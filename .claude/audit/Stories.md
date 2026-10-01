@@ -129,13 +129,13 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 1 (flipped 5→1 by the WU-StoryLifecycle review fixes, 2026-09-30).** The
-  2026-07-01 pass (cluster note "L4.5-Browser verification" below) drove the create/edit flow as it
-  then was. WU-StoryLifecycle replaced its publishing half — the all-enum Status select is gone, and
-  authors now publish only through `StoryLifecyclePanel` (submit / withdraw / revise / move / confirmed
-  unpublish) and the "Status when published" select — and none of that has been driven in a browser
-  (`grid_axes.md` L4.5: Stage 5 = "driven in a real browser and behaves as its audit file intends";
-  same convention as F15's L4.5 = 1). Returns to 5 when tracker **H12**'s pass runs.
+- **L4.5-Browser — Stage 5 (browser-verified 2026-09-30 by the WU-StoryLifecycle browser pass; it was
+  1 from the review fixes earlier that day until this pass ran).** Every lifecycle move, the "Status
+  when published" select and the published-story editor were driven on the circuit and on WASM against
+  `psql`. The pass found and fixed three runtime bugs: a refused save killed the circuit, a published
+  story's editor 301'd to its story page on a full load, and the rejection reason rendered as
+  "_rejectionReason". Detail: the browser-verification Stage note below. Not driven: the cover-art
+  `InputFile` (the standing exception in the 2026-07-01 cluster note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
@@ -245,6 +245,81 @@ status: a trusted submit asks for `PendingApproval` and shows Completed + "Publi
 state — mutation-checked against applying the target instead of the result); `StoryPageTests` (the
 publish date, and "Not yet published" for NULL). **Not browser-verified** — no browser was available;
 tracker **H12** now covers the confirm dialog too.
+
+### Feature 4 / Feature 5 — WU-StoryLifecycle browser-verification Stage note (2026-09-30) — F4 L4.5 1→5; three runtime bugs fixed
+
+**Cell change: F4 L4.5-Browser 1 → 5** (headline above). Closes tracker **H12**'s author half. The
+moderator half is in `audit/Moderation.md` F47/F48. Dev DB wiped and reseeded first: it predated both
+2026-09-30 migrations and still carried the WU-UserModeration leftovers. Each phase was confirmed from
+the network log, not assumed. The circuit showed `_blazor/negotiate` and no `/api` call for the
+action. WASM showed no negotiate and a `POST /api/stories/{id}/status` per move. The circuit pass was
+forced by removing the `blazor-resource-hash:TheCanalaveLibrary.Client` localStorage key before a
+full load.
+
+**Driven, with `psql` after every write:**
+- **TestUser (seeded untrusted):**
+  - Create with "Status when published" left at *Choose…*: Draft, `published_date` NULL,
+    `post_approval_status` 0. Submit is disabled and the panel shows the save-first hint.
+  - Choose Complete and save: Submit enables.
+  - Submit: Pending, with `submitted_date` stamped and `published_date` still NULL.
+  - Withdraw: Draft.
+  - Resubmit: Pending, `submitted_date` re-stamped.
+  - Each of these moves was driven on both phases.
+  - Own story page: "Not yet published".
+- **Refusal (two tabs):** tab B saved the select back to *Choose…*, then the stale tab A clicked
+  Submit. The circuit shows the server's sentence ("You must select a Status…"). WASM shows "Story
+  validation failed." That is the recorded interim gap (WU-ParityAndRemaining P1); the server's 400
+  body itself carries only that detail.
+- **After one approval, TestUser is trusted:** the rejected story 8 went *Return to draft*, then
+  Submit, then In Progress directly. `published_date` was stamped on its first publish.
+- **AuthorAlpha (trusted), on the circuit (this is the GIF):** Submit published directly (In
+  Progress, date stamped, `submitted_date` untouched, the select gone). Moved to Complete. Unpublish
+  opened the destructive dialog; Cancel left it Completed. Confirm made it Draft with the date kept
+  and the select back. Submit republished it with the original date.
+- **The same flow on WASM:** On Hiatus, a confirmed unpublish, and a republish with the date kept.
+- **Stale refusal on a published move:** tab B unpublished, then the stale tab A asked for a published
+  status. The circuit shows "Submit the story for publication instead."; WASM shows the generic text.
+  Nothing was written.
+- **Revoked AuthorAlpha:** a resubmission went to the queue with its old `published_date` kept.
+  After the moderator rejected it, *Return to draft* made it Draft. After the restore, Submit
+  published it directly.
+- **Anonymous** (fetch without credentials): published stories show "Published Oct 1, 2026"; a
+  pending story is a 404.
+- No Quill `removeChild` on any in-place status update, on either phase.
+
+**Three runtime bugs found and fixed in this pass** (commit "WU-StoryLifecycle: browser-pass fixes";
+each regression test fails when its fix is reverted, checked by hand):
+1. **A refused save killed the circuit.**
+   - On `/story/new`, any save the server refused (a missing Setting/Genre tag) logged `TypeError:
+     Cannot read properties of null (reading 'removeChild')` and a `CircuitHost` fail. It happened
+     even with an empty editor.
+   - Cause: the page writes the HTML it pulls from Quill back into the view model bound to
+     `EditorView.Html`, so the refusal's re-render changed markup Quill had already detached.
+   - Fix: `EditorView` freezes its rendered content at the first render. The fix is cross-cutting,
+     because `BlogPostEditorPage`, `SiteAnnouncementEditorPage` and `GroupBlogPostEditorPage` share
+     the write-back. Rule: `layer5-wasm.md` §"WASM renderer vs third-party DOM" rule 3.
+   - Tests (RazorComponents): `EditorViewTests`, and
+     `StoryEditorPageTests.RefusedSave_ShowsTheServerMessage_AndLeavesTheQuillContentAlone`.
+   - Re-verified: two refused saves on the circuit kept the Quill content, then the same circuit
+     created the story. A refused save on WASM was followed by a successful one.
+2. **A published story's editor was unreachable by full load** (refresh, bookmark, and the editor's
+   own `forceLoad` after Save).
+   - Cause: `UseCanonicalStorySlugRedirect` (Feature 64) read `/story/{id}/edit` as a stale slug.
+   - Fix and verification: `audit/Seo.md` F64 Stage note.
+   - Re-verified: a full load, a Save and the post-save landing on a published story's editor, on
+     both phases.
+3. **"Reason: _rejectionReason".**
+   - `StoryEditorPage` bound the panel's `string` parameter without `@`, so Razor passed the
+     literal. It was the only such binding in the UI.
+   - Test (RazorComponents): `StoryEditorPageTests.RejectedStory_ShowsTheModeratorsReason_NotTheFieldName`.
+   - Re-verified on both phases.
+
+**How verified:** browser (above) and `dotnet test` green: Unit 1,058, RazorComponents 730,
+Integration 1,253. Zero `fail:`/`crit:` lines and no console errors after the fixes. The three
+`fail:` lines before them were the two crashes of bug 1 plus the expected one from the fresh
+database's create. Still open:
+- The WASM generic refusal text (P1), which is narrowed tracker **H12**.
+- The blog editors were not driven live after the shared fix.
 
 ### Feature 4 / Feature 5 — Filter revamp Stage note (2026-06-27)
 
@@ -927,8 +1002,9 @@ Convention for the route-dispatcher pattern recorded in `layer3-logic.md`
 
 ## L4.5-Browser verification (2026-07-01) — F4 + F5 → Stage 5, one bug fixed same-session
 
-> **F4's half no longer stands (2026-09-30):** WU-StoryLifecycle replaced the publishing flow this pass
-> drove, so F4 L4.5 is back at 1 until tracker **H12**'s pass runs (F4 headline + review-fixes Stage
+> **F4's half was superseded and then re-verified (2026-09-30):** WU-StoryLifecycle replaced the
+> publishing flow this pass drove, and F4 L4.5 dropped to 1. The WU-StoryLifecycle browser pass later
+> the same day drove the new flow and returned it to 5 (F4 headline and the browser-verification Stage
 > note). F5's half is unaffected.
 
 Real-form pass as TestUser: `/story/new` (title, short desc, Quill long description, character

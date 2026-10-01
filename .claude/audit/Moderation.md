@@ -104,10 +104,10 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes; unchanged by WU-InertFeatures):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
-(flipped 5→1: the auto-approve revoke/restore control and trust line WU-StoryLifecycle added to
-`/mod/users/{id}` were never browser-driven — returns to 5 with tracker H12's pass), L5 = 5, L6 = 5
-(Stage notes at the end of this section).
+**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
+(the review fixes dropped it to 1 because the auto-approve control and trust line on `/mod/users/{id}`
+were undriven; the browser pass drove both on circuit and WASM and returned it to 5 — see F48's
+browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the end of this section).
 
 **WU34 settled constraints:**
 - `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
@@ -314,10 +314,10 @@ author of a revoke/restore is `roadmap.md` decision row 15.
 
 ## Feature 48 — Story Approval Workflow
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
-(flipped 5→1: `/mod/submissions` changed — `SubmittedDate` column, queue-level error slot,
-reload-on-refusal, taken-down rows hidden — and the approval workflow itself changed under D1, none of
-it browser-driven; returns to 5 with tracker H12's pass), L5 = 5, L6/L8 = N/A. The D1 guards, trust
+**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
+(the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed
+undriven; the browser pass drove them on circuit and WASM and returned it to 5 — browser-verification
+Stage note at the end of this section), L5 = 5, L6/L8 = N/A. The D1 guards, trust
 waiver, `SubmittedDate` and the takedown freeze landed beneath the other cells (Stage notes at the end
 of this section). **WU-InertFeatures (2026-09-30), no flip:** `StoryApproved` (75) and
 `StoryRejected` (71) are null-sourced — `NotifyStoryApprovedAsync`/`NotifyStoryRejectedAsync` lost
@@ -386,8 +386,9 @@ all 1232 pass. See `audit/Stories.md` §"Filter revamp Stage note" for the full 
 
 **Stage note (L4.5-Browser verification — 2026-07-02, Features 46/47/48 → L4.5=5):** full
 report→claim→resolve and approve/reject cycles driven in a real browser against the seeded dev DB.
-*(F47 and F48's halves no longer stand: both cells went back to L4.5 = 1 on 2026-09-30 — the
-WU-StoryLifecycle review fixes — because the surfaces changed under D1; tracker H12 restores them.)*
+*(F47 and F48's halves were superseded on 2026-09-30: the WU-StoryLifecycle review fixes dropped both
+cells to L4.5 = 1 because the surfaces changed under D1. The WU-StoryLifecycle browser pass the same
+day re-drove them and returned both to 5 — F48's browser-verification Stage note.)*
 - **F46:** report filed on a chapter comment via `ReportDialog` (reason select + notes + submit);
   `reports` row verified in psql (reporter/status/notes correct).
 - **F47:** `/mod/reports` as ModUser listed all three open reports; Claim → `UnderReview` +
@@ -511,6 +512,47 @@ hides it; both refuse; takedown reason/date intact; counter 0),
 `NewUser_InsertedWithCanAutoApproveFalse_KeepsFalse`. **RazorComponents** — `ModSubmissionsPageStoriesTests` (a refusal whose reload then fails,
 for approve and reject: message kept, no "Loading…", queue kept — mutation-checked against the old
 unguarded reload). **Not browser-verified** — tracker **H12**.
+
+**Stage note (WU-StoryLifecycle browser verification — 2026-09-30) — F47 and F48 L4.5 1→5.** This
+closes tracker **H12**'s moderator half; the author half is in `audit/Stories.md` F4. The dev DB was
+freshly reseeded. Users: AdminUser as the moderator (he sees the M-rated pending story); TestUser,
+AuthorAlpha and AuthorBeta as authors. Each phase was confirmed from the network log: the circuit
+showed `_blazor/negotiate` and no `/api/moderation` call; WASM showed no negotiate and the `/api`
+POST plus the reload GET. `psql` was checked after every write.
+- **`/mod/submissions` (F48):**
+  - The queue is ordered and dated by `SubmittedDate`: the two seeded rows (2026-09-01 and 09-03),
+    then the new submission (2026-10-01).
+  - With story 9 marked taken down by a temporary `psql` fixture, it was absent from the queue, and
+    an anonymous GET of it 404'd. The flag was restored afterwards.
+  - Approve on WASM: Completed, `published_date` stamped, TestUser's `approved_story_submissions`
+    0 → 1, and one type-75 notification.
+  - The same row approved from a stale circuit tab: "This submission was already handled.", the
+    queue reloaded, the counter stayed 1.
+  - Reject with an empty reason: "A rejection reason is required."
+  - Reject with a reason on the circuit: Rejected, the reason stored in the takedown columns
+    (tracker D6), `is_taken_down` false, one type-71 notification.
+  - Approve of that rejected row from a stale WASM tab: 400 → the same readable message and a reload.
+    This confirms the client 400 → `ModerationValidationException` mapping.
+  - Reject on WASM: a revoked author's resubmission that had been published before.
+- **`/mod/users/4` (F47):**
+  - Trust line "4 approved submissions · auto-approve on".
+  - Revoke on the circuit:
+    - With an empty reason: "A reason is required."
+    - With a reason: `can_auto_approve` false and a moderator-filed audit report (reporter =
+      moderator = 2, entity User 4, resolved, "Auto-approve revoked: …"). The line and the button
+      flipped, and the author's next submit queued.
+  - Restore on WASM: the flag back to true, a second audit row "Auto-approve restored: …", and the
+    author's next submit published directly.
+  - A 1,500-character reason on WASM: "That reason is too long."; nothing written.
+- **Logs:** zero `fail:`/`crit:` lines from these surfaces, and no console errors.
+
+The pass's three bugs were all on the author editor (`audit/Stories.md` F4); none were on these
+pages. Observed but not fixed, filed as tracker items:
+- The card's "Approve → publishes as InProgress" prints the raw enum name. A queue-level "already
+  handled" message also lingers when the next row's reject panel opens. Both are polish under L4 = 3
+  (tracker **H15**).
+- The reject and auto-approve reasons travel in the query string (tracker **D9**). Every moderation
+  write endpoint that takes free text has this shape; the new auto-approve endpoint followed it.
 
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 

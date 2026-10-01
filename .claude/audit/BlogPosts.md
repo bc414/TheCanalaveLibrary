@@ -27,6 +27,17 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
   `BlogPostPropertiesForm` renders errors via `InlineAlert` and gained `SetContentAsync` (Quill
   push for restore); generic catches route through `ExceptionPresenter` + `LogError`. Strategy:
   `error-handling.md` §"Error Handling Strategy".
+- **Shared editor fix, no cell flip (2026-09-30, the WU-StoryLifecycle browser pass).**
+  `BlogPostEditorPage`, `SiteAnnouncementEditorPage` and `GroupBlogPostEditorPage` write the pulled
+  Quill HTML back into the view model bound to `EditorView.Html` (`_viewModel.Content = content`).
+  On the story editor, which does the same, the pass watched a server-refused save then crash the
+  circuit (`removeChild` of null).
+  - The fix is in `EditorView` itself: it freezes its rendered content at the first render. So these
+    three pages are covered without a change of their own.
+  - Rule: `layer5-wasm.md` §"WASM renderer vs third-party DOM" rule 3.
+  - Tests (RazorComponents): `EditorViewTests`, plus the story-page repro.
+  - The blog editors were not driven live after the fix. The mechanism and the component are the
+    same as on the story editor.
 - **Settled constraints (2026-06-24, WU31):**
   - Content-editing Pattern 1: `/blog/new` + `/blog/{id}/edit` (write/auth), `/blog/{id}/{*slug}` (read-only).
     Spec §5 line ~1585 said "in-place editing" — overridden (blog is a multi-field form like Story).

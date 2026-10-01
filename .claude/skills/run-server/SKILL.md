@@ -335,6 +335,25 @@ pull-on-submit `GetHtmlAsync` reads the editor DOM. When a tab can't be foregrou
 assets by direct `fetch` + decode and `read_network_requests` instead of screenshots (a
 never-rendered tab never loads lazy images — that's browser behavior, not a bug).
 
+**Choosing and proving the render phase** (verified 2026-09-30, WU-StoryLifecycle browser pass).
+- **Auto's choice:** Auto picks WebAssembly on a full load when localStorage holds
+  `blazor-resource-hash:TheCanalaveLibrary.Client` matching the current build.
+- **Forcing the circuit pass:** `localStorage.removeItem('blazor-resource-hash:TheCanalaveLibrary.Client')`,
+  then a full `navigate`. The background download re-sets the key, so the next full load is WASM
+  again.
+- **Proving which phase ran:**
+  - Read `read_network_requests`, not `performance.getEntriesByType('resource')`: the resource-timing
+    buffer stops at 250 entries, and the `_framework` downloads fill it.
+  - The circuit shows `_blazor/negotiate` and no `/api` call for the action.
+  - WASM shows no negotiate and the action's `/api` request.
+- **Tool quirks:**
+  - The extension reports bodiless 202/204 responses as `503`. Trust `psql` and the server log.
+  - A minimized Chrome window makes every screenshot time out, though `javascript_tool` still works;
+    `document.visibilityState` is `hidden`. Restore the window, then re-create the tab.
+  - Browsers cache 301s. Once a buggy permanent redirect has been followed, that browser replays it
+    from cache after the server is fixed. Prove the fix with `fetch(url, {redirect:'manual',
+    cache:'no-store'})` or a URL the browser hasn't redirected before.
+
 **Ground truth is the database.** After every UI mutation, confirm the actual row via `psql`
 (credentials in Prerequisites) before declaring the behavior verified — page text can lag, lie, or
 describe optimistic local state.

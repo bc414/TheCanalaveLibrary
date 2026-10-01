@@ -249,7 +249,8 @@ references it, does not restate it.
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
   WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
   2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
-  2026-09-30, which closed B20–B22), including two **high-priority security items:
+  2026-09-30, which closed B20–B22; **D9/H15** opened by the WU-StoryLifecycle browser pass,
+  2026-09-30, which narrowed H12), including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
@@ -261,12 +262,13 @@ references it, does not restate it.
   story-lifecycle questions WU-StoryLifecycle left open — and 17–18 — the two defaults
   WU-InertFeatures had to take — added 2026-09-30). Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, tracker **H12**'s pass
-  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5), tracker **H13**'s confirmation
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, tracker **H13**'s confirmation
   of the access-gate sweep (privacy form "Off", Private-author blog 404s), and tracker **H14**'s pass
   over recommendation attribution and the new notifications (it returns F16/F30/F41 L4.5 to 5) need
   Brian's own browser session —
-  see those WUs' DONE entries and `audit/Accessibility.md`.
+  see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
+  ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
+  WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry.)
 
 ---
 
@@ -564,8 +566,8 @@ is pending except where a bullet says so.
 
 - **Cells:** the build flipped none (the gaps were beneath already-Stage-5 cells); its review fixes
   flipped **F4, F47, F48 L4.5 5→1** — the publishing, approval and auto-approve UI they vouched for
-  changed and was never browser-driven (tracker **H12** returns them to 5). F5, F6, F7, F54, F62
-  unchanged; F47/F48 L4 stay 3.
+  changed and was never browser-driven — and the browser pass the same day returned **all three to 5**.
+  F5, F6, F7, F54, F62 and F64 unchanged; F47/F48 L4 stay 3.
 - **Trigger:** first WU of the worksheet-decisions build campaign. Owner rulings **D1** (queue
   mandatory for an author's first submission only; build the server-side transition table) and
   **D2** (nullable publish dates, NULL = never published, never re-stamped; a chapter-level anchor)
@@ -652,12 +654,55 @@ is pending except where a bullet says so.
   `dotnet test`: **Unit 1,010, RazorComponents 696 (+10), Integration 1,131 (+14)**; build clean in
   touched files; all four gates pass. **No browser was available** — H12 now covers the confirm
   dialog and the hidden taken-down rows.
+- **Browser verification (2026-09-30, after WU-InertFeatures had landed; two commits: "browser-pass
+  fixes", then "browser verification").**
+  - **What was driven:**
+    - Every H12 item, on the circuit and on WASM, with `psql` after each write. The phase was read
+      from the network log: `_blazor/negotiate` against `/api` calls.
+    - Untrusted TestUser: create (Draft, NULL date), the save-first submit hint, submit, withdraw,
+      resubmit.
+    - Trusted AuthorAlpha (the GIF): submit publishes directly, published moves, unpublish behind
+      the destructive dialog (Cancel keeps it published), republish with the date kept.
+    - Revoke (circuit) and restore (WASM) on `/mod/users/4`, with the queue/direct routing and the
+      audit rows checked.
+    - `/mod/submissions`: `SubmittedDate` order; already-handled from a stale tab on both phases; a
+      taken-down pending row hidden; approve +1 trust; reject storing the reason.
+    - Readable refusals: the circuit shows the server's sentence. WASM shows "Story validation
+      failed." for author moves and saves (the recorded P1 gap) and the real text for moderator
+      refusals.
+  - **Three runtime bugs fixed:**
+    1. A refused story save crashed the circuit (Quill `removeChild`). `EditorView` now freezes its
+       rendered content at the first render. This is cross-cutting: the three blog editors share the
+       write-back. Rule: `layer5-wasm.md` §"WASM renderer vs third-party DOM" rule 3.
+    2. The canonical-slug middleware 301'd every full load of a published story's editor to the
+       story page. New `StorySlug.IsReservedRouteSegment`; the slug generator now suffixes `edit` and
+       numeric slugs (F64 note in `audit/Seo.md`).
+    3. The rejection reason rendered as "_rejectionReason" (a missing `@`).
+  - **Tests:** RazorComponents `EditorViewTests` (2) and `StoryEditorPageTests` +2; Unit
+    `StorySlugTests` +11; Integration `ContentGateTests` +1 and `StoryWriteServiceTests` +2. Each
+    fails with its fix reverted, checked by hand. `dotnet test`: **Unit 1,058, RazorComponents 730,
+    Integration 1,253**. All four gates pass.
+  - **Tracker:** H12 narrowed to the WASM re-check that waits on P1. New: **D9** (moderator reasons
+    in the query string) and **H15** (raw enum name and a lingering message on the queue card).
+  - **Dev-DB state left behind** (the DB was reset first; reset again to drop it):
+    - TestUser has `approved_story_submissions` = 1.
+    - Story 8 is In Progress (published 2026-10-01). Its stale rejection reason is still in
+      `takedown_reason` (tracker D6).
+    - Story 9 (AuthorBeta) is Rejected with an E2E reason.
+    - Story 10 (AuthorAlpha) is In Progress, published 2026-10-01, with a stale rejection reason.
+    - Stories 13 "E2E Lifecycle: TestUser Story" (Completed) and 14 "E2E Refused Save Check" (Draft)
+      were added.
+    - AuthorAlpha has two audit reports (revoke + restore) and is back to auto-approve on.
+    - Notifications: 75 and 71 for TestUser, and a 71 each for AuthorAlpha (story 10) and AuthorBeta
+      (story 9).
+    - This Chrome profile caches the old 301 for `/story/10/edit`. Clear cached files, or use another
+      story, to reach that editor by full load.
 - **Pointers:** `layer2-services.md` §"Story Lifecycle", §"Records of a decision are not counters",
   §"Account actions" rule 1; `layer8-data-marts.md` §`site_daily_stats`; `layer1-data-model.md`
   §"Column Conventions" (true-default bools); `audit/Stories.md` F4/F5, `audit/Chapters.md` F6/F7,
   `audit/Moderation.md` F47/F48/F62 Stage notes, `audit/Export.md` F54; `roadmap.md` §Resolved (D1,
   D2) and decision rows 14–16; `testing.md` §"Testing a check-then-act guard"; tracker D6, D7, E7, F9,
-  H12; worksheet D1/D2 "Built:" lines.
+  H12, D9, H15; worksheet D1/D2 "Built:" lines; browser pass: `layer5-wasm.md` §"WASM renderer vs third-party DOM" rule 3, `identity-and-authorization.md` route note, `audit/Seo.md` F64 and the browser-verification Stage notes in `audit/Stories.md` F4 and `audit/Moderation.md` F48.
 
 ## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
 

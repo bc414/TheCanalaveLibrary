@@ -169,7 +169,7 @@ tier applies (a static-asset + constant swap with no branching); `PublicUrlProvi
 existing fallback-resolution coverage needed no change (its literals are arbitrary test inputs,
 not the production constant).
 
-## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate; sitemap profile-post filter WU-AccessGateSweep2, 2026-09-30 — see the last Stage note)
+## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate; sitemap profile-post filter WU-AccessGateSweep2, 2026-09-30; editor route kept out of the canonical-slug 301 by the WU-StoryLifecycle browser pass, 2026-09-30 — see the last two Stage notes)
 
 **Settled (do not revisit at build time):**
 - **`noindex` is resolved: never added.** Decision row 11 resolved 2026-07-19 as "index all; gate
@@ -230,3 +230,32 @@ curl counts.
 **How verified:** Integration — `StoryVisibilityTests.Sitemap_ExcludesProfileBlogPostsOfNonPublicAuthors`
 (a Public author's post listed; Private and UsersOnly authors' posts absent, with `</loc>`-anchored
 ids; fails against the pre-fix query); the existing sitemap tests still green. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+
+### Feature 64 L2 Stage 5 — WU-StoryLifecycle browser pass (2026-09-30): the canonical-slug 301 no longer swallows the story editor
+
+**No cell flips — F64 stays Stage 5.** The WU-StoryLifecycle browser pass found it from the author's
+side (`audit/Stories.md` F4 browser-verification Stage note).
+- **Symptom:** every full-document load of a *published* story's editor ended on the story page:
+  a refresh, a bookmark, and the editor's own `forceLoad` after Save.
+- **Cause:** `UseCanonicalStorySlugRedirect` excluded only numeric third segments, so it read
+  `/story/{id}/edit` as a stale slug and 301'd it to `/story/{id}/{slug}`. A draft's editor escaped
+  only because the redirect's read context can't see unpublished stories.
+- **Fix:** the middleware now skips any segment `StorySlug.IsReservedRouteSegment` names: the `edit`
+  literal case-insensitively, and any integer by the router's `int` parse. The same rule closes the
+  other side: `GenerateUniqueSlugAsync` treats a reserved base slug as taken, so a story titled "Edit"
+  or "1984" gets `edit-2`/`1984-2`, never a canonical URL that opens the editor or a chapter.
+  Convention: `identity-and-authorization.md`, the view-page/edit-page route note.
+- **Cached redirects:** browsers cache permanent redirects. Any browser that received the old 301 for
+  a `/story/{id}/edit` URL keeps redirecting from its own cache until that cache is cleared. The
+  pass's Chrome profile still does so for `/story/10/edit`; the server log shows those navigations
+  never arrive. Pre-launch, so only dev browsers are affected.
+
+**How verified:**
+- Unit — `StorySlugTests.IsReservedRouteSegment_*` (11 cases).
+- Integration — `ContentGateTests.EditorRoute_OfAPublishedStory_IsNotRedirectedToTheSlug`, and
+  `StoryWriteServiceTests.CreateStoryAsync_TitleThatSlugsToARouteSegment_GetsASuffix`.
+- Each test fails with its half of the fix reverted (checked by hand), and `StaleSlug_Redirects301ToCanonical`
+  still passes.
+- Browser: a published story's editor loaded by full navigation, saved, and landed back on the editor,
+  across both render phases.
+- `dotnet test` green: Unit 1,058, RazorComponents 730, Integration 1,253. All four gates pass.

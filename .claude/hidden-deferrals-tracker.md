@@ -751,6 +751,17 @@ unless noted. All sit under Stage-5 cells.
     `Private` (no per-recipient work needed — `UsersOnly` admits every recipient), or accept and
     record it.
 
+- [ ] **D9 — Moderator free-text reasons travel in the query string** `[latent-risk · low · launch]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass; not decided there.*
+  - Grid: F47/F48 L5=5 (unchanged).
+  - Source: `ClientModerationWriteService` (`?reason=` on the account action, the user action, reject
+    and auto-approve; lines ~56–94) and the matching `ModerationEndpoints` handlers, which bind
+    `string reason` from the query.
+  - Context: the moderator's reason (up to 1,024 characters, sometimes naming the user or quoting the
+    content) ends up in the URL, which reverse proxies and access logs record. Every other write in
+    the app sends free text in a JSON body. The shape predates WU-StoryLifecycle, and its new
+    auto-approve endpoint followed it. Candidate owner: WU-ModerationIntegrity. The fix is a small
+    request record per endpoint, with the client and the `ModerationEndpointsTests` updated together.
+
 ---
 
 ## E. Cross-cutting work with no grid cell at all
@@ -1111,30 +1122,23 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Unblocked 2026-07-31: H10 had the whole `/Account/*` funnel returning 500, so none of these
     flows could be driven at all until it was fixed. Natural next candidate.
 
-- [ ] **H12 — Story-lifecycle UI never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available.*
-  - Grid: **F4 L4.5=1, F47 L4.5=1, F48 L4.5=1** — flipped 5→1 by the WU-StoryLifecycle review fixes
-    (2026-09-30): the cells' earlier browser passes predate this UI, and `grid_axes.md` defines L4.5
-    Stage 5 as "driven in a real browser and behaves as its audit file intends". Return all three to
-    5 when this pass runs (headline lines in `audit/Stories.md` F4, `audit/Moderation.md` F47/F48).
-  - Source: `workplan.md` WU-StoryLifecycle; `audit/Stories.md` F4 and `audit/Moderation.md` F48
-    Stage notes.
-  - Context: new author and moderator surfaces are covered by bUnit and Integration tests only.
-    Drive each in a real browser, on both the circuit and the WASM pass, against `psql` ground truth:
-    1. `StoryEditorPage` → the new `StoryLifecyclePanel`: submit as an untrusted author (TestUser is
-       seeded untrusted on purpose — but a workbench DB migrated in place has TestUser trusted by the
-       migration's backfill; reset it or revoke via `/mod/users/1` first) → Pending; withdraw; as a trusted author (AuthorAlpha/AuthorBeta)
-       submit → published directly with `published_date` stamped; move between published statuses;
-       unpublish → a destructive confirm dialog first (Cancel leaves the story published) → Draft with
-       the date kept. Confirm the in-place status update does **not** trip the Quill `removeChild`
-       crash on WASM (the page deliberately avoids same-route navigation).
-    2. The "Status when published" select on the form (hidden once the story is published).
-    3. `/mod/submissions`: the "submitted" date column (now `SubmittedDate`); approve an already-handled
-       row from a second tab → the queue reloads with the message; a taken-down pending story does not
-       appear at all.
-    4. `/mod/users/{id}`: the trust line in the header, and the auto-approve revoke/restore control.
-  - Known interim gap: on the WASM pass the author's lifecycle error text arrives as the generic
-    "Story validation failed." until WU-ParityAndRemaining's P1 carries validation error lists over
-    HTTP (moderator messages already round-trip — WU-StoryLifecycle changed that client mapping).
+- [ ] **H12 — Story-lifecycle UI: browser-verified 2026-09-30; one WASM re-check waits on WU-ParityAndRemaining P1** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available. Narrowed 2026-09-30 by the WU-StoryLifecycle browser pass.*
+  - Grid: **F4, F47 and F48 L4.5 are back at 5.** The review fixes had flipped them 5→1; the browser
+    pass drove all four surfaces this entry listed, on circuit and WASM against `psql`:
+    1. the lifecycle panel (untrusted and trusted submit, withdraw, revise, published moves, the
+       confirmed unpublish with Cancel, no Quill crash on WASM);
+    2. the "Status when published" select;
+    3. `/mod/submissions` (`SubmittedDate`, already-handled from a stale tab on both phases, the
+       taken-down row hidden);
+    4. `/mod/users/{id}` (trust line, revoke and restore).
+  - It also found and fixed three editor bugs: a refused save killed the circuit, a published story's
+    editor 301'd to its story page, and the rejection reason rendered as "_rejectionReason". Detail:
+    `audit/Stories.md` F4 and `audit/Moderation.md` F48 browser-verification Stage notes.
+  - **Remaining:** on WASM a refused author move or save still reads "Story validation failed."
+    (observed live, and the server's 400 body carries only that detail). This is WU-ParityAndRemaining's
+    P1 to fix. Once P1 lands, re-drive one refused lifecycle move and one refused save on WASM and
+    confirm the server's sentence arrives; then close this entry. Moderator messages already
+    round-trip.
 
 - [ ] **H13 — Access-gate sweep behavior never browser-verified** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available.*
   - Grid: F16, F20, F23, F35, F36, F37, F44, F49 — all unchanged. No markup changed visually (only
@@ -1194,6 +1198,16 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        is NULL on every 70–82 row.
     7. Add a story to a group with another member → "{story} was added to {group}" for the member,
        "Your story {story} was added to {group}" for the author (one each); re-add → nothing.
+
+- [ ] **H15 — `/mod/submissions` card copy: a raw enum name, and a lingering queue message** `[polish · low · anytime]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass.*
+  - Grid: F48 L4=3 (unchanged; this is part of what keeps it at 3).
+  - Source: `SharedUI/Moderation/ModSubmissionsPage.razor`, the Stories tab card.
+  - Context: two small copy problems on the card.
+    - "Approve → publishes as **InProgress**" prints `@sub.PostApprovalStatus` raw; it should read
+      "In Progress" through `StoryDisplayFormat.StatusLabel`, like the author's panel.
+    - The queue-level "This submission was already handled." stays on screen when the moderator
+      opens the next row's reject panel (`OpenRejectPanel` doesn't clear `_storyActionError`). It
+      clears on the next approve or confirm. Harmless, but it reads as if the new row was handled.
 
 ---
 
