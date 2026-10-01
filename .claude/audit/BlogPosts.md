@@ -92,7 +92,7 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
     spoiler posts therefore always take the interstitial's immediate-reveal path.
 
 ## Feature 36 — Blog Post Display
-- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30 — see its Stage note below).
+- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below).
   **L3/L3.5 — Stage 5. L4 — Stage 1** (visual sign-off pending).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
@@ -233,7 +233,31 @@ hidden poll throws like a missing poll; `PollServiceTests` asserts the visible-p
 null; the fan-out theory in `CommentAndBlogNotificationTests`. RazorComponents — `PollViewTests`.
 Each fix-specific test failed against a targeted mutation of its fix (the visible-post control passes both ways by design). `dotnet build` green, no new warnings in touched
 files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180; all four PowerShell
-gates pass. **No browser was available** — tracker **H13**.
+gates pass. **No browser was available** to the build — tracker **H13**, closed by the browser pass below.
+
+### Features 35–37 — WU-AccessGateSweep2 browser verification (2026-09-30)
+
+**No cell flips.** Driven on the circuit and on WASM, with `psql` after each write. Full narrative:
+`audit/AccessGate.md` F66.
+- **Private author (F36).** For a reader, a follower and an anonymous request, AuthorAlpha's post and
+  the revealed M post were a real 404 page while AuthorAlpha was Private; the group post still
+  rendered. The by-id API answered a hidden post, a draft and a missing id identically. The reveal
+  list showed "(deleted post)".
+- **Fan-out.** Publishing while Public notified both followers. Publishing while Private (from the
+  edit page) notified nobody.
+- **Stale-page clears (F35/F37).** The post was unpublished behind an open page.
+  - Withdrawing the vote removed the poll block and the `poll_votes` row.
+  - Switching the vote showed the not-found message and kept the vote.
+  - The unlike settled at ♡ 0. With a second like it landed at 1 in `blog_post_likes`, proving the
+    gated `(0, false)` response.
+- **Found and fixed.**
+  - The post page's author link and the poll's public-voter links pointed at `/profile/{id}`, which
+    does not exist (404). They now go to `/user/{id}`. Clicked through live.
+  - RazorComponents tests: `BlogPostPageTests` +1, `PollViewTests` +1. Both failed with the old
+    hrefs.
+- **Filed, not fixed.** The "new post" form shows a Publish checkbox that the create path ignores,
+  because profile posts are draft-first. Twice in this pass a "published" new post landed as a draft.
+  Tracker **F12**.
 
 ## WU-SiteNews — staff site announcements (extends Features 35/36, no new grid row) — Stage 5 (2026-07-28)
 

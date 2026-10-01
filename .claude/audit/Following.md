@@ -26,7 +26,7 @@ services, no components built.
   outgoing/incoming asymmetry, `GetIncomingVouchesAsync` scoped to active user, avatar default fallback,
   `VouchText` sanitization strips XSS payload while preserving allowed HTML, long text exceeds old
   1000-char cap). `dotnet test` green (78/78).
-- **L3-Logic — Stage 5 (WU21, 2026-06-22).** Bell toggles `ReceiveAlerts` via `SetReceiveAlertsAsync`;
+- **L3-Logic — Stage 5 (WU21, 2026-06-22; a refused write shows inline instead of crashing the page, WU-AccessGateSweep2 browser pass 2026-09-30 — see its note below).** Bell toggles `ReceiveAlerts` via `SetReceiveAlertsAsync`;
   `FollowButton` and `VouchButton` are self-contained-write composites injecting `IFollowingWriteService`
   (legitimate per `layer3-logic.md`). Optimistic toggle on follow/unfollow click. `VouchButton` opens
   `ConfirmDialog` hosting `EditorView` for optional rich note; disabled+tooltip at 5-limit. `VouchList`
@@ -83,6 +83,28 @@ doc says so; the class doc lists the raises and the clears.
 **How verified:** Integration — `ParentVisibilityContractTests`: alerts-on refused for a Private
 profile with the row left false (fails against the pre-fix service); alerts-off, unfollow and
 remove-vouch succeed against a Private profile. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+
+### Feature 18 L2/L3-Logic — WU-AccessGateSweep2 browser verification (2026-09-30): alerts-on refused live; the refusal now shows inline
+
+**No cell flips.**
+- **Driven:** TestUser followed AuthorBeta (alerts off) with AuthorBeta's profile open, then
+  AuthorBeta went Private behind the page (`psql`). Clicking the bell sent alerts-on.
+  - The guard refused it on both phases (WASM: `PUT /api/following/5/alerts?receiveAlerts=true` →
+    404), and the row stayed `receive_alerts = f`.
+- **Found and fixed:** before the fix, `FollowButton` had no catch, so the refusal tripped the page
+  error boundary and replaced the whole profile page.
+  - `FollowButton` and `VouchButton` now catch at the handler and show `ExceptionPresenter`'s message
+    in an inline `ErrorAlert` (sign-in link on an expired session; `VouchLimitException` and
+    throttles read as written). State changes only after a successful write.
+  - Re-driven on both phases: "That content couldn't be found — it may have been removed." under the
+    buttons, with the bell still off.
+  - Rule: `layer3-logic.md` §"Optimistic Updates & Debounce" rule 4.
+- **Not driven:** unfollow and remove-vouch on a Private profile. Seed AuthorBeta's `follower_count`
+  is 0 despite TestUser's follow row, so the decrement would go negative (tracker **H18**).
+  Integration covers the conformance.
+- **Tier:** RazorComponents — `FollowButtonTests` +2 (refused alerts-on, refused follow) and
+  `VouchButtonTests` +1 (refused remove). All three failed against the pre-fix components. Full
+  narrative: `audit/AccessGate.md` F66.
 
 ## Feature 19 — Vouches
 - **L1 — Stage 5 (reconciled Phase B, 2026-06-20; was mis-marked Stage 1).** `Vouch` is a dedicated

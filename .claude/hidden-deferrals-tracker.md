@@ -1019,6 +1019,20 @@ built rows at 5 and no signal these exist.
   - **D27** ("My X" anonymous semantics) gates none of these; it stays on the worksheet. D25's
     generalization to ownership gates is F10 item 3.
 
+- [ ] **F12 — The new-blog-post form offers a Publish checkbox the create path ignores** `[decision · low · beta]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
+  - Grid: F35 L3-Logic=5, L4.5=5 (unchanged).
+  - Source: `SharedUI/BlogPosts/BlogPostPropertiesForm.razor` (the "Publish (uncheck to save as
+    draft)" checkbox) and `BlogPostEditorPage.razor`'s create branch.
+  - `CreateProfileBlogPostDto` has no `IsPublished`, and `ServerBlogPostWriteService` creates profile
+    posts as drafts by design ("No notification on create (WU-B2): profile posts are drafts here";
+    `audit/BlogPosts.md` contrasts `SiteBlogPost`, which has "no forced draft-first").
+  - The form still shows the checkbox on `/blog/new`. A user who ticks it lands on a draft: twice in
+    the pass, a post created with Publish ticked was saved unpublished.
+  - Two valid fixes, a product choice:
+    - (a) hide the toggle on create, and say "saved as a draft — publish from the editor";
+    - (b) honor publish-on-create, running the publish fan-out at create time as the edit path does.
+  - The group-post create form shares the properties form, so it needs the same check.
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1140,34 +1154,21 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     confirm the server's sentence arrives; then close this entry. Moderator messages already
     round-trip.
 
-- [ ] **H13 — Access-gate sweep behavior never browser-verified** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available.*
-  - Grid: F16, F20, F23, F35, F36, F37, F44, F49 — all unchanged. No markup changed visually (only
-    `PrivacySettingsForm`'s option *values*, and `PollView`'s handling of a null vote result — review
-    fixes), so no L4.5 cell was flipped; the behavior beneath them did change and is covered by
-    Integration/bUnit only.
-  - Source: `workplan.md` WU-AccessGateSweep2; `audit/AccessGate.md` F66 and `audit/Profiles.md` F20
-    Stage notes.
-  - Drive each on the circuit and the WASM pass, against `psql` ground truth:
-    1. `/settings` → Privacy: choose "Off" for the comment wall and for private messages, save; both
-       settings read back as `Nobody` (3) in `privacy_settings`; your wall disappears for other users;
-       starting a conversation with you is refused. (A workbench user who saved "Off" before this WU
-       holds 2 — `Following` — and the select shows no matching option until re-saved, or
-       `reset-dev-db.ps1`.)
-    2. As ReaderGamma (seeded mature-off): turn mature on, favorite an M story, turn mature off, then
-       un-favorite it from `/bookshelves` via the panel — it saves (no reveal involved). (The
-       takedown/status axes have no UI path to a hidden story's controls; Integration covers them.)
-    3. Set AuthorAlpha's profile to Private; as another user and anonymously, open one of AuthorAlpha's
-       blog posts — a real 404, not an interstitial; `/sitemap.xml` omits it.
-    4. Set a wall to `Following` in `psql` (the form has no option for it); post on it as a user the
-       owner does not follow — the inline error reads "This user only accepts profile comments from
-       people they follow."
-    5. *(Added by the review fixes.)* As a reader, vote in a poll on AuthorAlpha's published blog
-       post; keep the page open; in another session unpublish the post; back on the open page click
-       "Retract vote" — no error shows, the poll block disappears, and `poll_votes` holds no row for
-       the reader. Then, with the post still unpublished, the same flow with "Update vote" to a
-       different option shows the not-found error and leaves the original vote. Likewise unlike the
-       post from the stale page: the like button settles at 0, and `blog_posts.like_count` drops by
-       one.
+- [x] **H13 — Access-gate sweep behavior: browser-verified 2026-09-30 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available. Closed 2026-09-30 by its browser pass.*
+  - Grid: F16, F20, F23, F35, F36, F37, F44, F49 — all unchanged. This WU flipped no L4.5 cell (F16's
+    L4.5=1 belongs to H14).
+  - **Closed:** all five steps were driven on the circuit and on WASM, with `psql` checks:
+    1. privacy "Off" writes `3`/`3`;
+    2. a D6 clear on a rating-hidden story, from the bookshelf card;
+    3. a Private author's posts are a real 404 and drop out of the sitemap;
+    4. the `Following` wall's inline error;
+    5. stale-page vote withdrawal, refused vote switch, and the gated unlike response.
+  - **Correction to step 2:** in listing context Favorite is a read-only indicator, so the reachable
+    clear was Read It Later.
+  - **Fixed in the pass:** the refused-raise page crash (interaction panel, `FollowButton`,
+    `VouchButton`) and the dead `/profile/{id}` links.
+  - **Filed from the pass:** **F12**, **H16**, **H17**, **H18**.
+  - Narrative: `audit/AccessGate.md` F66 browser-verification note; WU-AccessGateSweep2's DONE entry.
 
 - [ ] **H14 — Recommendation attribution and the new/re-anchored notifications never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-InertFeatures, which ran with no browser available.*
   - Grid: **F16 L4.5=1, F30 L4.5=1, F41 L4.5=1** — flipped 5→1 by WU-InertFeatures (the UI and the
@@ -1208,6 +1209,49 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - The queue-level "This submission was already handled." stays on screen when the moderator
       opens the next row's reject panel (`OpenRejectPanel` doesn't clear `_storyActionError`). It
       clears on the next approve or confirm. Harmless, but it reads as if the new row was handled.
+
+- [ ] **H16 — Bool-bound ARIA state attributes render absent or empty, never `"false"`/`"true"`** `[a11y · med · beta]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
+  - Grid: no single cell. Every toggle and disclosure control below; the closest owner is the
+    A11y sweep (`audit/Accessibility.md`).
+  - Context: Blazor drops an attribute whose value is `false` and writes `true` as an empty value.
+    So `aria-pressed="@_isFollowing"` renders with no `aria-pressed` at all when off, and as
+    `aria-pressed=""` when on (observed live on `FollowButton`). The off state then reads as "not a
+    toggle", and an empty value is invalid ARIA. The same applies to `aria-expanded`.
+  - Sites (grep `aria-(pressed|expanded|checked|selected)="@` without a string conversion):
+    - `aria-pressed`: `FollowButton` (×2), `UserStoryInteractionButton`, `CommentItem`,
+      `RecommendationCard`'s like.
+    - `aria-expanded`: `ChapterList`, `AddToCustomListMenuInner`, `StoryChapterImport`, `CreateMenu`,
+      `UserMenu`, `NotificationBellInner`, `StoryCard` (×2), `UserCard`.
+    - Correct already (they convert to the string): `ChapterList`'s read toggle, `ManualTreeCanvas`,
+      `TreeSearchTabStrip`, `RecommendationCard`'s RIL.
+  - **Tests encode the defect.** `UserStoryInteractionPanelTests` asserts "Blazor omits aria-pressed
+    when false" as intended behavior. A fix rewrites those assertions to `"true"`/`"false"`.
+  - Fix shape: one sweep converting each to `@(x ? "true" : "false")`, plus a `check-a11y.ps1` rule
+    for the bool-bound form, so the gate keeps it from returning.
+
+- [ ] **H17 — Write handlers with no catch: a refusal or expired session trips the page error boundary** `[polish · low · beta]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
+  - Grid: no cell moves.
+  - Context: the pass fixed this class where an access refusal can reach the handler: the interaction
+    panel, `FollowButton` and `VouchButton` (`layer3-logic.md` §"Optimistic Updates & Debounce"
+    rule 4). These other self-contained write handlers still have no catch:
+    - `NotificationSettingsPage` (toggle);
+    - `NotificationsPage` (mark read, mark all read);
+    - `TagAdoptionsPage` (undismiss).
+  - None has an access refusal path. But on WASM an expired session surfaces as
+    `SessionExpiredException`, and an escaped one replaces the whole page instead of showing
+    `ErrorAlert`'s sign-in link.
+  - Fix shape: the same catch, with an inline `ErrorAlert`.
+
+- [ ] **H18 — Dev seed: follower counters disagree with the follow rows** `[test-hygiene · low · anytime]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
+  - Grid: none (dev data only).
+  - Source: `Server/Data/DataSeeder.cs` `SeedProfilesAndStatsAsync`.
+  - Two counters disagree with the seeded `followed_users` rows:
+    - AuthorBeta is seeded with `FollowerCount = 0`, but TestUser follows AuthorBeta. Unfollowing it
+      would drive the counter to −1.
+    - ReaderGamma follows AuthorAlpha but has no `user_stats` row (`AuthorsFollowed` should be 1).
+  - The class doc promises "`UserStat` counters matching the content". The browser pass avoided the
+    unfollow for this reason.
+  - Fix: correct the two numbers and add the missing row; `reset-dev-db.ps1` afterwards.
 
 ---
 

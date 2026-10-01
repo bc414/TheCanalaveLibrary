@@ -330,6 +330,11 @@ cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-trac
   despite this note — no code gap, purely the same missed-edit WU-GlobalFlip left on F38/F39 (see
   F38's L5 grid-mark note). Corrected 2→5; no browser re-verification needed beyond F38/F39's
   pass (this feature's display composition was already exercised in that same session).
+- **L3.5 fix — WU-AccessGateSweep2 browser pass (2026-09-30), no cell flips.** The group page's
+  "Created by" link pointed at `/profile/{id}`, a route that does not exist (404). It was found beside
+  the same defect on the blog post page and the poll voter list (`audit/BlogPosts.md`). It now goes to
+  `/user/{id}` and was clicked through live. Tier: RazorComponents — `GroupPageTests` +1, which failed
+  with the old href.
 
 ### WU-ComponentSoundness Stage note (2026-06-27)
 

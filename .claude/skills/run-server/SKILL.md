@@ -353,6 +353,15 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
   - Browsers cache 301s. Once a buggy permanent redirect has been followed, that browser replays it
     from cache after the server is fixed. Prove the fix with `fetch(url, {redirect:'manual',
     cache:'no-store'})` or a URL the browser hasn't redirected before.
+  - When `document.visibilityState` is `hidden` but screenshots still work (verified 2026-09-30),
+    `computer` clicks and typing often no-op. `el.click()` via `javascript_tool` is reliable.
+    `CanalaveTypeahead` options select on **mousedown**, so dispatch
+    `new MouseEvent('mousedown', {bubbles: true})` on the option button; a `click()` does nothing.
+- **Fixtures that live in claims:** `ShowMatureContent` is a cookie claim, refreshed only when the
+  settings save calls `RefreshSignInAsync`. A `psql` flip of `show_mature_content` leaves the claim
+  stale, and the rating guards keep answering from it. Toggle mature through `/settings` (check with
+  `/dev/wu12/whoami`). Profile privacy and story status are read from the DB, so `psql` fixtures work
+  for those.
 
 **Ground truth is the database.** After every UI mutation, confirm the actual row via `psql`
 (credentials in Prerequisites) before declaring the behavior verified — page text can lag, lie, or

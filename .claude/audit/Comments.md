@@ -122,6 +122,16 @@ unlike succeeds on a taken-down comment — and, since the review fixes, returns
 stored count goes 3 → 2 (fails against the build's version, which returned 2). Against the pre-fix
 service the refusal tests and the unlike test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180 (after the review fixes); all four PowerShell gates pass.
 
+**Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass).**
+- **`Following` wall** (`psql` fixture on AuthorAlpha): ReaderGamma, whom the owner does not follow,
+  got the inline error "This user only accepts profile comments from people they follow." On WASM it
+  came from a 400 on `POST /api/comments/profile`; on the circuit there was no `/api` call. The draft
+  stayed in the editor. TestUser, whom the owner follows, posted, and the `user_profile_comments` row
+  landed.
+- **`Nobody` wall:** a direct POST answered 400 "This user isn't accepting profile comments." and
+  wrote no row.
+- Narrative: `audit/AccessGate.md` F66.
+
 ## Feature 24 — Comment Display & Pagination
 - **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
   (WU-L5Sweep) and the site now runs global InteractiveAuto; comment display + pagination verified

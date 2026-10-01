@@ -188,7 +188,7 @@ pending stories (E and M).
 still passes (it pins raw filter mechanics; service-level policy elevates per-path) and
 `BookshelfStoryIdsTests` pins id-collection (hydration, not ids, is where personalScope acts).
 
-### Stage 5 — WU-AccessGateSweep2: the D6 enumeration record + service audit §2.6 (2026-09-30; review fixes same day)
+### Stage 5 — WU-AccessGateSweep2: the D6 enumeration record + service audit §2.6 (2026-09-30; review fixes same day; browser-verified same day)
 
 **No cell flips — F66 stays Stage 5.** Builds owner ruling **D6** (raises gated, clears free — now
 in Settled above) and the service audit §2.6 items not blocked on pending D25/D26/D27. D6 required
@@ -264,4 +264,61 @@ vote on a hidden poll answers like a missing poll); the reveal-list test; the fa
 RazorComponents — `PollViewTests` (null result raises null, no error; a refreshed result is raised
 as-is). Each fix-specific test failed against a targeted mutation of its fix; the controls (visible-post unlike, `UsersOnly` fan-out, refreshed result) pass both ways by design. `dotnet build` green, no new
 warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180;
-all four PowerShell gates pass. **No browser was available** — tracker **H13** (step 5 added).
+all four PowerShell gates pass. **No browser was available** to the build — tracker **H13** (step 5 added); the
+browser pass below closed it.
+
+**Browser verification (2026-09-30; ran after WU-InertFeatures and the WU-StoryLifecycle browser
+pass; two commits — "browser-pass fixes", then "browser verification").** The dev DB was reset first,
+and every write was checked in `psql`. The render phase was read from the network log
+(`_blazor/negotiate` = circuit, `/api` calls = WASM); the circuit was forced by removing the Auto-mode
+localStorage hash. Every H13 step ran on both phases:
+1. **Privacy "Off".** Saved as TestUser (WASM) and as AuthorBeta (circuit): `privacy_settings` holds
+   `3`/`3` and the selects read back "Off". The wall is gone for other users; a direct
+   `POST /api/comments/profile` answers 400 "This user isn't accepting profile comments."; a new
+   conversation is refused with "This user does not accept private messages." (no `conversations`
+   row).
+2. **D6 clear on a rating-hidden story.** ReaderGamma (mature on) favorited and Read-It-Later'd the M
+   story, turned mature off, then cleared Read It Later from the `/bookshelves` card: the bit and its
+   date cleared, the favorite stayed (claim confirmed mature-off via `/dev/wu12/whoami`). H13 said
+   "un-favorite"; in listing context only Read It Later and Ignore are clickable — Favorite is a
+   read-only indicator — so the RIL bit was the reachable clear.
+3. **Private author.** AuthorAlpha went Private through the settings form. For ReaderGamma, TestUser
+   and an anonymous request, the profile post and the *revealed* M post are a real 404 page (no
+   interstitial); `/api/blog-posts/{2,3,999}` answer identically (no oracle); the sitemap drops the
+   post and every Private user and keeps the group post, which still renders. The reveal list shows
+   "(deleted post)" (it showed the title while the author was Public). Fan-out: publishing the M post
+   while Public notified both alert followers (the control); publishing a second post while Private
+   notified nobody. That second post was published from its edit page, because the new-post form
+   saves a draft (tracker **F12**).
+4. **`Following` wall** (`psql` fixture on AuthorAlpha). ReaderGamma, not followed, got "This user only
+   accepts profile comments from people they follow." inline on both phases. TestUser, followed,
+   posted.
+5. **Stale-page withdrawal.** TestUser voted and liked, then the post was unpublished behind the open
+   page (`psql`). "Update vote" to another option showed "That content couldn't be found — it may have
+   been removed." and left the vote. "Retract vote" removed the poll block and the `poll_votes` row.
+   The unlike settled at ♡ 0. On WASM a second like made the count 2: the UI showed 0 while
+   `like_count` landed at 1, which is the gated `(0, false)` response. This flow is the GIF
+   (`e2e-WU-AccessGateSweep2.gif`).
+
+**Found and fixed (the negative raise path, which H13 did not list):** a raise on a parent hidden
+behind an open page was refused correctly (404, no row change). But the exception escaped the handler
+and the page error boundary replaced the whole page, on both phases. This hit the interaction panel
+(story taken down or rating-hidden) and `FollowButton`'s alerts-on (profile gone Private). The fix
+rolls back to the last accepted state and shows the refusal inline (`layer3-logic.md` §"Optimistic
+Updates & Debounce" rule 4); `VouchButton` follows the same rule. It was re-driven on both phases. Also
+fixed: dead `/profile/{id}` links on the blog post page, the poll voter list and the group page.
+Detail: `audit/UserStoryInteractions.md` F16 and `audit/Following.md` F18. Tier:
+RazorComponents (+8).
+
+**Not driven, with the reason:**
+- The acknowledgment and lineage by-story reads: their only UI host is the story page, which is
+  itself gated. Integration covers them.
+- `RevokeAsync` ordering: API-only.
+- The read-mark clear's takedown and status axes: no UI path.
+- Unfollow and remove-vouch on a Private profile: the seed's AuthorBeta `follower_count` is 0
+  despite a follow row, so the decrement would go negative (tracker **H18**). Integration covers the
+  conformance.
+
+Mature-off is a cookie claim refreshed by the settings save (`RefreshSignInAsync`). A `psql` flip
+leaves the claim stale; a raise during that window succeeded, which is by design and was a test
+artifact.

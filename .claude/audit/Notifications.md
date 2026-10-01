@@ -311,7 +311,10 @@ L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
   WU-NotificationCorrectness. Verified: Integration — `CommentAndBlogNotificationTests`
   `PublishTransition_AuthorProfileVisibility_GatesTheWholeFanOut` (Private → no type-13 or type-15
   row; UsersOnly → both; the Private case fails with the early return removed). `dotnet test` green —
-  Unit 1,022, RazorComponents 703, Integration 1,180.
+  Unit 1,022, RazorComponents 703, Integration 1,180. **Browser-verified 2026-09-30** (WU-AccessGateSweep2
+  browser pass): AuthorAlpha's publish while Public wrote a type-13 row for each alert follower
+  (TestUser, ReaderGamma). After AuthorAlpha went Private through the settings form, publishing a
+  second post from its edit page wrote none.
 
 ### Feature 41 L1/L2/L4.5 — WU-InertFeatures Stage note (2026-09-30): owner rulings D4/D5/D16/D17 + the new-chapter fan-out (trackers B20, B21 closed)
 

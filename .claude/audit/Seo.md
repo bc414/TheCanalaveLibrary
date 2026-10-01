@@ -231,6 +231,11 @@ curl counts.
 (a Public author's post listed; Private and UsersOnly authors' posts absent, with `</loc>`-anchored
 ids; fails against the pre-fix query); the existing sitemap tests still green. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
+**Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass):** with AuthorAlpha set Private
+through the settings form, `/sitemap.xml` listed the group post (`/blog/1`) and only the Public users.
+The profile post and the Private users' profiles were absent, and the profile post answered a real
+404 to an anonymous request.
+
 ### Feature 64 L2 Stage 5 — WU-StoryLifecycle browser pass (2026-09-30): the canonical-slug 301 no longer swallows the story editor
 
 **No cell flips — F64 stays Stage 5.** The WU-StoryLifecycle browser pass found it from the author's

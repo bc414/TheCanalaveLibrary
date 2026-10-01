@@ -95,10 +95,12 @@ the USI row (do not decouple). Three write-path consequences, rule text in `laye
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
   all false; date row only when relevant") survived intact.
-**Stages (updated 2026-09-30, WU-InertFeatures):** L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the
-panel now adopts a changed `State` from its host so a recommendation card's Read It Later can't be
-flushed back — never browser-driven; returns to 5 with tracker H14's pass). Stage notes at the end of
-this feature.
+**Stages (updated 2026-09-30, WU-InertFeatures; WU-AccessGateSweep2 browser pass the same day):**
+L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the panel now adopts a changed `State` from its host so a
+recommendation card's Read It Later can't be flushed back — never browser-driven; returns to 5 with
+tracker H14's pass). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and refused-raise
+paths and fixed a page crash on a refused raise, but not the rec-card adoption H14 covers. Stage
+notes at the end of this feature.
 
 - **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
 
@@ -142,7 +144,7 @@ this feature.
   `Server/UserStoryInteractions/ServerUserStoryInteractionWriteService.cs`,
   DI in `Server/Program.cs`.
 
-- **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22; adopts a changed `State` when idle, WU-InertFeatures 2026-09-30 — Stage note at the end).** `UserStoryInteractionButton` leaf
+- **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22; adopts a changed `State` when idle, WU-InertFeatures 2026-09-30; a refused flush rolls back and shows inline, WU-AccessGateSweep2 browser pass 2026-09-30 — Stage notes at the end).** `UserStoryInteractionButton` leaf
   (WU7, Stage 5) + `UserStoryInteractionPanel` coordination composite (WU16). Panel owns the 2-second
   debounce via `CancellationTokenSource` + `Task.Delay`; applies optimistic local state update before
   the debounce fires; calls `SetUserStoryInteractionStateAsync` on flush.
@@ -343,6 +345,29 @@ overwritten), `StoryPageTests` +1 (card save → panel shows it), `CommunitySpot
 `ExploreTabTests` +1, `DeepDiveTabTests` +1. Mutation-checked: removing trigger 1 fails two tests;
 removing the panel's adoption clause fails the idle-adoption and story-page tests. Totals in the
 workplan entry. Rule: `layer2-services.md` §"Attribution (Feature 30)".
+
+### Feature 16 L2/L3-Logic — WU-AccessGateSweep2 browser verification (2026-09-30): D6 driven live; a refused raise no longer replaces the page
+
+**No cell flips.** L4.5 stays 1 for H14's rec-card adoption, which this pass did not drive.
+
+- **D6 clear, driven on both phases.** ReaderGamma (mature on) favorited and Read-It-Later'd the M
+  story, then turned mature off. Clearing Read It Later from its `/bookshelves` card saved on the
+  circuit and on WASM: `is_read_it_later` false, the date nulled, the favorite kept. The claim was
+  confirmed mature-off.
+- **Found and fixed: a refused raise crashed the page** (circuit and WASM). The story was taken down
+  (`psql`) or rating-hidden behind an open story page. The guard refused the raise correctly (404, no
+  row), but the exception escaped `HandleToggleAsync` and the page `CanalaveErrorBoundary` replaced the
+  whole story page. A second, futile flush also ran on dispose.
+  - The panel now keeps `_confirmedState`, the last state the server accepted or the parent supplied.
+  - On a refusal it rolls back to that state, unless a newer toggle has started, and shows
+    `ExceptionPresenter`'s message in an inline `ErrorAlert` (with the sign-in link on an expired
+    session). It no longer re-flushes on dispose.
+  - Re-driven on both phases: "That content couldn't be found — it may have been removed." under the
+    buttons, the page intact, no row.
+  - Rule: `layer3-logic.md` §"Optimistic Updates & Debounce" rule 4.
+- **Tier:** RazorComponents — `UserStoryInteractionPanelTests` +2 (a refused flush rolls back and
+  shows the refusal; earlier accepted toggles survive and the next toggle clears it). Both failed
+  against the pre-fix panel. Full narrative: `audit/AccessGate.md` F66.
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

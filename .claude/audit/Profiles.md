@@ -35,7 +35,7 @@ worker).
   next pass — connection tested via `GetMySettingsAsync` and write-path round-trips).
   **`UpdateAppearanceAsync` dropped its third parameter (WU-DataSaver, 2026-07-31)** — see this
   feature's dedicated Stage note below.
-- **L3-Logic — Stage 5** (WU30; `PrivacySettingsForm`'s "Off" options now write `Nobody`, WU-AccessGateSweep2, 2026-09-30 — see its Stage note). `SettingsPage.razor` at `/settings` dispatches to its sub-forms.
+- **L3-Logic — Stage 5** (WU30; `PrivacySettingsForm`'s "Off" options now write `Nobody`, WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note). `SettingsPage.razor` at `/settings` dispatches to its sub-forms.
   `ProfileSettingsForm`, `ReaderSettingsForm`, `PrivacySettingsForm`, `AuthorSettingsForm`,
   `AppearanceSettingsForm` all injection-free (bUnit-testable); page holds all service calls.
   `_seeded` guard prevents re-init on re-render. Per-section busy flags decouple save operations.
@@ -76,8 +76,16 @@ restores the seed — pre-real-data, so no data SQL.
 carries the `Nobody` value; choosing "Off" in both then Save raises `Nobody` for both fields; a saved
 `Nobody` displays as the "Off" option (both selects). Mutation-checked: all five fail against the old
 markup.
-`dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass. **No browser was available** — tracker **H13** carries the owner's browser confirmation; the
+`dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass. **No browser was available** to the build — tracker **H13**; the
 markup is visually unchanged, so L4.5 was not flipped.
+
+**Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass; closes H13 for this surface).** "Off"
+for the wall and for messages was saved as TestUser on WASM and as AuthorBeta on the circuit. Both
+rows hold `3`/`3` in `privacy_settings`, and both selects read back "Off" after a reload. The wall
+disappears for other users; messages and wall posts are refused (`audit/Messaging.md` F49,
+`audit/Comments.md` F23). The workbench was reset first, so no stale `2` rows were involved. The
+seven users' settings were restored to the seed values afterwards. Narrative: `audit/AccessGate.md`
+F66.
 
 ## Feature 21 — User Profile Display
 

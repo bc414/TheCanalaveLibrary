@@ -384,6 +384,10 @@ RazorComponents (`PrivacySettingsFormTests`); the gate's own tiers stay covered 
 `MessagingWriteServiceTests`. Workbench users who saved "Off" earlier still hold `Following` until they
 re-save (or `reset-dev-db.ps1`).
 
+**Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass):** with "Off" saved through the form,
+starting a conversation was refused with "This user does not accept private messages." on WASM (a
+403 on `POST /api/messaging/conversations`) and on the circuit. No `conversations` row was written.
+
 ### Tests (WU35, 2026-06-24)
 
 - **Unit** (`Tests.Unit/MessagingValidationsTests.cs`, 11 tests): `MessagingValidations.Validate`

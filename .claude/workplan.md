@@ -250,7 +250,8 @@ references it, does not restate it.
   WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
   2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
   2026-09-30, which closed B20–B22; **D9/H15** opened by the WU-StoryLifecycle browser pass,
-  2026-09-30, which narrowed H12), including two **high-priority security items:
+  2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
+  pass, 2026-09-30, which closed H13), including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
@@ -262,13 +263,13 @@ references it, does not restate it.
   story-lifecycle questions WU-StoryLifecycle left open — and 17–18 — the two defaults
   WU-InertFeatures had to take — added 2026-09-30). Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, tracker **H13**'s confirmation
-  of the access-gate sweep (privacy form "Off", Private-author blog 404s), and tracker **H14**'s pass
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, and tracker **H14**'s pass
   over recommendation attribution and the new notifications (it returns F16/F30/F41 L4.5 to 5) need
   Brian's own browser session —
   see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
-  WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry.)
+  WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry. Tracker **H13**'s
+  access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry.)
 
 ---
 
@@ -483,7 +484,8 @@ is pending except where a bullet says so.
 
 - **Cells:** none flipped — every change sits beneath an already-Stage-5 cell (F10, F16, F18, F20,
   F23, F25, F28, F35–37, F44, F49, F50, F64, F66); the WU-ParentVisibility shape. Markup changed
-  only in `PrivacySettingsForm`'s option values, so no L4.5 cell moved (browser pass: tracker **H13**).
+  only in `PrivacySettingsForm`'s option values, so no L4.5 cell moved (browser pass: tracker **H13**,
+  run and closed 2026-09-30 — see "Browser verification" below).
 - **Trigger:** owner ruling **D6** (answered 2026-08-04, unbuilt): the kind-(g) guard ran on clears
   too — a mature-off reader could not un-favorite an M story; mark-unread was refused on taken-down
   stories. Plus service audit §2.6's items not blocked on D25–D27. Sources: worksheet D6; service
@@ -554,6 +556,45 @@ is pending except where a bullet says so.
   `dotnet test`: **Unit 1,022, RazorComponents 703 (+2, `PollViewTests`), Integration 1,180 (+9)**;
   every fix-specific new test failed against a targeted mutation of its fix (the controls — visible-post unlike, `UsersOnly` fan-out, refreshed `PollView` result — pass both ways by design); build clean in touched files; all
   four gates pass. **No browser was available** — H13 gained step 5 (stale-page withdrawal/unlike).
+- **Browser verification (2026-09-30, after WU-InertFeatures and the WU-StoryLifecycle browser pass
+  had landed; two commits: "browser-pass fixes", then "browser verification").**
+  - **What was driven:**
+    - All five H13 steps, on the circuit and on WASM, with `psql` after each write. The phase was
+      read from the network log (`_blazor/negotiate` against `/api` calls).
+    - Privacy "Off" writes `3`/`3`. Its wall and messaging refusals read correctly.
+    - A D6 clear (Read It Later) on a rating-hidden M story, from the bookshelf card. H13 said
+      "un-favorite", but Favorite is read-only in listing context.
+    - AuthorAlpha Private (the settings form): real 404s for a reader, a follower and anonymous;
+      no API oracle; the sitemap drops the post; the reveal list shows "(deleted post)"; a Private
+      publish notifies nobody (the Public publish was the control).
+    - The `Following` wall's inline error and the followed user's successful post.
+    - The stale-page flows (the GIF, `e2e-WU-AccessGateSweep2.gif`): vote switch refused with the
+      not-found message, withdrawal drops the poll and the row, unlike settles at 0 while
+      `like_count` drops by one (2 → 1 on WASM).
+  - **Bugs fixed:**
+    1. A raise refused on a parent hidden behind an open page escaped its handler. The page error
+       boundary then replaced the whole page (interaction panel; `FollowButton`'s alerts-on, a raise
+       this WU guarded), on both phases. The fix rolls back to the last accepted state and shows the
+       refusal inline. `VouchButton` was fixed the same way. Rule: `layer3-logic.md` §"Optimistic
+       Updates & Debounce" rule 4, with a line in `error-handling.md`.
+    2. Dead `/profile/{id}` links on the blog post page, the poll voter list and the group page now
+       go to `/user/{id}`.
+  - **Tests:** RazorComponents +8 (panel ×2, `FollowButton` ×2, `VouchButton` ×1, three link hrefs).
+    All 8 failed with the SharedUI changes stashed. `dotnet test`: **Unit 1,058, RazorComponents 738,
+    Integration 1,253**. All four gates pass.
+  - **Not driven:** the acknowledgment/lineage reads and `RevokeAsync` (no UI path / API-only),
+    unfollow on a Private profile (seed counter, H18). Integration covers them.
+  - **Tracker:** H13 closed. New: **F12** (the new-post Publish checkbox is ignored — draft-first),
+    **H16** (bool-bound ARIA states render absent or empty), **H17** (other uncaught write handlers),
+    **H18** (seed follower counters).
+  - **Dev-DB state left behind** (the DB was reset first; reset again to drop it):
+    - All seven users' privacy settings are back at seed values.
+    - ReaderGamma (mature off) holds story 4 favorite + followed (the follow bit came from a
+      stale-claim test), and a reveal of post 4. ReaderGamma likes post 2 (`like_count` 1).
+    - TestUser's wall comment 6 is on AuthorAlpha's wall.
+    - AuthorAlpha has an open poll 1 "E2E Poll: Which region?" (no votes) on post 2, M post 4
+      (published) and post 5 (published).
+    - Notifications 5–6 (type 13, post 4) for TestUser and ReaderGamma.
 - **Pointers:** `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears";
   `layer2-services.md` §"`AllowProfileComments` Gate", §"Comment & blog-post semantic methods";
   `audit/AccessGate.md` F66 (enumeration record), `audit/UserStoryInteractions.md` F16,
@@ -561,6 +602,10 @@ is pending except where a bullet says so.
   `audit/Recommendations.md` F28, `audit/Following.md` F18, `audit/Stories.md` F10,
   `audit/Badges.md` F50, `audit/Profiles.md` F20, `audit/Messaging.md` F49, `audit/Seo.md` F64,
   `audit/Notifications.md` F41; `roadmap.md` §Resolved (D6); tracker D8, E6, F10, F11, H13.
+  Browser pass: `audit/AccessGate.md` F66 browser-verification note (the narrative), with notes in
+  `audit/UserStoryInteractions.md` F16, `audit/Following.md` F18, `audit/BlogPosts.md` F35–37,
+  `audit/Groups.md` F40, and the F20/F23/F41/F49/F64 notes; `layer3-logic.md` §"Optimistic Updates &
+  Debounce" rule 4; tracker F12, H16, H17, H18.
 
 ## WU-StoryLifecycle — story status transition table, first-submission approval gate + trust waiver, nullable publish anchors (worksheet D1 + D2; extends `Stories/`, `Chapters/`, `Moderation/`, `Identity/`, `Export/`) — DONE ✓ (2026-09-30)
 
