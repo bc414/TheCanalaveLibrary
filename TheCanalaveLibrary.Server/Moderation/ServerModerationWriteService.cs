@@ -241,6 +241,11 @@ public class ServerModerationWriteService(
 
     private const string SubmissionAlreadyHandled = "This submission was already handled.";
 
+    // A taken-down story's status is frozen until the takedown is reversed (layer2-services.md
+    // §"Story Lifecycle") — the moderator-side twin of TransitionStatusAsync's refusal.
+    private const string SubmissionTakenDown =
+        "This story is under a moderator takedown, so it can't be approved or rejected unless the takedown is reversed.";
+
     public async Task ApproveStoryAsync(int storyId)
     {
         int modId = RequireModerator();
@@ -251,6 +256,7 @@ public class ServerModerationWriteService(
             {
                 s.StoryStatusId,
                 s.AuthorId,
+                s.IsTakenDown,
                 PostApprovalStatus = s.StoryDetail.PostApprovalStatus,
                 AuthorStatus = s.Author != null ? (AccountStatusEnum?)s.Author.AccountStatus : null,
                 AuthorSuspendedUntilUtc = s.Author != null ? s.Author.SuspendedUntilUtc : null,
@@ -259,9 +265,11 @@ public class ServerModerationWriteService(
             ?? throw new KeyNotFoundException($"Story {storyId} was not found.");
 
         // D1 guards, all user-facing (400) rather than the InvalidOperationException → 401 they
-        // replaced. Order: already handled → unpublishable target → non-live author.
+        // replaced. Order: already handled → taken down → unpublishable target → non-live author.
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
             throw new ModerationValidationException([SubmissionAlreadyHandled]);
+        if (story.IsTakenDown)
+            throw new ModerationValidationException([SubmissionTakenDown]);
 
         // Closes the approve-into-Draft hole: PostApprovalStatus stays editable while queued, so it
         // is re-validated here, not only at submit.
@@ -295,7 +303,8 @@ public class ServerModerationWriteService(
             await using var tx = await writeDb.Database.BeginTransactionAsync();
 
             int affected = await writeDb.Stories
-                .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval)
+                .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval
+                            && !s.IsTakenDown)
                 .ExecuteUpdateAsync(u => u
                     .SetProperty(s => s.StoryStatusId, approvedStatus)
                     // D2: first publication only — a previously published story keeps its date.
@@ -327,19 +336,25 @@ public class ServerModerationWriteService(
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
-            .Select(s => new { s.StoryStatusId, s.AuthorId })
+            .Select(s => new { s.StoryStatusId, s.AuthorId, s.IsTakenDown })
             .SingleOrDefaultAsync()
             ?? throw new KeyNotFoundException($"Story {storyId} was not found.");
 
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
             throw new ModerationValidationException([SubmissionAlreadyHandled]);
+        // Rejecting a taken-down row would overwrite the takedown's own TakedownReason/TakedownDate
+        // and leave a Rejected story under the takedown — the overlap D1 rules out. The queue never
+        // lists such a row (GetPendingSubmissionsAsync keeps the IsTakenDown filter on).
+        if (story.IsTakenDown)
+            throw new ModerationValidationException([SubmissionTakenDown]);
 
         // Rejected is reachable only from PendingApproval (D1) — enforced by the conditional update
-        // itself, so a race with an approve or a withdraw can't reject a row it no longer applies to.
-        // No live-author guard here: a moderator must always be able to clear the queue.
+        // itself, so a race with an approve, a withdraw or a takedown can't reject a row it no longer
+        // applies to. No live-author guard here: a moderator must always be able to clear the queue.
         DateTime now = DateTime.UtcNow;
         int affected = await writeDb.Stories
-            .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval)
+            .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval
+                        && !s.IsTakenDown)
             .ExecuteUpdateAsync(u => u
                 .SetProperty(s => s.StoryStatusId, StoryStatusEnum.Rejected)
                 .SetProperty(s => s.TakedownReason, reason)

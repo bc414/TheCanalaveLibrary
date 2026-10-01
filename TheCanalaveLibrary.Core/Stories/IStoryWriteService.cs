@@ -21,12 +21,14 @@ public interface IStoryWriteService
     /// (submit, withdraw, revise-after-rejection, moves among the published statuses, unpublish).
     /// A trusted author's submit lands straight at <c>PostApprovalStatus</c>; the first move into
     /// the published set stamps <c>PublishedDate</c> (never re-stamped). Never touches
-    /// <c>LastUpdatedDate</c> or <c>IsTakenDown</c>. See <c>layer2-services.md</c> §"Story Lifecycle".
+    /// <c>LastUpdatedDate</c>; never writes <c>IsTakenDown</c>, and refuses every move while it is set
+    /// (a taken-down story's status is frozen). See <c>layer2-services.md</c> §"Story Lifecycle".
     /// </summary>
     /// <returns>The status the story actually landed on — lets the UI tell "Published" from
     /// "Submitted for review".</returns>
     /// <exception cref="StoryValidationException">Undefined or illegal target, no valid
-    /// <c>PostApprovalStatus</c> at submit, or the status changed since it was read.</exception>
+    /// <c>PostApprovalStatus</c> at submit, the story is taken down, or the status changed since it
+    /// was read.</exception>
     /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/>.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
     Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus);

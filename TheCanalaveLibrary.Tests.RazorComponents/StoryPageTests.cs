@@ -114,6 +114,29 @@ public class StoryPageTests : BunitContext
         _auth.SetAuthorized($"user-{userId}")
              .SetClaims(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
 
+    // ── Publish date (D2: NULL = never published on this site) ─────────────────────
+
+    [Fact]
+    public void StoryPage_PublishedStory_RendersItsPublishDate()
+    {
+        IRenderedComponent<StoryPage> cut = RenderPage(MakeStory());
+
+        cut.Markup.Should().Contain("Published Jan 15, 2025");
+    }
+
+    [Fact]
+    public void StoryPage_NeverPublishedStory_RendersNotYetPublished()
+    {
+        // Only the author can load a never-published story; the page must not invent a date for it.
+        StoryDetailsDTO draft = MakeStory(status: StoryStatusEnum.Draft);
+        draft.PublishDate = null;
+
+        IRenderedComponent<StoryPage> cut = RenderPage(draft);
+
+        cut.Markup.Should().Contain("Not yet published");
+        cut.Markup.Should().NotContain("Published Jan");
+    }
+
     // ── Title ─────────────────────────────────────────────────────────────────────
 
     [Fact]

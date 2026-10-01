@@ -191,7 +191,7 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | `total_words` | stock | `SUM(Story.WordCount)` as-of-day |
 | `new_users` | flow | `User.CreatedUtc` |
 | `new_stories` | flow | `Story.PublishedDate` — the first-publication stamp (NULL = never published, so drafts, pending and rejected stories never count; WU-StoryLifecycle, D2) |
-| `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2) |
+| `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2). **Known divergence from `new_stories`:** no story predicate, and the anchor is stamped on the chapter's own first publish whatever its story's status — so chapters published inside a not-yet-live story (Draft/Pending, or later Rejected) count here while their story never counts in `new_stories`. Left as built pending `roadmap.md` decision row 16 (when does a chapter "go live" if its story isn't live?) |
 | `new_words` | flow | `SUM` of the primary version's `ChapterContent.WordCount` on `Chapter.FirstPublishedDate` |
 | `new_comments` | flow | UNION of the 4 TPT comment children's `DatePosted` |
 | `new_blog_posts` | flow | `ProfileBlogPost`/`GroupBlogPost.DateCreated` |

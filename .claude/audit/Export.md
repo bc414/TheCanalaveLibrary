@@ -10,7 +10,8 @@ generation: `IExportService` (Core) + `ServerExportService` + per-format writers
 (Server), all in the `Export/` cluster.
 
 ## Feature 54 — Content Download/Export
-- **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11).**
+- **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11; re-verified WU-StoryLifecycle,
+  2026-09-30 — nullable publish date, "Not yet published" header; see its Stage note below).**
 - **L3-Logic — N/A** (trigger lives in Stories components). **L3.5 — N/A** (no components).
 - **L4 — N/A. L4.5 — Stage 5. L5 — N/A. L6 — N/A. L8 — N/A.**
 
@@ -38,6 +39,21 @@ caret Download submenu (the dead `OnDownload` EventCallback parameter was remove
   six anchors, `download` attribute, collapsed-by-default).
 - Import round-trips (ContentImportTests) double as writer-fidelity proof: export → import → the
   allowlist content survives byte-for-byte in every text format.
+
+### L2 Stage note (WU-StoryLifecycle, 2026-09-30) — no cell flips; F54 L2 stays 5
+Owner ruling D2 made `stories.published_date` nullable (NULL = never published on this site), and
+only a story's author can read — so export — a never-published story. `StoryExportModel.PublishDate`
+became `DateTime?` (`ServerExportService` passes the value through unchanged) and gained a computed
+`PublishedLabel` ("Published MMM d, yyyy" / "Not yet published") plus `FormatPublished(format)` for
+Markdown's ISO date. The header line of five writers uses it — DOCX, HTML, Markdown, PDF, TXT; EPUB
+carries no publish date and is untouched. HTML needed the change to compile at all (`.ToString(fmt)`
+doesn't exist on a nullable). This entry was missing from the WU-StoryLifecycle commit (the change
+was recorded only under `audit/Stories.md` F5) and was added by its review fixes the same day.
+**Verified:** Unit `ExportWritersTests` — `PublishedLabel_FormatsTheDate_OrSaysNotYetPublished`,
+`NullPublishDate_RendersNotYetPublished_InEveryTextWriter` (HTML/TXT/Markdown/DOCX text; PDF proves
+only that the writer accepts the null, since its text is compressed),
+`Markdown_KeepsItsIsoDateFormat_ForAPublishedStory`. No UI changed, so no browser pass is owed;
+L4.5 stays 5.
 
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under

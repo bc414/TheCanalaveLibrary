@@ -371,7 +371,12 @@ code change:
    sync JSON path deserializes camelCase with case-sensitive defaults
    (`ClientContentImportService.cs:91,145`) — `title`/`html` never bind. Two-line fix + extract a
    shared `JsonSerializerOptions(Web)` so the sync twin can't drift again.
-5. **Moderation WIP un-does its own fix on the client. MEDIUM, CONFIRMED.** The new
+5. > **Built:** WU-StoryLifecycle (2026-09-30), pulled forward from WU-ModerationIntegrity —
+   > `ClientModerationWriteService` maps 400 → `ModerationValidationException` via the shared
+   > `ClientHttpHelpers.ThrowIfWriteFailedAsync`, and its stale comment is rewritten;
+   > WU-ModerationIntegrity only verifies it. The finding below is history.
+
+   **Moderation WIP un-does its own fix on the client. MEDIUM, CONFIRMED.** The new
    `ModerationValidationException` reaches moderators verbatim on the circuit, but
    `ClientModerationWriteService.cs:96-97` maps 400 → `ArgumentException`, which
    `ExceptionPresenter.IsUserFacing` excludes — WASM re-flattens to the generic message. Every

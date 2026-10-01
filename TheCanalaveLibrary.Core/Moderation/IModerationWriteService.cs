@@ -75,9 +75,10 @@ public interface IModerationWriteService : IModerationReadService
     /// best-effort after commit.
     /// <para>Throws <see cref="KeyNotFoundException"/> for an unknown story, and
     /// <see cref="ModerationValidationException"/> when the story is no longer
-    /// <c>PendingApproval</c> (handled elsewhere — checked again inside the conditional update), its
-    /// <c>PostApprovalStatus</c> is not an entry status (InProgress/Completed/OpenBeta), or its author
-    /// is not live (deleted, banned, or suspended with a null or future end date).</para>
+    /// <c>PendingApproval</c> (handled elsewhere — checked again inside the conditional update), it is
+    /// taken down (a taken-down story's status is frozen), its <c>PostApprovalStatus</c> is not an
+    /// entry status (InProgress/Completed/OpenBeta), or its author is not live (deleted, banned, or
+    /// suspended with a null or future end date).</para>
     /// </summary>
     Task ApproveStoryAsync(int storyId);
 
@@ -86,7 +87,8 @@ public interface IModerationWriteService : IModerationReadService
     /// reason, and fires <c>StoryRejected</c> best-effort. <c>Rejected</c> is reachable only from
     /// <c>PendingApproval</c>. Unguarded on the author, so the queue can always be cleared.
     /// <para>Throws <see cref="KeyNotFoundException"/> for an unknown story and
-    /// <see cref="ModerationValidationException"/> when it is no longer <c>PendingApproval</c>.</para>
+    /// <see cref="ModerationValidationException"/> when it is no longer <c>PendingApproval</c> or is
+    /// taken down (rejecting would overwrite the takedown's own reason and date).</para>
     /// </summary>
     Task RejectStoryAsync(int storyId, string reason);
 

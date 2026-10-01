@@ -19,6 +19,8 @@ public interface IModerationReadService
 
     /// <summary>
     /// Returns stories currently in <c>PendingApproval</c> status, ordered by submission date ascending.
+    /// A taken-down story is never listed — its status is frozen and approve/reject refuse it
+    /// (<c>layer2-services.md</c> §"Story Lifecycle").
     /// </summary>
     Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync();
 

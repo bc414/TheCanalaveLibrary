@@ -10,14 +10,17 @@
 @* Story submission queue (WU34 Feature 48) + external-link verification (Feature 53, WU39).
    Tabbed shell — Stories tab is the active tab. Desktop-only.
 
-   Stories tab — only an author's FIRST submission ever lands here (owner ruling D1: a trusted
-   author's submit publishes directly). Approve: StoryStatusId = PostApprovalStatus, PublishedDate
-   stamped on first publication, the author's ApprovedStorySubmissions +1, StoryApproved notification.
+   Stories tab — only UNTRUSTED authors' submissions land here (owner ruling D1: a trusted author's
+   submit publishes directly). Untrusted = never had a story approved, or a moderator revoked their
+   auto-approve — so a row can be a resubmission of a story that was published before (it keeps its
+   original PublishedDate). Approve: StoryStatusId = PostApprovalStatus, PublishedDate stamped on
+   first publication only, the author's ApprovedStorySubmissions +1, StoryApproved notification.
    Reject: StoryStatusId = Rejected + reason + StoryRejected notification. Both act only on a row
    still PendingApproval and refuse with a ModerationValidationException otherwise ("already
    handled" — another moderator or an author withdraw got there first), on which the queue reloads;
    approve also refuses a non-live author or an unpublishable "Status when published" (reject it).
-   Rows are ordered and dated by SubmittedDate (WU-StoryLifecycle).
+   Taken-down stories never appear (their status is frozen). Rows are ordered and dated by
+   SubmittedDate (WU-StoryLifecycle).
 
    Imports tab — two independent queues, both manual review (no server-side fetch, ever):
    account tier (open the profile URL, confirm the code text is present) and per-link tier (open
@@ -368,8 +371,29 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        Submissions = await ModerationService.GetPendingSubmissionsAsync();
-        _loading = false;
+        try { Submissions = await ModerationService.GetPendingSubmissionsAsync(); }
+        finally { _loading = false; } // a failed fetch must never strand the queue on "Loading…"
+    }
+
+    /// <summary>
+    /// The reload after a guard refusal. It runs from inside a catch block, so a failure here (a
+    /// transient HTTP error on the WASM pass, a DB hiccup on the circuit) would otherwise escape the
+    /// event handler unhandled — killing the circuit or tripping the error boundary. The refusal
+    /// message is already in the queue-level slot; a reload failure is appended to it, and the
+    /// stale queue stays on screen.
+    /// </summary>
+    private async Task ReloadAfterRefusalAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            string reloadError = Translate(ex, "Reloading the submission queue after a refusal failed unexpectedly");
+            _storyActionError = _storyActionError is null ? reloadError : $"{_storyActionError} {reloadError}";
+            _storyActionErrorIsSessionExpired = ex is SessionExpiredException;
+        }
     }
 
     private async Task ApproveAsync(int storyId)
@@ -387,7 +411,7 @@
             // A guard refused (already handled elsewhere, non-live author, unpublishable status):
             // show why, and reload so a row another moderator / the author already moved disappears.
             _storyActionError = ExceptionPresenter.GetUserMessage(ex);
-            await LoadAsync();
+            await ReloadAfterRefusalAsync();
         }
         catch (Exception ex)
         {
@@ -438,7 +462,7 @@
             // the queue-level slot (the reject panel closes with its row).
             CancelReject();
             _storyActionError = ExceptionPresenter.GetUserMessage(ex);
-            await LoadAsync();
+            await ReloadAfterRefusalAsync();
         }
         catch (Exception ex)
         {

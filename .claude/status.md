@@ -78,7 +78,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
@@ -121,8 +121,8 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | 5 | N/A | N/A |
 | 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
-| 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
-| 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
+| 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 1 | 5 | 5 | N/A |
+| 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 1 | 5 | N/A | N/A |
 | 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |

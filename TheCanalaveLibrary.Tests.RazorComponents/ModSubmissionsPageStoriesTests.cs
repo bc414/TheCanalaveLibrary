@@ -10,8 +10,10 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <see cref="ModSubmissionsPage"/>'s Stories tab after WU-StoryLifecycle (owner rulings D1/D2):
 /// the "submitted" date is the nullable <c>SubmittedDate</c>, and a guard refusal from approve or
 /// reject (<see cref="ModerationValidationException"/> — e.g. another moderator or an author
-/// withdraw got there first) shows its message AND reloads the queue so a handled row disappears.
-/// The guards themselves are Integration-covered (<c>ModerationServiceTests</c>).
+/// withdraw got there first) shows its message AND reloads the queue so a handled row disappears —
+/// and a reload that itself fails stays inside the handler (message kept, never stuck on
+/// "Loading…"), because it runs from a catch block. The guards themselves are Integration-covered
+/// (<c>ModerationServiceTests</c>).
 /// Tier: RazorComponents (bUnit).
 /// </summary>
 public class ModSubmissionsPageStoriesTests : BunitContext
@@ -88,6 +90,40 @@ public class ModSubmissionsPageStoriesTests : BunitContext
         cut.Markup.Should().Contain("No pending submissions.");
     }
 
+    [Fact]
+    public async Task Approve_Refusal_ThenTheReloadFails_KeepsTheMessage_AndTheQueue()
+    {
+        _moderation.Queue = [Row(1, DateTime.UtcNow)];
+        IRenderedComponent<ModSubmissionsPage> cut = Render<ModSubmissionsPage>();
+        _moderation.ApproveBehavior = () => throw new ModerationValidationException(["This submission was already handled."]);
+        _moderation.LoadBehavior = () => throw new HttpRequestException("Network down.");
+
+        // Before the fix this reload ran unguarded inside the catch: the exception escaped the event
+        // handler (this await would throw) and the queue was stranded on "Loading…".
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Approve").ClickAsync(new());
+
+        cut.Markup.Should().Contain("This submission was already handled.");
+        cut.Markup.Should().NotContain("Loading", "a failed reload must reset the loading state");
+        cut.Markup.Should().Contain("Pending 1", "the stale queue stays on screen");
+    }
+
+    [Fact]
+    public async Task Reject_Refusal_ThenTheReloadFails_KeepsTheMessage_AndTheQueue()
+    {
+        _moderation.Queue = [Row(1, DateTime.UtcNow)];
+        IRenderedComponent<ModSubmissionsPage> cut = Render<ModSubmissionsPage>();
+        _moderation.RejectBehavior = () => throw new ModerationValidationException(["This submission was already handled."]);
+        _moderation.LoadBehavior = () => throw new HttpRequestException("Network down.");
+
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Reject").ClickAsync(new());
+        cut.Find("textarea").Change("Spam.");
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Confirm reject").ClickAsync(new());
+
+        cut.Markup.Should().Contain("This submission was already handled.");
+        cut.Markup.Should().NotContain("Loading");
+        cut.Markup.Should().Contain("Pending 1");
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────────
 
     private sealed class ScriptedModerationWriteService : IModerationWriteService
@@ -95,8 +131,13 @@ public class ModSubmissionsPageStoriesTests : BunitContext
         public StorySubmissionQueueItemDto[] Queue { get; set; } = [];
         public Action ApproveBehavior { get; set; } = () => { };
         public Action RejectBehavior { get; set; } = () => { };
+        public Action LoadBehavior { get; set; } = () => { };
 
-        public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() => Task.FromResult(Queue);
+        public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync()
+        {
+            LoadBehavior();
+            return Task.FromResult(Queue);
+        }
 
         public Task ApproveStoryAsync(int storyId)
         {

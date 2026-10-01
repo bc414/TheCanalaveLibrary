@@ -254,6 +254,103 @@ public class StoryLifecycleTests(PostgresFixture postgres) : IntegrationTestBase
         draft.RejectionReason.Should().BeNull("the reason is only meaningful while the story is Rejected");
     }
 
+    // ── Takedown freezes status (D1's non-overlap, enforced — review fixes 2026-09-30) ──
+
+    [Theory]
+    [InlineData(StoryStatusEnum.InProgress, StoryStatusEnum.Draft)]           // unpublish
+    [InlineData(StoryStatusEnum.InProgress, StoryStatusEnum.Completed)]       // published move
+    [InlineData(StoryStatusEnum.Draft, StoryStatusEnum.PendingApproval)]      // submit (untrusted → queue)
+    [InlineData(StoryStatusEnum.PendingApproval, StoryStatusEnum.Draft)]      // withdraw
+    public async Task TakenDownStory_RefusesEveryAuthorMove_AndChangesNothing(
+        StoryStatusEnum from, StoryStatusEnum target)
+    {
+        // Without the freeze, the first row is step one of "unpublish → resubmit → in front of a
+        // moderator", where approve would count toward trust and reject would overwrite the
+        // takedown's own reason — the overlap D1 confines rejection to pre-publication to avoid.
+        int storyId = await SeedStoryAsync(_authorId, status: from);
+        await UpdateStoryAsync(storyId, u => u
+            .SetProperty(s => s.IsTakenDown, true)
+            .SetProperty(s => s.TakedownReason, "Removed by a moderator."));
+
+        Func<Task> act = () => TransitionAsync(storyId, target);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains("taken down"));
+        Story story = await LoadAsync(storyId);
+        story.StoryStatusId.Should().Be(from);
+        story.TakedownReason.Should().Be("Removed by a moderator.");
+    }
+
+    [Fact]
+    public async Task TakenDownStory_TrustedSubmit_IsAlsoRefused()
+    {
+        // The waiver route never touches the queue, but the freeze is about the status, not the
+        // queue: reversing a takedown must restore the story exactly as it was taken down.
+        await SetTrustAsync(approved: 1, canAutoApprove: true);
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+        await UpdateStoryAsync(storyId, u => u.SetProperty(s => s.IsTakenDown, true));
+
+        (await this.Invoking(t => t.TransitionAsync(storyId, StoryStatusEnum.PendingApproval))
+                .Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains("taken down"));
+        Story story = await LoadAsync(storyId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.Draft);
+        story.PublishedDate.Should().BeNull();
+    }
+
+    // ── The conditional write itself (not the pre-read check) ───────────────────────
+
+    [Fact]
+    public async Task Transition_StatusChangesBetweenReadAndWrite_Throws_AndOverwritesNothing()
+    {
+        // The author withdraws a pending story while a moderator approves it: the approval lands
+        // strictly between TransitionStatusAsync's read and its conditional update. A sequential
+        // test can't reach this path — the pre-read would already see the new status.
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.PendingApproval);
+        InterleavingCommandInterceptor moderatorApproves = new(ConnectionString, "UPDATE stories",
+            $"UPDATE stories SET story_status_id = {(int)StoryStatusEnum.InProgress}, published_date = now() " +
+            $"WHERE story_id = {storyId}");
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (ServerStoryWriteService write, ApplicationDbContext writeDb) =
+                InterleavingCommandInterceptor.CreateService<ServerStoryWriteService>(scope, ConnectionString, moderatorApproves);
+            await using (writeDb)
+            {
+                (await write.Invoking(w => w.TransitionStatusAsync(storyId, StoryStatusEnum.Draft))
+                        .Should().ThrowAsync<StoryValidationException>())
+                    .Which.Errors.Should().ContainSingle(e => e.Contains("just changed"));
+            }
+        }
+
+        moderatorApproves.Fired.Should().BeTrue("the competing write must land between the read and the write");
+        (await LoadAsync(storyId)).StoryStatusId.Should().Be(StoryStatusEnum.InProgress,
+            "the guarded WHERE affects 0 rows instead of overwriting the moderator's approval with Draft");
+    }
+
+    [Fact]
+    public async Task Transition_TakedownLandsBetweenReadAndWrite_Throws_AndOverwritesNothing()
+    {
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.InProgress);
+        InterleavingCommandInterceptor moderatorTakesDown = new(ConnectionString, "UPDATE stories",
+            $"UPDATE stories SET is_taken_down = true WHERE story_id = {storyId}");
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (ServerStoryWriteService write, ApplicationDbContext writeDb) =
+                InterleavingCommandInterceptor.CreateService<ServerStoryWriteService>(scope, ConnectionString, moderatorTakesDown);
+            await using (writeDb)
+            {
+                await write.Invoking(w => w.TransitionStatusAsync(storyId, StoryStatusEnum.Draft))
+                    .Should().ThrowAsync<StoryValidationException>();
+            }
+        }
+
+        moderatorTakesDown.Fired.Should().BeTrue();
+        (await LoadAsync(storyId)).StoryStatusId.Should().Be(StoryStatusEnum.InProgress,
+            "!IsTakenDown rides the conditional WHERE, so the frozen status survives the race");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private async Task<int> CreateAsync(StoryStatusEnum postApprovalStatus, DateOnly? originalPublished = null)

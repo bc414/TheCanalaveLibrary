@@ -1602,8 +1602,17 @@ authors — approve-once-then-rewrite is closed only for an author's **first** s
 
 **Moderator transitions — only from `PendingApproval`.** Approve → `PostApprovalStatus`, re-validated with
 `IsEntryStatus` (closes the approve-into-`Draft` hole). Reject → `Rejected`. **`Rejected` is reachable
-only from `PendingApproval`**; published content is removed only via `IsTakenDown`, so the two
-invisibility mechanisms never overlap. Approve also requires a **live author** and refuses when
+only from `PendingApproval`**; published content is removed only via `IsTakenDown`. Confining rejection
+to pre-publication is what D1 relies on to keep the two invisibility mechanisms from overlapping, so the
+non-overlap is **enforced, not assumed** (WU-StoryLifecycle review fixes, 2026-09-30 — derived from D1's
+rationale, flagged): **a taken-down story's status is frozen until the takedown is reversed.**
+`TransitionStatusAsync` refuses every author move on an `IsTakenDown` row (without this, an author could
+unpublish a taken-down story over the API, resubmit it, and put it in front of a moderator), approve and
+reject refuse an `IsTakenDown` row (reject would otherwise overwrite the takedown's own
+`TakedownReason`/`TakedownDate` and leave a `Rejected` story under the takedown), and the pending queue
+keeps the `IsTakenDown` filter on, so such a row never appears there. All three conditional updates also
+carry `!IsTakenDown` in their `WHERE`, so a takedown landing between the read and the write affects 0
+rows. Reversing a takedown therefore always restores the story exactly as it was. Approve also requires a **live author** and refuses when
 `AuthorId` is null (deleted — D13 hard delete leaves the FK `SetNull`), the author is `Banned`, or the
 author is `Suspended` with a null or future `SuspendedUntilUtc` (deliberately stricter than
 `CanalaveSignInManager` on the null-date case). Reject is unguarded, so a moderator can always clear the
@@ -1640,8 +1649,8 @@ provenance and are never copied into a site-local column; an import's arrival so
 publication.
 
 **A status move is not a content update.** `TransitionStatusAsync` never touches `LastUpdatedDate`
-(touching it would reopen the unpublish/republish bump vector) and never touches `IsTakenDown` (an
-orthogonal axis — a taken-down story stays hidden whatever its status).
+(touching it would reopen the unpublish/republish bump vector) and never writes `IsTakenDown` (an
+orthogonal axis — it only reads it, to refuse moves on a taken-down story; see above).
 
 **Ratified riders (D1).** A post-approval rating raise is handled reactively only (the report path).
 Chapter-level gating never happens. **Import verification never takes the waiver** — true today because
@@ -1670,7 +1679,9 @@ The trust counter itself is a record of a decision, not a derived counter — se
 
 **Soft-delete (takedown) visibility filter `"IsTakenDown"`.** Each removable entity registers
 `HasQueryFilter("IsTakenDown", e => !e.IsTakenDown)` in `OnModelCreating`. Public reads go through the
-filter automatically. Author views and mod review paths use `IgnoreQueryFilters(["IsTakenDown"])`. The
+filter automatically. Author views and mod review paths use `IgnoreQueryFilters(["IsTakenDown"])` (one
+deliberate exception: the pending-submissions queue keeps the filter on, so a taken-down story never
+reaches approve/reject — §"Story Lifecycle"). The
 filter composes alongside `"ContentRating"` and `"GroupAudience"` on entities that have multiple filters.
 See `content-safety.md` "Content Removal" for the column naming rationale and moderator filter behavior.
 

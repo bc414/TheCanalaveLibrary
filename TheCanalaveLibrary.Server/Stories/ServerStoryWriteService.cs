@@ -183,6 +183,7 @@ public class ServerStoryWriteService(
             {
                 s.AuthorId,
                 s.StoryStatusId,
+                s.IsTakenDown,
                 PostApprovalStatus = s.StoryDetail.PostApprovalStatus,
                 ApprovedStorySubmissions = s.Author != null ? s.Author.ApprovedStorySubmissions : 0,
                 CanAutoApprove = s.Author != null && s.Author.CanAutoApprove,
@@ -196,6 +197,14 @@ public class ServerStoryWriteService(
         // separate path in ServerModerationWriteService and never OR into this check.
         if (story.AuthorId != userId)
             throw new UnauthorizedAccessException("You can only change the status of your own stories.");
+
+        // A taken-down story's status is frozen until a moderator reverses the takedown. Without
+        // this an author could unpublish it over the API, resubmit it, and put it back in front of a
+        // moderator — the takedown/rejection overlap D1 confines rejection to pre-publication to avoid
+        // (layer2-services.md §"Story Lifecycle"). The editor can't load such a story anyway.
+        if (story.IsTakenDown)
+            throw new StoryValidationException(
+                ["This story was taken down by a moderator, so its status can't change unless the takedown is reversed."]);
 
         bool trusted = story.ApprovedStorySubmissions >= 1 && story.CanAutoApprove;
         StoryTransitionResult resolved = StoryLifecycle.ResolveAuthorTransition(
@@ -211,11 +220,13 @@ public class ServerStoryWriteService(
         // ONE conditional update, guarded on the status just read — a concurrent change (a
         // moderator's approve/reject, the author's other tab) makes it affect 0 rows instead of
         // silently overwriting (lost-update guard; layer2-services.md §"Story Lifecycle").
-        // Deliberately untouched: LastUpdatedDate (a status move is not a content update — touching
-        // it would reopen the unpublish/republish bump vector) and IsTakenDown (orthogonal axis).
+        // !IsTakenDown rides the same WHERE, so a takedown landing between the read and this write
+        // affects 0 rows too. Deliberately untouched: LastUpdatedDate (a status move is not a content
+        // update — touching it would reopen the unpublish/republish bump vector) and IsTakenDown
+        // itself (read, never written).
         DateTime now = DateTime.UtcNow;
         IQueryable<Story> guarded = writeDb.Stories
-            .Where(s => s.StoryId == storyId && s.StoryStatusId == current);
+            .Where(s => s.StoryId == storyId && s.StoryStatusId == current && !s.IsTakenDown);
 
         int affected;
         if (StoryLifecycle.IsPublished(result))

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -27,9 +28,14 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   deleted/banned/suspended; an unknown story is <c>KeyNotFoundException</c>.</item>
 ///   <item><c>RejectStoryAsync</c>: sets <c>StoryStatusId = Rejected</c>, records reason, fires
 ///   <c>StoryRejected</c>; only from <c>PendingApproval</c>, never guarded on the author.</item>
-///   <item><c>SetCanAutoApproveAsync</c> (WU-StoryLifecycle): flips the flag and files a
-///   moderator-initiated audit <c>Report</c>; unchanged value writes nothing.</item>
-///   <item>The pending queue orders by and returns <c>SubmittedDate</c>.</item>
+///   <item><c>SetCanAutoApproveAsync</c> (WU-StoryLifecycle): flips the flag in both directions and
+///   files a moderator-initiated audit <c>Report</c> each time; unchanged value writes nothing; unknown
+///   user/reason and an over-long reason are refused.</item>
+///   <item>The pending queue orders by and returns <c>SubmittedDate</c>, and never lists a taken-down
+///   story, which approve and reject both refuse (a taken-down story's status is frozen).</item>
+///   <item>The conditional writes themselves (review fixes, 2026-09-30): a competing write landing
+///   between the pre-read and the update (<see cref="InterleavingCommandInterceptor"/>) is refused
+///   with nothing written, and a failed trust-record write rolls the approve's status flip back.</item>
 /// </list>
 /// </para>
 ///
@@ -725,6 +731,152 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     }
 
     [Fact]
+    public async Task SetCanAutoApproveAsync_RevokeThenRestore_WritesTwoAuditRows_AndTheWaiverReturns()
+    {
+        int authorId = await SeedUserAsync("RestoredAuthor");
+        await UpdateUserAsync(authorId, u => u.SetProperty(x => x.ApprovedStorySubmissions, 1));
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().SetCanAutoApproveAsync(authorId, canAutoApprove: false, reasonId, "Spam after approval.");
+        await GetMod().SetCanAutoApproveAsync(authorId, canAutoApprove: true, reasonId, "Cleared on appeal.");
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Users.SingleAsync(u => u.Id == authorId)).CanAutoApprove.Should().BeTrue();
+            List<string?> actions = await db.Reports
+                .Where(r => r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == authorId)
+                .OrderBy(r => r.ReportId)
+                .Select(r => r.ActionTaken)
+                .ToListAsync();
+            actions.Should().Equal("Auto-approve revoked: Spam after approval.", "Auto-approve restored: Cleared on appeal.");
+        }
+
+        // Restored for real: the author's next submit takes the trust waiver again.
+        int storyId = await SeedStoryAsync(authorId, status: StoryStatusEnum.Draft);
+        SetActiveUser(authorId);
+        (await GetStoryWrite().TransitionStatusAsync(storyId, StoryStatusEnum.PendingApproval))
+            .Should().Be(StoryStatusEnum.InProgress, "a restored author publishes directly again");
+    }
+
+    [Fact]
+    public async Task SetCanAutoApproveAsync_UnknownUser_UnknownReason_AndOverLongReason_AreRefused()
+    {
+        int targetId = await SeedUserAsync("Guarded");
+        short reasonId = await GetFirstReasonIdAsync();
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+
+        await GetMod().Invoking(m => m.SetCanAutoApproveAsync(999_999, false, reasonId, "x"))
+            .Should().ThrowAsync<KeyNotFoundException>();
+        await GetMod().Invoking(m => m.SetCanAutoApproveAsync(targetId, false, short.MaxValue, "x"))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*reason*");
+        await GetMod().Invoking(m => m.SetCanAutoApproveAsync(targetId, false, reasonId, new string('r', 1100)))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*too long*");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Users.SingleAsync(u => u.Id == targetId)).CanAutoApprove.Should().BeTrue("every refusal writes nothing");
+        (await db.Reports.AnyAsync(r => r.ReportedEntityId == targetId)).Should().BeFalse();
+    }
+
+    // ── Takedown freezes status: approve/reject refuse it, the queue hides it ─────
+
+    [Fact]
+    public async Task ApproveAndReject_TakenDownPendingStory_AreRefused_AndTheQueueHidesIt()
+    {
+        int authorId = await SeedUserAsync("TakenDownPending");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        DateTime takedownDate = new(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        await UpdateStoryAsync(storyId, s => s
+            .SetProperty(x => x.IsTakenDown, true)
+            .SetProperty(x => x.TakedownReason, "Spam takedown.")
+            .SetProperty(x => x.TakedownDate, takedownDate));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        (await GetMod().GetPendingSubmissionsAsync()).Should().NotContain(q => q.StoryId == storyId,
+            "a taken-down story's status is frozen, so the queue would only offer two dead buttons");
+
+        await GetMod().Invoking(m => m.ApproveStoryAsync(storyId))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*takedown*");
+        await GetMod().Invoking(m => m.RejectStoryAsync(storyId, "Rejected on top of the takedown."))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*takedown*");
+
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.PendingApproval);
+        story.TakedownReason.Should().Be("Spam takedown.", "a reject must not overwrite the takedown's own reason");
+        story.TakedownDate.Should().Be(takedownDate);
+        author.ApprovedStorySubmissions.Should().Be(0, "a taken-down story never earns trust");
+    }
+
+    // ── The conditional writes themselves, not the pre-read check (InterleavingCommandInterceptor) ──
+
+    [Fact]
+    public async Task ApproveStoryAsync_StatusChangesBetweenReadAndWrite_Throws_AndCountsNothing()
+    {
+        // The author withdraws AFTER approve's pre-read passed and BEFORE its conditional update —
+        // the race the sequential "approve after withdraw" test can't reach.
+        int authorId = await SeedUserAsync("WithdrawsMidApprove");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        InterleavingCommandInterceptor authorWithdraws = new(ConnectionString, "UPDATE stories",
+            $"UPDATE stories SET story_status_id = {(int)StoryStatusEnum.Draft} WHERE story_id = {storyId}");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await ActThroughInterceptorAsync(authorWithdraws, mod => mod
+            .Invoking(m => m.ApproveStoryAsync(storyId))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*already handled*"));
+
+        authorWithdraws.Fired.Should().BeTrue("the competing write must land between the read and the write");
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.Draft, "the guarded WHERE must not overwrite the withdraw");
+        story.PublishedDate.Should().BeNull();
+        author.ApprovedStorySubmissions.Should().Be(0, "0 rows affected → nothing incremented");
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_TrustRecordWriteFails_RollsBackTheStatusFlip()
+    {
+        // The flip and the +1 share one transaction because the trust record has no recompute to heal
+        // a split (layer2-services.md §"Records of a decision are not counters").
+        int authorId = await SeedUserAsync("SplitApprove");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.Completed);
+        InterleavingCommandInterceptor trustWriteFails = new(ConnectionString, "UPDATE \"AspNetUsers\"",
+            failWith: new InvalidOperationException("Simulated failure writing the trust record."));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await ActThroughInterceptorAsync(trustWriteFails, mod => mod
+            .Invoking(m => m.ApproveStoryAsync(storyId))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("Simulated*"));
+
+        trustWriteFails.Fired.Should().BeTrue();
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.PendingApproval, "the status flip rolls back with the failed +1");
+        story.PublishedDate.Should().BeNull();
+        author.ApprovedStorySubmissions.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RejectStoryAsync_StatusChangesBetweenReadAndWrite_Throws_AndWritesNoReason()
+    {
+        // Another moderator approves between this reject's read and its conditional update.
+        int authorId = await SeedUserAsync("ApprovedMidReject");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        InterleavingCommandInterceptor otherModApproves = new(ConnectionString, "UPDATE stories",
+            $"UPDATE stories SET story_status_id = {(int)StoryStatusEnum.InProgress}, published_date = now() " +
+            $"WHERE story_id = {storyId}");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await ActThroughInterceptorAsync(otherModApproves, mod => mod
+            .Invoking(m => m.RejectStoryAsync(storyId, "Too late."))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*already handled*"));
+
+        otherModApproves.Fired.Should().BeTrue();
+        (Story story, _) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.InProgress, "published work is never rejected (D1)");
+        story.TakedownReason.Should().BeNull("the losing reject writes nothing");
+    }
+
+    [Fact]
     public async Task GetUserModerationHistoryAsync_CarriesTheTrustFields()
     {
         int targetId = await SeedUserAsync("TrustFields");
@@ -742,8 +894,9 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     [Fact]
     public async Task NewUser_DefaultsToCanAutoApprove_WithNoApprovals()
     {
-        // HasDefaultValue(true) + HasSentinel(true): without the sentinel, a bool whose DB default
-        // differs from the CLR default mis-inserts — this pins the configured default end to end.
+        // Pins the `= true` CLR initializer, which is the load-bearing half of a true-default bool:
+        // the sentinel is true, so a new User without the initializer would INSERT an explicit false
+        // (mutation-checked 2026-09-30). The explicit-false path is the next test.
         int userId = await SeedUserAsync("Fresh");
 
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -751,6 +904,36 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         User user = await db.Users.SingleAsync(u => u.Id == userId);
         user.CanAutoApprove.Should().BeTrue();
         user.ApprovedStorySubmissions.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task NewUser_InsertedWithCanAutoApproveFalse_KeepsFalse()
+    {
+        // An explicit false must survive the INSERT. EF omits a property whose value equals its
+        // sentinel and lets the DB default (true) fill it, so this holds only while the sentinel is
+        // true. EF Core 10 already infers that from HasDefaultValue(true) — HasSentinel(true) states
+        // it explicitly — so this pins the behavior, whichever of the two supplies it
+        // (layer1-data-model.md §"Column Conventions", true-default bools).
+        int userId;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            UserManager<User> users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            string suffix = Guid.NewGuid().ToString("N")[..8];
+            User user = new()
+            {
+                UserName = $"Untrusted-{suffix}",
+                Email = $"untrusted-{suffix}@test.invalid",
+                EmailConfirmed = true,
+                ThemeId = 1,
+                CanAutoApprove = false,
+            };
+            (await users.CreateAsync(user, "Password123!")).Succeeded.Should().BeTrue();
+            userId = user.Id;
+        }
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Users.SingleAsync(u => u.Id == userId)).CanAutoApprove.Should().BeFalse();
     }
 
     public override async Task DisposeAsync()
@@ -767,6 +950,20 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         IServiceScope scope = Factory.Services.CreateScope();
         _serviceScopes.Add(scope);
         return scope.ServiceProvider.GetRequiredService<IModerationWriteService>();
+    }
+
+    /// <summary>
+    /// Runs <paramref name="act"/> against a <see cref="ServerModerationWriteService"/> whose write
+    /// context carries <paramref name="interceptor"/>; disposes both afterwards.
+    /// </summary>
+    private async Task ActThroughInterceptorAsync(InterleavingCommandInterceptor interceptor,
+        Func<ServerModerationWriteService, Task> act)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerModerationWriteService mod, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerModerationWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+            await act(mod);
     }
 
     private IStoryWriteService GetStoryWrite()

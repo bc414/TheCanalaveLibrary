@@ -64,8 +64,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                 "UPDATE stories SET submitted_date = published_date WHERE story_status_id = 1;");
 
             // D2: NULL = never published. Draft(0)/PendingApproval(1)/Rejected(8) rows carried a
-            // creation stamp, not a publication date. (A pulled-back Draft didn't exist before this
-            // WU — unpublish wasn't a legal move — so every Draft here is genuinely never-published.)
+            // creation stamp, not a publication date. Accepted loss: unpublish was not a SANCTIONED
+            // move before this WU, but the old all-enum Status select let an author set any status,
+            // so a Draft/Pending/Rejected row here may once have been live — and no column recorded
+            // that. Such a row loses its date and, if republished, is stamped as new. Pre-launch dev
+            // data only; from this WU on, PublishedDate IS NULL reliably means "never published".
             migrationBuilder.Sql(
                 "UPDATE stories SET published_date = NULL WHERE story_status_id IN (0, 1, 8);");
 

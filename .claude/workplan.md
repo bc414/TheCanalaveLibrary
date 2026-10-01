@@ -17,17 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-StoryLifecycle (2026-09-30) — the first build of the 2026-08-04 worksheet
-  answers: **D1** (the approval queue is mandatory for an author's *first* submission only; a
-  server-side transition table, `Core/Stories/StoryLifecycle`, now governs every status move) and
-  **D2** (`stories.published_date` nullable, NULL = never published, stamped once and never
-  re-stamped; new chapter anchor `Chapter.FirstPublishedDate`). Status left the property-edit path;
-  new `TransitionStatusAsync` + `/api/stories/{id}/status`; approve/reject are guarded (400 not
-  401), transactional and conditional on `PendingApproval`; new monotonic trust record
-  `User.ApprovedStorySubmissions` + moderator revoke/restore of `CanAutoApprove`. One migration
-  (`WU_StoryLifecycle`), checked on a populated dev-DB clone. No cell flips. `dotnet test`: Unit
-  1,010, RazorComponents 686, Integration 1,117. Not browser-verified (tracker **H12**); owner-open
-  residue in tracker **F9**. **Pointers:** its DONE entry; `layer2-services.md` §"Story Lifecycle".
+- **Last landed:** WU-StoryLifecycle (2026-09-30, build + review-fixes commits) — the first build of
+  the 2026-08-04 worksheet answers: **D1** (approval queue mandatory for an author's *first*
+  submission only; a server-side transition table, `Core/Stories/StoryLifecycle`, governs every status
+  move; a taken-down story's status is frozen) and **D2** (`stories.published_date` nullable, NULL =
+  never published, never re-stamped; chapter anchor `Chapter.FirstPublishedDate`). New
+  `TransitionStatusAsync` + `/api/stories/{id}/status`; approve/reject guarded (400), conditional on
+  `PendingApproval` and not taken down, approve transactional; monotonic trust record
+  `User.ApprovedStorySubmissions` + moderator revoke/restore of `CanAutoApprove`. One migration.
+  **F4/F47/F48 L4.5 flipped 5→1** (new UI never browser-driven — tracker **H12**). `dotnet test`: Unit
+  1,010, RazorComponents 696, Integration 1,131. Owner questions: `roadmap.md` rows 14–16 + tracker
+  **F9**. **Pointers:** its DONE entry; `layer2-services.md` §"Story Lifecycle".
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
@@ -226,7 +226,10 @@ references it, does not restate it.
   + WU-SelectionPermalink — decision row 13 resolved, closing tracker item **B11**; earlier the same
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
-  **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
+  **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
+  `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2)
+  landed first, and **WU-AccessGateSweep2** is next in the campaign's build order.
+  **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
   further blocks starting it. WU-SweepRiders and WU-A11y (Structure) were both pulled *ahead of*
@@ -240,17 +243,21 @@ references it, does not restate it.
   exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed, and
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
-  drive returning 500), including two **high-priority security items: E2 and E3**. **A7** is the
+  drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
+  WU-ThrottleCoverage, D6 to WU-ModerationIntegrity), including two **high-priority security items:
+  E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, and 10 (`roadmap.md` §"Decisions
-  that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31). Separately, not a
-  numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own
-  browser session — see that WU's DONE entry and `audit/Accessibility.md`.
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–16** (`roadmap.md` §"Decisions
+  that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
+  story-lifecycle questions WU-StoryLifecycle left open — added 2026-09-30). Separately, not a
+  numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, and tracker **H12**'s pass
+  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5) need Brian's own browser session —
+  see those WUs' DONE entries and `audit/Accessibility.md`.
 
 ---
 
@@ -396,8 +403,10 @@ is pending except where a bullet says so.
 
 ## WU-StoryLifecycle — story status transition table, first-submission approval gate + trust waiver, nullable publish anchors (worksheet D1 + D2; extends `Stories/`, `Chapters/`, `Moderation/`, `Identity/`, `Export/`) — DONE ✓ (2026-09-30)
 
-- **Cells:** none flipped. F4, F5, F6, F7, F47, F48, F62 stay at their `status.md` stages (F48 L4
-  stays 3) — the gaps were beneath already-Stage-5 cells.
+- **Cells:** the build flipped none (the gaps were beneath already-Stage-5 cells); its review fixes
+  flipped **F4, F47, F48 L4.5 5→1** — the publishing, approval and auto-approve UI they vouched for
+  changed and was never browser-driven (tracker **H12** returns them to 5). F5, F6, F7, F54, F62
+  unchanged; F47/F48 L4 stay 3.
 - **Trigger:** first WU of the worksheet-decisions build campaign. Owner rulings **D1** (queue
   mandatory for an author's first submission only; build the server-side transition table) and
   **D2** (nullable publish dates, NULL = never published, never re-stamped; a chapter-level anchor)
@@ -457,11 +466,39 @@ is pending except where a bullet says so.
   (unpublish → resubmit kept the date; self-approve 400; approve 204 then "already handled" 400;
   auto-approve revoke wrote its audit row). All four PowerShell gates passed. **No browser was
   available** — tracker **H12** carries the owner's browser pass.
+- **Review fixes (second commit, 2026-09-30).** Three independent reviews; 21 findings checked
+  against the code and the worksheet, all real, all fixed or routed:
+  1. **Takedown freeze (L2, flagged — derived from D1's rationale, not an owner sentence).** A
+     taken-down story could be unpublished over the API, resubmitted, then approved (+1 trust) or
+     rejected (overwriting its takedown reason). Now `TransitionStatusAsync` refuses every move on an
+     `IsTakenDown` row, approve/reject refuse it, the queue keeps the `IsTakenDown` filter on, and all
+     three conditional `WHERE`s carry `!IsTakenDown`.
+  2. **Tests for the guards themselves:** new `InterleavingCommandInterceptor` (+ `testing.md`
+     §"Testing a check-then-act guard") lands a competing write between read and update — approve,
+     reject and transition each refuse and write nothing; a failed trust write rolls approve's flip
+     back. Plus: auto-approve restore/unknown/over-long; explicit-`false` insert; new
+     `StoryEditorPageTests` (the page applies the RESULTING status); StoryPage date cases. The
+     guard, takedown, transaction, initializer and page tests were mutation-checked.
+  3. **UI:** Unpublish now opens a destructive `ConfirmDialog` (the convention already named it);
+     `ModSubmissionsPage`'s reload-after-refusal no longer escapes the handler or strands "Loading…";
+     queue/panel copy no longer assumes only first-ever submissions are reviewed.
+  4. **Docs:** `layer1-data-model.md` corrected (EF Core 10 infers `Sentinel = true`; the `= true`
+     initializer is the load-bearing half); Export.md F54 Stage note added; roadmap D1 entry no
+     longer attributes restore to the owner; folder_clusters Stories row, service audit §2.7.5
+     banner, migration comment (pre-WU pulled-back drafts lost their date — dev data only).
+  5. **Routed, not decided:** decision rows **14** (import rider), **15** (notify on auto-approve
+     change), **16** (does a chapter "go live" while its story isn't? — its L8 effect recorded in
+     `layer8-data-marts.md`); tracker **E7** (the `/status` endpoint's throttle classification →
+     WU-ThrottleCoverage — the ledger copy of a prose routing).
+  `dotnet test`: **Unit 1,010, RazorComponents 696 (+10), Integration 1,131 (+14)**; build clean in
+  touched files; all four gates pass. **No browser was available** — H12 now covers the confirm
+  dialog and the hidden taken-down rows.
 - **Pointers:** `layer2-services.md` §"Story Lifecycle", §"Records of a decision are not counters",
   §"Account actions" rule 1; `layer8-data-marts.md` §`site_daily_stats`; `layer1-data-model.md`
   §"Column Conventions" (true-default bools); `audit/Stories.md` F4/F5, `audit/Chapters.md` F6/F7,
-  `audit/Moderation.md` F47/F48/F62 Stage notes; `roadmap.md` §Resolved (D1, D2); tracker D6, D7,
-  F9, H12; worksheet D1/D2 "Built:" lines.
+  `audit/Moderation.md` F47/F48/F62 Stage notes, `audit/Export.md` F54; `roadmap.md` §Resolved (D1,
+  D2) and decision rows 14–16; `testing.md` §"Testing a check-then-act guard"; tracker D6, D7, E7, F9,
+  H12; worksheet D1/D2 "Built:" lines.
 
 ## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
 

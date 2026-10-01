@@ -126,15 +126,19 @@ public class ServerModerationReadService(
         return await (
             from s in readDb.Stories
                 // elevated read: pending submissions are a work surface, not scoped by the
-                // moderator's personal ContentRating/ShowMatureContent preference.
-                .IgnoreQueryFilters(["IsTakenDown", "ContentRating", "StoryStatus"])
+                // moderator's personal ContentRating/ShowMatureContent preference. "IsTakenDown"
+                // deliberately stays ON: a taken-down story's status is frozen and approve/reject
+                // refuse it (layer2-services.md §"Story Lifecycle"), so listing it would offer two
+                // dead buttons. It reappears here if the takedown is reversed.
+                .IgnoreQueryFilters(["ContentRating", "StoryStatus"])
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
             join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
             join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
             join author in readDb.Users on s.AuthorId equals author.Id into authors
             from a in authors.DefaultIfEmpty()
-            // Oldest submission first. SubmittedDate, not PublishedDate: a pending story has never
-            // been published, so PublishedDate is NULL for every row here (D2, WU-StoryLifecycle).
+            // Oldest submission first. SubmittedDate, not PublishedDate: PublishedDate is NULL for a
+            // story that has never been published (D2, WU-StoryLifecycle), and a resubmission after an
+            // unpublish (an author whose auto-approve was revoked) keeps its original date.
             orderby s.SubmittedDate, s.StoryId
             select new StorySubmissionQueueItemDto(
                 s.StoryId,

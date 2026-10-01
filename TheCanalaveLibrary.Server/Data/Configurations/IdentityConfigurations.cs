@@ -16,9 +16,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         // Story-approval trust (WU-StoryLifecycle, D1). DB defaults are REQUIRED, not cosmetic:
         // SeedTool COPYs AspNetUsers with an explicit column list that omits both columns. The
-        // sentinel is required too: CanAutoApprove's DB default (true) differs from the CLR bool
-        // default (false), so without HasSentinel(true) EF would treat an explicit false as "unset"
-        // and let the DB default overwrite a revoke-at-insert.
+        // sentinel must be TRUE for CanAutoApprove: EF omits a value equal to the sentinel and lets the
+        // DB default fill it, so a false sentinel would turn an explicit false into true. EF Core 10
+        // already infers Sentinel = true from HasDefaultValue(true) (probed 2026-09-30); HasSentinel
+        // states it explicitly. User's `= true` initializer is the load-bearing half — see
+        // layer1-data-model.md §"Column Conventions".
         builder.Property(u => u.ApprovedStorySubmissions).HasDefaultValue(0);
         builder.Property(u => u.CanAutoApprove).HasDefaultValue(true).HasSentinel(true);
 

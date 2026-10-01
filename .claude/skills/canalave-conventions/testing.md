@@ -265,6 +265,29 @@ integration tests, that prior navigation does not run.
 Respawn wipes all rows between tests — each test is self-contained in its FK setup; nothing
 can be assumed to survive from a previous test.
 
+## Testing a check-then-act guard: interleave, don't race
+
+A write that pre-reads a row, checks it, then writes with a conditional `WHERE` (the lifecycle and
+approve/reject writes — `layer2-services.md` §"Story Lifecycle" "Guard shape") has **two** guards,
+and the conditional `WHERE` is the one that matters under concurrency. Two *sequential* calls
+("approve twice", "approve after withdraw") never reach it — the pre-read already sees the new state
+and refuses first — so deleting the `WHERE` predicate leaves such tests green. Two *racing* calls
+(`Task.WhenAll`) leave it to timing which guard fires, so they can't prove the predicate either.
+
+To test the conditional write itself, make the competing write land **between** the read and the
+write, deterministically: `InterleavingCommandInterceptor` (Integration project) runs one SQL
+statement on a separate autocommit connection immediately before the first command whose text
+contains a marker (`"UPDATE stories"`), or throws in its place (to prove a transaction rolls back).
+Build the service under test over a context carrying it with
+`InterleavingCommandInterceptor.CreateService<TService>(scope, ConnectionString, interceptor)` — every
+other dependency resolves from the shared host, so it's the production service — and always assert
+`interceptor.Fired`, so a marker that stops matching fails loudly instead of passing vacuously.
+Precedent: `ModerationServiceTests.ApproveStoryAsync_StatusChangesBetweenReadAndWrite_*`,
+`…_TrustRecordWriteFails_RollsBackTheStatusFlip`, `StoryLifecycleTests.Transition_*BetweenReadAndWrite_*`
+(WU-StoryLifecycle review fixes, 2026-09-30). The `Task.WhenAll` racing shape stays right for
+contention a lock serializes (e.g. `SpotlightServiceTests.Redeem_TwoRacersOneOpening_ExactlyOneWins`),
+where "exactly one wins" is the whole claim.
+
 ## Integration test helper pitfall: async methods that create a scope must `await` the call inside it
 
 Any helper method that opens a `using IServiceScope scope` and calls a service **must be `async` and

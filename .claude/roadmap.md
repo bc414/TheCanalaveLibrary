@@ -120,7 +120,9 @@ Row numbers preserved from the retired chain (other docs cite them by number —
 2026-07-27). Row 13 was added 2026-07-27 (promoted out of `hidden-deferrals-tracker.md` B11's
 blocking question, same treatment now applied going forward: a tracker item that turns out to be a
 genuine open decision gets promoted here, not left buried in the tracker) and resolved 2026-07-28.
-Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved.
+Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved. Rows 14–16 were added
+2026-09-30 (WU-StoryLifecycle review fixes), promoted out of `hidden-deferrals-tracker.md` **F9** under
+the same rule; F9's other two items already sit on the worksheet as pending D20 and D30.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -128,6 +130,9 @@ Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved.
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Gates Phase 6. |
 | 8 | **Email provider + sending domain** — mechanism is resolved (config-only SMTP swap); which provider, the sending domain, and its SPF/DKIM/DMARC DNS records remain open. | Postmark, SES, or Resend (cheap at this scale); needs a sending domain, tying into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 7. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7. |
+| 14 | **Import rider, alternate reading (worksheet D1)** — must a *trusted* author's story that lists external ("also posted on") links still go through the approval queue? | No (as built): import verification is the decoupled per-link queue (WU38d/WU39), which never consults trust, so D1's "import-verification submissions never take the waiver" holds vacuously. | "Yes" would reopen the settled WU38d note in `audit/Moderation.md` F53 ("links don't gate story approval") — a policy reversal only you can make. Tracker **F9** item 2. |
+| 15 | **Tell an author when a moderator revokes or restores their auto-approve?** | No notification (D1 is silent; nothing is sent today). The revoke/restore is still recorded as a moderator-initiated `Report` row. | Moderation transparency toward authors is community policy. Tracker **F9** item 3. |
+| 16 | **When does a chapter "go live" if its story isn't live yet?** `Chapter.FirstPublishedDate` is stamped on the chapter's own first publish, even while its story is Draft/Pending/Rejected (D2's "stamped once on the chapter's first publish", invariant tied to `IsPublished`). D2 also says the anchor means "went live **on this site**", which such a chapter has not. | As built: stamp on the chapter's own first publish. Consequence: L8 `new_chapters`/`new_words` count chapters of stories that never went live (including rejected spam), while `new_stories` excludes those stories; the fan-out anchor (WU-InertFeatures) predates the story's own `PublishedDate`. | The two halves of D2's wording disagree on this edge, and the answer fixes the "New"-badge, fan-out and L8 semantics for good once real data exists. Tracker **F9** item 5. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -197,7 +202,9 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   one approved story and an unrevoked `CanAutoApprove` publishes directly. A server-side transition
   table is enforced regardless of policy. `Rejected` is reachable only from `PendingApproval`;
   unpublish is a legal author move that re-enters the gate (which the waiver then skips). The approval
-  counter is monotonic, and any moderator may revoke or restore the flag. Rule: `layer2-services.md`
+  counter is monotonic, and any moderator may revoke the flag (the grant is automatic). *Not part of the
+  ruling:* moderator **restore** of the flag was added by WU-StoryLifecycle itself, because a one-way
+  moderator lever is service audit §2.1.3(b)'s "irreversible in-app" defect class. Rule: `layer2-services.md`
   §"Story Lifecycle" (plus §"Records of a decision are not counters" and the auto-approve clause under
   §"Account actions"). Narrative: `audit/Moderation.md` F48, `audit/Stories.md` F4.
 

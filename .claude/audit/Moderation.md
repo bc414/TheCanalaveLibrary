@@ -64,9 +64,10 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5,
-L6 = 5 — unchanged; WU-StoryLifecycle added the auto-approve revoke/restore action and the trust
-line to `/mod/users/{id}` beneath these cells (Stage note at the end of this section).
+**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
+(flipped 5→1: the auto-approve revoke/restore control and trust line WU-StoryLifecycle added to
+`/mod/users/{id}` were never browser-driven — returns to 5 with tracker H12's pass), L5 = 5, L6 = 5
+(Stage notes at the end of this section).
 
 **WU34 settled constraints:**
 - `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
@@ -246,7 +247,8 @@ correctly untouched at 0. `AccountSuspended`/`AccountBanned` notifications both 
 suspended account, the WU38a mechanism reachable from the UI for the first time. Zero `fail:`/`crit:`
 lines in the server log across the pass.
 
-**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips; F47 stays as headlined above.**
+**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips at the build** *(L4.5 was flipped 5→1
+later the same day by the review fixes — next note)*.
 `UserModerationHistoryDto` gained two trailing optional fields, `ApprovedStorySubmissions` and
 `CanAutoApprove` (appended with defaults so existing constructors keep compiling), populated by
 `GetUserModerationHistoryAsync`. `/mod/users/{id}` shows "N approved submissions · auto-approve
@@ -259,11 +261,25 @@ non-mod/self refused, history carries the trust fields); RazorComponents (`ModUs
 the trust line, Revoke calls the service with `(42, false, reasonId, reason)`, an empty reason never
 calls it). **Not browser-verified** (no browser available) — tracker **H12** item 4.
 
+**Stage note (WU-StoryLifecycle review fixes — 2026-09-30) — F47 L4.5 5→1; restore path tested.**
+**L4.5 flipped 5→1** for the reason in the headline (`grid_axes.md` L4.5: Stage 5 means the feature
+was driven in a real browser as its audit file intends; this section now describes an undriven
+control). **L2 coverage gap closed:** only the revoke direction of `SetCanAutoApproveAsync` was
+tested, so a service that ignored its `canAutoApprove` argument and always wrote `false` passed.
+**Verified:** Integration `ModerationServiceTests.SetCanAutoApproveAsync_RevokeThenRestore_*` (flag
+back to true, a second audit row "Auto-approve restored: …", and the author's next submit takes the
+waiver again) and `…_UnknownUser_UnknownReason_AndOverLongReason_AreRefused` (`KeyNotFoundException`;
+two `ModerationValidationException`s; nothing written). Owner question promoted: whether to notify an
+author of a revoke/restore is `roadmap.md` decision row 15.
+
 ## Feature 48 — Story Approval Workflow
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5,
-L6/L8 = N/A — unchanged; the D1 guards, trust waiver and `SubmittedDate` landed beneath these cells
-(see the WU-StoryLifecycle Stage note at the end of this section; browser pass owed, tracker H12).
+**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
+(flipped 5→1: `/mod/submissions` changed — `SubmittedDate` column, queue-level error slot,
+reload-on-refusal, taken-down rows hidden — and the approval workflow itself changed under D1, none of
+it browser-driven; returns to 5 with tracker H12's pass), L5 = 5, L6/L8 = N/A. The D1 guards, trust
+waiver, `SubmittedDate` and the takedown freeze landed beneath the other cells (Stage notes at the end
+of this section).
 
 **WU34 settled constraints:**
 - `StoryDetail.PostApprovalStatus` (live field, enforced by `StoryValidations.CanSubmitForApproval`) is the
@@ -325,6 +341,8 @@ all 1232 pass. See `audit/Stories.md` §"Filter revamp Stage note" for the full 
 
 **Stage note (L4.5-Browser verification — 2026-07-02, Features 46/47/48 → L4.5=5):** full
 report→claim→resolve and approve/reject cycles driven in a real browser against the seeded dev DB.
+*(F47 and F48's halves no longer stand: both cells went back to L4.5 = 1 on 2026-09-30 — the
+WU-StoryLifecycle review fixes — because the surfaces changed under D1; tracker H12 restores them.)*
 - **F46:** report filed on a chapter comment via `ReportDialog` (reason select + notes + submit);
   `reports` row verified in psql (reporter/status/notes correct).
 - **F47:** `/mod/reports` as ModUser listed all three open reports; Claim → `UnderReview` +
@@ -355,8 +373,8 @@ alike; a T-only or mature-off moderator sees every pending submission regardless
 **Verified:** Integration (`ModerationServiceTests.GetPendingSubmissionsAsync_ShowsMRatedSubmission_
 ToModWithMatureOff`); `dotnet test` full suite green.
 
-**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips; F48 stays L1–L3.5=5, L4=3,
-L4.5=5, L5=5.** Owner ruling D1 (worksheet, answered 2026-08-04) made the queue mandatory for an
+**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips at the build; F48 stayed L1–L3.5=5,
+L4=3, L4.5=5, L5=5** *(L4.5 was flipped 5→1 later the same day by the review fixes — next note)*. Owner ruling D1 (worksheet, answered 2026-08-04) made the queue mandatory for an
 author's **first** submission only, and its moderator half was unguarded: approve/reject loaded with
 `SingleAsync` and threw `InvalidOperationException` for "not pending" (→ **401** "session
 expired" over HTTP), approve accepted any `PostApprovalStatus` (approve-into-Draft), nothing
@@ -403,6 +421,51 @@ live-author refusal keeps the row). **Unit** — `ClientStoryLifecycleServiceTes
 scratch DB (approve 204, second approve 400 "already handled", queue JSON carries
 `submittedDate`, auto-approve revoke wrote the audit row). **Not browser-verified** (no browser
 available): tracker **H12**. L4 stays 3. Rule of record: `layer2-services.md` §"Story Lifecycle".
+
+**Stage note (WU-StoryLifecycle review fixes — 2026-09-30) — F48 L4.5 5→1; takedown freeze; the
+conditional writes are now tested themselves.** Three independent reviews of the WU-StoryLifecycle
+commit found:
+
+- **L4.5 flipped 5→1** (headline): the 2026-07-02 browser pass drove a queue and an approval workflow
+  that no longer behave as this section describes.
+- **L2 — taken-down rows reached approve/reject.** The queue lifted the `IsTakenDown` filter and
+  neither method checked it, so a taken-down story an author had unpublished and resubmitted over the
+  API could be approved (+1 trust) or rejected (overwriting the takedown's `TakedownReason`/
+  `TakedownDate` and leaving a `Rejected` story under the takedown) — exactly the overlap D1 confines
+  rejection to pre-publication to avoid, while `layer2-services.md` claimed it could not happen. Now:
+  the queue keeps the `IsTakenDown` filter on; approve and reject refuse an `IsTakenDown` row
+  (`ModerationValidationException`); both conditional updates also carry `!IsTakenDown`. Paired with
+  the author-side freeze in `TransitionStatusAsync` (`audit/Stories.md` F4 review-fixes note). Rule:
+  `layer2-services.md` §"Story Lifecycle" — a taken-down story's status is frozen until the takedown
+  is reversed (derived from D1's rationale; flagged).
+- **L2 tests — the guard nobody exercised.** Every "already handled" test was stopped by the pre-read
+  status check before it reached the conditional `WHERE`, so deleting the `WHERE` predicate — or
+  moving the trust `+1` out of the transaction — left the suite green. New Integration tests drive the
+  conditional write itself with `InterleavingCommandInterceptor` (`testing.md` §"Testing a
+  check-then-act guard"): the author withdraws between approve's read and its update (throws, status
+  stays Draft, counter 0); another moderator approves between reject's read and its update (throws,
+  no reason written); the trust-record write fails inside approve's transaction (the status flip rolls
+  back). Each was mutation-checked.
+- **L3/L3.5 (`ModSubmissionsPage`):** the reload after a guard refusal ran unguarded inside the catch
+  block — a failing reload escaped the event handler (circuit kill / error boundary) and stranded the
+  queue on "Loading…". It now runs through `ReloadAfterRefusalAsync` (failure appended to the
+  queue-level message, stale queue kept), and `LoadAsync` resets `_loading` in a `finally`. The page
+  and read-service comments no longer claim the queue holds only first-ever, never-published
+  submissions: a revoked author's resubmission lands here and keeps its old `PublishedDate`.
+- **L1 test honesty:** the sentinel test only proved the default. Probing showed EF Core 10 infers
+  `Sentinel = true` from `HasDefaultValue(true)` on its own, so `HasSentinel(true)` is a statement of
+  intent and the `= true` initializer is the load-bearing half; `layer1-data-model.md` corrected, and
+  a new test inserts an explicit `false` and reads it back.
+
+**How verified:** `dotnet test` green (counts in `workplan.md`'s WU-StoryLifecycle entry, review-fixes
+bullet). **Integration** — `ModerationServiceTests.ApproveAndReject_TakenDownPendingStory_*` (queue
+hides it; both refuse; takedown reason/date intact; counter 0),
+`ApproveStoryAsync_StatusChangesBetweenReadAndWrite_*`,
+`ApproveStoryAsync_TrustRecordWriteFails_RollsBackTheStatusFlip`,
+`RejectStoryAsync_StatusChangesBetweenReadAndWrite_*`,
+`NewUser_InsertedWithCanAutoApproveFalse_KeepsFalse`. **RazorComponents** — `ModSubmissionsPageStoriesTests` (a refusal whose reload then fails,
+for approve and reject: message kept, no "Loading…", queue kept — mutation-checked against the old
+unguarded reload). **Not browser-verified** — tracker **H12**.
 
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
@@ -572,9 +635,10 @@ Stage 5 (see WU39 Stage note below). L5/L6/L8 — N/A.
 
 ## Feature 62 — SiteDailyStat Worker
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5/L6 = N/A,
-L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate` (D2) — see
-the WU-StoryLifecycle Stage note at the end of this section.
+**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, L4.5 = 5,
+L5/L6 = N/A, L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`
+(D2), with one known divergence from `new_stories` left for the owner (`roadmap.md` decision row 16) —
+see the two WU-StoryLifecycle Stage notes at the end of this section.
 
 **Requirements settled 2026-07-10 (WU-SiteDailyStat plan)** — reconciling the Gemini design source
 (`GeminiDiscussions/MyActivity September to November 2025_filtered.md:38146`, 2025-10-29) against
@@ -670,6 +734,20 @@ first publication, but that is not an approval date (`layer8-data-marts.md` amen
 Integration (`SiteDailyStatAggregatorTests` — the fixture chapter now carries `FirstPublishedDate`;
 new case: an old chapter whose newer version is promoted today does not count, so `NewChapters`
 stays 1 and `NewWords` 500 — it fails against the old `publish_date` source).
+
+**Stage note (WU-StoryLifecycle review fixes — 2026-09-30) — no cell flips; a recorded divergence,
+not a fix.** The note above overstated the side effect: drafts, pending and rejected *stories* stopped
+counting in `new_stories`, but their *chapters* did not stop counting in `new_chapters`/`new_words`.
+`Chapter.FirstPublishedDate` is stamped on the chapter's own first publish whatever its story's status
+(D2: "stamped once on the chapter's first publish", invariant tied to `IsPublished`), and the two
+chapter flows have no story predicate — so chapters an author publishes inside a still-Draft story
+(the normal way to prepare a first submission), and those of a story later rejected as spam, count
+as new chapters on their own publish day, while the story never counts. (The pre-WU source,
+`chapter_contents.publish_date`, had no story predicate either — this is not a regression.) D2 also
+defines the anchor as "went live **on this site**", which such a chapter has not, so the stamp rule
+itself is an owner question — promoted to `roadmap.md` **decision row 16** (tracker F9 item 5) rather
+than guessed: adding the story predicate to L8 alone would instead drop pre-launch chapters from every
+day's count. `layer8-data-marts.md` §`site_daily_stats` records the divergence.
 
 ### WU-AuditFixPass note (2026-07-18)
 

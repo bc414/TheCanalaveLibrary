@@ -116,13 +116,35 @@ public class StoryLifecyclePanelTests : BunitContext
     }
 
     [Fact]
-    public void Published_UnpublishRequestsDraft()
+    public void Published_Unpublish_AsksForConfirmation_ThenRequestsDraft()
     {
         IRenderedComponent<StoryLifecyclePanel> cut = RenderPanel(StoryStatusEnum.Completed);
 
         Button(cut, "Unpublish").Click();
 
+        _requested.Should().BeEmpty("unpublishing is destructive — nothing moves until the author confirms");
+        AngleSharp.Dom.IElement dialog = cut.Find("[role=dialog]");
+        dialog.TextContent.Should().Contain("moderator's review",
+            "the copy warns that getting it back may need review (a revoked author re-enters the queue)");
+        AngleSharp.Dom.IElement confirm = dialog.QuerySelectorAll("button").Single(b => b.TextContent.Trim() == "Unpublish");
+        confirm.ClassList.Should().Contain("bg-danger", "unpublishing is a destructive confirm (layer4-style.md)");
+
+        confirm.Click();
+
         _requested.Should().Equal(StoryStatusEnum.Draft);
+        cut.FindAll("[role=dialog]").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Published_Unpublish_Cancelled_RequestsNothing()
+    {
+        IRenderedComponent<StoryLifecyclePanel> cut = RenderPanel(StoryStatusEnum.Completed);
+
+        Button(cut, "Unpublish").Click();
+        cut.Find("[role=dialog]").QuerySelectorAll("button").Single(b => b.TextContent.Trim() == "Cancel").Click();
+
+        _requested.Should().BeEmpty();
+        cut.FindAll("[role=dialog]").Should().BeEmpty();
     }
 
     [Fact]

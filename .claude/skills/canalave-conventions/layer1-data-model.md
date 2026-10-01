@@ -171,11 +171,18 @@ independently. The service layer rejects logically impossible write combinations
   baked into the `canalave:theme` claim and used as the path segment in sprite URLs. Both columns must
   exist; neither substitutes for the other.
 - **Booleans:** `NOT NULL DEFAULT false` (1 byte each in PostgreSQL — no bit-packing, accepted trade-off).
-  **A bool that defaults to `true`** (first: `User.CanAutoApprove`, WU-StoryLifecycle 2026-09-30) needs
-  `HasDefaultValue(true).HasSentinel(true)` plus a `= true` CLR initializer. Without the sentinel EF
-  treats the CLR default `false` as "unset", omits it from the INSERT, and the DB default silently
-  turns an explicit `false` into `true`. The DB default itself is required whenever a raw COPY/INSERT
-  path (SeedTool) omits the column.
+  **A bool that defaults to `true`** (first: `User.CanAutoApprove`, WU-StoryLifecycle 2026-09-30) is
+  written `HasDefaultValue(true).HasSentinel(true)` plus a `= true` CLR initializer. EF omits a property
+  whose value equals its **sentinel** from the INSERT and lets the DB default fill it, so the sentinel
+  must be `true`: a `false` sentinel would silently turn an explicit `false` into `true`. EF Core 10
+  already infers `Sentinel = true` from `HasDefaultValue(true)` — probed 2026-09-30 (WU-StoryLifecycle
+  review fixes): with `HasSentinel` removed the property still reports `Sentinel == true` and an explicit
+  `false` still inserts — so `HasSentinel(true)` is an explicit statement of intent, not the mechanism.
+  **The initializer is the load-bearing half:** with the sentinel at `true`, a `new User()` without it
+  carries `false` ≠ sentinel and INSERTs an explicit `false`. Both halves are pinned in Integration
+  (`ModerationServiceTests.NewUser_DefaultsToCanAutoApprove_WithNoApprovals` — mutation-checked against
+  removing the initializer — and `NewUser_InsertedWithCanAutoApproveFalse_KeepsFalse`). The DB default
+  itself is required whenever a raw COPY/INSERT path (SeedTool) omits the column.
 - **`User.CreatedUtc`** (`datetime`, `.HasDefaultValueSql("CURRENT_TIMESTAMP")`) and
   **`User.LastActiveUtc`** (`datetime?`, nullable) — added WU-SiteDailyStat (2026-07-10).
   `CreatedUtc` sources Feature 62's `new_users`/`total_users`; pre-existing rows backfill to the

@@ -46,7 +46,10 @@ internal sealed class FakeStoryReadService : IStoryReadService
 {
     public Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) => Task.FromResult<StoryDetailsDTO?>(null);
     public Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) => Task.FromResult<GatedMetadataDto?>(null);
-    public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
+    /// <summary>Configurable knob for editor-page tests (StoryEditorPageTests). Default null
+    /// preserves the original no-op behavior.</summary>
+    public StoryUpdateDTO? EditDto { get; set; }
+    public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult(EditDto);
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult(Array.Empty<StoryListingDto>());
 
     /// <summary>Configurable knob for page tests whose listings load through the filter path

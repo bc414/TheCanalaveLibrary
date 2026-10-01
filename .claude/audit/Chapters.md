@@ -303,7 +303,10 @@ shape and dropdown row classes.
   `IsPublished ⇒ FirstPublishedDate != null` (D2 wrote `==`, which "never moved" plus the legal
   chapter unpublish makes impossible; the CHECK is routed to WU-SchemaHardening). Flag for
   WU-InertFeatures: a chapter first published while its story is unpublished has a
-  `FirstPublishedDate` earlier than the story's `PublishedDate`.
+  `FirstPublishedDate` earlier than the story's `PublishedDate`. *(Review fixes, 2026-09-30: that
+  edge is also an owner question — D2 calls the anchor "went live on this site", which such a chapter
+  has not — so it was promoted to `roadmap.md` decision row 16; its visible L8 effect is recorded in
+  `audit/Moderation.md` F62.)*
 - **`ChapterContent.PublishDate` is now nullable, per-version provenance only** — when *that
   version* became publicly readable. Create leaves it null (the chapter starts unpublished); the
   first publish stamps every still-null version (tracked, same `SaveChanges` as the flag); an

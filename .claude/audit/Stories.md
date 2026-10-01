@@ -129,6 +129,13 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
+- **L4.5-Browser — Stage 1 (flipped 5→1 by the WU-StoryLifecycle review fixes, 2026-09-30).** The
+  2026-07-01 pass (cluster note "L4.5-Browser verification" below) drove the create/edit flow as it
+  then was. WU-StoryLifecycle replaced its publishing half — the all-enum Status select is gone, and
+  authors now publish only through `StoryLifecyclePanel` (submit / withdraw / revise / move / confirmed
+  unpublish) and the "Status when published" select — and none of that has been driven in a browser
+  (`grid_axes.md` L4.5: Stage 5 = "driven in a real browser and behaves as its audit file intends";
+  same convention as F15's L4.5 = 1). Returns to 5 when tracker **H12**'s pass runs.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
@@ -141,7 +148,8 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
 
 ### Feature 4 / Feature 5 — WU-StoryLifecycle Stage note (2026-09-30) — the story lifecycle is enforced; publish dates mean "first went live"
 
-**No cell flips — F4 and F5 stay Stage 5 on every layer they had.** This closed defects *beneath*
+**No cell flips — F4 and F5 stay Stage 5 on every layer they had** *(F4 L4.5 was flipped 5→1 later
+the same day by the review fixes — see the next note)*. This closed defects *beneath*
 sound cells: owner rulings D1 (mandatory-for-first-submission approval queue + a server-side
 transition table) and D2 (nullable publish dates, NULL = never published) were answered
 2026-08-04 and had not been built. Before this WU an author set `StoryStatusId` freely through the
@@ -194,6 +202,49 @@ publish date; self-approve → 400). **Not browser-verified** — no browser was
 editor-page panel (including the in-place WASM re-render next to Quill) is tracker **H12**.
 Open owner questions the build did not decide: tracker **F9**. Rule of record:
 `layer2-services.md` §"Story Lifecycle".
+
+### Feature 4 / Feature 5 — WU-StoryLifecycle review-fixes Stage note (2026-09-30) — F4 L4.5 5→1; takedown freezes status; unpublish confirms
+
+**Cell change: F4 L4.5-Browser 5 → 1** (headline above) — the publishing flow it vouched for no longer
+exists, and the replacement was never browser-driven. All other F4/F5 cells stay 5. Three independent
+reviews of the WU-StoryLifecycle commit found:
+
+- **L2 — a taken-down story could re-enter the queue.** D1 confines `Rejected` to pre-publication so
+  that rejection and takedown never overlap, but nothing stopped an author from unpublishing a
+  taken-down story over `POST /api/stories/{id}/status` (the editor can't load it, so the UI block was
+  affordance only), resubmitting it, and having a moderator approve it (+1 trust) or reject it
+  (overwriting the takedown's own reason/date). `TransitionStatusAsync` now refuses every move on an
+  `IsTakenDown` row, and its conditional `WHERE` carries `!IsTakenDown` too (a takedown racing the
+  move affects 0 rows). Rule: `layer2-services.md` §"Story Lifecycle" ("a taken-down story's status is
+  frozen") — derived from D1's rationale, flagged in the workplan entry.
+- **L3/L3.5 — Unpublish fired immediately.** `layer3.5-structure.md` names "unpublishing a story" as
+  a `ConfirmDialog` consumer and `layer4-style.md` as a destructive confirm; the panel now opens a
+  destructive `ConfirmDialog` whose copy says the story disappears for readers and may need a
+  moderator's review to come back (true for an author whose auto-approve was revoked). The draft-state
+  helper copy no longer promises that later stories always publish straight away.
+- **F5:** the "Not yet published" branch on `StoryPage` gained its bUnit cases.
+- **Migration comment corrected.** `WU_StoryLifecycle`'s backfill comment claimed a pulled-back Draft
+  "didn't exist before this WU". It could: unpublish wasn't a *sanctioned* move, but the old all-enum
+  Status select let an author set any status. So the backfill nulls `published_date` on any
+  Draft/Pending/Rejected row, including one that was once live (no column recorded that), and such a
+  row is stamped as new if republished. Accepted: pre-launch dev data only. From this WU on,
+  `PublishedDate IS NULL` reliably means "never published".
+
+**How verified:** `dotnet test` green (counts in `workplan.md`'s WU-StoryLifecycle entry, review-fixes
+bullet). **Integration** — `StoryLifecycleTests.TakenDownStory_RefusesEveryAuthorMove_AndChangesNothing`
+(4 cases) and `…_TrustedSubmit_IsAlsoRefused`; `Transition_StatusChangesBetweenReadAndWrite_*` and
+`Transition_TakedownLandsBetweenReadAndWrite_*` drive the conditional `WHERE` itself through the new
+`InterleavingCommandInterceptor` (the competing write lands between the read and the update — a
+sequential test is always stopped by the pre-read; `testing.md` §"Testing a check-then-act guard").
+Each was mutation-checked: dropping the status predicate, the `!IsTakenDown` predicate or the
+pre-check fails it. **RazorComponents** — `StoryLifecyclePanelTests` (Unpublish asks first, is
+destructive, and Cancel requests nothing); new `StoryEditorPageTests` (the page applies the RESULTING
+status: a trusted submit asks for `PendingApproval` and shows Completed + "Published." with the
+"Status when published" select gone; untrusted → Pending + "Submitted for review."; confirmed unpublish
+→ Draft with the select back; a refusal keeps the status and shows the server's text; 403 → forbidden
+state — mutation-checked against applying the target instead of the result); `StoryPageTests` (the
+publish date, and "Not yet published" for NULL). **Not browser-verified** — no browser was available;
+tracker **H12** now covers the confirm dialog too.
 
 ### Feature 4 / Feature 5 — Filter revamp Stage note (2026-06-27)
 
@@ -861,6 +912,10 @@ Convention for the route-dispatcher pattern recorded in `layer3-logic.md`
   is the live one.
 
 ## L4.5-Browser verification (2026-07-01) — F4 + F5 → Stage 5, one bug fixed same-session
+
+> **F4's half no longer stands (2026-09-30):** WU-StoryLifecycle replaced the publishing flow this pass
+> drove, so F4 L4.5 is back at 1 until tracker **H12**'s pass runs (F4 headline + review-fixes Stage
+> note). F5's half is unaffected.
 
 Real-form pass as TestUser: `/story/new` (title, short desc, Quill long description, character
 typeahead → Cynthia w/ Primary priority row, setting → Canalave City, genre → Adventure) →

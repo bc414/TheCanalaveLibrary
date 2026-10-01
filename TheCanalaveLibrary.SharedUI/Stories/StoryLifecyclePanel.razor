@@ -10,7 +10,10 @@
 
    Per status: Draft → submit (disabled until a valid "Status when published" is SAVED); Pending →
    withdraw; Rejected → the moderator's reason + return to draft; published → move among the
-   published statuses, or unpublish. Outer Margin Rule: no outer margin on the root. *@
+   published statuses, or unpublish — behind a destructive ConfirmDialog (layer3.5-structure.md names
+   "unpublishing a story" as a ConfirmDialog consumer): readers lose the story at once, and getting
+   it back means submitting again, which for an author whose auto-approve was revoked re-enters the
+   moderator queue. Outer Margin Rule: no outer margin on the root. *@
 
 <section class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4" aria-labelledby="story-lifecycle-heading">
     <h2 id="story-lifecycle-heading" class="mb-1 text-lg font-semibold text-(--color-text)">Publication</h2>
@@ -21,8 +24,9 @@
     @if (CurrentStatus == StoryStatusEnum.Draft)
     {
         <p class="mb-3 text-sm text-(--color-text-muted)">
-            A moderator reviews an author's first story before it goes live. Once one of your stories
-            has been approved, the next ones publish straight away.
+            Submitting publishes the story straight away, unless it needs a moderator's review first:
+            every story does until one of yours has been approved, and so does every story from an
+            account a moderator has chosen to review.
         </p>
         @if (!CanSubmit)
         {
@@ -88,13 +92,20 @@
             <button type="button"
                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled="@IsBusy"
-                    @onclick="() => RaiseAsync(StoryStatusEnum.Draft)">
+                    @onclick="() => _confirmingUnpublish = true">
                 Unpublish
             </button>
         </div>
         <p class="mt-2 text-xs text-(--color-text-muted)">
             Unpublishing hides the story from readers. Publishing it again keeps its original publish date.
         </p>
+        <ConfirmDialog IsOpen="@_confirmingUnpublish"
+                       IsOpenChanged="@(open => _confirmingUnpublish = open)"
+                       Title="Unpublish this story?"
+                       Message="Readers will no longer be able to find or read it, and it goes back to being a draft. To bring it back you'll submit it again, which may need a moderator's review before it goes live."
+                       ConfirmText="Unpublish"
+                       IsDestructive="true"
+                       OnConfirm="() => RaiseAsync(StoryStatusEnum.Draft)" />
     }
 </section>
 
@@ -120,6 +131,7 @@
 
     private StoryStatusEnum _selectedPublishedStatus;
     private StoryStatusEnum? _lastSeenStatus;
+    private bool _confirmingUnpublish;
 
     private bool CanSubmit => StoryLifecycle.IsEntryStatus(SavedPostApprovalStatus);
 

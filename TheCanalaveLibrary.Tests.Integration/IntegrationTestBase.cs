@@ -36,6 +36,12 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
     /// </summary>
     protected TestAppFactory Factory => postgres.Factory;
 
+    /// <summary>
+    /// The Testcontainers connection string — for tests that build a context of their own (e.g. over
+    /// an <see cref="InterleavingCommandInterceptor"/>) or open a raw <c>NpgsqlConnection</c>.
+    /// </summary>
+    protected string ConnectionString => postgres.ConnectionString;
+
     public virtual async Task InitializeAsync()
     {
         await postgres.ResetAsync();

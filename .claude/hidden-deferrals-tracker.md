@@ -737,6 +737,18 @@ unless noted. All sit under Stage-5 cells.
   - Source: `audit/AccessGate.md` "Open (deferred, tracked)" + WU-AccessGate2 "Deliberately deferred, recorded."
   - Context: No rate limiting on `/content-gate/*` consent endpoints ("revisit on abuse"); interim AO3-style willingness wording (final copy + any age-assertion element is a counsel/row-10 item — legally load-bearing); optional hard-mode preference ("M URLs 404 instead of interstitial") not built; spotlight non-M pool floor.
 
+- [ ] **E7 — The author status-transition endpoint has no write-throttle classification** `[off-grid · low · pre-launch]` — *Filed 2026-09-30 by the WU-StoryLifecycle review fixes; routed, not an oversight.*
+  - Grid: F4 L2/L5=5 (unchanged).
+  - Source: `IStoryWriteService.TransitionStatusAsync` / `POST /api/stories/{id}/status`
+    (WU-StoryLifecycle); `security.md` §"Write Throttling".
+  - Context: a new author write surface with no `WriteActionKind` and no entry in the throttle-coverage
+    enumeration (worksheet D20's throttle half). WU-StoryLifecycle routed it to **WU-ThrottleCoverage**,
+    but only in prose (its workplan entry and commit), so this item is the ledger copy: that WU must
+    classify it (a status move is cheap and self-limiting by the transition table, so "unthrottled, on
+    purpose" is a legitimate outcome — it just has to be recorded). The sibling moderator surface,
+    `POST /api/moderation/users/{id}/auto-approve`, needs nothing: moderator actions are unthrottled by
+    the existing `security.md` rule.
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -853,8 +865,10 @@ built rows at 5 and no signal these exist.
   - Context: RSS/Atom feeds (#19), traffic analytics (#20), PWA `manifest.json` (#21). Conscious skips, no WU/row.
 
 - [ ] **F9 — Story-lifecycle questions left open for the owner by WU-StoryLifecycle** `[decision · med · beta]` — *Filed 2026-09-30; deliberately not decided in the build.*
-  - Grid: F4/F48 (all cells unchanged).
+  - Grid: F4/F48/F62 — no cell's stage rests on these items.
   - Source: worksheet D1 (sub-edges) and D20/D30 (pending); `layer2-services.md` §"Story Lifecycle".
+    Items 2, 3 and 5 are promoted to `roadmap.md` decision rows 14–16 (2026-09-30, review fixes) and
+    stay listed here only as the ledger copy; items 1 and 4 already sit on the worksheet as D20/D30.
   - Open items, none of which the build guessed at:
     1. **Minimum-content floor for submission** (e.g. a story must have a published chapter before
        it can be submitted). D1 routes it to **D20**, which is still pending. Today an author can submit
@@ -863,12 +877,20 @@ built rows at 5 and no signal these exist.
        links must still queue". That contradicts the *settled* WU38d note in `audit/Moderation.md`
        F53 ("links don't gate story approval"), so it would be a reopen, not a build. The built reading
        is the vacuous one: import verification is the decoupled per-link queue, which never consults
-       trust.
+       trust. **Promoted to `roadmap.md` decision row 14** (2026-09-30, review fixes).
     3. **Notify the author when a moderator revokes or restores `CanAutoApprove`?** The owner said
-       nothing; the build sends no notification.
+       nothing; the build sends no notification. **Promoted to `roadmap.md` decision row 15**
+       (2026-09-30, review fixes).
     4. **Optimistic concurrency (D30, pending).** The lifecycle writes guard only on the status they
        read (a conditional `WHERE story_status_id = @current`); there is no expected-version token.
        If D30 adopts `xmin`, `TransitionStatusAsync`/approve/reject are natural first adopters.
+    5. **When does a chapter "go live" if its story isn't live?** (Added 2026-09-30 by the
+       WU-StoryLifecycle review fixes.) `Chapter.FirstPublishedDate` is stamped on the chapter's own
+       first publish even while its story is Draft/Pending/Rejected — D2's "stamped once on the
+       chapter's first publish" — although D2 also defines the anchor as "went live on this site".
+       Visible today in L8: `new_chapters`/`new_words` count such chapters (rejected spam included)
+       while `new_stories` excludes their stories. Also the WU-InertFeatures fan-out anchor edge
+       already flagged in `audit/Chapters.md`. **Promoted to `roadmap.md` decision row 16.**
 
 ---
 
@@ -974,7 +996,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     flows could be driven at all until it was fixed. Natural next candidate.
 
 - [ ] **H12 — Story-lifecycle UI never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available.*
-  - Grid: F4 L4.5=5, F48 L4.5=5 (unchanged — the cells were verified before this UI existed).
+  - Grid: **F4 L4.5=1, F47 L4.5=1, F48 L4.5=1** — flipped 5→1 by the WU-StoryLifecycle review fixes
+    (2026-09-30): the cells' earlier browser passes predate this UI, and `grid_axes.md` defines L4.5
+    Stage 5 as "driven in a real browser and behaves as its audit file intends". Return all three to
+    5 when this pass runs (headline lines in `audit/Stories.md` F4, `audit/Moderation.md` F47/F48).
   - Source: `workplan.md` WU-StoryLifecycle; `audit/Stories.md` F4 and `audit/Moderation.md` F48
     Stage notes.
   - Context: new author and moderator surfaces are covered by bUnit and Integration tests only.
@@ -983,11 +1008,13 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        seeded untrusted on purpose — but a workbench DB migrated in place has TestUser trusted by the
        migration's backfill; reset it or revoke via `/mod/users/1` first) → Pending; withdraw; as a trusted author (AuthorAlpha/AuthorBeta)
        submit → published directly with `published_date` stamped; move between published statuses;
-       unpublish → Draft with the date kept. Confirm the in-place status update does **not** trip the
-       Quill `removeChild` crash on WASM (the page deliberately avoids same-route navigation).
+       unpublish → a destructive confirm dialog first (Cancel leaves the story published) → Draft with
+       the date kept. Confirm the in-place status update does **not** trip the Quill `removeChild`
+       crash on WASM (the page deliberately avoids same-route navigation).
     2. The "Status when published" select on the form (hidden once the story is published).
     3. `/mod/submissions`: the "submitted" date column (now `SubmittedDate`); approve an already-handled
-       row from a second tab → the queue reloads with the message.
+       row from a second tab → the queue reloads with the message; a taken-down pending story does not
+       appear at all.
     4. `/mod/users/{id}`: the trust line in the header, and the auto-approve revoke/restore control.
   - Known interim gap: on the WASM pass the author's lifecycle error text arrives as the generic
     "Story validation failed." until WU-ParityAndRemaining's P1 carries validation error lists over
