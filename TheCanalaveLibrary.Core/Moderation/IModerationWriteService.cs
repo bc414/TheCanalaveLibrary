@@ -13,7 +13,10 @@ public interface IModerationWriteService : IModerationReadService
     /// <summary>
     /// Submits a report against a content item or user. Validates the target-type allow-set,
     /// increments the target's <c>ActiveReportCount</c>, and fires a best-effort
-    /// <c>ReportReceived</c> notification to the reporter.
+    /// <c>ReportReceived</c> notification to the reporter — null-sourced, carrying the new report's
+    /// id (owner ruling D4; it used to be deleted by drop-self because the reporter was passed as its
+    /// own source). Every outcome notification this interface sends is null-sourced (D5): the acting
+    /// moderator is never named to the recipient.
     /// </summary>
     Task SubmitReportAsync(SubmitReportRequest request);
 

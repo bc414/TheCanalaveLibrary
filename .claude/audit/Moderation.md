@@ -22,7 +22,34 @@ soft-delete columns on Story/BaseComment/BaseBlogPost/Recommendation (renamed in
 **Not EF entities:** `SiteDailyStat` (PK `StatDate`) is a raw-SQL data mart (no `DbSet`, no migration —
 see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
+**Settled — the moderation notification band, F46/F47/F48/F53 (owner rulings D4 + D5, answered
+2026-08-04, consumed WU-InertFeatures 2026-09-30; do not revisit).** Rule text: `layer2-services.md`
+§"Notification Generation"; `content-safety.md` §"Notification Loop (§13 Transparency)".
+- **De-identified, all of 70–82, good news included** (plus tag-adoption 26): no moderator id or name
+  reaches the recipient; no `INotificationWriteService` method in the band takes a moderator id. The
+  `Report` row (and `ReviewedByModeratorUserId` on verification rows) is the internal ledger.
+- **`ReportReceived` (80) is restored** — it was annihilated by drop-self because the submit path
+  passed the reporter as their own source. It now fires null-sourced with the report id.
+- **Report ids, not zeros:** 70/80/81/82 carry `Report.ReportId` (two removals or two resolutions for
+  one user no longer collapse to one unread row — spec §5.21 "reporters always learn the outcome").
+  72/73/74/76/77 (and 90) are exempt from cross-existing dedup.
+- **Guardrail:** the moderator-initiated account action (`ApplyAccountActionToUserAsync`) never sends
+  80 or 81. *Routed, not built here:* the report-driven `ApplyAccountActionAsync` sending 81 to a member
+  reporter is a report-lifecycle defect owned by WU-ModerationIntegrity.
+- **Attribution sweep (D3 trigger 5):** a Recommendation takedown through the removal path deletes
+  every attribution row naming that recommendation (`layer2-services.md` §"Attribution (Feature 30)").
+
 ## Feature 46 — Content Reporting
+
+**Stages (updated 2026-09-30, WU-InertFeatures):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5, L6 = 5 — no
+flip. **WU-InertFeatures Stage note (owner rulings D4/D5; tracker B21 closed):** `SubmitReportAsync`'s
+receipt was never delivered — it passed the reporter as their own source and the create-core's
+drop-self rule deleted it. It now calls `NotifyReportReceivedAsync(reporter, report.ReportId)`, which
+sends `ReportReceived` (80) null-sourced with the report id (id populated by the preceding save), and
+the presenter words it as a receipt ("Thanks — we received your report"). Verified by Integration
+`ModerationServiceTests` (`SubmitReportAsync_DeliversANullSourcedReceipt_CarryingTheReportId`,
+`SubmitReportAsync_TwoReports_TwoReceipts`) and Unit `NotificationPresenterTests`. The receipt in the
+bell is on tracker H14's browser list. Band-wide rules: the cluster Settled note above.
 
 **WU34 settled constraints:**
 - Report targets: Story, User, Comment, BlogPost, Recommendation, PrivateMessage (`ReportedEntityId` is long).
@@ -64,7 +91,20 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
+**WU-InertFeatures Stage note (2026-09-30) — no cell flips; L2 stays 5 (owner rulings D3/D4/D5).**
+Every outcome notification the queue sends is now null-sourced (the moderator is never named to the
+recipient) and anchored per D4: `ResolveNoActionAsync` → 82 and `ResolveWithRemovalAsync` → 81 + 70
+carry the report id; the account actions' 72/73/74 are dedup-exempt, so a second warning while the
+first is unread is a second row; `ApplyStatusAndNotifyAsync` lost its moderator parameter; the
+moderator-initiated `ApplyAccountActionToUserAsync` carries the D4 guardrail comment and sends no
+80/81. A Recommendation takedown through `ResolveWithRemovalAsync` sweeps every reader's attribution
+naming that rec in the same save (D3 trigger 5). Verified by Integration `ModerationServiceTests`
+(+8 — the seven listed in `audit/Notifications.md` F41's Stage note plus
+`ResolveWithRemoval_OnARecommendationReport_SweepsItsAttributions`); mutation-checked. Routed, not
+built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
+(WU-ModerationIntegrity).
+
+**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes; unchanged by WU-InertFeatures):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**
 (flipped 5→1: the auto-approve revoke/restore control and trust line WU-StoryLifecycle added to
 `/mod/users/{id}` were never browser-driven — returns to 5 with tracker H12's pass), L5 = 5, L6 = 5
 (Stage notes at the end of this section).
@@ -279,7 +319,12 @@ author of a revoke/restore is `roadmap.md` decision row 15.
 reload-on-refusal, taken-down rows hidden — and the approval workflow itself changed under D1, none of
 it browser-driven; returns to 5 with tracker H12's pass), L5 = 5, L6/L8 = N/A. The D1 guards, trust
 waiver, `SubmittedDate` and the takedown freeze landed beneath the other cells (Stage notes at the end
-of this section).
+of this section). **WU-InertFeatures (2026-09-30), no flip:** `StoryApproved` (75) and
+`StoryRejected` (71) are null-sourced — `NotifyStoryApprovedAsync`/`NotifyStoryRejectedAsync` lost
+their moderator parameter and `ApproveStoryAsync`/`RejectStoryAsync` now only gate on the role — and
+75 has its own actor-free presenter arm ("{story} was approved for the library"; it previously fell to
+the catch-all). Covered by Integration `ModerationServiceTests` (the band sweep and the renamed
+story-outcome dedup tests) and Unit `NotificationPresenterTests`.
 
 **WU34 settled constraints:**
 - `StoryDetail.PostApprovalStatus` (live field, enforced by `StoryValidations.CanSubmitForApproval`) is the
@@ -547,6 +592,13 @@ permanently deferred, not a future phase of this feature).
   Only the mod **review tab** (`/mod/submissions` → Imports) is Moderation-cluster UI, injecting
   the Stories-cluster service — mirrors `ModStatsPage`→`ISiteDailyStatReadService`,
   `ModSpotlightPage`→`ISpotlightSlotAllocator`. See `folder_clusters.md`.
+
+**WU-InertFeatures (2026-09-30), no flip — L2 stays Stage 5:** the four verification outcomes (76–79)
+are null-sourced (owner ruling D5 — the reviewing moderator is no longer named to the author; the
+account tier still records `ReviewedByModeratorUserId` internally), 76/77 are exempt from
+cross-existing dedup (D4), and 76–79 gained their own actor-free presenter arms (previously the
+catch-all "You have a new notification"). Covered by Integration `ExternalVerificationTests` (all four
+assert `SourceUserId == null`) and Unit `NotificationPresenterTests`.
 
 **Stages (updated 2026-07-25, WU39):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
 (WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).

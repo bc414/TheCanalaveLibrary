@@ -32,10 +32,14 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync() =>
         Task.FromResult<IReadOnlyList<int>>([]);
 
-    private int? _helpfulPromptRecId;
-    public void SetHelpfulPromptRecommendationId(int? recId) => _helpfulPromptRecId = recId;
-    public Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId) =>
-        Task.FromResult(_helpfulPromptRecId);
+    private RecommendationDto? _helpfulPrompt;
+    public void SetHelpfulPrompt(RecommendationDto? prompt) => _helpfulPrompt = prompt;
+    public List<int> GetHelpfulPromptCalls { get; } = [];
+    public Task<RecommendationDto?> GetHelpfulPromptAsync(int storyId)
+    {
+        GetHelpfulPromptCalls.Add(storyId);
+        return Task.FromResult(_helpfulPrompt);
+    }
 
     public Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) =>
         Task.FromResult<IReadOnlyList<int>>([]);
@@ -54,7 +58,7 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public List<(int Id, bool IsHiddenGem)> SetHiddenGemCalls { get; } = [];
     public List<(int Id, bool IsHighlighted)> SetHighlightedCalls { get; } = [];
     public List<int> RecordSuccessCalls { get; } = [];
-    public List<(int StoryId, int RecId)> RecordAttributionCalls { get; } = [];
+    public List<int> DismissHelpfulPromptCalls { get; } = [];
     public List<(int Id, string Note)> RequestRevisionCalls { get; } = [];
     public List<int> RemoveCalls { get; } = [];
     public List<int> UnblockCalls { get; } = [];
@@ -105,9 +109,9 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
         return Task.CompletedTask;
     }
 
-    public Task RecordAttributionSourceAsync(int storyId, int recommendationId)
+    public Task DismissHelpfulPromptAsync(int recommendationId)
     {
-        RecordAttributionCalls.Add((storyId, recommendationId));
+        DismissHelpfulPromptCalls.Add(recommendationId);
         return Task.CompletedTask;
     }
 

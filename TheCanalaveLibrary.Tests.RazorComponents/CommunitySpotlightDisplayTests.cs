@@ -17,12 +17,13 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class CommunitySpotlightDisplayTests : BunitContext
 {
     private readonly FakeSpotlightReadService _fakeSpotlights = new();
+    private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
 
     public CommunitySpotlightDisplayTests()
     {
         Services.AddSingleton<ISpotlightReadService>(_fakeSpotlights);
         // Nested StoryCard's own dependency set (the StoryCardTests registrations):
-        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         Services.AddSingleton<IStoryReadService>(new FakeStoryReadService());
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -144,6 +145,52 @@ public class CommunitySpotlightDisplayTests : BunitContext
         _fakeSpotlights.Active = [];
         Action act = () => Render<CommunitySpotlightDisplay>();
         act.Should().NotThrow();
+    }
+
+    // ── Signed-in viewer: states + Read It Later (WU-InertFeatures, owner ruling D3) ──
+
+    private void SignIn(int userId) =>
+        this.AddAuthorization().SetAuthorized("reader").SetClaims(
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString()));
+
+    [Fact]
+    public void SignedInViewer_BatchLoadsTheSpotlightStates_AndHandsThemToTheStoryCard()
+    {
+        SignIn(5);
+        _fakeInteractions.States[7] = UserStoryInteractionStateDto.AllFalse(7) with { IsReadItLater = true };
+        _fakeSpotlights.Active = [MakeSpotlight(1, MakeStory(), MakeRec())];
+
+        IRenderedComponent<CommunitySpotlightDisplay> cut = Render<CommunitySpotlightDisplay>();
+
+        _fakeInteractions.GetStatesCalls.Should().ContainSingle().Which.Should().Equal([7]);
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+            "the StoryCard's panel used to get no state at all — its first flush wiped the viewer's flags");
+        cut.Find("[aria-label='Saved to Read It Later']"); // the recommendation card agrees
+    }
+
+    [Fact]
+    public void AnonymousViewer_LoadsNoStates()
+    {
+        _fakeSpotlights.Active = [MakeSpotlight(1, MakeStory(), MakeRec())];
+
+        Render<CommunitySpotlightDisplay>();
+
+        _fakeInteractions.GetStatesCalls.Should().BeEmpty("the by-ids endpoint is auth-gated");
+    }
+
+    [Fact]
+    public async Task ReadItLaterOnTheRecommendation_SavesIt_AndTheStoryCardPanelAdoptsIt()
+    {
+        SignIn(5);
+        _fakeSpotlights.Active = [MakeSpotlight(1, MakeStory(), MakeRec(recId: 3))];
+        IRenderedComponent<CommunitySpotlightDisplay> cut = Render<CommunitySpotlightDisplay>();
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeFalse();
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([3]);
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+            "the host refreshes the story's state so the panel can't flush the save back to false");
     }
 
     // ── Fake ──────────────────────────────────────────────────────────────────────

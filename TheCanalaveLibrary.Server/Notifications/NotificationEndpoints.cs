@@ -14,7 +14,7 @@ namespace TheCanalaveLibrary.Server;
 /// own commit (<c>cross-cutting.md</c> "Notification Creation") — no <c>.razor</c> file injects them,
 /// so they get no endpoint here. Mapping them would also be a privilege-escalation surface (e.g. a
 /// WASM client could otherwise mint arbitrary <c>AccountBanned</c>/<c>StoryApproved</c> notifications
-/// naming any <c>moderatorSourceId</c>). <see cref="TheCanalaveLibrary.Client.ClientNotificationWriteService"/>
+/// for any user). <see cref="TheCanalaveLibrary.Client.ClientNotificationWriteService"/>
 /// still implements every one of them (a client impl must satisfy the whole interface to compile) —
 /// each throws <see cref="NotSupportedException"/>, since no code path ever calls them over HTTP.
 /// </para>

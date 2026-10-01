@@ -141,4 +141,69 @@ public class RecommendationCardTests : BunitContext
 
         cut.Markup.Should().Contain("2026", "post date must be rendered");
     }
+
+    // ── Feature 30 reader entry points (owner ruling D3, WU-InertFeatures) ───────
+
+    [Fact]
+    public void RecommendationCard_NoReadItLaterDelegate_NoReadItLaterButton()
+    {
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec()));
+
+        cut.FindAll("[aria-label*='Read It Later']").Should().BeEmpty(
+            "HasDelegate-gated — the read-only reminder in the helpful prompt must not offer it");
+        cut.FindAll("a[href*='?rec=']").Should().BeEmpty("Read now is opt-in");
+    }
+
+    [Fact]
+    public async Task RecommendationCard_ReadItLaterButton_RaisesTheRecommendationId()
+    {
+        int? raised = null;
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec())
+            .Add(c => c.OnReadItLater, EventCallback.Factory.Create<int>(this, id => raised = id)));
+
+        AngleSharp.Dom.IElement button = cut.Find("[aria-label='Save this story to Read It Later']");
+        button.GetAttribute("aria-pressed").Should().Be("false");
+        await button.ClickAsync(new());
+
+        raised.Should().Be(1);
+    }
+
+    [Fact]
+    public void RecommendationCard_ReadItLaterSaved_RendersPressedAndInert()
+    {
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec())
+            .Add(c => c.OnReadItLater, EventCallback.Factory.Create<int>(this, _ => { }))
+            .Add(c => c.IsReadItLaterSaved, true));
+
+        AngleSharp.Dom.IElement button = cut.Find("[aria-label='Saved to Read It Later']");
+        button.GetAttribute("aria-pressed").Should().Be("true");
+        button.HasAttribute("disabled").Should().BeTrue();
+    }
+
+    [Fact]
+    public void RecommendationCard_ShowReadNow_LinksToChapterOneCarryingTheRec()
+    {
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec())
+            .Add(c => c.ShowReadNow, true));
+
+        cut.Find("a[href='/story/10/1?rec=1']").TextContent.Should().Contain("Read now");
+    }
+
+    [Theory]
+    [InlineData(RecommendationStatusEnum.NeedsRevision)]
+    [InlineData(RecommendationStatusEnum.Rejected)]
+    public void RecommendationCard_NotApproved_HidesBothEntryPoints(RecommendationStatusEnum status)
+    {
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec() with { Status = status })
+            .Add(c => c.OnReadItLater, EventCallback.Factory.Create<int>(this, _ => { }))
+            .Add(c => c.ShowReadNow, true));
+
+        cut.FindAll("[aria-label*='Read It Later']").Should().BeEmpty("a hidden rec can't be attributed");
+        cut.FindAll("a[href*='?rec=']").Should().BeEmpty();
+    }
 }

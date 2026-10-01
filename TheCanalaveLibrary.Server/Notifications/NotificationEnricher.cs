@@ -4,6 +4,13 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
+/// One resolved notification target: the related entity's display <paramref name="Title"/> and
+/// deep-link <paramref name="Url"/>, plus an optional <paramref name="ContextTitle"/> — a second name
+/// the same anchor yields for free (the story behind a <c>GroupStory</c> or <c>Chapter</c> anchor).
+/// </summary>
+public readonly record struct NotificationTarget(string? Title, string? Url, string? ContextTitle);
+
+/// <summary>
 /// Resolves each notification's polymorphic <c>RelatedEntityId</c> to a display title and target
 /// URL — the two-pass batch enrichment described in <c>layer2-services.md</c>
 /// §"Polymorphic RelatedEntityId — Two-Pass Batch Enrichment." One query per entity kind actually
@@ -18,6 +25,11 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Do not fork this switch.</b> <see cref="KindFor"/> has an arm per notification type and
 /// grows every time a type is minted; a second copy would drift silently, surfacing as
 /// title-less notifications in whichever consumer was not updated.</para>
+///
+/// <para><b>Ids are <c>long</c>, keys are <c>int</c> (WU-InertFeatures, 2026-09-30).</b>
+/// <c>RelatedEntityId</c> is <c>bigint</c> (report ids), but every kind resolved here has an
+/// <c>int</c> primary key, so each kind's id set is narrowed to <c>int</c> before its query — an id
+/// above <c>int.MaxValue</c> simply misses — and the SQL compares <c>int = int</c>.</para>
 ///
 /// <para><b>Plane note (unchanged by the extraction):</b> enrichment resolves <em>ground truth</em>
 /// and is never rating- or audience-filtered — notifications are Personal-plane, referencing things
@@ -35,11 +47,13 @@ public static class NotificationEnricher
     /// and links to the *group* (<c>/group/{GroupId}</c> — NewGroupBlogPost's chosen target);
     /// <c>BlogPostDirect</c> resolves via the TPT-root <c>BlogPosts</c> DbSet and links to the
     /// *post* (<c>/blog/{id}</c>, the unified BlogPostPage route serving both post kinds).
+    /// <c>GroupStory</c> (owner ruling D16) resolves the junction row to the group (title + link) and
+    /// the story (context title).
     /// </summary>
-    private enum RelatedEntityKind { None, User, Story, Chapter, Group, BlogPost, BlogPostDirect, Tag }
+    private enum RelatedEntityKind { None, User, Story, Chapter, Group, GroupStory, BlogPost, BlogPostDirect, Tag }
 
     /// <summary>
-    /// Batch-resolves <c>(type, relatedEntityId)</c> pairs to their <c>(Title, Url)</c> targets.
+    /// Batch-resolves <c>(type, relatedEntityId)</c> pairs to their targets.
     /// Pairs whose type has no navigable target, or whose entity no longer resolves (deleted,
     /// taken down), are simply absent from the returned dictionary — callers treat a miss as
     /// "no title, no link," which every consumer already renders gracefully.
@@ -49,21 +63,22 @@ public static class NotificationEnricher
     /// sequentially — see <c>layer2-services.md</c> §"Read-context concurrency: factory per method."
     /// </param>
     /// <param name="pairs">One entry per notification being enriched. Duplicates are fine.</param>
-    public static async Task<Dictionary<(NotificationTypeEnum TypeId, int RelatedEntityId), (string? Title, string? Url)>>
+    public static async Task<Dictionary<(NotificationTypeEnum TypeId, long RelatedEntityId), NotificationTarget>>
         ResolveTargetsAsync(
             ReadOnlyApplicationDbContext readDb,
-            IReadOnlyList<(NotificationTypeEnum TypeId, int RelatedEntityId)> pairs)
+            IReadOnlyList<(NotificationTypeEnum TypeId, long RelatedEntityId)> pairs)
     {
-        Dictionary<RelatedEntityKind, Dictionary<int, (string? Title, string? Url)>> kindLookups =
+        Dictionary<RelatedEntityKind, Dictionary<int, NotificationTarget>> kindLookups =
             await BatchLoadEntitiesAsync(readDb, pairs);
 
-        var resolved = new Dictionary<(NotificationTypeEnum, int), (string?, string?)>();
-        foreach ((NotificationTypeEnum typeId, int relatedEntityId) in pairs)
+        var resolved = new Dictionary<(NotificationTypeEnum, long), NotificationTarget>();
+        foreach ((NotificationTypeEnum typeId, long relatedEntityId) in pairs)
         {
             if (resolved.ContainsKey((typeId, relatedEntityId))) continue;
+            if (!TryNarrow(relatedEntityId, out int id)) continue;
 
             if (kindLookups.TryGetValue(KindFor(typeId), out var byId) &&
-                byId.TryGetValue(relatedEntityId, out (string? Title, string? Url) target))
+                byId.TryGetValue(id, out NotificationTarget target))
             {
                 resolved[(typeId, relatedEntityId)] = target;
             }
@@ -73,13 +88,28 @@ public static class NotificationEnricher
     }
 
     /// <summary>
+    /// Every resolvable kind has an <c>int</c> key: an id outside the <c>int</c> range cannot name
+    /// one, so it misses instead of overflowing.
+    /// </summary>
+    private static bool TryNarrow(long relatedEntityId, out int id)
+    {
+        if (relatedEntityId is >= int.MinValue and <= int.MaxValue)
+        {
+            id = (int)relatedEntityId;
+            return true;
+        }
+        id = 0;
+        return false;
+    }
+
+    /// <summary>
     /// Maps each <see cref="NotificationTypeEnum"/> to the kind of entity its
     /// <c>RelatedEntityId</c> references. Derived from the <c>CreateCoreAsync</c> call-sites
     /// in <see cref="ServerNotificationWriteService"/> — those are the authoritative source of
     /// what each semantic method stores in <c>RelatedEntityId</c>.
     ///
-    /// <para>Types whose generating write-path is not yet implemented are stubbed with the kind
-    /// their future implementation is expected to store; they produce no DB rows until the
+    /// <para>Types whose generating write-path is not yet implemented (tracker B24) are stubbed with
+    /// the kind their future implementation is expected to store; they produce no DB rows until the
     /// triggering work-unit lands, but the branch exists for forward-compat.</para>
     /// </summary>
     private static RelatedEntityKind KindFor(NotificationTypeEnum type) => type switch
@@ -91,9 +121,11 @@ public static class NotificationEnricher
         // ── Implemented WU29: RelatedEntityId = recommender's user id ────────────
         NotificationTypeEnum.HiddenGem        => RelatedEntityKind.User,
 
-        // ── Implemented WU32: group fan-out ──────────────────────────────────────
-        NotificationTypeEnum.NewGroupStory          => RelatedEntityKind.Group,
-        NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.Group,
+        // ── Implemented WU32, re-anchored WU-InertFeatures (D16): RelatedEntityId = the
+        // GroupStory junction row — title = group name, link = the group (unchanged), context
+        // title = the story. A removed GroupStory row misses → title-less (accepted by D16). ──
+        NotificationTypeEnum.NewGroupStory          => RelatedEntityKind.GroupStory,
+        NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.GroupStory,
         NotificationTypeEnum.NewGroupBlogPost        => RelatedEntityKind.BlogPost,
 
         // ── Implemented WU-Spotlight: RelatedEntityId = spotlighted story id ─────
@@ -112,8 +144,9 @@ public static class NotificationEnricher
         // ── Implemented WU-B2 (2026-07-25): comment + profile-blog generation lives ──
         // RelatedEntityId: chapterId for NewStoryComment (deep-link to the commented chapter);
         // blogPostId for NewCommentOnBlog + the four followed-content blog types (13–16);
-        // profileOwnerId for NewCommentOnYourProfile. CommentReply stays None below — one
-        // cross-context type cannot map to one table (relatedId is the context entity's id).
+        // profileOwnerId for NewCommentOnYourProfile. CommentReply stays None below: it stores the
+        // context entity's id, and one cross-context type cannot map to one table (re-pointing it at
+        // the comment via the BaseComments TPT root is on D16's conformance list, tracker B23). ──
         NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.Chapter,
         NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.BlogPostDirect,
         NotificationTypeEnum.NewCommentOnYourProfile         => RelatedEntityKind.User,
@@ -122,20 +155,26 @@ public static class NotificationEnricher
         NotificationTypeEnum.NewBlogPostOnFavoritedStory     => RelatedEntityKind.BlogPostDirect,
         NotificationTypeEnum.NewBlogPostOnReadItLaterStory   => RelatedEntityKind.BlogPostDirect,
 
-        // ── Forward-compat stubs (no rows until triggering work-units land) ──────
+        // ── Implemented WU-InertFeatures: RelatedEntityId = the new chapter (the Chapter kind
+        // also yields the story title as context). ─────────────────────────────────────
         NotificationTypeEnum.NewChapterOnFollowedStory       => RelatedEntityKind.Chapter,
+
+        // ── Forward-compat stubs (no rows until triggering work-units land — tracker B24) ──
         NotificationTypeEnum.NewStoryByFollowedUser          => RelatedEntityKind.Story,
         NotificationTypeEnum.NewRecommendationByFollowedUser => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryFavorite                => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryFollower                => RelatedEntityKind.Story,
-        // NewRecommendationOnYourStory + RecommendationApproved gained production senders in
-        // WU-RecLifecycle (submit / unblock); the two types below were minted by the same WU.
+        NotificationTypeEnum.RecommendationHighlighted       => RelatedEntityKind.Story,
+        NotificationTypeEnum.SuccessfulRec                   => RelatedEntityKind.Story,
+
+        // ── Implemented WU-RecLifecycle (submit / revise / revision request / unblock) ──
         NotificationTypeEnum.NewRecommendationOnYourStory    => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationApproved          => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationRevisionRequested => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationRevised           => RelatedEntityKind.Story,
-        NotificationTypeEnum.RecommendationHighlighted       => RelatedEntityKind.Story,
-        NotificationTypeEnum.SuccessfulRec                   => RelatedEntityKind.Story,
+
+        // ── Implemented: lineage (WU42), acknowledgement (WU-StatBadgeProducers), and the
+        // submission outcomes (WU34) — RelatedEntityId = the story. ─────────────────────
         NotificationTypeEnum.StoryLineageRequested            => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryLineageApproved             => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryAcknowledgement         => RelatedEntityKind.Story,
@@ -152,7 +191,9 @@ public static class NotificationEnricher
         NotificationTypeEnum.ExternalLinkVerified => RelatedEntityKind.Story,
         NotificationTypeEnum.ExternalLinkRejected => RelatedEntityKind.Story,
 
-        // ── No navigable target (site announcements, account warnings, reports) ──
+        // ── No navigable target: site announcements, account actions, and the report-anchored
+        // types (70/80/81/82 carry the report id — D4 — which is a dedup anchor, not a link a
+        // reporter or author may follow). ──
         _ => RelatedEntityKind.None
     };
 
@@ -163,22 +204,25 @@ public static class NotificationEnricher
     ///
     /// <para><see cref="RelatedEntityKind.None"/> produces no query.</para>
     /// </summary>
-    private static async Task<Dictionary<RelatedEntityKind, Dictionary<int, (string? Title, string? Url)>>>
+    private static async Task<Dictionary<RelatedEntityKind, Dictionary<int, NotificationTarget>>>
         BatchLoadEntitiesAsync(
             ReadOnlyApplicationDbContext readDb,
-            IReadOnlyList<(NotificationTypeEnum TypeId, int RelatedEntityId)> typeIdPairs)
+            IReadOnlyList<(NotificationTypeEnum TypeId, long RelatedEntityId)> typeIdPairs)
     {
-        // Classify each row's kind and group ids per kind — skip None entirely.
+        // Classify each row's kind and group ids per kind — skip None entirely, and narrow each id
+        // to the int key every kind uses (an out-of-range id cannot name an entity).
         var idsByKind = typeIdPairs
             .GroupBy(p => KindFor(p.TypeId))
             .Where(g => g.Key != RelatedEntityKind.None)
             .ToDictionary(
                 g => g.Key,
-                g => g.Select(p => p.RelatedEntityId).ToHashSet());
+                g => g.Select(p => TryNarrow(p.RelatedEntityId, out int id) ? (int?)id : null)
+                      .OfType<int>()
+                      .ToHashSet());
 
-        var result = new Dictionary<RelatedEntityKind, Dictionary<int, (string? Title, string? Url)>>();
+        var result = new Dictionary<RelatedEntityKind, Dictionary<int, NotificationTarget>>();
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.Story, out var storyIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.Story, out var storyIds) && storyIds.Count > 0)
         {
             result[RelatedEntityKind.Story] = (await readDb.StoryListings
                     .Where(s => storyIds.Contains(s.StoryId))
@@ -186,21 +230,25 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     s => s.StoryId,
-                    s => ((string?)s.StoryTitle, (string?)$"/story/{s.StoryId}"));
+                    s => new NotificationTarget(s.StoryTitle, $"/story/{s.StoryId}", null));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.Chapter, out var chapterIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.Chapter, out var chapterIds) && chapterIds.Count > 0)
         {
-            result[RelatedEntityKind.Chapter] = (await readDb.Chapters
-                    .Where(c => chapterIds.Contains(c.ChapterId))
-                    .Select(c => new { c.ChapterId, c.Title, c.StoryId, c.ChapterNumber })
+            // The story title rides along as context (type 10: "New chapter of {story}: {chapter}").
+            result[RelatedEntityKind.Chapter] = (await (
+                    from c in readDb.Chapters
+                    where chapterIds.Contains(c.ChapterId)
+                    join s in readDb.StoryListings on c.StoryId equals s.StoryId into stories
+                    from s in stories.DefaultIfEmpty()
+                    select new { c.ChapterId, c.Title, c.StoryId, c.ChapterNumber, StoryTitle = (string?)s.StoryTitle })
                     .ToListAsync())
                 .ToDictionary(
                     c => c.ChapterId,
-                    c => ((string?)c.Title, (string?)$"/story/{c.StoryId}/{c.ChapterNumber}"));
+                    c => new NotificationTarget(c.Title, $"/story/{c.StoryId}/{c.ChapterNumber}", c.StoryTitle));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.User, out var userIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.User, out var userIds) && userIds.Count > 0)
         {
             result[RelatedEntityKind.User] = (await readDb.Users
                     .Where(u => userIds.Contains(u.Id))
@@ -208,10 +256,10 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     u => u.Id,
-                    u => ((string?)(u.UserName ?? "Unknown User"), (string?)$"/user/{u.Id}"));
+                    u => new NotificationTarget(u.UserName ?? "Unknown User", $"/user/{u.Id}", null));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.Group, out var groupIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.Group, out var groupIds) && groupIds.Count > 0)
         {
             // elevated read: notifications are Personal-plane — they reference things the
             // recipient interacted with, so enrichment resolves ground truth and is never
@@ -226,10 +274,28 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     g => g.GroupId,
-                    g => ((string?)g.GroupName, (string?)$"/group/{g.GroupId}"));
+                    g => new NotificationTarget(g.GroupName, $"/group/{g.GroupId}", null));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.BlogPost, out var blogPostIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.GroupStory, out var groupStoryIds) && groupStoryIds.Count > 0)
+        {
+            // D16: one id names the pairing. Explicit joins (not navigations) so the group read can
+            // carry the same elevated GroupAudience bypass as the Group kind above — Personal plane.
+            // The link target stays the group, as it was when these types carried the group id.
+            result[RelatedEntityKind.GroupStory] = (await (
+                    from gs in readDb.GroupStories
+                    where groupStoryIds.Contains(gs.GroupStoryId)
+                    join g in readDb.Groups.IgnoreQueryFilters(["GroupAudience"]) on gs.GroupId equals g.GroupId
+                    join s in readDb.StoryListings on gs.StoryId equals s.StoryId into stories
+                    from s in stories.DefaultIfEmpty()
+                    select new { gs.GroupStoryId, g.GroupId, g.GroupName, StoryTitle = (string?)s.StoryTitle })
+                    .ToListAsync())
+                .ToDictionary(
+                    x => x.GroupStoryId,
+                    x => new NotificationTarget(x.GroupName, $"/group/{x.GroupId}", x.StoryTitle));
+        }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.BlogPost, out var blogPostIds) && blogPostIds.Count > 0)
         {
             // Group-scoped kind (NewGroupBlogPost only): links to the GROUP, not the post —
             // that type's chosen navigation target. Post-scoped types use BlogPostDirect below.
@@ -239,10 +305,10 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     b => b.BlogPostId,
-                    b => ((string?)b.Title, (string?)$"/group/{b.GroupId}"));
+                    b => new NotificationTarget(b.Title, $"/group/{b.GroupId}", null));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.BlogPostDirect, out var directPostIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.BlogPostDirect, out var directPostIds) && directPostIds.Count > 0)
         {
             // TPT-root lookup (WU-B2): resolves BOTH post kinds; /blog/{id} is the unified
             // BlogPostPage route. No IgnoreQueryFilters — blog posts carry no audience/rating
@@ -255,10 +321,10 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     b => b.BlogPostId,
-                    b => ((string?)b.Title, (string?)$"/blog/{b.BlogPostId}"));
+                    b => new NotificationTarget(b.Title, $"/blog/{b.BlogPostId}", null));
         }
 
-        if (idsByKind.TryGetValue(RelatedEntityKind.Tag, out var tagIds))
+        if (idsByKind.TryGetValue(RelatedEntityKind.Tag, out var tagIds) && tagIds.Count > 0)
         {
             // WU-TagFanon: the adoption invitation deep-links to the author's per-tag page.
             result[RelatedEntityKind.Tag] = (await readDb.Tags
@@ -267,7 +333,7 @@ public static class NotificationEnricher
                     .ToListAsync())
                 .ToDictionary(
                     t => t.TagId,
-                    t => ((string?)t.TagName, (string?)$"/tag-adoptions/{t.TagId}"));
+                    t => new NotificationTarget(t.TagName, $"/tag-adoptions/{t.TagId}", null));
         }
 
         return result;

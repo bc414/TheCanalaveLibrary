@@ -112,6 +112,8 @@ Ordered by severity. Each is a migration against empty tables today.
 
 ### 2.1 Phantom shadow FK: `user_story_interactions.recommendation_id`
 
+> **Built:** WU-InertFeatures (2026-09-30), per worksheet D3's routing note — the unpaired nav is removed and the column, index and FK dropped (migration `WU_InertFeatures`); the fossil origin is recorded in `layer1-data-model.md`. The entry below is history.
+
 **Evidence.** `Recommendation.cs:41` declares `ICollection<UserStoryInteraction>
 UserStoryInteractions` with no inverse navigation and no Fluent pairing. EF therefore mints a
 shadow FK — the DDL shows `recommendation_id integer` on `user_story_interactions`, an FK with **no
@@ -173,6 +175,8 @@ in the same migration (empty DB makes the FK flip free), and record the rule in
 it is a cross-cutting invariant, not three point fixes.
 
 ### 2.3 `notifications.related_entity_id` is `integer`; comment ids are `bigint`
+
+> **Built:** WU-InertFeatures (2026-09-30), on the migration D4 asked for (`WU_InertFeatures` — `integer` → `bigint`, data-preserving widen). The entry below is history.
 
 Notification types 24/31/33/34 (comment events) store a `base_comments.comment_id` — a `bigint` —
 in an `int` column. `Report` solved the identical problem correctly: `ReportedEntityId` is `long`

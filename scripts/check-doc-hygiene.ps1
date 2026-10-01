@@ -42,6 +42,8 @@ $retiredTerms = [ordered]@{
     'RecommenderSilver badge tier (tiers retired site-wide, WU-StatBadgeProducers 2026-07-30)' = '\bRecommenderSilver\b'
     'PrefersDataSaverMode (cut as inert, WU-DataSaver 2026-07-31)' = '\bPrefersDataSaverMode\b|\bprefers_data_saver_mode\b|\bprefersDataSaver\b'
     'UserCustomFilter / FilterEntityType (cut, both directions unbuilt/unrequested, WU-DiscoveryOverrideUI 2026-07-31)' = '\bUserCustomFilter\b|\bFilterEntityType\b|\buser_custom_filters?\b'
+    'RecordAttributionSourceAsync (on-load attribution write retired; owner ruling D3, WU-InertFeatures 2026-09-30)' = '\bRecordAttributionSourceAsync\b'
+    'GetHelpfulPromptRecommendationIdAsync (replaced by the DTO-returning GetHelpfulPromptAsync, WU-InertFeatures 2026-09-30)' = '\bGetHelpfulPromptRecommendationIdAsync\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

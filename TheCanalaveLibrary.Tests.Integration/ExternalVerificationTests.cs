@@ -163,7 +163,8 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
         identity.DateReviewed.Should().NotBeNull();
 
         db.Notifications.Should().ContainSingle(n =>
-            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalAccountVerified);
+            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalAccountVerified
+            && n.SourceUserId == null, "D5: the reviewing moderator is never named to the user");
     }
 
     [Fact]
@@ -185,7 +186,8 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
         identity.RejectionReason.Should().Be("Code not found on profile.");
 
         db.Notifications.Should().ContainSingle(n =>
-            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalAccountRejected);
+            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalAccountRejected
+            && n.SourceUserId == null, "D5: the reviewing moderator is never named to the user");
     }
 
     [Fact]
@@ -274,7 +276,7 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
 
         db.Notifications.Should().ContainSingle(n =>
             n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalLinkVerified
-            && n.RelatedEntityId == storyId);
+            && n.RelatedEntityId == storyId && n.SourceUserId == null, "D5: null-sourced");
     }
 
     [Fact]
@@ -298,7 +300,8 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
         // Settled 2026-07-24: a rejected link is NOT deleted/hidden — it stays a plain public link.
 
         db.Notifications.Should().ContainSingle(n =>
-            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalLinkRejected);
+            n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.ExternalLinkRejected
+            && n.SourceUserId == null, "D5: null-sourced");
     }
 
     // ── Moderator queues ─────────────────────────────────────────────────────────

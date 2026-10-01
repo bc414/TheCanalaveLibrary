@@ -122,7 +122,8 @@ blocking question, same treatment now applied going forward: a tracker item that
 genuine open decision gets promoted here, not left buried in the tracker) and resolved 2026-07-28.
 Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved. Rows 14–16 were added
 2026-09-30 (WU-StoryLifecycle review fixes), promoted out of `hidden-deferrals-tracker.md` **F9** under
-the same rule; F9's other two items already sit on the worksheet as pending D20 and D30.
+the same rule; F9's other two items already sit on the worksheet as pending D20 and D30. Rows 17–18
+were added 2026-09-30 by WU-InertFeatures: two unruled edges its build had to take a default on.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -133,6 +134,8 @@ the same rule; F9's other two items already sit on the worksheet as pending D20 
 | 14 | **Import rider, alternate reading (worksheet D1)** — must a *trusted* author's story that lists external ("also posted on") links still go through the approval queue? | No (as built): import verification is the decoupled per-link queue (WU38d/WU39), which never consults trust, so D1's "import-verification submissions never take the waiver" holds vacuously. | "Yes" would reopen the settled WU38d note in `audit/Moderation.md` F53 ("links don't gate story approval") — a policy reversal only you can make. Tracker **F9** item 2. |
 | 15 | **Tell an author when a moderator revokes or restores their auto-approve?** | No notification (D1 is silent; nothing is sent today). The revoke/restore is still recorded as a moderator-initiated `Report` row. | Moderation transparency toward authors is community policy. Tracker **F9** item 3. |
 | 16 | **When does a chapter "go live" if its story isn't live yet?** `Chapter.FirstPublishedDate` is stamped on the chapter's own first publish, even while its story is Draft/Pending/Rejected (D2's "stamped once on the chapter's first publish", invariant tied to `IsPublished`). D2 also says the anchor means "went live **on this site**", which such a chapter has not. | As built: stamp on the chapter's own first publish. Consequence: L8 `new_chapters`/`new_words` count chapters of stories that never went live (including rejected spam), while `new_stories` excludes those stories; the fan-out anchor (WU-InertFeatures) predates the story's own `PublishedDate`. | The two halves of D2's wording disagree on this edge, and the answer fixes the "New"-badge, fan-out and L8 semantics for good once real data exists. Tracker **F9** item 5. |
+| 17 | **Should a new chapter notify its story's followers when the story itself isn't live?** The new-chapter fan-out (type 10) fires once, when the chapter's `FirstPublishedDate` is stamped. | As built (a default, not a ruling): suppress it when the story is not publicly published at that moment (Draft / PendingApproval / Rejected, or taken down). Consequence: a chapter first published while its story was unpublished never notifies, because its anchor is already stamped when the story later goes live; a story that is unpublished and republished does not re-announce its chapters. | Who gets told about what, and when, is reader-facing policy; it is tied to row 16 (whether such a chapter has "gone live" at all). Rule text: `layer2-services.md` §"Notification Generation" → "New-chapter fan-out". |
+| 18 | **May a recommender earn a "helpful" credit from their own recommendation?** A recommender who saves a story for later from their own recommendation card (or follows its "Read now" link) gets an attribution row, and answering the prompt adds +1 to that recommendation's `SuccessfulRecCount`. | As built (status quo): allowed. Only the recommender badge counter skips the reader-is-recommender case; D3's author gate covers the *story's* author, not the recommender. | It decides what the public "N helpful" count means; D3 did not address it. Rule text: `layer2-services.md` §"Attribution (Feature 30)". |
 
 ## Recommended next work units (2026-07-27)
 
@@ -193,6 +196,39 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Recommendation provenance home (worksheet D3) — answered 2026-08-04, built WU-InertFeatures
+  2026-09-30.** Had no decision row: it came out of the 2026-08-03 service-layer audit's §3.2, which
+  proposed decoupling the attribution partition from the USI row because the shipped `?rec=`-on-load
+  write FK-failed. Ruling: the coupling is correct and the fork is void — the fault was a missing
+  producer (the 2025-specified Read It Later button on the recommendation card). The attribution is
+  metadata on the `IsReadItLater` bit; two entry points (card RIL, and a direct link persisted at the
+  Ch.1 ≥90% moment); five removal triggers; a DTO-returning prompt with Yes/X only; `RecordSuccessAsync`
+  requires and consumes the sources row; cascade (not RESTRICT) on the recommendation FK. Rule:
+  `layer2-services.md` §"Attribution (Feature 30)". Narrative: `audit/Recommendations.md` F30,
+  `audit/UserStoryInteractions.md` F16. Unruled edge left open: decision row 18.
+
+- **System/self-sourced notifications (worksheet D4) and moderation-notification de-identification
+  (worksheet D5) — answered 2026-08-04, built WU-InertFeatures 2026-09-30.** Had no decision rows:
+  both came out of the service-layer audit's §3.3/§3.4. D4: `CreateCoreAsync` takes a nullable source
+  (null = no actor); drop-self is conditional; `ReportReceived` is restored; 70/80/81/82 carry the
+  report id and 72/73/74/76/77/90 are exempt from cross-existing dedup; `related_entity_id` widened to
+  `bigint` on the same migration; two nulls are told apart by type, never by column. D5: the whole
+  70–82 band is null-sourced, good news included, and — D5's routed sub-edge, taken per the owner's
+  recommendation — so is the tag-adoption invitation (26). No band method takes a moderator id. Rule:
+  `layer2-services.md` §"Notification Generation"; threat model in `content-safety.md`
+  §"Notification Loop". Narrative: `audit/Notifications.md` F41, `audit/Moderation.md` (cluster
+  Settled note).
+
+- **Group fan-out `RelatedEntityId` (worksheet D16) and hidden-favorite fan-out membership (worksheet
+  D17) — answered 2026-08-07, built WU-InertFeatures 2026-09-30.** D16: `RelatedEntityId` names the
+  single most specific entity of the event — for a group add, the `GroupStory` junction row — and a
+  second id column is never added; the re-point backlog is recorded as a conformance list (tracker
+  B23), not built. D17: a hidden favorite suppresses public-plane consequences only, so type 15 goes to
+  `IsFavorite || IsHiddenFavorite`, and the author-plane type 20 must not fire for a hidden favorite.
+  Rule: `layer2-services.md` §"Polymorphic RelatedEntityId" and §"Comment & blog-post semantic
+  methods". Narrative: `audit/Notifications.md` F41, `audit/Groups.md` F39. The new-chapter fan-out
+  that both rulings fed was built in the same WU (its unpublished-story default is decision row 17).
 
 - **Visibility gating: raises vs clears (worksheet D6) — answered 2026-08-04, built
   WU-AccessGateSweep2 2026-09-30.** Had no decision row: it came out of the 2026-08-03 service-layer

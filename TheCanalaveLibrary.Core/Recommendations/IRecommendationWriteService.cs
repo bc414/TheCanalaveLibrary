@@ -63,7 +63,9 @@ public interface IRecommendationWriteService : IRecommendationReadService
     /// story. From <c>Approved</c> or <c>NeedsRevision</c> → <c>Rejected</c>. Silent (no
     /// notification), publicly hidden, and sticky: the recommender cannot edit, delete, or
     /// resubmit — only <see cref="UnblockAsync"/> reverses it. Clears the revision note and both
-    /// curation flags.
+    /// curation flags, and deletes every reader's attribution naming it in the same save (owner
+    /// ruling D3, trigger 5 — a recommendation that can't be displayed can't be reminded or credited;
+    /// unblocking does not restore them).
     /// </summary>
     /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
@@ -116,19 +118,24 @@ public interface IRecommendationWriteService : IRecommendationReadService
     Task SetHighlightedByAuthorAsync(int recommendationId, bool isHighlighted);
 
     /// <summary>
-    /// Records that a recommendation successfully led to a completed reading experience.
-    /// Idempotent on composite PK. Increments <c>SuccessfulRecCount</c> on the recommendation.
-    /// Minted in WU29; called by WU26 after Ch.1 IsRead triggers.
+    /// The helpful prompt's <b>Yes</b> (spec §5.6, owner ruling D3): records that the recommendation
+    /// helped the caller find the story — <c>SuccessfulRecCount</c> +1 and the recommender's badge
+    /// credit — and consumes the caller's attribution in the same save, so the prompt never returns.
+    /// <b>Requires the caller's attribution for this recommendation</b> (the service audit's §2.4.1
+    /// credit-faucet fix): without one, or when the recommendation is not <c>Approved</c> or is taken
+    /// down, it throws <see cref="KeyNotFoundException"/> and nothing changes. An already-recorded
+    /// success is an idempotent no-op that still clears a lingering attribution row.
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
+    /// <exception cref="KeyNotFoundException">Recommendation not found or not visible, or the caller
+    /// holds no attribution for it — indistinguishable on purpose.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task RecordSuccessAsync(int recommendationId);
 
     /// <summary>
-    /// Records that the current user discovered a story via a specific recommendation (Feature 30
-    /// attribution source). Written when the user opens a story from a recommendation link.
-    /// Minted in WU29; called by WU26 reading-page infrastructure.
+    /// The helpful prompt's <b>X</b> — the decline (owner ruling D3): deletes the caller's attribution
+    /// naming <paramref name="recommendationId"/> so the prompt never returns. A clear of the caller's
+    /// own row, so no visibility guard runs (D6); a no-op when no such row exists.
     /// </summary>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
-    Task RecordAttributionSourceAsync(int storyId, int recommendationId);
+    Task DismissHelpfulPromptAsync(int recommendationId);
 }

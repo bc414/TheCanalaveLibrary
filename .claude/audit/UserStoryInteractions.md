@@ -77,10 +77,30 @@ The §8.7 entity/column renames (`UserInteractionFilter→UserStoryInteractionFi
 to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on User) respectively.
 
 ## Feature 16 — Story Interaction State Writes
+
+**Settled — recommendation attribution on the USI writes (owner ruling D3, answered 2026-08-04,
+consumed WU-InertFeatures 2026-09-30; do not revisit).** The attribution partition stays FK-coupled to
+the USI row (do not decouple). Three write-path consequences, rule text in `layer2-services.md`
+§"Attribution (Feature 30)":
+- **New producer** `SetReadItLaterFromRecommendationAsync(recId)` — the rec card's targeted single-bit
+  setter (USI upsert + sources row in one unit of work; a raise, so the D6 guard applies).
+- **`MarkStartedAsync(storyId, attributedRecommendationId = null)`** persists a direct-link attribution
+  at the Ch.1 ≥90% moment; an unattributable parameter is silently ignored.
+- **Trigger 1:** `SetUserStoryInteractionStateAsync` deletes the sources row when `IsReadItLater` goes
+  true→false, in the same unit of work (it is a clear — never guarded, D6).
+- *Derived, not owner text:* `UserStoryInteractionPanel` adopts a **changed** `State` parameter when
+  it has no pending local toggle — otherwise its next six-bit flush would write `IsReadItLater = false`
+  over a card's RIL and fire trigger 1.
+
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
   all false; date row only when relevant") survived intact.
-- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30 — see its Stage note at the end of this feature).** Read/write service implemented and tested.
+**Stages (updated 2026-09-30, WU-InertFeatures):** L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the
+panel now adopts a changed `State` from its host so a recommendation card's Read It Later can't be
+flushed back — never browser-driven; returns to 5 with tracker H14's pass). Stage notes at the end of
+this feature.
+
+- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
 
   **Settled for WU15 (2026-06-22, do not revisit):**
   - WU15 is **trimmed to the panel-critical slice** — Feature 16 L2 only (write path + per-viewer state
@@ -122,7 +142,7 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   `Server/UserStoryInteractions/ServerUserStoryInteractionWriteService.cs`,
   DI in `Server/Program.cs`.
 
-- **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22).** `UserStoryInteractionButton` leaf
+- **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22; adopts a changed `State` when idle, WU-InertFeatures 2026-09-30 — Stage note at the end).** `UserStoryInteractionButton` leaf
   (WU7, Stage 5) + `UserStoryInteractionPanel` coordination composite (WU16). Panel owns the 2-second
   debounce via `CancellationTokenSource` + `Task.Delay`; applies optimistic local state update before
   the debounce fires; calls `SetUserStoryInteractionStateAsync` on flush.
@@ -280,6 +300,49 @@ hidden story and on id 999 999, and the counter decrement on a taken-down story;
 raise tests still refuse. Mutation-checked: run against the pre-fix service, every clear test and the
 no-oracle test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass. Rule: `identity-and-authorization.md` §"Parent-visibility guards" →
 "Raises vs clears".
+
+### Feature 16 L2/L3/L4.5 — WU-InertFeatures Stage note (2026-09-30): recommendation attribution rides the RIL bit (owner ruling D3)
+
+**Cells:** L2 and L3-Logic stay Stage 5; **L4.5 flips 5→1** (the panel's behavior beside a
+recommendation card changed and was never browser-driven — no browser in this environment; returns to
+5 with tracker **H14**'s pass).
+
+**What changed (L2):** three write-path consequences of D3 (Settled note at the top of this feature).
+(1) New `SetReadItLaterFromRecommendationAsync(recId)` — the rec card's targeted single-bit setter:
+refuses an unknown / non-`Approved` / taken-down rec as not-found, runs the full raise guard on the
+rec's story (D6), upserts the USI row with `IsReadItLater = true` and `ReadItLaterDate ??= now`
+leaving every other bit alone, and — only when this call flipped the bit and no attribution exists and
+the caller isn't the story's author — attaches the sources row, all in **one** `SaveChangesAsync`
+(the FK-ordering hazard the old on-load write hit is now structurally unreachable). Endpoint `POST
+/api/user-story-interactions/read-it-later/from-recommendation/{id}`. (2) `MarkStartedAsync(storyId,
+attributedRecommendationId = null)` records the `?rec=` direct-link attribution in the same save as
+`HasStarted`; an unattributable value is silently ignored (`/started?recommendationId=`). Shared rules:
+`Server/Recommendations/RecommendationAttribution.cs`. (3) Trigger 1 — `SetUserStoryInteractionStateAsync`
+now loads the attribution with the row and deletes it when `IsReadItLater` goes true→false (a clear,
+never guarded); a direct-link attribution with the bit never set survives unrelated toggles. No counter
+moves on the RIL bit.
+
+**What changed (L3-Logic, derived — the panel-clobber closure):** `UserStoryInteractionPanel` adopts
+a **changed** `State` parameter whenever it has no pending local toggle (an unchanged value from a
+parent re-render is ignored, so flushed toggles are never reverted; a pending toggle wins). Every host
+of a rec card beside a panel (story page, Explore, Deep Dive, Community Spotlight) re-reads the story's
+state after a card save and passes it down — otherwise the panel's next six-bit flush wrote
+`IsReadItLater = false` over the save and fired trigger 1. The homepage spotlight's `StoryCard` used to
+receive **no** state at all, so its first flush wiped a signed-in viewer's real flags; it now
+batch-loads the spotlight stories' states.
+
+**How verified:** Integration — new `RecommendationAttributionTests` (RIL from the card with no prior
+USI row creates row + dates + attribution; other bits preserved; author gate; bit-already-set; first
+wins; re-RIL after a clear starts a new attribution; six not-live refusals write nothing; anonymous;
+direct link with/without a prior row; three bogus parameters still start without throwing; trigger 1;
+sparse-cleanup cascade; the unrelated-toggle survival) and `UserStoryInteractionEndpointsTests` (+3:
+the new route 401/204, `/started?recommendationId=`), `ParentVisibilityContractTests` (card RIL on a
+Draft story refused, nothing written). RazorComponents — `UserStoryInteractionPanelTests` +3 (adopts a
+changed state when idle; ignores an unchanged one after a flushed toggle; a pending toggle isn't
+overwritten), `StoryPageTests` +1 (card save → panel shows it), `CommunitySpotlightDisplayTests` +3,
+`ExploreTabTests` +1, `DeepDiveTabTests` +1. Mutation-checked: removing trigger 1 fails two tests;
+removing the panel's adoption clause fails the idle-adoption and story-page tests. Totals in the
+workplan entry. Rule: `layer2-services.md` §"Attribution (Feature 30)".
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

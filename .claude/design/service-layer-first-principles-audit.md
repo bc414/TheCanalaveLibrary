@@ -213,6 +213,12 @@ update/delete methods; correct the false "cascades handle it" doc comments in th
 
 ### 2.3 Silently inert features (the hidden-deferral class, invisible to every ledger)
 
+> **Built:** WU-InertFeatures (2026-09-30), per worksheet D2/D3/D4/D16/D17 — 2.3.1 (the new-chapter
+> fan-out, anchored on `Chapter.FirstPublishedDate`), 2.3.2 (`ReportReceived` restored, null-sourced,
+> carrying the report id) and 2.3.3 (attribution rebuilt around the RIL-from-card producer; the
+> on-load write is gone — D3 voids this section's decoupling fork). Rules: `layer2-services.md`
+> §"Notification Generation" and §"Attribution (Feature 30)". The findings below are history.
+
 **2.3.1 Chapter publish notifies nobody. HIGH, CONFIRMED.** `NewChapterOnFollowedStory` is seeded
 (`NotificationConfigurations.cs:71`, `DefaultEmailEnabled = true`) and the enricher maps it — but
 no producer exists anywhere; `SetPublishedAsync` flips the flag and returns. The core promise of
@@ -229,7 +235,7 @@ Fix via §3.3's ruling (nullable `SourceUserId`, null = system — the column is
 
 **2.3.3 Recommendation attribution FK-fails in its primary flow, silently. HIGH, CONFIRMED.**
 `UserStoryRecommendationSource` is FK'd 1:1 to the `UserStoryInteraction` composite PK;
-`RecordAttributionSourceAsync` (`ServerRecommendationWriteService.cs:552-581`) inserts without
+`RecordAttributionSourceAsync` [since removed — WU-InertFeatures] (`ServerRecommendationWriteService.cs:552-581`) inserts without
 ensuring the parent row exists — and its caller fires on chapter-page **load** with `?rec=`
 present (`ChapterReadingPage.razor:349-353`), i.e. before any USI row can exist. Postgres 23503;
 fire-and-forget swallow. The integration test papers over it with a false premise ("opening the
@@ -239,6 +245,10 @@ gate. Fix per §3.2's ruling — decoupling the partition's FK (to users+stories
 only option that fixes both the insert-order failure and the cascade loss, and it is free today.
 
 ### 2.4 Credit and counter integrity
+
+> **2.4.1 built:** WU-InertFeatures (2026-09-30) — `RecordSuccessAsync` now requires the caller's
+> attribution row for that recommendation (and the rec `Approved`, not taken down) and consumes it in
+> the same save. 2.4.2–2.4.6 are untouched by that WU.
 
 **2.4.1 `RecordSuccessAsync` is an open credit faucet. MEDIUM (HIGH consequence), CONFIRMED.**
 The endpoint requires only authenticated + story-visible + not-self + not-already
@@ -403,6 +413,11 @@ code change:
 
 ### 2.8 Notification correctness (beyond the inert producers)
 
+> **First three bullets built:** WU-InertFeatures (2026-09-30), with D16's `GroupStory` anchor — the
+> notify block now runs only on a real add, an authorless story still notifies members, and the
+> story's author gets type 25 only. The remaining bullets are routed to WU-NotificationCorrectness /
+> WU-ThrottleCoverage.
+
 - **Group `AddStoryAsync` re-notifies on the idempotent duplicate path** (block sits outside
   `if (!alreadyAdded)`) — a repeatable spam primitive for any member. MEDIUM, CONFIRMED.
 - **The member fan-out is wrongly gated on the story having an author** (`if (storyAuthorId.HasValue)`
@@ -490,12 +505,19 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
 2. **Where recommendation provenance lives** (§2.3.3): decouple `user_story_recommendation_sources`
    from the USI composite FK (FK users+stories directly — survives sparse cleanup, insertable at
    any time) vs upsert-parent vs capture-at-MarkStarted. Only the first fixes both failure modes.
+   > **Ruled and built:** worksheet D3 (2026-08-04 — none of the three: the coupling is correct, the
+   > fault was a missing RIL-from-card producer), built WU-InertFeatures (2026-09-30); rule in
+   > `layer2-services.md` §"Attribution (Feature 30)".
 3. **System/self-sourced notifications**: make `CreateCoreAsync`'s source nullable (null = system;
    drop-self vacuous; dedup on null source) — restores `ReportReceived` and enables the next item.
+   > **Ruled and built:** worksheet D4 (2026-08-04 — plus the per-type dedup enumeration), built
+   > WU-InertFeatures (2026-09-30); rule in `layer2-services.md` §"Notification Generation".
 4. **Moderation notifications should not carry the acting moderator's identity** to the sanctioned
    user (currently id + username ship in the DTO over a WASM-reachable endpoint — a
    harassment/retaliation vector; the audit Report row keeps the real moderator). Null-source for
    types 70–82; settle before real moderation happens.
+   > **Ruled and built:** worksheet D5 (2026-08-04 — all of 70–82, and type 26), built
+   > WU-InertFeatures (2026-09-30); rule in `layer2-services.md` §"Notification Generation".
 5. **Visibility-gating asymmetry, raises vs clears** (§2.6): flag-raises require the full guard;
    clears/lowers on an existing row are always permitted (decide whether takedown/status also lift
    for clears — arguably yes; clearing reveals nothing).
@@ -504,6 +526,8 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
 6. **Group fan-out `RelatedEntityId`**: groupId (current — can never name the story; distinct
    stories dedup-collapse while unread) vs storyId. Ratify the digest behavior or switch; fix the
    author-double-notify either way.
+   > **Ruled and built:** worksheet D16 (2026-08-07 — neither: the `GroupStory` junction id), built
+   > WU-InertFeatures (2026-09-30); rule in `layer2-services.md` §"Polymorphic RelatedEntityId".
 7. **Does creating a group count as joining** for `GroupsJoined`? Encode the same answer in the
    live path and the recalculator (§2.4.2).
 8. **Mod-only read gating**: extend the service-gate rule to the three sensitive mod reads
@@ -565,7 +589,7 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     (split before the surface freezes); story deletion doesn't exist for authors (archive
     permanence — say so); `StoriesInProgress` vs Actively-Reading formula (settled — ratify with
     the visible consequence stated); hidden-favorite fan-out membership (doctrine says include
-    hidden-only favoriters in type 15; code excludes them — pick one); USI dates partition
+    hidden-only favoriters in type 15; code excludes them — pick one) [ruled D17: include; built WU-InertFeatures 2026-09-30]; USI dates partition
     written-never-read (schema §3.5 — build the date-sorted shelves, ratify as future-proofing, or
     cut); story-centric USI index gap (L6 matrix PENDING — ratify or build pre-data).
 
@@ -581,7 +605,7 @@ unless noted):
 |---|---|---|---|
 | 1 | §UserStats: counters "within the same transaction as the primary write" | Post-commit second statement, universally, matching the doctrine's *own code samples* | Reword per decision §3.14 |
 | 2 | §Group Rating Waterfall Tier 1: write-side story load "already filtered… never bypassed" | Write context carries **no** filters post-WU38 (stated elsewhere in the same file); code correctly uses the confidentiality-only guard | Rewrite the Tier-1 row — display-side filter, not an add-time gate |
-| 3 | §Notification Generation: "composes read services for recipient resolution… will inject" | Every fan-out queries `writeDb` directly (defensible, DAG-clean) | Align doc to reality; kill the stale future tense |
+| 3 | §Notification Generation: "composes read services for recipient resolution… will inject" | Every fan-out queries `writeDb` directly (defensible, DAG-clean) | Align doc to reality; kill the stale future tense — *fixed WU-InertFeatures, 2026-09-30 (doc + the `ServerNotificationWriteService` class comment)* |
 | 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example |
 | 5 | WU37 validation table: pairing member-count/in-story → Reject | `StoryMappers` silently drops bad indexes and persists degenerate pairings | Enforce or amend (defect §2.12) |
 | 6 | "SpriteBaseUrl is a config seam… no code changes" | False for WASM (§2.7.3) | Amend + fix |

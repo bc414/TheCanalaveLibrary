@@ -715,21 +715,97 @@ relatedId)` would require every caller to re-implement filtering. Semantic metho
 `NotifyNewChapterAsync`, etc.) are thin wrappers over one private create-core that owns all invariants
 — the same "property of the model" principle behind the content-rating named query filter.
 
-**`INotificationWriteService` is a fully independent service** with its own injected contexts. It
-composes *read* services for recipient resolution (e.g. `IFollowingReadService.GetFollowedUsersAsync`),
-keeping the DAG acyclic — see "The DAG rule" below.
+**`INotificationWriteService` is a fully independent service** with its own injected contexts. Fan-out
+methods resolve their recipient sets with direct queries on its own write context — ground truth,
+Personal plane, never rating- or audience-filtered — and it injects no other feature's service, read or
+write, which keeps the DAG acyclic — see "The DAG rule" below. (Corrected WU-InertFeatures,
+2026-09-30: an earlier wording said it "composes read services for recipient resolution"; no
+implementation ever did.)
 
 **Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds its triggering feature; fan-out methods (new chapter, new story, etc.) land with their respective work-units when the triggering feature is Stage 5.
 
 ### Filtering semantics
 
 **In-app delivery is always-on.** The private create-core applies exactly two universal rules: **drop
-self** (`recipient == sourceUser`) and **dedup**. No per-type in-app mute exists in the model.
+self** and **dedup** (both defined below). No per-type in-app mute exists in the model.
 
-**Fan-out eligibility (relationship-level gate):** follow-driven notification types (new chapter on a
-followed story, new story by a followed user, etc.) are sent only to followers where
-`FollowedUser.ReceiveAlerts == true`. That filter is part of the recipient-resolution query for each
-semantic method — not a per-type setting.
+**Fan-out eligibility (relationship-level gate):** the gate depends on which relationship drives the
+type. **Author-follow** types (`NewStoryByFollowedUser` 11, `NewRecommendationByFollowedUser` 12,
+`NewBlogPostByFollowedUser` 13) go only to followers where `FollowedUser.ReceiveAlerts == true` — a
+user-to-user follow carries a per-row opt-in. **Story-relationship** types (`NewChapterOnFollowedStory`
+10, `NewBlogPostOnFollowedStory` 14, `…OnFavoritedStory` 15, `…OnReadItLaterStory` 16) have no per-row
+opt-in: presence of the `UserStoryInteraction` flag is the signal. The filter is part of each semantic
+method's recipient query — not a per-type setting. (Corrected WU-InertFeatures, 2026-09-30: this
+paragraph used to put the new-chapter type under `ReceiveAlerts`, a column that does not exist on a
+story follow.)
+
+**A null source means "no actor" (owner ruling D4, WU-InertFeatures 2026-09-30).** `CreateCoreAsync`
+takes `int? sourceUserId`. Null = system-sourced or self-caused: nobody did this *to* the recipient, or
+the one who did must not be named (D5 below). The column was always nullable; only the write path
+could not express it.
+- **Drop-self is conditional:** a target is skipped only when `sourceUserId is int s && recipientId == s`.
+  A null source never drops anyone — a notification with no actor has no self to echo.
+- **Guardrail — null is not a convenience.** Drop-self used to protect call sites silently; a null
+  source removes that protection, so a type with a real actor must always pass it. Concretely, the
+  moderator-initiated account action (`ApplyAccountActionToUserAsync`, the report row where
+  `ReporterUserId == ModeratorUserId`) must **never** send `ReportReceived` (80) or `ReportResolved`
+  (81): under a null source they would deliver, mailing moderators receipts for their own actions.
+- **Two nulls share one column.** "Actor deleted" (SET NULL on account deletion) and "no actor" are
+  indistinguishable in storage. Disambiguate **by notification type at display time, never by the
+  column**: actor-free types compose actor-free text ("Your account has been suspended"), and the
+  presenter's `?? "Someone"` fallback survives only for types that genuinely had an actor since
+  deleted. "Someone banned your account" must not be reachable.
+
+**Moderation-band de-identification (owner ruling D5, WU-InertFeatures 2026-09-30).** Every
+notification in the moderation band 70–82 (`ContentRemoved`, `StoryRejected`, `AccountWarning`,
+`AccountSuspended`, `AccountBanned`, `StoryApproved`, the four external-verification outcomes, and the
+three report outcomes) and `TagUpdateSuggestion` (26 — a moderator's adoption invitation is a
+moderation act; D5's routed sub-edge, taken per the owner's recommendation) is **null-sourced**. The
+acting moderator's id and name never reach the recipient: the id would ship in `NotificationDto` over
+a WASM-reachable endpoint whether or not any UI rendered it, so suppressing it at the presenter is not
+a fix. The `Report` row (and `ReviewedByModeratorUserId` on the verification rows) remains the internal
+ledger. **Type-level enforcement: no `INotificationWriteService` method in this band may take a
+moderator id parameter** — that is what stops a future call site from reintroducing the leak. The
+band is uniform on purpose, good news included: if only sanctions were anonymous, a name's presence
+would itself say "you're fine". `SpotlightSlotGranted` (90) sits outside D5's stated band and keeps its
+granting-moderator source (unruled).
+
+**Dedup.** The cross-existing key is `(type, source, related entity, unread)`: a recipient who already
+holds an unread row with that key is skipped. A null source matches a null source (EF's C# null
+semantics emit `IS NULL`), so a null source strips the key's discriminating power — which is why D4
+enumerated the band per type:
+- **`ContentRemoved` (70), `ReportReceived` (80), `ReportResolved` (81), `ReportResolvedNoAction` (82)
+  carry the report id** (`Report.ReportId`, globally unique across reported-entity kinds). The reported
+  entity's id would collapse a report on story 5 with a report on comment 5. Accepted: a sequential
+  report id reaches its own reporter/author in `NotificationDto.RelatedEntityId`, which reveals rough
+  report volume; it relies on mod-only report reads staying gated.
+- **`AccountWarning` (72), `AccountSuspended` (73), `AccountBanned` (74), `ExternalAccountVerified`
+  (76), `ExternalAccountRejected` (77) and `SpotlightSlotGranted` (90) are exempt from cross-existing
+  dedup.** They have no related entity (the target is the account itself), so two warnings while the
+  first is unread must produce two rows. The exemption set lives in `ServerNotificationWriteService`;
+  any future dedup unique index must respect it and the null source.
+- Within-batch dedup (one row per recipient per call, first wins) applies to every type.
+
+**`RelatedEntityId` stays non-nullable; 0 means "no related entity".** It carries no FK, is interpreted
+per type (see §"Polymorphic RelatedEntityId" below), and 0 is never a valid id in this schema. NULL
+would buy only a second nullable dedup component and a null branch in every enricher lookup.
+
+**New-chapter fan-out (`NewChapterOnFollowedStory` = 10; WU-InertFeatures, 2026-09-30).**
+`NotifyNewChapterAsync(storyId, chapterId, authorId)` is called by `IChapterWriteService.SetPublishedAsync`
+best-effort post-commit **iff that call performed the `Chapter.FirstPublishedDate` null→non-null
+stamp** (D2's chapter anchor). Recipients: `UserStoryInteraction.IsFollowed` on the story — no per-row
+opt-in, and no rating filter (Personal plane; D6 already lets a follower who can no longer see the
+story unfollow it). A hidden favorite does not enter: there is no private-follow flag (D17); if this
+fan-out is ever widened to favoriters it takes `IsFavorite || IsHiddenFavorite`, never bare
+`IsFavorite`. `RelatedEntityId = chapterId` (D16-conformant: the chapter joins up to its story); the
+source is the author, so a self-follow is dropped. **First publication only, permanently, per
+artifact** (D1's anti-bump rider): unpublish→republish, adding or promoting an alternate version, and
+editing content never notify — republication is not a publication event (D2). **Default, not an owner
+ruling:** the fan-out is suppressed when the story is not publicly published at that moment (status
+outside `StoryLifecycle.IsPublished`'s set, or `IsTakenDown`), using the status predicate rather than
+`StoryVisibilityGuard` (whose author clause would make a Draft "visible" to the publishing author). The
+consequence — a chapter first-published while its story is unpublished never notifies, because its
+anchor is already stamped when the story later goes live — is open as `roadmap.md` decision row 17.
 
 **`UserNotificationSetting` governs email and display, not in-app generation.** The sparse-override
 table stores exactly two user-settable fields per type — `EmailEnabled` (the email side-channel; see
@@ -792,12 +868,15 @@ properties, and `check-design-tokens.ps1` governs app markup only.
 
 The comment and profile-blog seams are wired through five semantic methods. Rules that bind them:
 
-- **Replies carry the *context* id, never the comment id.** `Notification.RelatedEntityId` is `int`;
-  `CommentId` is `long` — a `CommentReply` notification physically cannot reference the comment. It
-  stores the context entity id per seam (chapterId / blogPostId / groupId / profileOwnerId). Accepted
-  dedup consequence: two replies from one user to your different comments in the same context, while
-  the first is unread, collapse to one notification — consistent with the generic "replied to your
-  comment" presenter text.
+- **Replies carry the *context* id (current behavior).** `CommentReply` stores the context entity id
+  per seam (chapterId / blogPostId / groupId / profileOwnerId), and `KindFor` maps it to `None`.
+  Accepted dedup consequence: two replies from one user to your different comments in the same
+  context, while the first is unread, collapse to one notification — consistent with the generic
+  "replied to your comment" presenter text. (Rewritten WU-InertFeatures, 2026-09-30: the old rationale
+  — "`RelatedEntityId` is `int`, `CommentId` is `long`" — stopped being true when the column widened
+  to `bigint`. Re-pointing type 34 at the comment through the `BaseComments` TPT root is on D16's
+  conformance list in §"Polymorphic RelatedEntityId" below; it is not a physical impossibility any
+  more.)
 - **Reply/container-suppress rule:** on a reply, the container owner (story author / blog author /
   profile owner) is *not* sent the container-level type when they are also the parent-comment author —
   they get exactly one notification (`CommentReply`). Never two notifications to one person for one event.
@@ -822,8 +901,20 @@ The comment and profile-blog seams are wired through five semantic methods. Rule
   followers/favoriters/read-it-later (`UserStoryInteraction.IsFollowed/IsFavorite/IsReadItLater`,
   types 14/15/16) — made disjoint by precedence 13 > 14 > 15 > 16 (most-direct relationship wins), so
   each user receives exactly one notification per publish event. Story-interaction sets have no
-  per-row opt-in; presence of the flag is the signal. Hidden-favorite users are included in 15
-  (notifications are personal-plane — visible only to the favoriter).
+  per-row opt-in; presence of the flag is the signal. The favoriter set (15) is
+  `IsFavorite || IsHiddenFavorite` — all three favoriter states (public, hidden-from-visitors,
+  private-only) are favoriters for fan-out purposes.
+- **A hidden favorite suppresses public-plane consequences only; it never suppresses personal-plane
+  ones** (owner ruling D17, built WU-InertFeatures 2026-09-30). Spec §5.7's list of what the flag
+  withholds — public profile display, the public favorite count, tree-search/Also-Favorited edges absent
+  `AllowDiscoveryFromHiddenFavorites` — is all things *other people* see. A notification delivered to
+  the favoriter alone leaks nothing, so withholding it only punishes choosing privacy. **Mirror, same
+  principle, opposite outcome:** `NewStoryFavorite` (20, "someone favorited your story") is
+  *author-plane*, so a hidden favorite (either `IsHiddenFavorite` state) must **not** fire it — recorded
+  before that producer exists (only `SeedGraph` mints type 20 today). The plane, not the flag, decides.
+  Read paths are unaffected: the profile Favorites query's narrower
+  `IsFavorite && (includePrivate || !IsHiddenFavorite)` is a public-plane display filter, not the
+  definition of favoriting.
 - **Blog `StoryId` is ownership-validated at write time:** `CreateProfileBlogPostAsync` /
   `UpdateBlogPostAsync` reject a `StoryId` whose `Story.AuthorId` isn't the blog author
   (`UnauthorizedAccessException`) — the editor's own-stories dropdown is affordance, the service gate
@@ -833,9 +924,37 @@ The comment and profile-blog seams are wired through five semantic methods. Rule
 
 ## Polymorphic RelatedEntityId — Two-Pass Batch Enrichment (WU33)
 
-`NotificationDto.RelatedEntityId` is a single `int` column that points at different entity tables
-depending on `NotificationTypeEnum` (story, chapter, user, group, blog post, comment, or nothing).
-The type-ambiguity makes a single SQL JOIN projection impossible.
+`NotificationDto.RelatedEntityId` is a single `long` column (`bigint` since WU-InertFeatures,
+2026-09-30 — report and comment ids are `bigint`) that points at different entity tables depending on
+`NotificationTypeEnum` (story, chapter, user, group, group-story pairing, blog post, tag, report, or
+nothing — 0). The type-ambiguity makes a single SQL JOIN projection impossible.
+
+**What the column names — one anchor per event (owner ruling D16, WU-InertFeatures 2026-09-30).**
+`RelatedEntityId` names the **single most specific entity of the event**: the node from which every
+other entity the display needs is reachable by FK join. If an event appears to need two entities, the
+pairing *is* an entity — point at the junction row (give it a surrogate PK if it lacks one).
+Genuinely polymorphic targets anchor on a TPT root (`BaseComments`, `BlogPosts` — the `BlogPostDirect`
+precedent), never on a discriminator column. **A second id column is never added to `notifications`.**
+A notification row is already (recipient, actor, object); where two objects appear, one owns the other
+(chapter ⊂ story, recommendation ⊂ story) or a junction owns both, so one FK root suffices everywhere.
+Nothing structural would stop a widened design at two rather than three, so the stop is a stated rule:
+each extra column costs a `KindFor` arm per type, a second batch-load pass, a dedup-key ruling, a
+NULL-semantics answer and a presenter phrasing per *combination* of resolved targets. A type that
+cannot name one anchor has not been designed yet. First application: `NewGroupStory` (60) and
+`YourStoryAddedToGroup` (25) carry the `GroupStory` junction row's id (distinct stories stop
+collapsing under dedup; re-adding the same story still does).
+
+**Conformance backlog (D16 — "none urgent", one later sweep, not point fixes; tracker B23).** Types
+that point at a less specific node today: `HiddenGem` (23) stores the recommender's user id (a
+duplicate of `SourceUserId`) where `recommendationId` would name the story; the recommendation family
+(22/27/40/41/42/43) and `RecommendationSpotlighted` (92) store `storyId` where `recommendationId` adds a
+rec anchor; the comment types (24/31/33) store the context entity where `commentId` gives context plus an
+in-page anchor; `CommentReply` (34) has no target at all (the `BaseComments` TPT-root case);
+`ExternalLinkVerified`/`Rejected` (78/79) store `storyId` where the link row is the real object;
+`PollUpdated` (100) stores the owning blog post and leaves site polls at 0 where `pollId` resolves both.
+`ContentRemoved` (70) is resolved by D4: its anchor is the report row. Story lineage (50/51) is the
+one event with two genuinely disjoint roots — the fix is a surrogate PK on `story_lineages` (a schema
+item, recorded as an implication, not decided work).
 
 **Why not a conditional JOIN:** EF Core cannot translate a JOIN whose target table varies by row value
 across heterogeneous tables. Even with raw SQL, the column set differs per branch.
@@ -850,15 +969,27 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
    Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`.
 2. **Classify** each materialized row's `RelatedEntityId` by a private
    `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
-   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | BlogPost | BlogPostDirect`.
+   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | GroupStory | BlogPost | BlogPostDirect | Tag`.
 3. **Batch-load** each kind present on the page in one query per kind:
-   - Group the materialized row ids by kind; skip empty sets.
+   - Group the materialized row ids by kind; skip empty sets. Every kind's PK is `int`, so each
+     `long` id set is narrowed to `int` first (ids above `int.MaxValue` simply miss) — the SQL stays
+     `int = int` and keeps its index.
    - `Stories.Where(s => ids.Contains(s.StoryId)).Select(s => new {s.StoryId, s.Title})` → url = `$"/story/{id}"`.
    - `Chapters.Where(...)` → url = `$"/story/{storyId}/{chapterNumber}"` (Chapter carries both fields).
    - `Users.Where(...)` → url = `$"/user/{id}"`.
    - Group/BlogPost → respective routes. `None` → no query; null title/url.
-   - Produce `Dictionary<int,(string Title,string Url)>` per kind.
-4. **Stitch** each DTO row with its `(TargetTitle, TargetUrl)` from the relevant dictionary; return enriched array.
+   - Produce `Dictionary<long,(string? Title, string? Url, string? ContextTitle)>` per kind.
+4. **Stitch** each DTO row with its `(TargetTitle, TargetUrl, TargetContextTitle)` from the relevant
+   dictionary; return enriched array.
+
+**`TargetContextTitle` — the second name a junction or child anchor yields (WU-InertFeatures,
+2026-09-30).** Resolving the one anchor can name a second object for free; the DTO carries it as an
+optional trailing `TargetContextTitle` (null unless the kind supplies one). `GroupStory` →
+Title = group name, Url = `/group/{GroupId}` (link target unchanged from the group-id era),
+ContextTitle = story title; the group read is the same elevated `IgnoreQueryFilters(["GroupAudience"])`
+as the `Group` kind. `Chapter` → Title = chapter title, ContextTitle = story title (used by type 10).
+A deleted junction row (`RemoveStoryAsync`) is a miss → title-less, non-navigating — the designed
+graceful path, accepted by D16.
 
 **Extra queries:** at most as many as distinct kinds appearing on the page (max 7, typically 1–3). Never N+1.
 
@@ -1187,6 +1318,81 @@ the user must explicitly un-designate first. **Settled — do not revisit** (res
 **Like toggle (no notification):** `ToggleLikeAsync` returns `RecommendationLikeResultDto(int LikeCount,
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
 recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
+
+### Attribution (Feature 30) — metadata on the Read-It-Later bit (owner ruling D3, WU-InertFeatures 2026-09-30)
+
+**The defining sentence:** the attribution (`UserStoryRecommendationSource`, keyed on the USI composite
+PK) records **how the viewer's `IsReadItLater` bit came to be set**. RIL clicked on a recommendation card
+→ store the source; RIL set anywhere else (the story page panel) → store nothing. It is not a "where did
+this reader come from" event log. Every rule below follows from that sentence.
+
+**The coupling is correct — do not decouple.** The sources row FKs to the USI row (cascade) and to the
+recommendation (cascade). The 2025-design-session record shows provenance deliberately coupled to the
+interaction; the FK failure the service audit found (§2.3.3) came from a *placeholder caller* — a
+`?rec=`-on-load write that ran before any USI row could exist — not from the schema. The fault was a
+missing producer. **Cascade on the recommendation FK is the faithful translation**, not an EF accident:
+the 2025 SQL Server DDL's `NO ACTION` was a multi-cascade-path workaround for an intended
+`SET NULL` ("deleting a recommendation clears the attribution and leaves the interaction alone"), and in
+the two-table shape "null the attribution" and "delete the sources row" are the same operation.
+**RESTRICT is rejected:** attribution must never block a recommender from deleting their own
+recommendation. (The unpaired `Recommendation.UserStoryInteractions` collection nav, which minted a
+shadow `user_story_interactions.recommendation_id` FK, was a fossil of the pre-split
+`SourceRecommendationID` column — removed WU-InertFeatures; see `layer1-data-model.md`.)
+
+**Two entry points — one integrity rule ("a sources row exists").**
+1. **RIL from the card** — `IUserStoryInteractionWriteService.SetReadItLaterFromRecommendationAsync(recId)`,
+   the durable path. One `SaveChangesAsync`: upsert the USI row (`IsReadItLater = true`,
+   `ReadItLaterDate ??= now`, other bits untouched) and insert the sources row **in the same unit of
+   work**, so the FK-ordering hazard is structurally unreachable. The card cannot reuse
+   `SetUserStoryInteractionStateAsync` (six-bit absolute set — it would clobber the viewer's other
+   flags). The sources row is inserted only when this call flipped the bit false→true (or created the
+   row): a bit already set elsewhere was not "set from the card". A raise, so the full story-visibility
+   guard applies (D6); an unknown, non-`Approved` or taken-down rec is `KeyNotFoundException`.
+2. **Direct link** (`/story/{id}/1?rec={recId}`, the "Read now" anchor) — the same-session read-now
+   path. **Nothing is written on page load.** The attribution is persisted at the 90%-of-Chapter-1
+   moment, inside `MarkStartedAsync(storyId, attributedRecommendationId)` — the parent row is guaranteed
+   there, and a URL-farm attempt must reach 90% of Chapter 1 per target. The URL is untrusted and
+   `MarkStartedAsync` is the primary action, so an unattributable parameter is **silently ignored**. A
+   reader who stops early and comes back without the parameter gets no attribution — correct.
+
+**Write gates (both entry points, shared helper `RecommendationAttribution.IsAttributableAsync`).** The
+rec exists, belongs to the story, is `Approved` and not taken down; the caller is **not the story's
+author** (the RIL itself is allowed — only the attribution is skipped, so no row exists that can never
+be consumed); **first attribution wins** within one attribution's life (no row is overwritten; a re-RIL
+after a clear starts a new one). Anonymous card click → login nudge (UI), `InvalidOperationException`
+(service).
+
+**Removal — five triggers.** The attribution describes the RIL bit, so it dies when the bit does.
+Cascade-only is rejected: it would let a stale attribution outlive its RIL, and an un-RIL→re-RIL from a
+different rec would credit the wrong recommender.
+1. `IsReadItLater` true→false (`SetUserStoryInteractionStateAsync`) → delete, same unit of work.
+2. USI row swept or deleted → FK cascade.
+3. Prompt answered, either control → delete (consume — the prompt must not reappear on a re-read).
+4. Recommendation deleted → FK cascade.
+5. Recommendation author-`Rejected` (`RemoveAsync`) or taken down (`ServerModerationWriteService`'s
+   removal path) → service-level sweep of every sources row naming it. A rec that cannot be displayed
+   cannot be reminded, and an invisible rec must not collect credit. **Accepted:** `UnblockAsync` and a
+   takedown reversal do not restore destroyed attributions. `NeedsRevision` is **not** a trigger — the
+   read-time gate hides the prompt while the row survives the revision.
+
+**The prompt (`IRecommendationReadService.GetHelpfulPromptAsync(storyId)` → `RecommendationDto?`).**
+Returns the recommendation itself, because the widget shows it as a reminder — the RIL may be long ago.
+Four gates, all at read time: the caller's sources row exists; the rec is visible (`Approved`, not taken
+down, parent story passes `StoryVisibilityGuard`); `RecommenderId` is non-null (anonymous or
+since-deleted recommenders get no prompt — gating at read time covers a deletion between RIL and read);
+no `RecommendationSuccess` exists for (caller, rec). Two controls only: **Yes** →
+`RecordSuccessAsync`; **X** → `DismissHelpfulPromptAsync` (a clear of the caller's own row: no
+visibility guard, idempotent). There is no "No thanks" — X is the decline.
+
+**`RecordSuccessAsync` requires and consumes the sources row** (service audit §2.4.1's credit-faucet
+fix). Beyond the existing visibility guard, it requires the caller's sources row for that rec and the
+rec `Approved ∧ ¬IsTakenDown`, else `KeyNotFoundException` (non-disclosure); the success row and the
+sources-row delete commit in one `SaveChangesAsync`. An already-recorded success stays an idempotent
+no-op but still deletes a lingering sources row.
+
+**Unruled edge, status quo (roadmap decision row 18):** a recommender who RILs or direct-links their
+*own* recommendation can collect a `SuccessfulRecCount` +1 on it; only the badge counter has an
+anti-self-farm check.
 
 ## Structured Tag Authoring — Routing and Validation (WU37, reshaped by WU-TagFanon 2026-07-26)
 

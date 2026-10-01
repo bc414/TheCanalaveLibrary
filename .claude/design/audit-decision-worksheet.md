@@ -284,7 +284,7 @@ recommender**.
    **Consequence, accepted:** `Rejected` is reversible ("blocked until the author unblocks it"), so
    unblocking does not restore destroyed attributions.
 
-*The prompt.* `GetHelpfulPromptRecommendationIdAsync` returns `int?`; it must return a **DTO**, because
+*The prompt.* `GetHelpfulPromptRecommendationIdAsync` [since replaced — WU-InertFeatures] returns `int?`; it must return a **DTO**, because
 the widget shows the recommendation itself as a reminder — the RIL may have been long ago. Two
 controls only: **Yes (thumbs up)** and **X**. There is no "No thanks" button; delete the one in
 `RecommendationHelpfulPrompt.razor`. Yes → record success, then delete the sources row. X → dismiss
@@ -329,6 +329,8 @@ gate + consume; the two service-level removal triggers (1 and 5); drop the phant
 and fix `RecommendationWriteServiceTests.RecordAttributionSource_WritesSourceRow`, whose comment
 asserts a production path that has never existed ("opening the story creates the USI row") — the
 seeding is right for the real design, the stated reason is not.
+
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Attribution (Feature 30)" (shadow-FK fossil in `layer1-data-model.md`).
 
 ### D4. System/self-sourced notifications
 
@@ -400,6 +402,8 @@ system-sourced notification.)
 `NotificationCleanupTests.cs:81` seeds a null source commented "no actor needed." Both become legal
 shapes — but the `TagUpdateSuggestion` divergence is a real fork, routed to D5.
 
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Notification Generation" (null source, conditional drop-self, guardrail, two-nulls display rule, 0 sentinel, dedup enumeration).
+
 ### D5. De-identify moderation notifications
 
 *Source: service §3.4.*
@@ -441,6 +445,8 @@ a follow-up. Landing D5 without it collapses the sanction band to one unread row
 the seed tool already writes it null-sourced. Same exposure shape: a moderator invites authors to adopt
 a fanonized tag, and the invitation names them. Rule it with the WU — extend the de-identification
 (recommended; the invitation is a moderation act) or record why an invitation differs from a sanction.
+
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification" and `content-safety.md` §"Notification Loop"; the type-26 sub-edge was taken per the recommendation (de-identified).
 
 ### D6. Visibility gating: raises vs clears
 
@@ -1629,6 +1635,8 @@ story. Whatever else that producer mints follows the rule above rather than re-d
 `audit/Notifications.md` records the 60/25 semantics change; `roadmap.md`'s decision row moves to
 Resolved pointing at the convention doc.
 
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Polymorphic RelatedEntityId — Two-Pass Batch Enrichment" (one-anchor rule, `GroupStory` kind, conformance backlog → tracker B23).
+
 ### D17. Hidden-favorite fan-out membership
 
 *Source: service §3.20.*
@@ -1696,6 +1704,8 @@ Independent of every schema decision — nothing here touches DDL.
 per state above → all three receive exactly one type-15 row. A user who is both an author-follower
 and a hidden-only favoriter receives only type 13 (precedence 13 > 14 > 15 > 16 is unaffected by the
 widened predicate). A hidden-only favoriter who is also on Read Later receives 15, not 16.
+
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Comment & blog-post semantic methods" (public-plane/personal-plane rule + type-20 mirror).
 
 ### D18. Private-message email
 

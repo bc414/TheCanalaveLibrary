@@ -25,8 +25,8 @@ public class ClientRecommendationReadService(HttpClient http) : IRecommendationR
     public async Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync() =>
         await Http.GetFromJsonAsync<List<int>>("api/recommendations/mine/hidden-gem-story-ids") ?? [];
 
-    public Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId) =>
-        Http.GetNullableFromJsonAsync<int?>($"api/recommendations/helpful-prompt/{storyId}");
+    public Task<RecommendationDto?> GetHelpfulPromptAsync(int storyId) =>
+        Http.GetNullableFromJsonAsync<RecommendationDto?>($"api/recommendations/helpful-prompt/{storyId}");
 
     public async Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) =>
         await Http.GetFromJsonAsync<List<int>>($"api/recommendations/by-user/{userId}/story-ids") ?? [];

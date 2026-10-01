@@ -8,6 +8,13 @@ namespace TheCanalaveLibrary.Server;
 /// Applies the six panel-managed bits in a single upsert: load→decide (the D6 raise guard)→apply→
 /// stamp dates→sparse cleanup→save. HasStarted is never touched — it belongs to the reading path
 /// (WU26). Any later step that writes (e.g. an ensure-row insert) belongs after the decide step.
+/// <para><b>Recommendation attribution (owner ruling D3, WU-InertFeatures).</b> The attribution row
+/// hangs off the interaction row and describes how its <c>IsReadItLater</c> bit was set. Two producers
+/// live here — <see cref="SetReadItLaterFromRecommendationAsync"/> (the rec card) and
+/// <see cref="MarkStartedAsync"/>'s direct-link parameter — each writing the parent and the attribution
+/// in one save; and the panel upsert deletes it when the bit goes true→false. Shared rules:
+/// <see cref="RecommendationAttribution"/>; doctrine: <c>layer2-services.md</c> §"Attribution
+/// (Feature 30)".</para>
 /// </summary>
 public class ServerUserStoryInteractionWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -48,9 +55,11 @@ public class ServerUserStoryInteractionWriteService(
         ValidateCombination(update);
 
         // ── 1. Load first (D6: load, diff, then decide) ──────────────────────────────
-        // The tracked row + its date partition; null when the caller has never touched this story.
+        // The tracked row + its date partition + its attribution (D3 trigger 1 below); null when the
+        // caller has never touched this story.
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
             .Include(i => i.InteractionDatePartition)
+            .Include(i => i.RecommendationSource)
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
         // No row + all-false: nothing to clear and nothing to raise. Returns BEFORE any guard, so
@@ -79,6 +88,7 @@ public class ServerUserStoryInteractionWriteService(
         bool wasIgnored     = row?.IsIgnored   ?? false;
         bool hadStarted     = row?.HasStarted  ?? false;
         bool wasInProgress  = hadStarted && !wasCompleted;
+        bool wasReadItLater = row?.IsReadItLater ?? false;
 
         // Apply the six panel bits — HasStarted is intentionally untouched.
         DateTime now = DateTime.UtcNow;
@@ -102,7 +112,16 @@ public class ServerUserStoryInteractionWriteService(
             d.IgnoredDate = update.IsIgnored ? (d.IgnoredDate ?? now) : null;
         }
 
-        // Sparse cleanup: if all bits (including the read-only HasStarted) are false, remove the row.
+        // D3 removal trigger 1: the attribution is metadata on the IsReadItLater bit, so un-saving the
+        // story deletes it in the same unit of work. A clear — never guarded (D6). An attribution that
+        // exists while the bit was never set (a direct-link reader) is untouched by unrelated toggles.
+        if (wasReadItLater && !update.IsReadItLater && row.RecommendationSource is { } attribution)
+        {
+            writeDb.UserStoryRecommendationSources.Remove(attribution);
+        }
+
+        // Sparse cleanup: if all bits (including the read-only HasStarted) are false, remove the row
+        // (its attribution, if any, goes with it — FK cascade, D3 trigger 2).
         if (!row.HasStarted && !AnyBitTrue(update))
         {
             writeDb.UserStoryInteractions.Remove(row);
@@ -186,13 +205,68 @@ public class ServerUserStoryInteractionWriteService(
         || (update.IsReadItLater    && !(row?.IsReadItLater    ?? false))
         || (update.IsIgnored        && !(row?.IsIgnored        ?? false));
 
-    public async Task MarkStartedAsync(int storyId)
+    public async Task SetReadItLaterFromRecommendationAsync(int recommendationId)
+    {
+        if (CurrentUserId is not int userId)
+            throw new InvalidOperationException("This operation requires an authenticated user.");
+
+        // The rec must be one a reader can see on a card: exists, Approved, not taken down. A missing
+        // and a hidden rec are indistinguishable (non-disclosure).
+        var rec = await writeDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .Select(r => new { r.StoryId, r.StatusId, r.IsTakenDown })
+            .FirstOrDefaultAsync();
+        if (rec is null || rec.StatusId != (short)RecommendationStatusEnum.Approved || rec.IsTakenDown)
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+
+        // A raise (D6): the full story-visibility guard, before any write.
+        await RequireStoryVisibleAsync(rec.StoryId);
+
+        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+            .Include(i => i.InteractionDatePartition)
+            .Include(i => i.RecommendationSource)
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == rec.StoryId);
+
+        // D3's defining sentence: the attribution records how the IsReadItLater bit came to be set.
+        // A bit already set (say, on the story page) was not set from this card — no attribution.
+        bool flipsTheBit = row is null || !row.IsReadItLater;
+
+        if (row is null)
+        {
+            row = new UserStoryInteraction { UserId = userId, StoryId = rec.StoryId };
+            writeDb.UserStoryInteractions.Add(row);
+        }
+
+        DateTime now = DateTime.UtcNow;
+        row.IsReadItLater = true; // every other bit untouched — no counter moves on this bit
+        row.InteractionDatePartition ??= new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
+        row.InteractionDatePartition.ReadItLaterDate ??= now;
+
+        // First attribution wins within one attribution's life; the story's author never gets one.
+        if (flipsTheBit && row.RecommendationSource is null
+            && await RecommendationAttribution.IsAttributableAsync(writeDb, userId, rec.StoryId, recommendationId))
+        {
+            row.RecommendationSource = new UserStoryRecommendationSource
+            {
+                UserId = userId,
+                StoryId = rec.StoryId,
+                SourceRecommendationId = recommendationId,
+            };
+        }
+
+        // ONE save: the parent row and the attribution row commit together, so the FK-ordering hazard
+        // the old on-load write hit (sources row before any USI row) is structurally unreachable.
+        await writeDb.SaveChangesAsync();
+    }
+
+    public async Task MarkStartedAsync(int storyId, int? attributedRecommendationId = null)
     {
         if (CurrentUserId is not int userId) return;  // anonymous: no-op
 
         await RequireStoryVisibleAsync(storyId);
 
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
+            .Include(i => i.RecommendationSource)
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
         // Capture BEFORE applying the write (transition-delta rule) — StoriesInProgress mirrors
@@ -211,6 +285,21 @@ public class ServerUserStoryInteractionWriteService(
         }
 
         row.HasStarted = true;
+
+        // D3 direct-link entry point: the ?rec= the reader arrived with becomes the attribution here, at
+        // the 90%-of-Chapter-1 moment, in the same save as the parent row — never on page load. The URL is
+        // untrusted and this is the primary write, so an unattributable value is silently ignored.
+        if (attributedRecommendationId is int recId && row.RecommendationSource is null
+            && await RecommendationAttribution.IsAttributableAsync(writeDb, userId, storyId, recId))
+        {
+            row.RecommendationSource = new UserStoryRecommendationSource
+            {
+                UserId = userId,
+                StoryId = storyId,
+                SourceRecommendationId = recId,
+            };
+        }
+
         await writeDb.SaveChangesAsync();
 
         if (!alreadyStarted && !wasCompleted)

@@ -1,14 +1,20 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ISpotlightReadService SpotlightReadService
+@inject IUserStoryInteractionWriteService Interactions
 
 @* The homepage Community Spotlight section (Feature 55, WU-Spotlight — audit/Spotlight.md).
    Coordination composite with sanctioned service injection (independent-concern rule, the
    NotificationBell precedent): the Home page is a device dispatcher only, and this section is
    slotted into both variants. Each placement is an ADDITIVE COMPOSITION of existing leaves —
-   StoryCard beside the optional endorsing RecommendationCard (no callbacks wired: read-only
-   context). No recommendation attached (or not visible to this viewer) → the rec half simply
-   stays blank, per the settled requirements. *@
+   StoryCard beside the optional endorsing recommendation. No recommendation attached (or not
+   visible to this viewer) → the rec half simply stays blank, per the settled requirements.
+   The recommendation carries the Feature 30 reader entry points (Read It Later / Read now — owner
+   ruling D3) via ReadItLaterRecommendationCard. For a signed-in viewer the spotlight stories'
+   interaction states are batch-loaded and handed to each StoryCard (WU-InertFeatures): the card's
+   panel used to get no state at all, so its first flush wrote all-false over the viewer's real
+   flags — and a card Read It Later beside it would have been flushed straight back. *@
 
 <section aria-label="Community Spotlight" class="flex flex-col gap-3">
     <h2 class="font-display text-lg font-semibold text-(--color-text)">Community Spotlight</h2>
@@ -33,14 +39,19 @@
                    than the viewport — found live during WU-Spotlight browser verification. *@
                 <div @key="spotlight.SpotlightId" class="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div class="min-w-0">
-                        <StoryCard Story="@spotlight.Story" />
+                        <StoryCard Story="@spotlight.Story"
+                                   UserStoryInteractionState="@StateFor(spotlight.Story.StoryId)"
+                                   IsOwnStory="@(_currentUserId is not null && spotlight.Story.AuthorId == _currentUserId)" />
                     </div>
                     @if (spotlight.Recommendation is not null)
                     {
                         @* break-words (overflow-wrap) inherits into the card's prose, wrapping
                            unbreakable runs instead of clipping them. *@
                         <div class="min-w-0 break-words">
-                            <RecommendationCard Rec="@spotlight.Recommendation" />
+                            <ReadItLaterRecommendationCard Rec="@spotlight.Recommendation"
+                                                           CurrentUserId="_currentUserId"
+                                                           IsReadItLaterSaved="@(StateFor(spotlight.Recommendation.StoryId)?.IsReadItLater ?? false)"
+                                                           OnSaved="RefreshStoryStateAsync" />
                         </div>
                     }
                 </div>
@@ -65,11 +76,52 @@
     [Parameter]
     public EventCallback<bool> OnLoaded { get; set; }
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private int? _currentUserId;
+
+    // Ephemeral per-viewer state (deterministic, re-fetched on the interactive pass like StoryPage's
+    // _usiState) — never [PersistentState].
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+
     protected override async Task OnInitializedAsync()
     {
+        if (AuthStateTask is not null)
+        {
+            AuthenticationState auth = await AuthStateTask;
+            string? idStr = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(idStr, out int parsedId))
+                _currentUserId = parsedId;
+        }
+
         Spotlights ??= await SpotlightReadService.GetActiveSpotlightsAsync();
+
+        // One batch read for every spotlight story (the N+1 rule) — authenticated viewers only; the
+        // endpoint is auth-gated and an anonymous panel renders nothing anyway.
+        if (_currentUserId is not null && Spotlights.Count > 0)
+            _states = await Interactions.GetStatesByStoryIdsAsync(
+                Spotlights.Select(s => s.Story.StoryId).Distinct().ToList());
 
         if (OnLoaded.HasDelegate)
             await OnLoaded.InvokeAsync(Spotlights.Count > 0);
+    }
+
+    private UserStoryInteractionStateDto? StateFor(int storyId) =>
+        _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    // After the recommendation's Read It Later: refresh that story's state so its StoryCard panel
+    // adopts the saved bit (the panel-clobber closure). A missing row after a known save is marked locally.
+    private async Task RefreshStoryStateAsync(int storyId)
+    {
+        IReadOnlyDictionary<int, UserStoryInteractionStateDto> fresh =
+            await Interactions.GetStatesByStoryIdsAsync([storyId]);
+        Dictionary<int, UserStoryInteractionStateDto> merged = new(_states)
+        {
+            [storyId] = fresh.TryGetValue(storyId, out UserStoryInteractionStateDto? s)
+                ? s
+                : (StateFor(storyId) ?? UserStoryInteractionStateDto.AllFalse(storyId)) with { IsReadItLater = true },
+        };
+        _states = merged;
     }
 }

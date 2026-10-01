@@ -66,7 +66,12 @@
                     }
                     @if (_openRec is { } rec)
                     {
-                        <RecommendationCard Rec="rec" />
+                        @* Read It Later / Read now (owner ruling D3); the save refreshes the story's state
+                           so the panel above can't flush it back. *@
+                        <ReadItLaterRecommendationCard Rec="rec"
+                                                       CurrentUserId="CurrentUserId"
+                                                       IsReadItLaterSaved="@(StateFor(rec.StoryId)?.IsReadItLater ?? false)"
+                                                       OnSaved="RefreshStoryStateAsync" />
                     }
                     @if (_lastSkippedNote is { } note)
                     {
@@ -304,6 +309,23 @@
 
     private UserStoryInteractionStateDto? StateFor(int storyId) =>
         _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    // After the panel's recommendation card saves its story for later (owner ruling D3): refresh that
+    // story's state entry so the StoryCard panel adopts the saved bit rather than flushing it back to
+    // false (the panel-clobber closure, WU-InertFeatures). The recommended story may not be the open
+    // story (a user node's rec), in which case the entry is simply added.
+    private async Task RefreshStoryStateAsync(int storyId)
+    {
+        IReadOnlyDictionary<int, UserStoryInteractionStateDto> fresh =
+            await InteractionReadService.GetStatesByStoryIdsAsync([storyId]);
+        Dictionary<int, UserStoryInteractionStateDto> merged = new(_states)
+        {
+            [storyId] = fresh.TryGetValue(storyId, out UserStoryInteractionStateDto? s)
+                ? s
+                : (StateFor(storyId) ?? UserStoryInteractionStateDto.AllFalse(storyId)) with { IsReadItLater = true },
+        };
+        _states = merged;
+    }
 
     private Task HandleToggleAsync((string Key, bool IsOn) change)
     {

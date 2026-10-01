@@ -251,14 +251,46 @@ behavior is exercised by existing `RecommendationSectionTests`.
 ---
 
 ## Feature 30 — Recommendation Attribution
+
+**Settled — owner ruling D3 (answered 2026-08-04, consumed WU-InertFeatures 2026-09-30; do not
+revisit).** Rule text: `layer2-services.md` §"Attribution (Feature 30)".
+- **The attribution is metadata on the `IsReadItLater` bit** — how that bit came to be set (RIL on the
+  rec card → store the source; RIL elsewhere → nothing). Not an event log.
+- **The service audit's three-way fork is void — do not decouple.** Keep the composite FK to the USI
+  PK and both cascades. The FK failure (service audit §2.3.3) came from a placeholder caller (the
+  `?rec=`-on-load write in `ChapterReadingPage`); the specified 2025 producer — a Read It Later button
+  on the recommendation card — had never been built. Cascade on the rec FK is the faithful translation
+  of the 2025 intent (`SET NULL` → SQL-Server `NO ACTION` workaround); **RESTRICT is rejected**.
+- **Two entry points, both built:** RIL-from-card (one unit of work: USI upsert + sources row) and the
+  direct `?rec=` link, persisted at the Ch.1 ≥90% `MarkStartedAsync` moment — never on page load.
+- **Five removal triggers:** RIL true→false; USI row gone (cascade); prompt answered (either control);
+  rec deleted (cascade); rec author-`Rejected` or taken down (service sweep — not restored by
+  unblock/reversal; `NeedsRevision` is not a trigger).
+- **Prompt:** a DTO (the rec as reminder), four read-time gates (sources row, rec visible,
+  `RecommenderId` non-null, no success yet), two controls (Yes / X — "No thanks" deleted).
+- **Write gates:** no attribution for the story's author (the RIL itself is allowed); anonymous card
+  click → login nudge; first attribution wins; `RecordSuccessAsync` requires and consumes the
+  sources row (service audit §2.4.1).
+- **Unruled, status quo:** a recommender attributing their *own* rec (roadmap row 18).
+
+**Stages (updated 2026-09-30, WU-InertFeatures):** L1, L2, L3-Logic, L3.5, L4, L5 = 5 (the feature was
+rebuilt beneath them — see the WU-InertFeatures Stage note at the end of this feature); **L4.5 = 1**
+(flipped 5→1: the card's Read It Later / Read now, the reminder-card prompt and the 90%-moment flow are
+new UI never driven in a browser — returns to 5 with tracker **H14**'s pass); L6/L8 = N/A. Tracker
+**B22** closed.
+
 - **L1 — Stage 5** (`UserStoryRecommendationSource` sparse; `RecommendationSuccess`). **L2 — Stage 5
-  (WU29, 2026-06-23 — surface minted; trigger deferred to WU26).** `RecordAttributionSourceAsync`
+  (WU29, 2026-06-23 — surface minted; trigger deferred to WU26; **rebuilt WU-InertFeatures 2026-09-30 —
+  the paragraph below is history: the on-load attribution write it describes was retired, see the
+  Stage note at the end of this feature**).** `RecordAttributionSourceAsync`
   writes `UserStoryRecommendationSource`; `RecordSuccessAsync` writes `RecommendationSuccess`
   (idempotent on composite PK) + `SuccessfulRecCount++`. **Trigger wiring deferred to WU26:**
   the after-Ch.1-`IsRead` trigger lives in the chapter reading page (WU26 must call these methods
   after the user passes 90% of Ch.1); the surface is minted and callable now. Mirrors WU5's cascade-
   provider deferral to its first consumer.
-- **L3-Logic — Stage 5 (WU29, 2026-06-23).** `RecommendationHelpfulPrompt` leaf: **inline,
+- **L3-Logic — Stage 5 (WU29, 2026-06-23; **rebuilt WU-InertFeatures 2026-09-30 — takes the
+  `RecommendationDto` as a reminder card, Yes/X only; the description below is history**).**
+  `RecommendationHelpfulPrompt` leaf: **inline,
   non-blocking, dismissible banner** — NOT a `ConfirmDialog` overlay (must not interrupt the reading
   experience). Renders at the bottom of Ch.1 content; gating (show only when
   `UserStoryRecommendationSource` exists for viewer+story, Ch.1 `IsRead` true, no existing
@@ -269,6 +301,57 @@ behavior is exercised by existing `RecommendationSectionTests`.
   site now runs global InteractiveAuto (attribution writes not driven in the flip's browser wave —
   trigger lives in the chapter reading page, WU26, which was verified under WASM). Full wave
   narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+
+### Feature 30 — WU-InertFeatures Stage note (2026-09-30): attribution rebuilt around the RIL-from-card producer (owner ruling D3; tracker B22 closed)
+
+**What was wrong.** The feature never worked: the only attribution write ran on chapter **load** from
+`?rec=`, before any interaction row could exist, so it FK-failed (logged and swallowed) for every new
+reader; nothing in the app generated a `?rec=` link anyway; the specified Read It Later button on the
+card had never been built; and `RecordSuccessAsync` credited `SuccessfulRecCount` and the recommender
+badge to any signed-in reader for any visible rec (service audit §2.3.3, §2.4.1).
+
+**What changed.** L1: the phantom `Recommendation.UserStoryInteractions` nav and its shadow
+`user_story_interactions.recommendation_id` column are gone (migration `WU_InertFeatures`); the
+partition's rec FK is explicit (cascade, rationale in the configuration's doc comment). L2: the two
+producers live on the USI write service (F16's Stage note); `RecordAttributionSourceAsync` and its
+endpoint are **retired** (the FK-order hazard stays unreachable — registered in
+`check-doc-hygiene.ps1`); `GetHelpfulPromptRecommendationIdAsync` became `GetHelpfulPromptAsync` →
+`RecommendationDto?` with the four read-time gates; new `DismissHelpfulPromptAsync` (X — a clear, no
+guard, idempotent; `POST /api/recommendations/{id}/helpful-prompt/dismiss`); `RecordSuccessAsync`
+requires the caller's attribution for that rec on an `Approved`, not-taken-down rec and consumes it in
+the same save (an already-recorded success still clears a lingering row); `RemoveAsync` and the
+moderator takedown path sweep every attribution naming the rec (trigger 5). L3/L3.5/L4:
+`RecommendationHelpfulPrompt` takes the `RecommendationDto`, renders it as a read-only reminder card,
+and has exactly Yes (thumbs up — new `RecommendationIcons.HelpfulIconPath`) and X; "No thanks" is
+deleted. `RecommendationCard` gains `OnReadItLater` / `IsReadItLaterSaved` / `ShowReadNow` (both only
+on `Approved` recs; the saved state renders pressed and inert); new composite
+`ReadItLaterRecommendationCard` (login nudge, the call, an `ErrorAlert`) serves Explore, Deep Dive and
+the homepage spotlight; `RecommendationSection` wires the card directly and raises
+`OnReadItLaterSaved` so the story page re-reads the viewer's state. `ChapterReadingPage` parses
+`?rec=` but writes nothing on load; at the Ch.1 ≥90% moment it calls `MarkStartedAsync(storyId, rec)`
+**then** fetches the prompt; Yes/X close the widget whatever the outcome, failures logged. L5: client
+impls and endpoints mirror every change 1:1. **Left alone (unruled, status quo):** a recommender
+attributing their own rec (roadmap row 18); throttling the new write endpoints (WU-ThrottleCoverage).
+
+**How verified:** Integration — `RecommendationWriteServiceTests` (every existing `RecordSuccess_*`
+test now seeds the reader's attribution as the producers leave it; new: no attribution → refused with
+no credit row and both counters unmoved; an attribution to another rec → refused; success consumes the
+row and keeps the RIL; NeedsRevision / Rejected / taken-down → refused; dismiss deletes only the
+caller's matching row and is idempotent; `RemoveAsync` sweeps and unblock doesn't restore; rec delete
+cascades the attribution and leaves the RIL; the two `RecordAttributionSource_*` tests and their
+false-premise comment deleted), `RecommendationReadServiceTests` (+9: the four gates, anonymous, hidden
+story, happy path with the recommender card), `ParentVisibilityContractTests` (RecordSuccess on a
+taken-down story now seeds a real attribution so the visibility guard is what refuses; the prompt on a
+hidden story is null; dismiss on a hidden story is permitted), `ModerationServiceTests` (+1: a
+Recommendation takedown sweeps its attributions, RIL kept), and F16's `RecommendationAttributionTests`.
+RazorComponents — `RecommendationHelpfulPromptTests` (rewritten: reminder renders body and
+recommender; exactly two answer controls; Yes → `OnHelpful`, X → `OnDismiss`, both hide),
+`RecommendationCardTests` (+6), `RecommendationSectionTests` (+3: card call, anonymous login nudge,
+saved state + Read now link), new `ChapterReadingPageAttributionTests` (5: nothing written or fetched on
+load; at 90% `MarkStarted(1, 5)` then the prompt; Yes → success; X → dismiss; anonymous → no rec, no
+prompt fetch — `CommentSection` stubbed). Mutation-checked: removing the credit gate, the trigger-5
+sweeps (service and moderation) or trigger 1 each fails its tests. **Browser: not run** (no browser in
+this environment) — L4.5 → 1, tracker H14. Totals in the workplan entry.
 
 ## L4.5-Browser verification (2026-07-01/02) — F27 + F28 + F29 + F30 → Stage 5
 

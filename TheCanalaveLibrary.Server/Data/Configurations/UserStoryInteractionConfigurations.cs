@@ -58,11 +58,38 @@ public sealed class UserStoryInteractionDateConfiguration : IEntityTypeConfigura
     }
 }
 
+/// <summary>
+/// The attribution partition (Feature 30). Both FKs cascade, deliberately (owner ruling D3 —
+/// <c>layer2-services.md</c> §"Attribution (Feature 30)"):
+/// <list type="bullet">
+/// <item><b>→ the USI row</b> (composite PK, configured on <see cref="UserStoryInteractionConfiguration"/>):
+/// the attribution is metadata on the <c>IsReadItLater</c> bit, so it is coupled to the interaction.
+/// Do <b>not</b> decouple it to users+stories — the FK failures the service audit saw came from a
+/// placeholder on-load caller, not from this coupling.</item>
+/// <item><b>→ the recommendation</b> (below): CASCADE is the faithful translation of the 2025 intent.
+/// The SQL-Server DDL's <c>NO ACTION</c> was a multi-cascade-path workaround for an intended
+/// <c>SET NULL</c> ("deleting a recommendation clears the attribution and leaves the interaction
+/// alone"); in this two-table shape, nulling the attribution and deleting the sources row are the
+/// same operation. RESTRICT is rejected: attribution must never block a recommender from deleting
+/// their own recommendation.</item>
+/// </list>
+/// <para><b>Why there is no <c>Recommendation.UserStoryInteractions</c> collection.</b> It used to
+/// exist, unpaired, and minted a shadow <c>user_story_interactions.recommendation_id</c> FK column
+/// that nothing wrote. That was a fossil of the 2025 DDL's <c>SourceRecommendationID INT NULL</c> on
+/// <c>UserStoryInteractions</c> (<c>CanalaveDBCreation.sql</c>), from before attribution moved to this
+/// sparse partition — a mostly-null column on a hot table for a feature absent from its filtering
+/// job. Removed by migration <c>WU_InertFeatures</c> (2026-09-30); the explicit
+/// <c>WithMany()</c> below is the only recommendation edge this partition has.</para>
+/// </summary>
 public sealed class UserStoryRecommendationSourceConfiguration : IEntityTypeConfiguration<UserStoryRecommendationSource>
 {
     public void Configure(EntityTypeBuilder<UserStoryRecommendationSource> builder)
     {
         builder.HasKey(e => new { e.UserId, e.StoryId });
-        // Future indexes for querying
+
+        builder.HasOne(s => s.SourceRecommendation)
+            .WithMany()
+            .HasForeignKey(s => s.SourceRecommendationId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

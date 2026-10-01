@@ -21,10 +21,27 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     ///   whole. Clears on the caller's existing row, including the all-false delete, always succeed,
     ///   even when the story is now hidden (rating, status or takedown). No row + all-false is a
     ///   silent no-op for any story id, real or not.</item>
+    ///   <item><b>Attribution removal (owner ruling D3, trigger 1):</b> when <c>IsReadItLater</c> goes
+    ///   true→false, the viewer's recommendation attribution for the story is deleted in the same unit
+    ///   of work — the attribution describes how that bit was set, so it dies with it.</item>
     /// </list>
     /// Throws <see cref="InvalidOperationException"/> when the viewer is anonymous.
     /// </summary>
     Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update);
+
+    /// <summary>
+    /// The recommendation card's Read It Later button (Feature 30's durable entry point, owner ruling
+    /// D3). In <b>one</b> unit of work: upserts the viewer's interaction row for the recommendation's
+    /// story with <c>IsReadItLater = true</c> (stamping <c>ReadItLaterDate</c> once; every other bit
+    /// untouched — unlike <see cref="SetUserStoryInteractionStateAsync"/>'s six-bit absolute set) and,
+    /// when this call flipped the bit false→true, records the recommendation as the attribution — unless
+    /// one already exists (first wins) or the viewer is the story's author (the save still happens).
+    /// A raise, so the full story-visibility guard applies (D6).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The viewer is anonymous (the UI nudges to log in first).</exception>
+    /// <exception cref="KeyNotFoundException">The recommendation does not exist, is not <c>Approved</c>,
+    /// is taken down, or its story is not visible to the viewer — indistinguishable on purpose.</exception>
+    Task SetReadItLaterFromRecommendationAsync(int recommendationId);
 
     /// <summary>
     /// Idempotent upsert that flips <c>HasStarted = true</c> for the current viewer on
@@ -34,8 +51,14 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     /// <c>StoriesInProgress</c> transition-delta (A3, 2026-07-24) — this is the sole real-time
     /// producer of that counter's increment; <see cref="MarkCompletedAsync"/>'s decrement depends
     /// on it having run first.
+    /// <para><b>Direct-link attribution (owner ruling D3):</b> <paramref name="attributedRecommendationId"/>
+    /// is the <c>?rec=</c> a reader arrived with. In the same save, it becomes the viewer's attribution
+    /// for the story when none exists yet and the recommendation is attributable (belongs to this story,
+    /// <c>Approved</c>, not taken down, viewer not the story's author). The URL is untrusted and this is
+    /// the reading path's primary write, so an unattributable value is <b>silently ignored</b> — it never
+    /// makes this method throw.</para>
     /// </summary>
-    Task MarkStartedAsync(int storyId);
+    Task MarkStartedAsync(int storyId, int? attributedRecommendationId = null);
 
     /// <summary>
     /// Idempotent upsert that flips <c>IsCompleted = true</c> for the current viewer on

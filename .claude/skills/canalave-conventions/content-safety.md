@@ -290,8 +290,10 @@ engagement-maximization — none of which apply here.
 label), or the `ContentRating`/`GroupAudience` filters (which hide by rating/audience, not by mod action).
 The content is invisible on public reads (named query filter `"IsTakenDown"`) but visible to the author
 (who reads with `IgnoreQueryFilters(["IsTakenDown"])`) and to moderators (same). The author receives a
-`NotifyContentRemovedAsync` notification with the stated reason so they can often fix it (e.g. re-rate
-mature content) rather than just being punished. See `layer2-services.md` §"Notification Generation" for
+`NotifyContentRemovedAsync` notification so they can often fix it (e.g. re-rate mature content) rather
+than just being punished. The notification carries no free text (no notification does); the stated
+reason is recorded on the entity's `TakedownReason`. (Corrected WU-InertFeatures, 2026-09-30: this
+sentence used to say the notification carries the reason.) See `layer2-services.md` §"Notification Generation" for
 the generation mechanism (semantic per-event methods, best-effort post-commit ordering, DAG rule); the
 full moderation semantic-method list is below in "Notification Loop (§13 Transparency)".
 
@@ -414,12 +416,30 @@ than industry standard, and it is affordable precisely because volume is low and
 point. **The "close the loop" philosophy is a project axiom; do not trade it away for efficiency.**
 
 Semantic methods (generation mechanism: `layer2-services.md` §"Notification Generation"):
-- `NotifyReportReceivedAsync` — immediate confirmation on submit.
-- `NotifyReportResolvedAsync` — action taken (links to affected entity if applicable).
-- `NotifyReportResolvedNoActionAsync` — no action taken, still closes the loop.
-- `NotifyContentRemovedAsync` — target author notified with reason.
+- `NotifyReportReceivedAsync(reporter, reportId)` — immediate confirmation on submit. Never sent on the
+  moderator-initiated path (`ReporterUserId == ModeratorUserId`) — a moderator must not receive receipts
+  for their own actions.
+- `NotifyReportResolvedAsync(reporter, reportId)` — action taken.
+- `NotifyReportResolvedNoActionAsync(reporter, reportId)` — no action taken, still closes the loop.
+- `NotifyContentRemovedAsync(author, reportId)` — the content's author is told it was removed.
 - `NotifyStoryApprovedAsync` / `NotifyStoryRejectedAsync` — submission outcomes.
 - `NotifyAccountWarningAsync` / `AccountSuspendedAsync` / `AccountBannedAsync` — disciplinary actions.
+
+Each of 70, 80, 81 and 82 carries the **report id** as its related entity, so two outcomes for one
+recipient never collapse into one unread notification (owner ruling D4). Notifications carry no free
+text.
+
+**The acting moderator is never named to the recipient (owner ruling D5, WU-InertFeatures
+2026-09-30).** Every notification in the 70–82 band, and the tag-adoption invitation (26), is
+null-sourced: no moderator id or username reaches the sanctioned, reporting or approved user, and no
+`INotificationWriteService` method in the band accepts a moderator id. *Threat model:* a user reading
+"ModeratorName banned your account" has a named target with a public profile, a comment surface, a PM
+inbox and usually an off-site identity; moderation here is volunteer labour and retaliation is the
+standard failure mode, while the name buys the recipient nothing actionable (an appeal goes through a
+channel, not a person). The band is de-identified uniformly, good news included, so a name's presence
+cannot signal "you're fine". The `Report` row keeps the real `ModeratorUserId` — accountability is
+internal; only outward attribution is removed. Mechanism and dedup rules: `layer2-services.md`
+§"Notification Generation".
 
 All are best-effort post-commit (try/catch swallows; notification failure never rolls back the primary
 moderation action).

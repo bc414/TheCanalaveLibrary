@@ -169,7 +169,13 @@ Phase 7.
 
 ## Feature 41 — Notification Generation
 
-- **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
+**Stages (updated 2026-09-30, WU-InertFeatures):** L1, L2, L6 = 5 (the D4/D5/D16/D17 rebuild and the
+new-chapter fan-out landed beneath them — Stage note at the end of this feature); **L4.5 = 1**
+(flipped 5→1: the new-chapter notification, the restored report receipt and the re-anchored group
+notifications were never seen in a browser bell — returns to 5 with tracker **H14**'s pass);
+L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
+
+- **L1 — Stage 5 (`related_entity_id` widened to `bigint`, WU-InertFeatures 2026-09-30).** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
   (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
   date_created)` built in `L6_IndexBatch` (supersedes the recipient FK index); measured at 20k
   seeded notifications: unread count −47%; newest-first feed neutral by design (per-user residual
@@ -177,7 +183,10 @@ Phase 7.
 
 - **L2 — Stage 2 → 5 (WU22; extended WU-NotifEmail 2026-07-31 — create-core now also enqueues the
   email fan-out, stage unchanged; a Private author's profile post fans out to nobody since the
-  WU-AccessGateSweep2 review fixes, 2026-09-30 — see that slice below, stage unchanged).** Settled constraints (do not revisit):
+  WU-AccessGateSweep2 review fixes, 2026-09-30 — see that slice below, stage unchanged; nullable
+  source, de-identified moderation band, report-id anchors, `GroupStory` anchor, hidden favoriters in
+  15 and the new-chapter fan-out, WU-InertFeatures 2026-09-30 — stage unchanged, Stage note at the end
+  of this feature).** Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
     services; called via a semantic per-event method after the primary `SaveChangesAsync` (best-effort
     post-commit, `try/catch`-with-log). See `layer2-services.md` "Notification Generation"
@@ -186,7 +195,36 @@ Phase 7.
     no public generic `CreateAsync` escape hatch. Methods funnel through one private create-core
     (drop-self, dedup, bulk-insert, single `SaveChangesAsync`).
   - **In-app filtering:** always-on — the create-core never gates on `UserNotificationSetting`. The only
-    in-app gate is relationship-level: fan-out follow-alert methods check `FollowedUser.ReceiveAlerts`.
+    in-app gate is relationship-level: **author-follow** fan-outs (11/12/13) check
+    `FollowedUser.ReceiveAlerts`; **story-relationship** fan-outs (10/14/15/16) have no per-row opt-in —
+    presence of the `UserStoryInteraction` flag is the signal. (Corrected 2026-09-30, WU-InertFeatures:
+    this bullet used to say every follow-alert method checks `ReceiveAlerts`, which has never been true
+    of a story follow.)
+  - **Settled by owner rulings D4/D5/D16/D17 (answered 2026-08-04/07, consumed WU-InertFeatures
+    2026-09-30 — do not revisit; rules in `layer2-services.md` §"Notification Generation",
+    §"Comment & blog-post semantic methods", §"Polymorphic RelatedEntityId"):**
+    - **D4 — null source = no actor.** `CreateCoreAsync(int? sourceUserId, …)`; drop-self only when
+      `sourceUserId is int s && recipient == s`. `ReportReceived` (80) is restored by deleting the
+      parameter that broke it. Guardrail: the moderator-initiated account action never sends 80/81.
+      `RelatedEntityId` stays non-nullable with 0 = none. Dedup: 70/80/81/82 carry the report id;
+      72/73/74/76/77/90 are exempt from cross-existing dedup. Two nulls (deleted actor vs. no actor)
+      are disambiguated by type at display time. Prerequisite widen `related_entity_id` int→bigint
+      lands on the same migration.
+    - **D5 — the moderation band 70–82 is null-sourced, good news included**, and so is
+      `TagUpdateSuggestion` (26 — D5's routed sub-edge, taken per the owner's recommendation). No
+      band method takes a moderator id. `SpotlightSlotGranted` (90) is outside the stated band — its
+      source stays (unruled).
+    - **D16 — one anchor per event.** 60 and 25 carry the `GroupStory` row's id (new
+      `RelatedEntityKind.GroupStory`); a second id column is never added; the re-point backlog is
+      recorded as a conformance list (tracker B23), not built. Riders: the story's author is excluded
+      from the 60 fan-out (gets 25 only); the notify block moves inside `if (!alreadyAdded)`; an
+      authorless story still notifies members.
+    - **D17 — hidden favorites are favoriters on the personal plane.** Type 15 recipients are
+      `IsFavorite || IsHiddenFavorite`; the type-20 mirror (author-plane — a hidden favorite must not
+      fire it) is recorded before that producer exists.
+    - **New-chapter fan-out (10):** anchored on `Chapter.FirstPublishedDate` (D2), first publication
+      only (D1 rider), recipients = `IsFollowed`. Suppressing it while the story is not publicly
+      published is a **default, not a ruling** — `roadmap.md` row 17.
   - **Transactional posture:** best-effort post-commit — see above.
   - Open/incremental part: the *set* of semantic methods grows as triggering features land. WU22 delivers
     `NotifyNewFollowerAsync` / `NotifyNewVouchAsync` (single-recipient, no fan-out) and wires them into
@@ -209,7 +247,8 @@ Phase 7.
   defaults); end-to-end `FollowAsync` → notification row exists. Mutation sanity: drop-self line
   commented out → `NotifyNewFollowerAsync_DropsSelf_WhenRecipientEqualsSource` fails; reverted.
   **Deferred semantic methods (co-delivered with triggering work-units):** `NotifyNewChapterAsync`
-  (fan-out to `ReceiveAlerts` followers, with WU17/chapter-publish flow); `NotifyNewRecommendationAsync` /
+  (fan-out to the story's `IsFollowed` interactions — not `ReceiveAlerts`, corrected 2026-09-30 — built
+  by WU-InertFeatures); `NotifyNewRecommendationAsync` /
   etc. (with WU19/20/29). The create-core and DAG pattern are built now; each deferred method is a
   thin wrapper addition. The comment + profile-blog wrappers landed 2026-07-25 — see the WU-B2 slice
   below. `NotifyStoryAcknowledgedAsync` (type 52, `NewStoryAcknowledgement`) landed 2026-07-31 — see
@@ -274,10 +313,70 @@ Phase 7.
   row; UsersOnly → both; the Private case fails with the early return removed). `dotnet test` green —
   Unit 1,022, RazorComponents 703, Integration 1,180.
 
+### Feature 41 L1/L2/L4.5 — WU-InertFeatures Stage note (2026-09-30): owner rulings D4/D5/D16/D17 + the new-chapter fan-out (trackers B20, B21 closed)
+
+**What changed.**
+- **L1 (migration `WU_InertFeatures`):** `notifications.related_entity_id` integer → bigint (in-place
+  widen, values preserved; `Notification.RelatedEntityId`/`NotificationDto.RelatedEntityId` are `long`,
+  0 documented as the "no related entity" sentinel). Up and Down were both run against a populated
+  clone of the dev DB (2026-09-30): column type flipped and back, row count and id sum unchanged.
+- **D4 — create-core:** `CreateCoreAsync(type, int? sourceUserId, (int, long)[] targets)`; drop-self only
+  when there is an actor; the `(type, source, related, unread)` dedup matches NULL to NULL; a
+  `CrossExistingDedupExempt` set (72/73/74/76/77/90) skips cross-existing dedup. `ReportReceived` (80)
+  is restored — `SubmitReportAsync` now sends it null-sourced with the report id (B21: the old call
+  passed the reporter as their own source and drop-self deleted every receipt). 70/81/82 carry the
+  report id. Guardrail comment + test: the moderator-initiated account action sends no 80/81.
+- **D5 — de-identification:** every moderator-id parameter is deleted from the interface (70–82 and
+  26); all those wrappers pass `sourceUserId: null`; callers updated in `ServerModerationWriteService`
+  (approve/reject now only gate on the role), `ServerExternalVerificationWriteService` (the account
+  tier still records `ReviewedByModeratorUserId`) and `ServerFanonWriteService`. 90 keeps its source
+  (outside the band, unruled). `SeedGraph`'s null-sourced type-26 rows now match the live shape.
+- **D16 — group fan-out:** `NotifyNewGroupStoryAsync(groupId, groupStoryId, int? storyAuthorId,
+  sourceUserId)`; 60 and 25 carry the `GroupStory` row id; the author is excluded from the 60 fan-out.
+  Caller rider fixes in `ServerGroupWriteService.AddStoryAsync` (F39's Stage note).
+- **D17:** type 15's favoriter set is `IsFavorite || IsHiddenFavorite`; read paths untouched.
+  `SeedGraph`'s type-20 seed now skips hidden favorites (the mirror rule).
+- **New-chapter fan-out (B20):** `NotifyNewChapterAsync(storyId, chapterId, authorId)` → type 10 to the
+  story's `IsFollowed` interactions, `RelatedEntityId = chapterId`, source = author; fired by
+  `SetPublishedAsync` only on the `FirstPublishedDate` stamp and only while the story is publicly
+  published (F6's Stage note in `Chapters.md`; default → roadmap row 17).
+- Comments corrected: the class docs of `INotificationWriteService`/`ServerNotificationWriteService`
+  (no read-service composition; actor-free methods), the create-core doc (its dedup rationale is true
+  now — report ids), the reply/int rationale in `ServerCommentWriteService` and the interface, the
+  `KindFor` stub comments, `NotificationEndpoints`' moderator-id mention.
+
+**How verified.** Integration — `NotificationServiceTests` (+5: a null-sourced row is delivered;
+null-source dedup collapses an identical unread pair but not a different report id; two unread
+warnings are two rows; a 3 000 000 000 report id round-trips through the feed; a Story-kind row with an
+out-of-int id resolves to no target without throwing), `ModerationServiceTests` (the two misnamed
+"NotifyReportReceivedAsync_*" tests renamed to what they test and asserting null sources; +7: the
+restored receipt carries the report id with no source; two reports → two receipts; resolve paths carry
+report ids, no source; two removals → two 70s; warn twice → two 72s; the D4 guardrail; a sweep of every
+70–82 row across all moderator paths finds no source), `ExternalVerificationTests` / `FanonPipelineTests`
+(76–79 and 26 assert `SourceUserId == null`), `GroupServiceTests` (+5, F39), `CommentAndBlogNotificationTests`
+(+3, D17's three cases), new `NewChapterNotificationTests` (7). Unit — `NotificationPresenterTests` (F42).
+Mutation-checked: removing the exemption, the author exclusion or the D17 predicate each fails its tests.
+**Browser: not run** — L4.5 → 1, tracker H14. Totals in the workplan entry.
+
 ## Feature 42 — Notification Display
 
 - **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; the two-pass enrichment moved out to
-  `NotificationEnricher` at WU-NotifEmail 2026-07-31 so email shares it — stage unchanged).**
+  `NotificationEnricher` at WU-NotifEmail 2026-07-31 so email shares it — stage unchanged; `long` ids,
+  the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
+  2026-09-30 — stage unchanged, see the slice below).**
+  **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes
+  `(type, long)` pairs and narrows each kind's id set to `int` before querying (out-of-range ids miss);
+  results are a `NotificationTarget(Title, Url, ContextTitle)` record consumed by the read service and
+  the email flusher; new `GroupStory` kind (explicit joins, `GroupAudience` bypass, title = group, link =
+  `/group/{id}`, context = story); the `Chapter` kind also returns the story title as context.
+  `NotificationDto` gains an optional trailing `TargetContextTitle`. `NotificationPresenter`: the
+  two-nulls rule (actor-free types never say "Someone"); `ReportReceived` reworded as a receipt to the
+  reporter; explicit arms for 75–79 (previously the catch-all); 60 → "{story} was added to {group}",
+  25 → "Your story {story} was added to {group}", 10 → "New chapter of {story}: {chapter}", each with
+  one- and zero-name fallbacks. Covered by Unit `NotificationPresenterTests` (+8 tests, 25 cases, incl. a 14-type
+  actor-free theory) and the Integration enrichment pins in `GroupServiceTests` /
+  `NewChapterNotificationTests` / `NotificationServiceTests`. L4.5 stays 5 (copy-only change; the
+  bell's new types are listed in tracker H14's pass).
   Settled constraints:
   - `INotificationReadService`: `GetUnreadCountAsync()`, `GetNotificationsAsync(page, pageSize)`. All
     self-scoped via `IActiveUserContext` (the whole surface is "my notifications").

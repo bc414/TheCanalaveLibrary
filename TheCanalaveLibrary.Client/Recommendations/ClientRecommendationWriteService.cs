@@ -97,10 +97,10 @@ public sealed class ClientRecommendationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    public async Task RecordAttributionSourceAsync(int storyId, int recommendationId)
+    public async Task DismissHelpfulPromptAsync(int recommendationId)
     {
         HttpResponseMessage response = await Http.PostAsync(
-            $"api/recommendations/attribution/{storyId}/{recommendationId}", content: null);
+            $"api/recommendations/{recommendationId}/helpful-prompt/dismiss", content: null);
         await ThrowIfWriteFailedAsync(response);
     }
 

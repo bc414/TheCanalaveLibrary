@@ -79,11 +79,23 @@ public static class UserStoryInteractionEndpoints
                 return Results.NoContent();
             }));
 
+        // ?recommendationId= is the direct-link attribution the reader arrived with (owner ruling D3) —
+        // optional, untrusted, silently ignored by the service when it can't be attributed.
         group.MapPost("/{storyId:int}/started",
-            (IUserStoryInteractionWriteService interactions, int storyId) =>
+            (IUserStoryInteractionWriteService interactions, int storyId, int? recommendationId) =>
                 EndpointHelpers.ExecuteAsync(async () =>
                 {
-                    await interactions.MarkStartedAsync(storyId);
+                    await interactions.MarkStartedAsync(storyId, recommendationId);
+                    return Results.NoContent();
+                }));
+
+        // The recommendation card's Read It Later button (D3's durable entry point): one targeted
+        // single-bit write plus the attribution, never the six-bit panel set.
+        group.MapPost("/read-it-later/from-recommendation/{recommendationId:int}",
+            (IUserStoryInteractionWriteService interactions, int recommendationId) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                {
+                    await interactions.SetReadItLaterFromRecommendationAsync(recommendationId);
                     return Results.NoContent();
                 }));
 

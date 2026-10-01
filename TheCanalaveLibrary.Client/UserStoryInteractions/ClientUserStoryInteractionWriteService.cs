@@ -19,10 +19,19 @@ public sealed class ClientUserStoryInteractionWriteService(HttpClient http)
         await ThrowIfFailedAsync(response);
     }
 
-    public async Task MarkStartedAsync(int storyId)
+    public async Task SetReadItLaterFromRecommendationAsync(int recommendationId)
     {
-        HttpResponseMessage response =
-            await Http.PostAsync($"api/user-story-interactions/{storyId}/started", null);
+        HttpResponseMessage response = await Http.PostAsync(
+            $"api/user-story-interactions/read-it-later/from-recommendation/{recommendationId}", null);
+        await ThrowIfFailedAsync(response);
+    }
+
+    public async Task MarkStartedAsync(int storyId, int? attributedRecommendationId = null)
+    {
+        string url = attributedRecommendationId is int recId
+            ? $"api/user-story-interactions/{storyId}/started?recommendationId={recId}"
+            : $"api/user-story-interactions/{storyId}/started";
+        HttpResponseMessage response = await Http.PostAsync(url, null);
         await ThrowIfFailedAsync(response);
     }
 

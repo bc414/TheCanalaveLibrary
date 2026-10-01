@@ -18,7 +18,7 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public List<long> MarkedRead { get; } = [];
     public int MarkAllReadCalls { get; private set; }
     public List<(NotificationTypeEnum Type, bool Email, bool Collapsed)> SettingCalls { get; } = [];
-    public List<(IReadOnlyList<int> Recipients, int TargetTagId, int ModeratorId)> TagAdoptionCalls { get; } = [];
+    public List<(IReadOnlyList<int> Recipients, int TargetTagId)> TagAdoptionCalls { get; } = [];
 
     // ── Read side ─────────────────────────────────────────────────────────────
     public Task<int> GetUnreadCountAsync() => Task.FromResult(UnreadCount);
@@ -42,24 +42,24 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public Task NotifyRecommendationRevisionRequestedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) => Task.CompletedTask;
     public Task NotifyRecommendationRevisedAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId) => Task.CompletedTask;
     public Task NotifyRecommendationApprovedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) => Task.CompletedTask;
-    public Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId) => Task.CompletedTask;
+    public Task NotifyNewGroupStoryAsync(int groupId, int groupStoryId, int? storyAuthorId, int sourceUserId) => Task.CompletedTask;
     public Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId) => Task.CompletedTask;
     public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) => Task.CompletedTask;
     public Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId) => Task.CompletedTask;
     public Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId) => Task.CompletedTask;
-    public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyContentRemovedAsync(int contentAuthorUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyAccountSuspendedAsync(int targetUserId, int moderatorSourceId) => Task.CompletedTask;
-    public Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId) => Task.CompletedTask;
+    public Task NotifyReportReceivedAsync(int reporterUserId, long reportId) => Task.CompletedTask;
+    public Task NotifyReportResolvedAsync(int reporterUserId, long reportId) => Task.CompletedTask;
+    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, long reportId) => Task.CompletedTask;
+    public Task NotifyContentRemovedAsync(int contentAuthorUserId, long reportId) => Task.CompletedTask;
+    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyExternalAccountVerifiedAsync(int userId) => Task.CompletedTask;
+    public Task NotifyExternalAccountRejectedAsync(int userId) => Task.CompletedTask;
+    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyAccountWarningAsync(int targetUserId) => Task.CompletedTask;
+    public Task NotifyAccountSuspendedAsync(int targetUserId) => Task.CompletedTask;
+    public Task NotifyAccountBannedAsync(int targetUserId) => Task.CompletedTask;
     public Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId) => Task.CompletedTask;
     public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId) => Task.CompletedTask;
     public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId) => Task.CompletedTask;
@@ -69,7 +69,8 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public Task NotifyNewProfileCommentAsync(int profileOwnerId, int commenterId) => Task.CompletedTask;
     public Task NotifyCommentReplyAsync(int parentAuthorId, int commenterId, int contextEntityId) => Task.CompletedTask;
     public Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId) => Task.CompletedTask;
-    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId)
-    { TagAdoptionCalls.Add((recipientAuthorIds, targetTagId, moderatorSourceId)); return Task.CompletedTask; }
+    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId)
+    { TagAdoptionCalls.Add((recipientAuthorIds, targetTagId)); return Task.CompletedTask; }
     public Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId) => Task.CompletedTask;
+    public Task NotifyNewChapterAsync(int storyId, int chapterId, int authorId) => Task.CompletedTask;
 }

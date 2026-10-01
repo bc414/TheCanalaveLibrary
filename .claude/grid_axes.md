@@ -532,9 +532,10 @@ highlight up to 5 per story. `RecommendationLike` junction for reader likes.
 **29. Hidden Gem Management** — Mark/unmark recommendations as Hidden Gems (`IsHiddenGem`).
 5-per-user limit enforced in C# service. *Spec §8.4: edge case at limit needs resolution.*
 
-**30. Recommendation Attribution** — `UserStoryRecommendationSource` (sparse partition): records which
-recommendation led user to story. After reading Chapter 1, popup asks "Was this recommendation useful?"
-→ `RecommendationSuccess` record created.
+**30. Recommendation Attribution** — `UserStoryRecommendationSource` (sparse partition): records how the
+reader's Read It Later came to be set — from a recommendation's card, or its direct link read to 90% of
+Chapter 1 (owner ruling D3, built 2026-09-30). After reading Chapter 1, a prompt asks whether the
+recommendation helped → `RecommendationSuccess` record created.
 
 
 ### Discovery

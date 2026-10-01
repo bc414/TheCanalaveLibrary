@@ -97,6 +97,19 @@ collection to the concrete child (`ICollection<BlogPostPoll>`) and pair it expli
 (`HasOne(p => p.BlogPost).WithMany(b => b.Polls)`). Fixed in the WU-Polls L1 reconcile
 (migration `WU_Polls_ConfigLifecycleAndShadowFkFix`, 2026-07-12).
 
+**Unpaired collection navs mint shadow FKs — not only on TPT.** The same mechanism bites ordinary
+entities: a collection navigation with no inverse reference on the other side makes EF invent a
+nullable shadow FK column on the *dependent* table. `Recommendation.UserStoryInteractions` did exactly
+that — it minted `user_story_interactions.recommendation_id` (indexed, FK'd, always NULL) with no
+property behind it. It was a **fossil**, not a modelling slip: the 2025 DDL carried
+`SourceRecommendationID INT NULL` directly on `UserStoryInteractions` before attribution moved to the
+sparse `user_story_recommendation_sources` partition (a mostly-null column on a hot table for a feature
+absent from its main filtering job). Removed with migration `WU_InertFeatures` (2026-09-30), which also
+made the partition's recommendation FK explicit (`HasOne(SourceRecommendation).WithMany()`, cascade —
+the rationale is in `layer2-services.md` §"Attribution (Feature 30)"). Check: every collection nav
+either has its inverse named in a `WithMany(...)`/`WithOne(...)` call or is deleted; a snapshot column
+with no C# property is the symptom.
+
 **Cross-child casts in projections need a base-typed source:** a projection that branches across
 sibling child types (`p is SitePoll && ((SitePoll)p).IsArchived`, `p is BlogPostPoll ?
 ((BlogPostPoll)p).BlogPostId : null`) only translates when the `IQueryable`'s **static element

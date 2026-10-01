@@ -157,7 +157,12 @@
                                             </div>
                                         }
                                         <div class="space-y-2">
-                                            <RecommendationCard Rec="item.Recommendation" />
+                                            @* Read It Later / Read now (owner ruling D3) — the save refreshes this story's
+                                               state so the StoryCard panel can't flush it back. *@
+                                            <ReadItLaterRecommendationCard Rec="item.Recommendation"
+                                                                           CurrentUserId="CurrentUserId"
+                                                                           IsReadItLaterSaved="@(StateFor(item.Recommendation.StoryId)?.IsReadItLater ?? false)"
+                                                                           OnSaved="RefreshStoryStateAsync" />
                                             @if (item.Recommendation.Recommender is { } rec && _selected is { IsStory: true })
                                             {
                                                 @AddButton(false, rec.UserId, item.Recommendation.IsHighlightedByAuthor ? ManualTreeEdge.StorySpotlightedRecommender : ManualTreeEdge.StoryRecommender, rec.Username, rec.AvatarUrl)
@@ -535,6 +540,23 @@
 
     private UserStoryInteractionStateDto? StateFor(int storyId) =>
         _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    // After a recommendation card's Read It Later (owner ruling D3): replace this story's state entry
+    // with the server's view so the StoryCard panel adopts the saved bit instead of flushing it back
+    // to false (the panel-clobber closure, WU-InertFeatures). If the re-read comes back without the
+    // row, the save itself is known — mark it locally.
+    private async Task RefreshStoryStateAsync(int storyId)
+    {
+        IReadOnlyDictionary<int, UserStoryInteractionStateDto> fresh =
+            await InteractionReadService.GetStatesByStoryIdsAsync([storyId]);
+        Dictionary<int, UserStoryInteractionStateDto> merged = new(_states)
+        {
+            [storyId] = fresh.TryGetValue(storyId, out UserStoryInteractionStateDto? s)
+                ? s
+                : (StateFor(storyId) ?? UserStoryInteractionStateDto.AllFalse(storyId)) with { IsReadItLater = true },
+        };
+        _states = merged;
+    }
 
     private bool IsOwn(StoryListingDto story) => CurrentUserId is not null && story.AuthorId == CurrentUserId;
 

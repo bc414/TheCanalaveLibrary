@@ -361,6 +361,58 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
             .Should().NotBeNull();
     }
 
+    // ── D17: hidden favorites are favoriters on the personal plane (WU-InertFeatures) ──
+
+    [Fact]
+    public async Task PublishTransition_EveryFavoriterState_GetsExactlyOneType15()
+    {
+        int storyId = await SeedStoryAsync(authorId: _authorId);
+        int publicFav = await SeedUserAsync("PublicFav");
+        int hiddenFromVisitors = await SeedUserAsync("BothFlags");
+        int privateOnly = await SeedUserAsync("PrivateOnly");
+        await SeedInteractionAsync(publicFav, storyId, favorite: true);
+        await SeedInteractionAsync(hiddenFromVisitors, storyId, favorite: true, hiddenFavorite: true);
+        await SeedInteractionAsync(privateOnly, storyId, hiddenFavorite: true);
+
+        await CreateAndPublishProfilePostAsync(_authorId, storyId);
+
+        foreach (int favoriter in new[] { publicFav, hiddenFromVisitors, privateOnly })
+        {
+            (await CountNotificationsAsync(favoriter, NotificationTypeEnum.NewBlogPostOnFavoritedStory))
+                .Should().Be(1, "D17: all three favoriter states are favoriters for fan-out purposes");
+            (await CountNotificationsAsync(favoriter)).Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task PublishTransition_AlertFollowerWhoIsAHiddenOnlyFavoriter_GetsOnlyType13()
+    {
+        int storyId = await SeedStoryAsync(authorId: _authorId);
+        int userId = await SeedUserAsync("FollowerAndPrivateFav");
+        await SeedFollowAsync(userId, _authorId, receiveAlerts: true);
+        await SeedInteractionAsync(userId, storyId, hiddenFavorite: true);
+
+        await CreateAndPublishProfilePostAsync(_authorId, storyId);
+
+        (await CountNotificationsAsync(userId)).Should().Be(1);
+        (await SingleNotificationOrDefaultAsync(userId, NotificationTypeEnum.NewBlogPostByFollowedUser))
+            .Should().NotBeNull("precedence 13 > 14 > 15 > 16 is unaffected by the widened favoriter set");
+    }
+
+    [Fact]
+    public async Task PublishTransition_HiddenOnlyFavoriterAlsoOnReadItLater_GetsType15Not16()
+    {
+        int storyId = await SeedStoryAsync(authorId: _authorId);
+        int userId = await SeedUserAsync("PrivateFavAndRil");
+        await SeedInteractionAsync(userId, storyId, hiddenFavorite: true, readItLater: true);
+
+        await CreateAndPublishProfilePostAsync(_authorId, storyId);
+
+        (await CountNotificationsAsync(userId)).Should().Be(1);
+        (await SingleNotificationOrDefaultAsync(userId, NotificationTypeEnum.NewBlogPostOnFavoritedStory))
+            .Should().NotBeNull("a hidden-only favoriter now claims the favoriter slot ahead of read-it-later");
+    }
+
     [Fact]
     public async Task EditWithoutTransition_FiresNothing()
     {
@@ -665,14 +717,15 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
 
     private async Task SeedInteractionAsync(
         int userId, int storyId,
-        bool followed = false, bool favorite = false, bool readItLater = false, bool completed = false)
+        bool followed = false, bool favorite = false, bool readItLater = false, bool completed = false,
+        bool hiddenFavorite = false)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.UserStoryInteractions.Add(new UserStoryInteraction
         {
             UserId = userId, StoryId = storyId,
-            IsFollowed = followed, IsFavorite = favorite,
+            IsFollowed = followed, IsFavorite = favorite, IsHiddenFavorite = hiddenFavorite,
             IsReadItLater = readItLater, IsCompleted = completed
         });
         await db.SaveChangesAsync();

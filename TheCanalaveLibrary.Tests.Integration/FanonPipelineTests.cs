@@ -167,8 +167,9 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             (await db.Notifications.CountAsync(n =>
                     n.NotificationTypeId == NotificationTypeEnum.TagUpdateSuggestion
-                    && n.RelatedEntityId == _targetTagId))
-                .Should().Be(2, "one type-26 invitation per author, RelatedEntityId = target tag");
+                    && n.RelatedEntityId == _targetTagId
+                    && n.SourceUserId == null))
+                .Should().Be(2, "one type-26 invitation per author, RelatedEntityId = target tag, null-sourced (D5 sub-edge: the moderator is not named)");
         }
 
         // Author A reads theirs, then a re-sweep runs — nobody is re-notified (the never-twice

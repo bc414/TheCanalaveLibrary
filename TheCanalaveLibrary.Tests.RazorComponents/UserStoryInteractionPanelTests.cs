@@ -243,4 +243,64 @@ public class UserStoryInteractionPanelTests : BunitContext
         cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
             "clicking ReadLater optimistically toggles it active before debounce fires");
     }
+
+    // ── Adopting a changed State (the panel-clobber closure, WU-InertFeatures) ───
+
+    [Fact]
+    public void Idle_AdoptsAChangedStateParameter()
+    {
+        // A recommendation card beside this panel saved the story for later (owner ruling D3); the
+        // host re-read the state and passes it down. Without adopting it, the panel's next six-bit
+        // flush would write IsReadItLater = false over the card's save.
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 5)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5))
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
+
+        cut.Render(p => p.Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5) with { IsReadItLater = true }));
+
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+            "an idle panel adopts the parent's changed state");
+    }
+
+    [Fact]
+    public async Task Idle_AfterAFlushedToggle_IgnoresAnUnchangedStateParameter()
+    {
+        UserStoryInteractionStateDto initial = UserStoryInteractionStateDto.AllFalse(5);
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 5)
+            .Add(c => c.State, initial)
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
+
+        // The toggle's handler runs through its debounce and flush.
+        await cut.Find("button[aria-label='Favorite']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        _fakeService.SetStateCalls.Should().ContainSingle();
+
+        // A parent re-render with the SAME (now stale) value must not revert the flushed toggle.
+        cut.Render(p => p.Add(c => c.State, initial));
+
+        cut.Find("button[aria-label='Favorite']").HasAttribute("aria-pressed").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PendingToggle_IsNotOverwrittenByAChangedStateParameter()
+    {
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 5)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5))
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
+
+        // Start a toggle and leave it inside its debounce window (not awaited yet).
+        Task pending = cut.Find("button[aria-label='Favorite']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        cut.Render(p => p.Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5) with { IsFollowed = true }));
+
+        cut.Find("button[aria-label='Favorite']").HasAttribute("aria-pressed").Should().BeTrue(
+            "the user's in-flight toggle wins over an incoming state while its flush is pending");
+        cut.Find("button[aria-label='Following']").HasAttribute("aria-pressed").Should().BeFalse();
+
+        await pending;
+    }
 }

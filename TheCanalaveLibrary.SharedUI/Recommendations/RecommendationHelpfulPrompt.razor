@@ -1,78 +1,78 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 
-@* Leaf — inline, non-blocking, dismissible "Was this recommendation helpful?" banner.
-   Rendered at the end of chapter content (not a ConfirmDialog overlay — must not interrupt reading).
-   The hosting page (WU26's reading page) owns the gating: show only when a
-   UserStoryRecommendationSource exists, Ch.1 IsRead is true, and no RecommendationSuccess exists.
-   On "Yes", the host calls RecordSuccessAsync. Self-contained: inject no service here. *@
+@* Leaf — inline, non-blocking "Did this recommendation help you find this story?" banner (spec §5.6,
+   owner ruling D3). Rendered at the end of chapter content (not a ConfirmDialog overlay — must not
+   interrupt reading). The hosting reading page owns the gating: it fetches the prompt
+   (IRecommendationReadService.GetHelpfulPromptAsync — non-null only when the reader's Read It Later
+   was set from this recommendation's card or its direct link, the rec is still visible, its
+   recommender is named, and no success is recorded) at the Ch.1 ≥90% moment.
+   The recommendation itself renders as a read-only reminder card: the save may have been long ago.
+   Exactly two controls — Yes (thumbs up) and X. There is no "No thanks": X is the decline. Either
+   answer consumes the attribution, so the prompt never comes back (the host calls RecordSuccessAsync
+   or DismissHelpfulPromptAsync). Self-contained: injects no service. *@
 
-@if (!_dismissed)
+@if (!_answered)
 {
     <div class="mt-6 rounded-xl border border-(--color-rec) bg-(--color-surface) p-4 shadow-subtle"
          role="region" aria-label="Recommendation feedback">
-        <div class="flex items-start gap-3">
+        <div class="mb-3 flex items-start gap-3">
             <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true" fill="var(--color-rec)">
                 <path d="@RecommendationIcons.RecommendationIconPath" />
             </svg>
-            <div class="flex-1 min-w-0">
-                <p class="mb-3 text-sm text-(--color-text)">
-                    Was the recommendation that brought you here helpful?
-                </p>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button"
-                            class="rounded-md bg-(--color-mission) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
-                            aria-label="Yes, this recommendation was helpful"
-                            @onclick="HandleYes">
-                        Yes, it was!
-                    </button>
-                    <button type="button"
-                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover)"
-                            aria-label="No, this recommendation was not helpful"
-                            @onclick="HandleNo">
-                        No thanks
-                    </button>
-                </div>
-            </div>
+            <p class="flex-1 min-w-0 text-sm text-(--color-text)">
+                This recommendation brought you to this story. Did it help you find something you like?
+            </p>
             <button type="button"
                     class="shrink-0 text-(--color-text-muted) hover:text-(--color-text)"
-                    aria-label="Dismiss"
-                    @onclick="Dismiss">
+                    aria-label="Dismiss — don't ask about this recommendation again"
+                    @onclick="HandleDismiss">
                 <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
             </button>
         </div>
+
+        @* The reminder: the recommendation as it reads on the story page, with no actions wired. *@
+        <div class="mb-3 min-w-0 break-words">
+            <RecommendationCard Rec="@Recommendation" />
+        </div>
+
+        <button type="button"
+                class="flex items-center gap-2 rounded-md bg-(--color-mission) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                aria-label="Yes, this recommendation helped me find this story"
+                @onclick="HandleHelpful">
+            <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="currentColor">
+                <path d="@RecommendationIcons.HelpfulIconPath" />
+            </svg>
+            Yes, it helped
+        </button>
     </div>
 }
 
 @code {
-    /// <summary>The recommendation that brought the user to this story (attribution source).</summary>
-    [Parameter, EditorRequired] public int RecommendationId { get; set; }
+    /// <summary>
+    /// The recommendation the reader's Read It Later came from — shown in full as the reminder.
+    /// </summary>
+    [Parameter, EditorRequired] public RecommendationDto Recommendation { get; set; } = null!;
 
-    /// <summary>Raised when the user responds. True = helpful ("Yes"), false = not helpful ("No thanks").</summary>
-    [Parameter] public EventCallback<bool> OnRespond { get; set; }
+    /// <summary>Raised by Yes (thumbs up): the host records the success.</summary>
+    [Parameter] public EventCallback OnHelpful { get; set; }
 
-    /// <summary>Raised when the user dismisses without responding.</summary>
+    /// <summary>Raised by X — the decline: the host deletes the attribution.</summary>
     [Parameter] public EventCallback OnDismiss { get; set; }
 
-    private bool _dismissed;
+    private bool _answered;
 
-    private async Task HandleYes()
+    private async Task HandleHelpful()
     {
-        _dismissed = true;
-        await OnRespond.InvokeAsync(true);
+        _answered = true;
+        await OnHelpful.InvokeAsync();
     }
 
-    private async Task HandleNo()
+    private async Task HandleDismiss()
     {
-        _dismissed = true;
-        await OnRespond.InvokeAsync(false);
-    }
-
-    private async Task Dismiss()
-    {
-        _dismissed = true;
+        _answered = true;
         await OnDismiss.InvokeAsync();
     }
 }

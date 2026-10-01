@@ -15,12 +15,13 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class DeepDiveTabTests : BunitContext
 {
     private readonly FakeManualTreeSearchReadService _manualTree = new();
+    private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
 
     public DeepDiveTabTests()
     {
         Services.AddScoped<IManualTreeSearchReadService>(_ => _manualTree);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
-        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         Services.AddScoped<ManualTreeStore>();
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -56,6 +57,30 @@ public class DeepDiveTabTests : BunitContext
                 .Should().HaveCount(3, "root + author + spotlighted recommender, all auto-added");
             cut.Markup.Should().NotContain("Explore more", "no separate bulk-add button exists");
         });
+    }
+
+    [Fact]
+    public async Task PanelRecommendation_ReadItLater_CallsTheCardProducer()
+    {
+        // A spotlighted recommender's node carries the rec that earned the edge; its floating panel
+        // renders that rec with the Feature 30 entry points (owner ruling D3, WU-InertFeatures).
+        _manualTree.StoryResult = new ManualTreeNeighborsDto
+        {
+            RecommendationFamily = new ManualTreeSectionDto<ManualTreeRecItemDto>(
+                [new ManualTreeRecItemDto(MakeRec(4, 1, MakeUser(20, "Spotlighted"), spotlight: true), MakeStory(1))], 1),
+        };
+        IRenderedComponent<DeepDiveTab> cut = Render<DeepDiveTab>(p => p
+            .Add(c => c.RootStory, MakeStory(1, "Root Story"))
+            .Add(c => c.CurrentUserId, 99));
+        cut.WaitForAssertion(() =>
+            cut.FindComponents<ManualTreeCanvas>().Single().FindAll("[data-tree-node]").Should().HaveCount(2));
+
+        cut.FindComponents<ManualTreeCanvas>().Single().FindAll("[data-tree-node]")[1].Click(); // the recommender
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([4]);
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Saved to Read It Later']"));
     }
 
     [Fact]

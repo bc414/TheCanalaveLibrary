@@ -610,7 +610,11 @@ border`.
 p-3 text-sm` — no outer margin; the chapter reading page controls placement. Yes button:
 `rounded-md bg-(--color-primary) px-3 py-1 text-white text-xs`. Dismiss link:
 `text-(--color-text-muted) text-xs underline cursor-pointer`. Renders nothing when dismissed
-(local `_dismissed` bool).
+(local `_dismissed` bool). *Superseded in part by WU-InertFeatures (2026-09-30, owner ruling D3): the
+banner now embeds the recommendation as a read-only `RecommendationCard` reminder and has exactly two
+controls — Yes (a `mission` Control with the thumbs-up `RecommendationIcons.HelpfulIconPath`) and an
+icon-only X; the class strings above are the WU29 originals, and the component's own markup is
+authoritative.*
 
 **Notification icons (WU33, design-pending visual sign-off):** notification category/type icons are **inline
 SVG**, the same permanent carve-out as interaction icons. `NotificationCategoryVisuals.cs` is the single source

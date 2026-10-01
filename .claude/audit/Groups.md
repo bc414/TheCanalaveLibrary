@@ -128,8 +128,32 @@ conventions. **Do not revisit these.** Pointers:
 
 ## Feature 39 — Group Content & Folders
 
+**Settled — group-story notifications (owner ruling D16, answered 2026-08-07, consumed
+WU-InertFeatures 2026-09-30; do not revisit).** `NewGroupStory` (60) and `YourStoryAddedToGroup` (25)
+both carry the **`GroupStory` junction row's id** — not the group id (which could never name the story,
+and made two different stories collapse under unread dedup) and not the story id. The enricher's
+`GroupStory` kind yields the group name (link `/group/{id}`, unchanged) and the story title from that
+one id; a removed `GroupStory` row leaves the notification title-less (accepted). Riders on
+`AddStoryAsync`: the notify block runs only when the story was actually added (a re-add re-fired the
+whole fan-out); an authorless story still notifies members; the story's author is excluded from the
+60 fan-out and gets 25 only (one event, one notification). Rule: `layer2-services.md`
+§"Polymorphic RelatedEntityId".
+
 - **L1 — Stage 5.** `GroupFolder` self-nesting + `GroupStory` first-class entity established.
-- **L2 — Stage 5 (2026-06-24, WU32).** `IGroupWriteService.AddStoryAsync` enforces three-tier
+- **L2 — Stage 5 (2026-06-24, WU32; story-add notifications re-anchored and de-spammed,
+  WU-InertFeatures 2026-09-30 — stays Stage 5).** **WU-InertFeatures Stage note (owner ruling D16 +
+  service audit §2.8 bullets 1–3):** `AddStoryAsync` now notifies only inside `if (!alreadyAdded)` —
+  re-adding an existing story was a repeatable fan-out any member could trigger; the
+  `if (storyAuthorId.HasValue)` wrapper is gone (an authorless story silenced the member fan-out
+  too); it passes `groupStory.GroupStoryId` and the nullable author to
+  `NotifyNewGroupStoryAsync`, which anchors both 60 and 25 on that junction row and excludes the
+  story's author from the 60 fan-out (one event, one notification). Verified by Integration
+  `GroupServiceTests` (+5: both types carry the `GroupStoryId` and enrich to group name + `/group/{id}`
+  + story title, title-less after `RemoveStoryAsync`; an author-member gets 25 only; a re-add by another
+  member writes nothing even with the first rows read; an authorless story still notifies members; two
+  different stories while unread are two 60s). The author-exclusion and re-add tests fail against the
+  pre-fix code (mutation-checked). No browser pass (tracker H14). Original WU32 text follows.
+  `IGroupWriteService.AddStoryAsync` enforces three-tier
   content-rating waterfall: tier 1 = `ContentRating` named filter (model); tier 2 =
   `story.Rating > group.MaxContentRating` (service); tier 3 = `story.Rating > folder.MaxRating`
   (service, when `GroupFolderId` set). Admin-only folder CRUD: `CreateFolderAsync`, `RenameFolderAsync`,

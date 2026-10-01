@@ -42,13 +42,21 @@ public interface IRecommendationReadService
     Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync();
 
     /// <summary>
-    /// Returns the <c>RecommendationId</c> from the viewer's
-    /// <see cref="UserStoryRecommendationSource"/> for <paramref name="storyId"/> — but only when
-    /// no <see cref="RecommendationSuccess"/> already exists for (viewer, that recommendation).
-    /// Used by the reading page to gate the "found this helpful?" prompt (WU26, spec §5.6).
-    /// Anonymous → null. No source row → null. Success already recorded → null.
+    /// The "was this recommendation helpful?" prompt for <paramref name="storyId"/> (spec §5.6, owner
+    /// ruling D3): the recommendation the viewer's attribution names, as a full DTO, because the widget
+    /// shows it as a reminder — the Read It Later may have been long ago. Read by the reading page at
+    /// the Ch.1 ≥90% moment. Returns the recommendation only when all four gates hold, else null:
+    /// <list type="number">
+    ///   <item>the viewer has an attribution (<see cref="UserStoryRecommendationSource"/>) for the story;</item>
+    ///   <item>the recommendation is visible — <c>Approved</c>, not taken down, and its story passes the
+    ///   viewer's story-visibility guard;</item>
+    ///   <item><c>RecommenderId</c> is non-null (anonymous or since-deleted recommenders get no prompt —
+    ///   gated here, at read time, so a deletion between the save and the read is covered);</item>
+    ///   <item>no <see cref="RecommendationSuccess"/> exists yet for (viewer, recommendation).</item>
+    /// </list>
+    /// Anonymous → null.
     /// </summary>
-    Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId);
+    Task<RecommendationDto?> GetHelpfulPromptAsync(int storyId);
 
     /// <summary>
     /// Returns the IDs of stories that <paramref name="userId"/> has written an Approved

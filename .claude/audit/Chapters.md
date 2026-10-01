@@ -72,7 +72,25 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7).** Built `IChapterWriteService : IChapterReadService` and
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet).**
+  **WU-InertFeatures Stage note (2026-09-30) — tracker B20 closed.** `SetPublishedAsync` now fires
+  `INotificationWriteService.NotifyNewChapterAsync` (type 10 to the story's followers) best-effort
+  after its commit, **iff that call performed the `FirstPublishedDate` null→non-null stamp** — D2's
+  anchor, D1's anti-bump rider: first publication only, permanently, per artifact. Unpublish→republish,
+  `AddAlternateVersionAsync`, `SetPrimaryVersionAsync` and `UpdateChapterContentAsync` never notify.
+  **Default, not a ruling:** it fires only while the story is publicly published
+  (`StoryLifecycle.IsPublished(status) && !IsTakenDown` — the status predicate, not
+  `StoryVisibilityGuard`, whose author clause would make a Draft "visible" to its author); a chapter
+  first published while its story is unpublished therefore never notifies (`roadmap.md` row 17, tied
+  to row 16). The service gained `INotificationWriteService` + `ILogger` dependencies; the interface
+  doc's false "maintains `Story.ChapterCount`" sentence is replaced. Verified by Integration
+  `NewChapterNotificationTests` (7: one row per follower with the chapter id and the author as source;
+  the self-following author and a non-following hidden favoriter get nothing; republish after the first
+  row was read adds nothing; alternate version + primary switch + edit add nothing; Draft and taken-down
+  stories notify nobody yet still stamp the anchor; enrichment deep-links `/story/{sid}/{n}` with the
+  story title as context) — mutation-checked (dropping the anchor condition or the status predicate each
+  fails a test). Original WU17 text follows.
+  Built `IChapterWriteService : IChapterReadService` and
   `ServerChapterWriteService : ServerChapterReadService` in `Core/Chapters/`/`Server/Chapters/`. Write
   service is the **first production caller** of `IHtmlSanitizationService`. `ChapterText.CountWords()`
   helper in `Core/Chapters/ChapterText.cs` (strips HTML tags + decodes entities before splitting on

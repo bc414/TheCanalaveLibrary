@@ -82,13 +82,16 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyRecommendationApprovedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId) =>
+    public Task NotifyNewGroupStoryAsync(int groupId, int groupStoryId, int? storyAuthorId, int sourceUserId) =>
         throw NotExposedOverHttp();
 
     public Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId) =>
         throw NotExposedOverHttp();
 
     public Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyNewChapterAsync(int storyId, int chapterId, int authorId) =>
         throw NotExposedOverHttp();
 
     public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) =>
@@ -100,43 +103,43 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) =>
+    public Task NotifyReportReceivedAsync(int reporterUserId, long reportId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId) =>
+    public Task NotifyReportResolvedAsync(int reporterUserId, long reportId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId) =>
+    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, long reportId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyContentRemovedAsync(int contentAuthorUserId, int moderatorSourceId) =>
+    public Task NotifyContentRemovedAsync(int contentAuthorUserId, long reportId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId) =>
+    public Task NotifyExternalAccountVerifiedAsync(int userId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId) =>
+    public Task NotifyExternalAccountRejectedAsync(int userId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) =>
+    public Task NotifyAccountWarningAsync(int targetUserId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyAccountSuspendedAsync(int targetUserId, int moderatorSourceId) =>
+    public Task NotifyAccountSuspendedAsync(int targetUserId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId) =>
+    public Task NotifyAccountBannedAsync(int targetUserId) =>
         throw NotExposedOverHttp();
 
     public Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId) =>
@@ -167,7 +170,7 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId) =>
+    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId) =>
         throw NotExposedOverHttp();
 
     private static NotSupportedException NotExposedOverHttp([CallerMemberName] string? method = null) =>

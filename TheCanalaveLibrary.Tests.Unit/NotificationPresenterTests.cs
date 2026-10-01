@@ -19,7 +19,8 @@ public class NotificationPresenterTests
         NotificationCategoryEnum category,
         string? sourceUserName = null,
         string? targetTitle = null,
-        string? targetUrl = null)
+        string? targetUrl = null,
+        string? contextTitle = null)
     {
         return new NotificationDto(
             NotificationId:    1L,
@@ -32,7 +33,8 @@ public class NotificationPresenterTests
             RelatedEntityId:   99,
             IsRead:            false,
             DateCreated:       DateTime.UtcNow,
-            Collapsed:         false);
+            Collapsed:         false,
+            TargetContextTitle: contextTitle);
     }
 
     // ── All known types produce non-empty fields ──────────────────────────────────
@@ -214,6 +216,97 @@ public class NotificationPresenterTests
             sourceUserName: null, targetTitle: null);
         var (text, _, _) = NotificationPresenter.Compose(n);
         text.Should().NotContain("null");
+    }
+
+    // ── D4/D5: actor-free types never say "Someone" (WU-InertFeatures) ────────────
+
+    public static TheoryData<NotificationTypeEnum> ActorFreeTypes() =>
+    [
+        NotificationTypeEnum.ContentRemoved, NotificationTypeEnum.StoryRejected,
+        NotificationTypeEnum.AccountWarning, NotificationTypeEnum.AccountSuspended,
+        NotificationTypeEnum.AccountBanned, NotificationTypeEnum.StoryApproved,
+        NotificationTypeEnum.ExternalAccountVerified, NotificationTypeEnum.ExternalAccountRejected,
+        NotificationTypeEnum.ExternalLinkVerified, NotificationTypeEnum.ExternalLinkRejected,
+        NotificationTypeEnum.ReportReceived, NotificationTypeEnum.ReportResolved,
+        NotificationTypeEnum.ReportResolvedNoAction, NotificationTypeEnum.TagUpdateSuggestion,
+    ];
+
+    [Theory]
+    [MemberData(nameof(ActorFreeTypes))]
+    public void Compose_ActorFreeType_WithNullSource_NeverNamesSomeone(NotificationTypeEnum type)
+    {
+        // Two nulls share SourceUserName (deleted actor vs. no actor); the TYPE decides. "Someone
+        // banned your account" must not be reachable (owner ruling D4).
+        foreach (string? target in new[] { null, "A Story" })
+        {
+            var (text, _, _) = NotificationPresenter.Compose(Make(type, CategoryFor(type), targetTitle: target));
+            text.Should().NotContain("Someone", $"{type} has no actor to fall back to");
+            text.Should().NotContain("null");
+        }
+    }
+
+    [Theory]
+    [InlineData(NotificationTypeEnum.StoryApproved)]
+    [InlineData(NotificationTypeEnum.ExternalAccountVerified)]
+    [InlineData(NotificationTypeEnum.ExternalAccountRejected)]
+    [InlineData(NotificationTypeEnum.ExternalLinkVerified)]
+    [InlineData(NotificationTypeEnum.ExternalLinkRejected)]
+    public void Compose_ModerationOutcomes75To79_HaveTheirOwnArm_NotTheCatchAll(NotificationTypeEnum type)
+    {
+        string catchAll = NotificationPresenter.Compose(Make((NotificationTypeEnum)999, NotificationCategoryEnum.SiteNews)).Text;
+        NotificationPresenter.Compose(Make(type, CategoryFor(type))).Text.Should().NotBe(catchAll);
+    }
+
+    [Fact]
+    public void Compose_ReportReceived_IsAReceiptToTheReporter()
+    {
+        var (text, _, _) = NotificationPresenter.Compose(
+            Make(NotificationTypeEnum.ReportReceived, NotificationCategoryEnum.YourReports));
+        text.Should().Contain("received your report",
+            "80 is delivered to the reporter (D4) — the old moderator-facing 'A new report has been filed' was wrong");
+    }
+
+    [Fact]
+    public void Compose_NewGroupStory_NamesStoryAndGroup()
+    {
+        var (text, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.NewGroupStory,
+            NotificationCategoryEnum.Groups, targetTitle: "Legendary Authors", contextTitle: "The Dragon's Path"));
+        text.Should().Be("The Dragon's Path was added to Legendary Authors");
+    }
+
+    [Fact]
+    public void Compose_YourStoryAddedToGroup_NamesStoryAndGroup()
+    {
+        var (text, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.YourStoryAddedToGroup,
+            NotificationCategoryEnum.YourStories, targetTitle: "Legendary Authors", contextTitle: "The Dragon's Path"));
+        text.Should().Be("Your story The Dragon's Path was added to Legendary Authors");
+    }
+
+    [Fact]
+    public void Compose_GroupStoryTypes_WithoutAnchor_FallBackWithoutNulls()
+    {
+        foreach (NotificationTypeEnum type in new[] { NotificationTypeEnum.NewGroupStory, NotificationTypeEnum.YourStoryAddedToGroup })
+        {
+            string text = NotificationPresenter.Compose(Make(type, CategoryFor(type))).Text;
+            text.Should().Contain("a group").And.NotContain("null");
+        }
+    }
+
+    [Fact]
+    public void Compose_NewChapterOnFollowedStory_NamesStoryAndChapter()
+    {
+        var (text, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.NewChapterOnFollowedStory,
+            NotificationCategoryEnum.YourFollows, targetTitle: "The Storm", contextTitle: "The Dragon's Path"));
+        text.Should().Be("New chapter of The Dragon's Path: The Storm");
+    }
+
+    [Fact]
+    public void Compose_NewChapterOnFollowedStory_ChapterOnly_And_Neither()
+    {
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.NewChapterOnFollowedStory,
+            NotificationCategoryEnum.YourFollows, targetTitle: "The Storm")).Text.Should().Be("New chapter: The Storm");
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.NewChapterOnFollowedStory,
+            NotificationCategoryEnum.YourFollows)).Text.Should().Be("A story you follow has a new chapter");
     }
 
     // ── Mutation sanity: a missing switch arm returns non-empty (default arm) ─────

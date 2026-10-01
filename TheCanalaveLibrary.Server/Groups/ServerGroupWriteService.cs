@@ -202,15 +202,15 @@ public class ServerGroupWriteService(
                 await AssignStoryToFolderInternalAsync(
                     groupStory.GroupStoryId, dto.GroupFolderId.Value, story.Rating, dto.GroupId);
             }
-        }
 
-        // Notifications: fan-out to members + author-added notification (best-effort post-commit).
-        int? storyAuthorId = story.AuthorId;
-        if (storyAuthorId.HasValue)
-        {
+            // Notifications (best-effort post-commit) — only on a real add. Outside this block, any
+            // member could re-add an already-added story and re-fire the whole fan-out (service audit
+            // §2.8). An authorless story still notifies members; only the author's own type 25 needs
+            // an author. Both types anchor on the GroupStory row (owner ruling D16).
             try
             {
-                await notifications.NotifyNewGroupStoryAsync(dto.GroupId, storyAuthorId.Value, userId);
+                await notifications.NotifyNewGroupStoryAsync(
+                    dto.GroupId, groupStory.GroupStoryId, story.AuthorId, userId);
             }
             catch (Exception ex)
             {

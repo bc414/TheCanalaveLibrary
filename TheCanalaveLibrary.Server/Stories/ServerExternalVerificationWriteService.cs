@@ -156,7 +156,7 @@ public class ServerExternalVerificationWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        try { await notifications.NotifyExternalAccountVerifiedAsync(identity.UserId, modId); }
+        try { await notifications.NotifyExternalAccountVerifiedAsync(identity.UserId); }
         catch (Exception ex) { logger.LogWarning(ex, "ExternalAccountVerified notification failed for identity {Id}", userExternalIdentityId); }
     }
 
@@ -174,7 +174,7 @@ public class ServerExternalVerificationWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        try { await notifications.NotifyExternalAccountRejectedAsync(identity.UserId, modId); }
+        try { await notifications.NotifyExternalAccountRejectedAsync(identity.UserId); }
         catch (Exception ex) { logger.LogWarning(ex, "ExternalAccountRejected notification failed for identity {Id}", userExternalIdentityId); }
     }
 
@@ -182,7 +182,9 @@ public class ServerExternalVerificationWriteService(
 
     public async Task ApproveLinkVerificationAsync(int storyExternalLinkId)
     {
-        int modId = RequireModerator();
+        // Role gate only: the per-link tier records no reviewer, and the outcome notification is
+        // null-sourced (D5 — the moderator is never named to the author).
+        RequireModerator();
 
         StoryExternalLink link = await writeDb.StoryExternalLinks
             .Include(l => l.Story)
@@ -196,14 +198,14 @@ public class ServerExternalVerificationWriteService(
         try
         {
             if (link.Story.AuthorId.HasValue)
-                await notifications.NotifyExternalLinkVerifiedAsync(link.Story.AuthorId.Value, link.StoryId, modId);
+                await notifications.NotifyExternalLinkVerifiedAsync(link.Story.AuthorId.Value, link.StoryId);
         }
         catch (Exception ex) { logger.LogWarning(ex, "ExternalLinkVerified notification failed for link {Id}", storyExternalLinkId); }
     }
 
     public async Task RejectLinkVerificationAsync(int storyExternalLinkId, string reason)
     {
-        int modId = RequireModerator();
+        RequireModerator(); // role gate only (see ApproveLinkVerificationAsync)
 
         StoryExternalLink link = await writeDb.StoryExternalLinks
             .Include(l => l.Story)
@@ -217,7 +219,7 @@ public class ServerExternalVerificationWriteService(
         try
         {
             if (link.Story.AuthorId.HasValue)
-                await notifications.NotifyExternalLinkRejectedAsync(link.Story.AuthorId.Value, link.StoryId, modId);
+                await notifications.NotifyExternalLinkRejectedAsync(link.Story.AuthorId.Value, link.StoryId);
         }
         catch (Exception ex) { logger.LogWarning(ex, "ExternalLinkRejected notification failed for link {Id}", storyExternalLinkId); }
     }

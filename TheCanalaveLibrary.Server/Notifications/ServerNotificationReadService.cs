@@ -131,10 +131,10 @@ public class ServerNotificationReadService(
         // ── Stitch: merge enriched fields into DTOs ────────────────────────────────
         return [..rows.Select(r =>
         {
-            (string? targetTitle, string? targetUrl) =
-                targets.TryGetValue((r.NotificationTypeId, r.RelatedEntityId), out var target)
-                    ? target
-                    : (null, null);
+            NotificationTarget target =
+                targets.TryGetValue((r.NotificationTypeId, r.RelatedEntityId), out NotificationTarget found)
+                    ? found
+                    : default;
 
             return new NotificationDto(
                 r.NotificationId,
@@ -142,12 +142,13 @@ public class ServerNotificationReadService(
                 r.CategoryId,
                 r.SourceUserId,
                 r.SourceUserName,
-                targetTitle,
-                targetUrl,
+                target.Title,
+                target.Url,
                 r.RelatedEntityId,
                 r.IsRead,
                 r.DateCreated,
-                r.Collapsed);
+                r.Collapsed,
+                target.ContextTitle);
         })];
     }
 

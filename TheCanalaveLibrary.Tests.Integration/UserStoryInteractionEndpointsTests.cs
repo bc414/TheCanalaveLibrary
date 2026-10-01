@@ -80,4 +80,70 @@ public class UserStoryInteractionEndpointsTests(PostgresFixture postgres) : Inte
         ids.Should().Contain([_publicFavoriteStoryId, _hiddenFavoriteStoryId],
             "the owner always sees their own hidden favorites");
     }
+
+    // ── Feature 30 entry points (owner ruling D3, WU-InertFeatures) ──────────────
+
+    [Fact]
+    public async Task ReadItLaterFromRecommendation_Anonymous_Returns401()
+    {
+        int recId = await SeedApprovedRecAsync(_publicFavoriteStoryId);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        HttpResponseMessage response = await Factory.CreateClient().PostAsync(
+            $"/api/user-story-interactions/read-it-later/from-recommendation/{recId}", null);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ReadItLaterFromRecommendation_Authenticated_Returns204_AndRecordsTheAttribution()
+    {
+        int recId = await SeedApprovedRecAsync(_publicFavoriteStoryId);
+        int readerId = await SeedUserAsync("ril-reader");
+        SetActiveUser(readerId);
+
+        HttpResponseMessage response = await Factory.CreateClient().PostAsync(
+            $"/api/user-story-interactions/read-it-later/from-recommendation/{recId}", null);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStoryRecommendationSources.Should().ContainSingle(s =>
+            s.UserId == readerId && s.StoryId == _publicFavoriteStoryId && s.SourceRecommendationId == recId);
+    }
+
+    [Fact]
+    public async Task Started_WithRecommendationIdQuery_BindsItAsTheDirectLinkAttribution()
+    {
+        int recId = await SeedApprovedRecAsync(_publicFavoriteStoryId);
+        int readerId = await SeedUserAsync("direct-reader");
+        SetActiveUser(readerId);
+
+        HttpResponseMessage response = await Factory.CreateClient().PostAsync(
+            $"/api/user-story-interactions/{_publicFavoriteStoryId}/started?recommendationId={recId}", null);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStoryRecommendationSources.Should().ContainSingle(s =>
+            s.UserId == readerId && s.SourceRecommendationId == recId);
+    }
+
+    private async Task<int> SeedApprovedRecAsync(int storyId)
+    {
+        int recommenderId = await SeedUserAsync();
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Recommendation rec = new()
+        {
+            StoryId = storyId,
+            RecommenderId = recommenderId,
+            StatusId = (short)RecommendationStatusEnum.Approved,
+            DatePosted = DateTime.UtcNow,
+            RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
+        };
+        db.Recommendations.Add(rec);
+        await db.SaveChangesAsync();
+        return rec.RecommendationId;
+    }
 }

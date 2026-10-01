@@ -133,17 +133,18 @@ public sealed class NotificationEmailFlusher(
         var mails = new List<OutgoingMail>(rows.Count);
         foreach (var r in rows)
         {
-            (string? targetTitle, string? targetUrl) =
-                targets.TryGetValue((r.NotificationTypeId, r.RelatedEntityId), out var target)
-                    ? target
-                    : (null, null);
+            NotificationTarget target =
+                targets.TryGetValue((r.NotificationTypeId, r.RelatedEntityId), out NotificationTarget found)
+                    ? found
+                    : default;
+            string? targetUrl = target.Url;
 
             // Collapsed is a panel-display concern with no email meaning — pass false rather than
             // paying for the join. IsRead is false by construction (the query filters on it).
             var dto = new NotificationDto(
                 r.NotificationId, r.NotificationTypeId, r.CategoryId, r.SourceUserId,
-                r.SourceUserName, targetTitle, targetUrl, r.RelatedEntityId,
-                IsRead: false, r.DateCreated, Collapsed: false);
+                r.SourceUserName, target.Title, targetUrl, r.RelatedEntityId,
+                IsRead: false, r.DateCreated, Collapsed: false, TargetContextTitle: target.ContextTitle);
 
             string unsubscribeUrl = publicUrls.AbsolutePageUrl(
                 UnsubscribeTokenService.PathFor(unsubscribeTokens.CreateToken(r.RecipientUserId, r.NotificationTypeId)));

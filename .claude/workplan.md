@@ -17,17 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-AccessGateSweep2 (2026-09-30, plus review fixes the same day) — owner ruling
-  **D6** (a raise keeps the full parent-visibility guard; a clear on the caller's own row is never
-  guarded, on any axis) plus service audit §2.6's unblocked items. USI panel, manual read-marks and
-  poll votes load, diff, then guard raises only; three unlikes and vote withdrawal are clears whose
-  *response* stays gated (no count, or `null`, on a hidden parent); alerts-on became a guarded raise.
-  Profile blog posts respect the author's `ProfileVisibility` on every path (detail, gate, children,
-  sitemap, reveal list, publish fan-out); acknowledgment/lineage reads gained the story guard;
-  `AllowProfileComments` is service-enforced. No migration, no cell flips; one contract change
-  (`VoteAsync` → `PollDto?`). `dotnet test`: Unit 1,022, RazorComponents 703, Integration 1,180.
-  Owner sub-edges: tracker **F10**; D25/D26 slice: **F11**; browser pass: **H13**. **Pointers:** its
-  DONE entry; `identity-and-authorization.md` §"Parent-visibility guards".
+- **Last landed:** WU-InertFeatures (2026-09-30) — owner rulings **D3, D4, D5, D16, D17** plus the
+  new-chapter fan-out. Recommendation attribution now rides the Read-It-Later bit: a card RIL button
+  (every rec-card host) and a `?rec=` link persisted at Ch.1 90%, one save each; the on-load write is
+  retired; the prompt is a Yes/X reminder card; `RecordSuccessAsync` requires and consumes the row.
+  Notifications: nullable source, the 70–82 band and type 26 de-identified, report-id anchors,
+  dedup-exempt account types, `ReportReceived` restored, `GroupStory`-anchored group notices, hidden
+  favoriters in type 15, and type 10 on a chapter's first publish. Migration `WU_InertFeatures`
+  (bigint `related_entity_id`, phantom FK column dropped). F16/F30/F41 L4.5 → 1 (no browser).
+  `dotnet test`: Unit 1,047, RazorComponents 726, Integration 1,250. New decision rows **17–18**;
+  trackers **B20–B22** closed, **B23/B24/H14** opened. **Pointers:** its DONE entry;
+  `layer2-services.md` §"Notification Generation" and §"Attribution (Feature 30)".
+  Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
@@ -228,9 +229,9 @@ references it, does not restate it.
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
-  `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2)
-  and WU-AccessGateSweep2 (D6) have landed, and **WU-InertFeatures** is next in the campaign's build
-  order (its new-chapter fan-out depended on D6 landing first — it has).
+  `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
+  WU-AccessGateSweep2 (D6) and WU-InertFeatures (D3/D4/D5/D16/D17) have landed, and
+  **WU-ModerationIntegrity** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -247,20 +248,24 @@ references it, does not restate it.
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
   WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
-  2026-09-30, which also annotated E6 without closing it), including two **high-priority security items:
+  2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
+  2026-09-30, which closed B20–B22), including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–16** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–18** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
-  story-lifecycle questions WU-StoryLifecycle left open — added 2026-09-30). Separately, not a
+  story-lifecycle questions WU-StoryLifecycle left open — and 17–18 — the two defaults
+  WU-InertFeatures had to take — added 2026-09-30). Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, tracker **H12**'s pass
-  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5), and tracker **H13**'s confirmation
-  of the access-gate sweep (privacy form "Off", Private-author blog 404s) need Brian's own browser session —
+  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5), tracker **H13**'s confirmation
+  of the access-gate sweep (privacy form "Off", Private-author blog 404s), and tracker **H14**'s pass
+  over recommendation attribution and the new notifications (it returns F16/F30/F41 L4.5 to 5) need
+  Brian's own browser session —
   see those WUs' DONE entries and `audit/Accessibility.md`.
 
 ---
@@ -404,6 +409,73 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-InertFeatures — recommendation attribution rebuilt on the RIL bit, notification core (nullable source, de-identified moderation band, one-anchor rule, hidden favoriters), new-chapter fan-out (worksheet D3/D4/D5/D16/D17; extends `Recommendations/`, `UserStoryInteractions/`, `Notifications/`, `Moderation/`, `Groups/`, `Chapters/`, `Tags/`, `Stories/`, `Discovery/`, `Spotlight/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** **F16 / F30 / F41 L4.5 5→1** (UI and bell behavior changed with no browser in this
+  environment — tracker **H14** restores them); everything else beneath Stage-5 cells: F30
+  L1/L2/L3/L3.5/L5, F16 L2/L3, F41 L1/L2, F42 L2, F39 L2, F46/F47/F48/F53 L2, F6 L2.
+- **Trigger:** five answered, unbuilt owner rulings (D3, D4, D5, D16, D17) and three inert features
+  the service audit found (§2.3.1 chapter publish notified nobody; §2.3.2 `ReportReceived` deleted by
+  drop-self; §2.3.3/§2.4.1 attribution FK-failed and `RecordSuccessAsync` was a credit faucet) — filed
+  and closed as tracker **B20–B22**. Sources: worksheet D3/D4/D5/D16/D17 (+ D1's anti-bump rider, D2's
+  anchor, D6's sequencing); service audit §2.3, §2.4.1, §2.8 (bullets 1–3), §3.2–§3.4, §3.6, §3.20;
+  schema audit §2.1, §2.3.
+- **What landed:**
+  1. **Migration `WU_InertFeatures`** — `notifications.related_entity_id` int→bigint; the phantom
+     `user_story_interactions.recommendation_id` (unpaired `Recommendation.UserStoryInteractions`
+     nav, a 2025-DDL fossil) dropped; the attribution's rec FK made explicit with no DDL churn. Up and
+     Down both run against a populated clone of the dev DB. SeedTool: COPY column list and the
+     bigint write; `SeedGraph`'s type-20 seed now skips hidden favorites (D17 mirror).
+  2. **D4/D5 — notification core.** `CreateCoreAsync(int? source, (int, long)[])`; conditional
+     drop-self; NULL-matching dedup; a dedup-exempt set (72/73/74/76/77/90). Every moderator-id
+     parameter is gone from the interface (70–82 and 26 null-sourced); 70/80/81/82 carry the report
+     id; `ReportReceived` restored; the D4 guardrail on the mod-initiated account action.
+  3. **D16 — one anchor per event.** 60/25 carry the `GroupStory` row id; new enricher kind; the
+     author is excluded from 60; `AddStoryAsync` notifies only on a real add and for authorless
+     stories too. Enricher takes `long` ids (narrowed per kind) and returns a `NotificationTarget`
+     with a new `TargetContextTitle`; presenter two-nulls rule, arms for 75–79, the 80 receipt, and
+     story+group / story+chapter phrasing.
+  4. **D17** — type 15 goes to `IsFavorite || IsHiddenFavorite`.
+  5. **D3 — attribution.** `SetReadItLaterFromRecommendationAsync` (card RIL, one save) and
+     `MarkStartedAsync(storyId, recId)` (direct link at Ch.1 90%) behind a shared
+     `RecommendationAttribution` helper; `RecordAttributionSourceAsync` retired; prompt read returns
+     the DTO with four gates; `DismissHelpfulPromptAsync`; `RecordSuccessAsync` gate + consume;
+     triggers 1 and 5 (USI clear; author remove + moderator takedown). UI: Yes/X reminder prompt,
+     card RIL + Read now, `ReadItLaterRecommendationCard` for Explore/Deep Dive/Spotlight, the
+     section wired on the story page; the panel adopts a changed `State` when idle and every host
+     re-reads after a card save (the spotlight now batch-loads states — it passed none before).
+  6. **New-chapter fan-out** — `NotifyNewChapterAsync`, fired by `SetPublishedAsync` on the
+     `FirstPublishedDate` stamp only, while the story is publicly published (default → row 17).
+  7. **Docs, moment 1:** `layer2-services.md` §Notification Generation (null source, de-identification,
+     dedup enumeration, 0 sentinel, eligibility correction, new-chapter rule, read-service wording),
+     §Comment & blog-post (reply rationale, D17 plane rule), §Polymorphic RelatedEntityId (one-anchor
+     rule, conformance list, `GroupStory`, context title), new §"Attribution (Feature 30)";
+     `content-safety.md` §Notification Loop + the takedown sentence; `layer1-data-model.md` (unpaired
+     collection navs); `testing.md` FK-parent example; audit Settled notes (Recommendations F30,
+     Notifications F41, Groups F39, UserStoryInteractions F16, Moderation cluster); roadmap Resolved
+     D3 / D4+D5 / D16+D17 and new rows 17–18; worksheet "Built:" lines; service/schema audit banners;
+     `check-doc-hygiene.ps1` registers both retired method names.
+- **Left alone, with the reason:** D16's re-point backlog (owner: "none urgent" — tracker **B23**);
+  unproduced types 11/12/20/21/41/42 (tracker **B24**); story-lineage surrogate PK (a schema
+  implication, not decided work); 90's source (outside D5's band, unruled); self-recommender credit
+  (unruled — row 18); the report-driven account action sending 81 to a member reporter
+  (WU-ModerationIntegrity); presenter arms for 90–92 and §2.8's remainder (WU-NotificationCorrectness);
+  throttles on the new write endpoints (WU-ThrottleCoverage, D20 pending); a story-centric USI index
+  (D32 pending); splitting server-only `Notify*` off the WASM interface (D36/D37 pending).
+- **Verification.** `dotnet build` green, no new warnings in touched files (the CS9107 in
+  `ServerCommentWriteService` predates this WU). `dotnet test` green: **Unit 1,047** (+25,
+  `NotificationPresenterTests`), **RazorComponents 726** (+23 — prompt rewrite, card, section, panel,
+  story page, spotlight, Explore, Deep Dive, new `ChapterReadingPageAttributionTests`), **Integration
+  1,250** (+70 — new `RecommendationAttributionTests` and `NewChapterNotificationTests`; moderation,
+  notification, group, comment/blog, rec read/write, parent-visibility, endpoint and verification/fanon
+  additions). Mutation-checked: dedup exemption, author exclusion, D17 predicate, credit gate, both
+  trigger-5 sweeps, trigger 1, the panel's adoption clause and both fan-out guards each fail their
+  tests when removed. All four PowerShell gates pass. **No browser was available** — tracker **H14**.
+- **Pointers:** `layer2-services.md` §"Notification Generation", §"Polymorphic RelatedEntityId",
+  §"Attribution (Feature 30)"; Stage notes in `audit/Recommendations.md` F30,
+  `audit/UserStoryInteractions.md` F16, `audit/Notifications.md` F41/F42, `audit/Groups.md` F39,
+  `audit/Moderation.md` F46/F47/F48/F53, `audit/Chapters.md` F6, `audit/Tags.md` (type 26).
 
 ## WU-AccessGateSweep2 — raises gated, clears free; service audit §2.6 access fixes (worksheet D6; extends `UserStoryInteractions/`, `Chapters/`, `BlogPosts/`, `Comments/`, `Recommendations/`, `Following/`, `Collaboration/`, `Stories/`, `Profiles/`, `Seo/`) — DONE ✓ (2026-09-30)
 

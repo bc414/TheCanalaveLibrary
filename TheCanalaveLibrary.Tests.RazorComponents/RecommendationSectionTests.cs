@@ -19,10 +19,12 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class RecommendationSectionTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeService = new();
+    private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
 
     public RecommendationSectionTests()
     {
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeService);
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
@@ -282,5 +284,53 @@ public class RecommendationSectionTests : BunitContext
             "the recommender sees their hidden rec's status");
         cut.Markup.Should().Contain("trim the ending detail",
             "the author's note is displayed inline on the card");
+    }
+
+    // ── Read It Later from a card (owner ruling D3, WU-InertFeatures) ─────────────
+
+    [Fact]
+    public async Task ReadItLater_Authenticated_CallsTheCardProducer_AndRaisesOnReadItLaterSaved()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(5)]);
+        bool saved = false;
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 99)
+            .Add(c => c.CurrentUserId, 3)
+            .Add(c => c.OnReadItLaterSaved, Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => saved = true)));
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([5]);
+        saved.Should().BeTrue("the page re-reads the viewer's state so the interaction panel can't flush it back");
+        cut.Find("[aria-label='Saved to Read It Later']").GetAttribute("aria-pressed").Should().Be("true");
+    }
+
+    [Fact]
+    public async Task ReadItLater_Anonymous_NavigatesToLogin_WithoutCallingTheService()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(5)]);
+        Microsoft.AspNetCore.Components.NavigationManager nav =
+            Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        nav.NavigateTo("/story/99");
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 99)); // CurrentUserId null = anonymous
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().BeEmpty();
+        nav.Uri.Should().Contain("/Account/Login?ReturnUrl=%2Fstory%2F99", "D3: an anonymous card click is a login nudge");
+    }
+
+    [Fact]
+    public void ReadItLater_StoryAlreadySaved_RendersTheSavedState_AndReadNowLink()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(5)]);
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 99)
+            .Add(c => c.CurrentUserId, 3)
+            .Add(c => c.StoryIsReadItLater, true));
+
+        cut.Find("[aria-label='Saved to Read It Later']").HasAttribute("disabled").Should().BeTrue();
+        cut.Find("a[href='/story/99/1?rec=5']");
     }
 }

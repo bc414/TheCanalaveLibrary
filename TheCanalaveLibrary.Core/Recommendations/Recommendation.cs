@@ -38,5 +38,4 @@ public class Recommendation : IModeratableContent
     public User? Recommender { get; set; }
     public RecommendationStatus Status { get; set; } = null!;
     public Story Story { get; set; } = null!;
-    public ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = [];
 }

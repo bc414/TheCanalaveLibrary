@@ -222,9 +222,14 @@ else
 
         @* ── Recommendations ──────────────────────────────────────────────────────── *@
         <section>
+            @* A card's Read It Later writes the same IsReadItLater bit the interaction panel above owns,
+               so the page re-reads the viewer's state afterwards and the panel adopts it (owner ruling
+               D3; the panel-clobber closure, WU-InertFeatures). *@
             <RecommendationSection StoryId="Story.StoryId"
                                    StoryAuthorId="Story.AuthorId"
-                                   CurrentUserId="_currentUserId" />
+                                   CurrentUserId="_currentUserId"
+                                   StoryIsReadItLater="@(_usiState?.IsReadItLater ?? false)"
+                                   OnReadItLaterSaved="ReloadInteractionStateAsync" />
         </section>
 
         @* ── Also Favorited / Also Recommended (Feature 61) ───────────────────────── *@
@@ -351,6 +356,14 @@ else
     // heaviest page in the app). Shared by both lifecycle methods (MA-203). Chapters only
     // participates when not already restored by [PersistentState] (init) or nulled for a reload
     // (OnParametersSetAsync); _usiState only for an authenticated viewer.
+    // After a recommendation card's Read It Later: hand the panel the server's view of the six bits
+    // (it adopts a changed State when it has no pending toggle) so its next flush can't undo the save.
+    private async Task ReloadInteractionStateAsync()
+    {
+        if (_currentUserId is null) return;
+        _usiState = await UsiReadService.GetStateAsync(StoryId);
+    }
+
     private async Task LoadSupplementaryAsync()
     {
         Task<IReadOnlyList<ChapterListEntryDto>>? chaptersTask =

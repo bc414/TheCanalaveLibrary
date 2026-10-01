@@ -72,7 +72,7 @@ public sealed record SeedChapterCommentRow(
     long Id, int ChapterId, int UserId, long? ParentCommentId, string Text, DateTime DatePostedUtc, bool IsSpoiler);
 
 public sealed record SeedNotificationRow(
-    long Id, int RecipientUserId, int? SourceUserId, short TypeId, int RelatedEntityId,
+    long Id, int RecipientUserId, int? SourceUserId, short TypeId, long RelatedEntityId,
     bool IsRead, DateTime DateCreatedUtc);
 
 // ── Tag world (WU-TagFanon) ────────────────────────────────────────────────────────────────────
@@ -788,7 +788,9 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
         const short NewStoryFavorite = 20, NewRecommendationOnYourStory = 22, NewVouchOnYou = 32;
         foreach (SeedInteractionRow row in interactions.Values)
         {
-            if (!row.IsFavorite || row.FavoriteDateUtc is not DateTime favoriteDate) continue;
+            // D17 mirror: type 20 is author-plane, so a hidden favorite (either IsHiddenFavorite state)
+            // must never fire it — only a public favorite does.
+            if (!row.IsFavorite || row.IsHiddenFavorite || row.FavoriteDateUtc is not DateTime favoriteDate) continue;
             if (_rng.NextDouble() >= 0.40) continue; // sample — not every favorite notifies
             Notify(stories[row.StoryId - bases.StoryId].AuthorId, row.UserId, NewStoryFavorite, row.StoryId, favoriteDate);
         }
@@ -820,7 +822,9 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
         }
 
         // Type-26 adoption invitations for the pre-linked fanon cluster (WU-TagFanon) — one per
-        // notified author, RelatedEntityId = the target tag, matching NotifyTagAdoptionSuggestedAsync.
+        // notified author, RelatedEntityId = the target tag. Null-sourced, which now matches the live
+        // NotifyTagAdoptionSuggestedAsync shape (owner ruling D5: the invitation is a moderation act,
+        // so the moderator is never named).
         const short TagUpdateSuggestion = 26;
         foreach (SeedAdoptionStateRow state in adoptionStates.Where(s => s.DateNotifiedUtc is not null))
             notifications.Add(new SeedNotificationRow(

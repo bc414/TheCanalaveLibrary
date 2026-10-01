@@ -169,8 +169,8 @@ public class ServerFanonWriteService(
         // Best-effort post-commit (layer2-services.md §"Notification Generation").
         try
         {
-            await notifications.NotifyTagAdoptionSuggestedAsync(
-                fresh, link.TargetTagId, ActiveUser.UserId ?? 0);
+            // Null-sourced: the invitation is a moderation act, so the moderator is not named (D5).
+            await notifications.NotifyTagAdoptionSuggestedAsync(fresh, link.TargetTagId);
         }
         catch (Exception ex)
         {

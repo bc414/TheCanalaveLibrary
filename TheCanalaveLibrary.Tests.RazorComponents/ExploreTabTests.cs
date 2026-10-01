@@ -16,13 +16,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class ExploreTabTests : BunitContext
 {
     private readonly FakeManualTreeSearchReadService _manualTree = new();
+    private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
     private readonly FakeDiscoveryDefaultsReadService _defaults = new();
 
     public ExploreTabTests()
     {
         Services.AddScoped<IManualTreeSearchReadService>(_ => _manualTree);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
-        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // WU-ExploreFilterAxes: the filter disclosure seeds from the §8.7 matrix and composes
         // TagFilter/ShipFilter, whose nested selectors read tags.
@@ -101,6 +102,28 @@ public class ExploreTabTests : BunitContext
             cut.FindComponents<RecommendationCard>().Should().ContainSingle();
             cut.Markup.Should().Contain("Hidden Gem").And.Contain("Author's Pick");
         });
+    }
+
+    [Fact]
+    public async Task FamilyRow_ReadItLaterOnTheRecommendation_SavesIt_AndTheStoryCardPanelAdoptsIt()
+    {
+        // User anchor → the compound row renders StoryCard (with its interaction panel) beside the
+        // recommendation (owner ruling D3; the panel-clobber closure, WU-InertFeatures).
+        _manualTree.UserResult = new ManualTreeNeighborsDto
+        {
+            RecommendationFamily = new ManualTreeSectionDto<ManualTreeRecItemDto>(
+                [new ManualTreeRecItemDto(MakeRec(8, 5, MakeUser(10, "RootUser")), MakeStory(5, "Recommended"))], 1),
+        };
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot();
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeFalse();
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([8]);
+        cut.WaitForAssertion(() =>
+            cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+                "the tab refreshes the story's state entry so the StoryCard panel adopts the save"));
     }
 
     [Fact]

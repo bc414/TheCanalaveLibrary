@@ -9,11 +9,17 @@ namespace TheCanalaveLibrary.SharedUI;
 /// map), extended with a per-instance composition step because notifications carry actor and
 /// target data from the DTO that enum lookup alone cannot provide.
 ///
-/// <para><b>Message composition:</b> the actor falls back to "Someone" when
-/// <see cref="NotificationDto.SourceUserName"/> is null (source deleted via SET NULL, or type
-/// has no actor). Target entity name is embedded into the message text; navigation to
-/// <see cref="NotificationDto.TargetUrl"/> is handled by the caller (e.g. via
-/// <c>OnActivate</c> on <see cref="NotificationItem"/>), not by this class.</para>
+/// <para><b>Message composition — two nulls, told apart by type (owner ruling D4):</b> a null
+/// <see cref="NotificationDto.SourceUserName"/> means either "the actor's account was deleted" or
+/// "this type has no actor" (system-sourced, self-caused, or de-identified — the moderation band
+/// 70–82 and tag-adoption 26, D5). The row cannot tell them apart, so the <b>type</b> decides:
+/// actor-free types compose actor-free text and never interpolate <c>actor</c>; the "Someone"
+/// fallback survives only in arms for types that genuinely had an actor since deleted. "Someone
+/// banned your account" must not be reachable. Target entity names (and
+/// <see cref="NotificationDto.TargetContextTitle"/>, the story behind a group-story or chapter
+/// anchor) are embedded into the message text; navigation to <see cref="NotificationDto.TargetUrl"/>
+/// is handled by the caller (e.g. via <c>OnActivate</c> on <see cref="NotificationItem"/>), not by
+/// this class.</para>
 ///
 /// <para><b>Icon + accent per type:</b> defaults to the row's
 /// <see cref="NotificationCategoryVisuals"/> entry; a small set of per-type overrides reuse
@@ -38,8 +44,10 @@ public static class NotificationPresenter
     /// </returns>
     public static (string Text, string IconPath, string AccentColor) Compose(NotificationDto n)
     {
+        // "Someone" is interpolated only by arms for types that have an actor (D4 two-nulls rule).
         string actor = n.SourceUserName ?? "Someone";
         string? target = n.TargetTitle;
+        string? context = n.TargetContextTitle;
         NotificationCategoryVisuals.Info cat = NotificationCategoryVisuals.For(n.CategoryId);
 
         string text = n.NotificationTypeId switch
@@ -67,8 +75,14 @@ public static class NotificationPresenter
             NotificationTypeEnum.NewStoryComment =>
                 target is not null ? $"{actor} commented on {target}" : $"{actor} commented on your story",
 
+            // D16: {target} = the group, {context} = the story (both from the GroupStory anchor).
             NotificationTypeEnum.YourStoryAddedToGroup =>
-                target is not null ? $"Your story was added to {target}" : "Your story was added to a group",
+                (target, context) switch
+                {
+                    (not null, not null) => $"Your story {context} was added to {target}",
+                    (not null, null) => $"Your story was added to {target}",
+                    _ => "Your story was added to a group",
+                },
 
             // WU-TagFanon reword: {target} is the official tag's name; the row deep-links to the
             // per-tag adoption page. The old text described a different (never-built) event.
@@ -82,8 +96,12 @@ public static class NotificationPresenter
                     ? $"{actor} revised their recommendation for {target} — it's live again"
                     : $"{actor} revised their recommendation — it's live again",
 
+            // Submission outcomes are actor-free (D5 — never name the moderator, good news included).
             NotificationTypeEnum.StoryRejected =>
                 target is not null ? $"{target} was not approved for the library" : "Your story was not approved for the library",
+
+            NotificationTypeEnum.StoryApproved =>
+                target is not null ? $"{target} was approved for the library" : "Your story was approved for the library",
 
             NotificationTypeEnum.NewStoryAcknowledgement =>
                 target is not null ? $"{actor} acknowledged {target}" : $"{actor} acknowledged your story",
@@ -124,15 +142,27 @@ public static class NotificationPresenter
                 target is not null ? $"Your story lineage link for {target} was approved" : "Your story lineage link was approved",
 
             // ── Groups category ───────────────────────────────────────────────────
+            // D16: {target} = the group, {context} = the story (both from the GroupStory anchor).
             NotificationTypeEnum.NewGroupStory =>
-                target is not null ? $"A new story was added to {target}" : "A new story was added to a group you follow",
+                (target, context) switch
+                {
+                    (not null, not null) => $"{context} was added to {target}",
+                    (not null, null) => $"A new story was added to {target}",
+                    _ => "A new story was added to a group you follow",
+                },
 
             NotificationTypeEnum.NewGroupBlogPost =>
                 target is not null ? $"New blog post in a group you follow: {target}" : "A new blog post was added to a group you follow",
 
             // ── YourFollows — followed-content fan-out types ──────────────────────
+            // {target} = the chapter title, {context} = its story (the Chapter kind yields both).
             NotificationTypeEnum.NewChapterOnFollowedStory =>
-                target is not null ? $"New chapter: {target}" : "A story you follow has a new chapter",
+                (target, context) switch
+                {
+                    (not null, not null) => $"New chapter of {context}: {target}",
+                    (not null, null) => $"New chapter: {target}",
+                    _ => "A story you follow has a new chapter",
+                },
 
             NotificationTypeEnum.NewStoryByFollowedUser =>
                 target is not null ? $"{actor} published {target}" : $"{actor} published a new story",
@@ -165,9 +195,28 @@ public static class NotificationPresenter
             NotificationTypeEnum.AccountBanned =>
                 "Your account has been banned",
 
-            // ── YourReports category ──────────────────────────────────────────────
+            // External verification outcomes (Feature 53) — actor-free (D5).
+            NotificationTypeEnum.ExternalAccountVerified =>
+                "Your external account was verified",
+
+            NotificationTypeEnum.ExternalAccountRejected =>
+                "Your external account couldn't be verified — check it and request again",
+
+            NotificationTypeEnum.ExternalLinkVerified =>
+                target is not null
+                    ? $"An “also posted on” link on {target} was verified"
+                    : "One of your “also posted on” links was verified",
+
+            NotificationTypeEnum.ExternalLinkRejected =>
+                target is not null
+                    ? $"An “also posted on” link on {target} couldn't be verified — check it and request again"
+                    : "One of your “also posted on” links couldn't be verified — check it and request again",
+
+            // ── YourReports category (actor-free, D5) ─────────────────────────────
+            // ReportReceived is a receipt TO the reporter (restored by D4); the old "A new report has
+            // been filed" was a moderator-facing sentence no recipient of this type ever was.
             NotificationTypeEnum.ReportReceived =>
-                "A new report has been filed",
+                "Thanks — we received your report",
 
             NotificationTypeEnum.ReportResolved =>
                 "A report you filed has been resolved",

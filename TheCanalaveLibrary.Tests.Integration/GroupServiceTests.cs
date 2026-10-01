@@ -595,6 +595,156 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
             "story author should receive YourStoryAddedToGroup when someone else adds their story");
     }
 
+    // ── D16: both group-story types anchor on the GroupStory row (WU-InertFeatures) ──
+
+    [Fact]
+    public async Task AddStory_BothTypesCarryTheGroupStoryId_AndEnrichToGroupAndStory()
+    {
+        int memberId = await SeedUserAsync("gs-member");
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Anchor Group" });
+        int storyId = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E);
+        SetActiveUser(memberId);
+        await JoinGroupAsync(groupId);
+
+        SetActiveUser(_userId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        int groupStoryId;
+        string storyTitle;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            groupStoryId = await db.GroupStories
+                .Where(gs => gs.GroupId == groupId && gs.StoryId == storyId)
+                .Select(gs => gs.GroupStoryId).SingleAsync();
+            storyTitle = await db.StoryListings.Where(s => s.StoryId == storyId)
+                .Select(s => s.StoryTitle).SingleAsync();
+
+            Notification toMember = await db.Notifications.SingleAsync(n =>
+                n.RecipientUserId == memberId && n.NotificationTypeId == NotificationTypeEnum.NewGroupStory);
+            toMember.RelatedEntityId.Should().Be(groupStoryId,
+                "D16: the junction row is the single most specific entity of the event");
+            Notification toAuthor = await db.Notifications.SingleAsync(n =>
+                n.RecipientUserId == _otherUserId && n.NotificationTypeId == NotificationTypeEnum.YourStoryAddedToGroup);
+            toAuthor.RelatedEntityId.Should().Be(groupStoryId);
+        }
+
+        // Enrichment: one id yields the group (title + link) and the story (context title).
+        SetActiveUser(memberId);
+        NotificationDto dto = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewGroupStory);
+        dto.TargetTitle.Should().Be("Anchor Group");
+        dto.TargetUrl.Should().Be($"/group/{groupId}");
+        dto.TargetContextTitle.Should().Be(storyTitle);
+
+        // Removing the GroupStory row leaves the notification title-less (accepted by D16).
+        SetActiveUser(_userId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().RemoveStoryAsync(groupStoryId);
+        SetActiveUser(memberId);
+        NotificationDto after = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewGroupStory);
+        after.TargetTitle.Should().BeNull();
+        after.TargetUrl.Should().BeNull();
+        after.TargetContextTitle.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AddStory_AuthorWhoIsAlsoAMember_GetsOnlyTheMoreSpecificType()
+    {
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Author Member Group" });
+        int storyId = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E);
+        SetActiveUser(_otherUserId);
+        await JoinGroupAsync(groupId); // NotifyForNewStory = true
+
+        SetActiveUser(_userId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<NotificationTypeEnum> types = await db.Notifications
+            .Where(n => n.RecipientUserId == _otherUserId).Select(n => n.NotificationTypeId).ToListAsync();
+        types.Should().Equal([NotificationTypeEnum.YourStoryAddedToGroup],
+            "one event, one notification: the author is excluded from the 60 fan-out (service audit §2.8)");
+    }
+
+    [Fact]
+    public async Task AddStory_ReAddingTheSameStory_SendsNothingNew()
+    {
+        int memberId = await SeedUserAsync("re-add-member");
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Re-add Group" });
+        int storyId = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E);
+        SetActiveUser(memberId);
+        await JoinGroupAsync(groupId);
+
+        SetActiveUser(_userId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+        // Mark everything read so unread-dedup could not be what suppresses a second fan-out.
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Notifications
+                .ExecuteUpdateAsync(u => u.SetProperty(n => n.IsRead, true));
+
+        SetActiveUser(memberId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.CountAsync()).Should().Be(2,
+            "the idempotent re-add path must not re-fire the fan-out — it was a repeatable spam primitive");
+    }
+
+    [Fact]
+    public async Task AddStory_AuthorlessStory_StillNotifiesMembers()
+    {
+        int memberId = await SeedUserAsync("authorless-member");
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Authorless Group" });
+        int storyId = await SeedStoryAsync(authorId: null, rating: Rating.E);
+        SetActiveUser(memberId);
+        await JoinGroupAsync(groupId);
+
+        SetActiveUser(_userId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == memberId
+                && n.NotificationTypeId == NotificationTypeEnum.NewGroupStory))
+            .Should().BeTrue("an authorless story used to silence the member fan-out along with type 25");
+    }
+
+    [Fact]
+    public async Task AddStory_TwoDifferentStoriesWhileUnread_TwoNewGroupStoryRows()
+    {
+        int memberId = await SeedUserAsync("two-stories-member");
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Two Stories Group" });
+        int storyA = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E);
+        int storyB = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E);
+        SetActiveUser(memberId);
+        await JoinGroupAsync(groupId);
+
+        SetActiveUser(_userId);
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyA });
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyB });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.CountAsync(n => n.RecipientUserId == memberId
+                && n.NotificationTypeId == NotificationTypeEnum.NewGroupStory))
+            .Should().Be(2, "with the group id as the anchor, the second story collapsed into the first while unread");
+    }
+
+    private async Task<NotificationDto[]> GetNotificationsAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<INotificationReadService>()
+            .GetNotificationsAsync(1, 50);
+    }
+
     [Fact]
     public async Task CreateGroupBlogPost_NotifiesMembers_WhenNotifyForBlogPostEnabled()
     {

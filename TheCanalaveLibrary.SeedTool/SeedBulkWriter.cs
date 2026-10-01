@@ -528,7 +528,7 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
     {
         const string copy = """
             COPY user_story_interactions (user_id, story_id, has_started, is_completed, is_favorite,
-                is_followed, is_hidden_favorite, is_ignored, is_read_it_later, recommendation_id)
+                is_followed, is_hidden_favorite, is_ignored, is_read_it_later)
             FROM STDIN (FORMAT BINARY)
             """;
         await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(copy);
@@ -544,7 +544,6 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(row.IsHiddenFavorite, NpgsqlDbType.Boolean);
             await writer.WriteAsync(row.IsIgnored, NpgsqlDbType.Boolean);
             await writer.WriteAsync(row.IsReadItLater, NpgsqlDbType.Boolean);
-            await writer.WriteNullAsync();
         }
         await writer.CompleteAsync();
     }
@@ -733,7 +732,9 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(notification.IsRead, NpgsqlDbType.Boolean);
             await writer.WriteAsync(notification.TypeId, NpgsqlDbType.Smallint);
             await writer.WriteAsync(notification.RecipientUserId, NpgsqlDbType.Integer);
-            await writer.WriteAsync(notification.RelatedEntityId, NpgsqlDbType.Integer);
+            // related_entity_id is bigint since WU_InertFeatures — binary COPY rejects an int4 value
+            // for an int8 column, so the row carries a long and is written as Bigint.
+            await writer.WriteAsync(notification.RelatedEntityId, NpgsqlDbType.Bigint);
             if (notification.SourceUserId is int source) await writer.WriteAsync(source, NpgsqlDbType.Integer);
             else await writer.WriteNullAsync();
         }

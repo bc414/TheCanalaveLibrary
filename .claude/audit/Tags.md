@@ -90,6 +90,16 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 
 ---
 
+> **Type-26 update (WU-InertFeatures, 2026-09-30 — no cell flips).** The tag-adoption invitation
+> (`TagUpdateSuggestion` = 26) is now **null-sourced**: owner ruling D5's routed sub-edge was taken per
+> its recommendation (the invitation is a moderation act, so the moderator who linked the group is not
+> named to the invited authors). `NotifyTagAdoptionSuggestedAsync(recipientAuthorIds, targetTagId)` has
+> no moderator parameter; `ServerFanonWriteService` no longer passes `ActiveUser.UserId ?? 0`;
+> `SeedGraph`'s already-null-sourced type-26 rows now match the live shape. Covered by Integration
+> `FanonPipelineTests` (the two invitations assert `SourceUserId == null`) and Unit
+> `NotificationPresenterTests` (26 is in the actor-free theory). Rule: `layer2-services.md`
+> §"Notification Generation" → "Moderation-band de-identification". The Stage note below predates it.
+
 ## WU-TagFanon Stage note (2026-07-26) — F11 + F12 + F31 + F41, all touched cells keep their current Stage (F11/F12/F31 L4 remain Stage 1 — standing Phase-3 visual pass)
 
 **What changed.** The tag model's per-story overlay was rebuilt around the custom-name/nuance

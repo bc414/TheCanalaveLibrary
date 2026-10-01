@@ -745,9 +745,13 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
             recId = rec.RecommendationId;
         }
 
+        // The reader holds a genuine attribution (owner ruling D3 made RecordSuccessAsync require one),
+        // so the STORY-visibility guard — not the attribution gate — is what refuses below.
+        int readerId = await SeedUserAsync("pv-reader");
+        await SeedAttributionAsync(readerId, storyId, recId);
+
         await TakeDownStoryAsync(storyId); // parent now hidden
 
-        int readerId = await SeedUserAsync("pv-reader");
         SetActiveUser(readerId);
         using IServiceScope scope = Factory.Services.CreateScope();
 
@@ -765,36 +769,91 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
     }
 
     [Fact]
-    public async Task Recommendations_RecordAttributionSource_DraftStory_Refused()
+    public async Task Recommendations_ReadItLaterFromCard_DraftStory_Refused()
     {
+        // D3's RIL-from-card producer is a raise (D6): a rec on a story the reader can't see must not
+        // save the story or mint an attribution that would later feed RecordSuccessAsync credit.
         int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
-        int recId;
-
-        using (IServiceScope seedScope = Factory.Services.CreateScope())
-        {
-            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
-            Recommendation rec = new()
-            {
-                StoryId = storyId,
-                RecommenderId = _strangerId,
-                StatusId = (short)RecommendationStatusEnum.Approved,
-                DatePosted = DateTime.UtcNow,
-                RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
-            };
-            db.Recommendations.Add(rec);
-            await db.SaveChangesAsync();
-            recId = rec.RecommendationId;
-        }
+        int recId = await SeedApprovedRecAsync(storyId);
 
         int readerId = await SeedUserAsync("pv-attrib");
         SetActiveUser(readerId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            Func<Task> act = () => Resolve<IUserStoryInteractionWriteService>(scope)
+                .SetReadItLaterFromRecommendationAsync(recId);
+            await act.Should().ThrowAsync<KeyNotFoundException>();
+        }
+
+        (await LoadUsiRowAsync(readerId, storyId)).Should().BeNull("a refused raise writes nothing");
+    }
+
+    [Fact]
+    public async Task Recommendations_HelpfulPrompt_HiddenStory_ReturnsNull()
+    {
+        int storyId = await SeedStoryAsync(_authorId);
+        int recId = await SeedApprovedRecAsync(storyId);
+        int readerId = await SeedUserAsync("pv-prompt");
+        await SeedAttributionAsync(readerId, storyId, recId);
+
+        await TakeDownStoryAsync(storyId);
+
+        SetActiveUser(readerId);
         using IServiceScope scope = Factory.Services.CreateScope();
+        (await Resolve<IRecommendationReadService>(scope).GetHelpfulPromptAsync(storyId))
+            .Should().BeNull("the prompt shows the recommendation, so it is exactly as visible as its story");
+    }
 
-        Func<Task> act = () => Resolve<IRecommendationWriteService>(scope)
-            .RecordAttributionSourceAsync(storyId, recId);
+    [Fact]
+    public async Task Recommendations_DismissHelpfulPrompt_HiddenStory_Permitted()
+    {
+        // D6: a clear of the caller's own row is never guarded — a reader whose story went hidden can
+        // still remove their attribution.
+        int storyId = await SeedStoryAsync(_authorId);
+        int recId = await SeedApprovedRecAsync(storyId);
+        int readerId = await SeedUserAsync("pv-dismiss");
+        await SeedAttributionAsync(readerId, storyId, recId);
 
-        await act.Should().ThrowAsync<KeyNotFoundException>(
-            "attribution feeds RecordSuccessAsync credit downstream");
+        await TakeDownStoryAsync(storyId);
+
+        SetActiveUser(readerId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await Resolve<IRecommendationWriteService>(scope).DismissHelpfulPromptAsync(recId);
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        (await Resolve<ApplicationDbContext>(verify).UserStoryRecommendationSources
+            .AnyAsync(s => s.UserId == readerId)).Should().BeFalse();
+    }
+
+    private async Task<int> SeedApprovedRecAsync(int storyId)
+    {
+        using IServiceScope seedScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+        Recommendation rec = new()
+        {
+            StoryId = storyId,
+            RecommenderId = _strangerId,
+            StatusId = (short)RecommendationStatusEnum.Approved,
+            DatePosted = DateTime.UtcNow,
+            RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
+        };
+        db.Recommendations.Add(rec);
+        await db.SaveChangesAsync();
+        return rec.RecommendationId;
+    }
+
+    /// <summary>A reader's attribution as the real producers leave it: an RIL'd USI row (the FK
+    /// parent) plus the sources row naming the recommendation (owner ruling D3).</summary>
+    private async Task SeedAttributionAsync(int userId, int storyId, int recId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
+        db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = userId, StoryId = storyId, IsReadItLater = true });
+        db.UserStoryRecommendationSources.Add(new UserStoryRecommendationSource
+        {
+            UserId = userId, StoryId = storyId, SourceRecommendationId = recId,
+        });
+        await db.SaveChangesAsync();
     }
 
     [Fact]

@@ -31,6 +31,13 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Notifications are best-effort.</b> All <c>NotifyXxx</c> calls happen <em>after</em>
 /// the primary <c>SaveChangesAsync</c> inside a <c>try/catch</c> that logs and swallows — a
 /// notification failure never rolls back a moderation action.</para>
+///
+/// <para><b>Notifications never name the moderator (owner rulings D4/D5).</b> Every outcome
+/// notification this service sends (70–82) is null-sourced — the <c>Report</c> row keeps the real
+/// <c>ModeratorUserId</c> as the internal ledger. The report outcomes (70/80/81/82) carry the report
+/// id so two outcomes for one recipient never collapse. Guardrail: the moderator-initiated account
+/// action (<see cref="ApplyAccountActionToUserAsync"/>) must never send 80 or 81 — a null source
+/// no longer drop-selfs, so it would mail the moderator receipts for their own action.</para>
 /// </summary>
 public class ServerModerationWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -92,7 +99,9 @@ public class ServerModerationWriteService(
 
         if (reporterId.HasValue)
         {
-            try { await notifications.NotifyReportReceivedAsync(reporterId.Value, reporterId.Value); }
+            // Null-sourced, carrying the report id (owner ruling D4): at submission no moderator exists, and
+            // the old call passed the reporter as their own source, so drop-self deleted every receipt.
+            try { await notifications.NotifyReportReceivedAsync(reporterId.Value, report.ReportId); }
             catch (Exception ex) { logger.LogWarning(ex, "ReportReceived notification failed for reporter {UserId}", reporterId.Value); }
         }
     }
@@ -129,7 +138,7 @@ public class ServerModerationWriteService(
         try
         {
             if (reporterUserId.HasValue)
-                await notifications.NotifyReportResolvedNoActionAsync(reporterUserId.Value, modId);
+                await notifications.NotifyReportResolvedNoActionAsync(reporterUserId.Value, reportId);
         }
         catch (Exception ex)
         {
@@ -161,9 +170,9 @@ public class ServerModerationWriteService(
         try
         {
             if (reporterUserId.HasValue)
-                await notifications.NotifyReportResolvedAsync(reporterUserId.Value, modId);
+                await notifications.NotifyReportResolvedAsync(reporterUserId.Value, reportId);
             if (contentAuthorId.HasValue)
-                await notifications.NotifyContentRemovedAsync(contentAuthorId.Value, modId);
+                await notifications.NotifyContentRemovedAsync(contentAuthorId.Value, reportId);
         }
         catch (Exception ex)
         {
@@ -196,7 +205,7 @@ public class ServerModerationWriteService(
         // counter upward forever — and that counter is what the mod-triage sort orders on.
         await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
 
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, modId, suspendedUntilUtc);
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc);
     }
 
     public async Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
@@ -234,7 +243,12 @@ public class ServerModerationWriteService(
 
         // No AdjustActiveReportCountAsync call: the row opens and resolves in one step, so the
         // +1/-1 pair every other path makes would cancel out.
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, modId, suspendedUntilUtc);
+        //
+        // Guardrail (owner ruling D4): this report is moderator-filed (ReporterUserId == modId), so it
+        // must NOT send ReportReceived (80) or ReportResolved (81). Those are null-sourced now, so
+        // drop-self no longer protects this path — wiring them here would mail the moderator receipts
+        // for their own action. Only the target's account notification (72/73/74) is sent.
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc);
     }
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
@@ -248,7 +262,9 @@ public class ServerModerationWriteService(
 
     public async Task ApproveStoryAsync(int storyId)
     {
-        int modId = RequireModerator();
+        // Role gate only — the moderator is not recorded on the story, and the outcome notification
+        // is null-sourced (D5), so the id itself is not needed.
+        RequireModerator();
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -322,7 +338,7 @@ public class ServerModerationWriteService(
 
         try
         {
-            await notifications.NotifyStoryApprovedAsync(authorId, storyId, modId);
+            await notifications.NotifyStoryApprovedAsync(authorId, storyId);
         }
         catch (Exception ex)
         {
@@ -332,7 +348,7 @@ public class ServerModerationWriteService(
 
     public async Task RejectStoryAsync(int storyId, string reason)
     {
-        int modId = RequireModerator();
+        RequireModerator(); // role gate only (see ApproveStoryAsync)
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -367,7 +383,7 @@ public class ServerModerationWriteService(
         try
         {
             if (authorId.HasValue)
-                await notifications.NotifyStoryRejectedAsync(authorId.Value, storyId, modId);
+                await notifications.NotifyStoryRejectedAsync(authorId.Value, storyId);
         }
         catch (Exception ex)
         {
@@ -474,7 +490,7 @@ public class ServerModerationWriteService(
     /// WU-UserModeration so the report-driven and moderator-initiated paths cannot drift apart.
     /// </summary>
     private async Task ApplyStatusAndNotifyAsync(User targetUser, ModeratorActionType action,
-        AccountStatusEnum newStatus, int modId, DateTime? suspendedUntilUtc)
+        AccountStatusEnum newStatus, DateTime? suspendedUntilUtc)
     {
         targetUser.AccountStatus = newStatus;
         if (newStatus == AccountStatusEnum.Suspended)
@@ -493,9 +509,9 @@ public class ServerModerationWriteService(
         {
             Task notifyTask = action switch
             {
-                ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUser.Id, modId),
-                ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUser.Id, modId),
-                ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUser.Id, modId),
+                ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUser.Id),
+                ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUser.Id),
+                ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUser.Id),
                 _ => Task.CompletedTask
             };
             await notifyTask;
@@ -684,6 +700,13 @@ public class ServerModerationWriteService(
         entity.IsTakenDown = true;
         entity.TakedownDate = DateTime.UtcNow;
         entity.TakedownReason = reason;
+
+        // Owner ruling D3, removal trigger 5: a taken-down recommendation can't be shown as a reminder
+        // or collect credit, so every reader's attribution naming it is staged for deletion — committed
+        // by the caller's SaveChangesAsync with the takedown. A takedown reversal doesn't restore them.
+        if (type == ReportedEntityType.Recommendation)
+            await RecommendationAttribution.StageSweepAsync(writeDb, (int)id);
+
         return entity.AuthorUserId;
     }
 

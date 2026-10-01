@@ -177,8 +177,10 @@ public class ServerCommentWriteService(
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
         // Best-effort post-commit notifications (WU-B2): story author (NewStoryComment) + parent
-        // author on replies (CommentReply, relatedId = context chapterId — CommentId is long,
-        // RelatedEntityId is int). Reply/container-suppress + null-skip rules:
+        // author on replies (CommentReply, relatedId = context chapterId — current behavior; re-pointing
+        // it at the comment via the BaseComments root is on D16's conformance list, tracker B23 — the old
+        // "RelatedEntityId is int" reason stopped being true at WU-InertFeatures' bigint widen).
+        // Reply/container-suppress + null-skip rules:
         // layer2-services.md §"Comment & blog-post semantic methods".
         try
         {

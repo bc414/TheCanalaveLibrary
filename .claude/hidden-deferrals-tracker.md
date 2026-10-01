@@ -285,6 +285,49 @@ decision work that has no row at all.
   - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
   - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
+- [x] **B20 — The new-chapter fan-out is never produced — DONE (WU-InertFeatures, 2026-09-30)** `[inert · high · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.1).* `SetPublishedAsync` now fires `NotifyNewChapterAsync` on the `FirstPublishedDate` stamp only, to the story's `IsFollowed` interactions, while the story is publicly published (that last part a default — roadmap row 17). Narrative: `audit/Chapters.md` F6, `audit/Notifications.md` F41.
+  - Grid: F6 L2 and F41 L2 read 5. `NotificationTypeEnum.NewChapterOnFollowedStory` (10) is seeded
+    (email-default on), enriched (`KindFor` → Chapter) and presentable, but nothing creates a row:
+    following a story never told anyone about a new chapter — the site's core reader alert.
+  - Source: `ServerChapterWriteService.SetPublishedAsync` (no notification call); worksheet D2 (the
+    `Chapter.FirstPublishedDate` anchor), D1's anti-bump rider, D16/D17 (anchor + recipients), D6
+    (land before the producer).
+
+- [x] **B21 — `ReportReceived` is annihilated by drop-self — DONE (WU-InertFeatures, 2026-09-30)** `[inert · med · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.2).* Null-sourced (D4) with the report id; the moderator-initiated path sends none (guardrail). Narrative: `audit/Moderation.md` F46.
+  - Grid: F46 L2 reads 5. `SubmitReportAsync` passed the reporter as their own source, so the
+    create-core's drop-self rule deleted every receipt — a reporter never got the "we received your
+    report" confirmation spec §13 promises.
+  - Source: `ServerModerationWriteService.SubmitReportAsync`; worksheet D4 (nullable source).
+
+- [x] **B22 — Recommendation attribution never worked: FK-failing write, missing producer, credit faucet — DONE (WU-InertFeatures, 2026-09-30)** `[inert · high · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.3/§2.4.1, owner ruling D3).* The RIL-from-card producer and the 90%-moment direct link write the attribution with its parent row in one save; the on-load write is retired; `RecordSuccessAsync` requires and consumes it. Browser pass still owed — H14. Narrative: `audit/Recommendations.md` F30.
+  - Grid: F30 L1–L5 read 5. The only attribution write ran on chapter load before any USI row
+    existed, so it FK-failed (logged and swallowed) for every new reader; the Read It Later button on
+    the recommendation card that the 2025 design specified was never built; and `RecordSuccessAsync`
+    awarded `SuccessfulRecCount` and recommender badge credit without requiring any attribution.
+  - Source: `ChapterReadingPage`'s `?rec=` on-load write, `RecordAttributionSourceAsync`,
+    `RecordSuccessAsync`; worksheet D3.
+
+- [ ] **B23 — D16 conformance backlog: notification types that point at a less specific entity** `[polish · low · anytime]` — *Filed 2026-09-30 by WU-InertFeatures; deliberate — the owner ruled "none of these are urgent", one later sweep.*
+  - Grid: F41/F42 L2 read 5 and stay 5 — the types work; they cost display fidelity.
+  - Source: worksheet D16's re-point list, restated in `layer2-services.md` §"Polymorphic
+    RelatedEntityId" → "Conformance backlog": 23 (recommender user id → recommendation id),
+    22/27/40/41/42/43 and 92 (story id → recommendation id), 24/31/33 (context → comment id),
+    34 (no target → `BaseComments` root), 78/79 (story id → link row), 100 (blog post / 0 → poll id).
+    70 is already resolved (report id). Story lineage 50/51 needs a surrogate PK on `story_lineages`
+    first — a schema decision, not recorded as work.
+  - Next: one sweep, re-pointing each type with its `KindFor` arm, enricher kind and presenter
+    phrasing together. Pre-launch is cheapest (existing rows keep their old meaning otherwise).
+
+- [ ] **B24 — Six notification types are seeded and presentable but have no producer** `[inert · low · beta]` — *Filed 2026-09-30 by WU-InertFeatures; outside its catalog.*
+  - Grid: F41 L2 reads 5.
+  - Source: `NewStoryByFollowedUser` (11), `NewRecommendationByFollowedUser` (12), `NewStoryFavorite`
+    (20), `NewStoryFollower` (21), `RecommendationHighlighted` (41) and `SuccessfulRec` (42) each have
+    an enum member, a seed row, a `KindFor` arm and a presenter arm, and nothing in
+    `ServerNotificationWriteService` creates them (only `SeedGraph` mints type 20).
+  - Context: D17 already rules type 20's recipients: author-plane, so a hidden favorite (either
+    `IsHiddenFavorite` state) must not fire it. Each producer is a feature decision (when does
+    "new story" fire — first publication, per D1's anti-bump rider?), not a wiring task.
+
 - [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
   - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
   - Source: `audit/Messaging.md` L4.5 "Observation (not a defect)" (now struck; superseded by that file's WU-MsgArchive slice).
@@ -1121,6 +1164,36 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        different option shows the not-found error and leaves the original vote. Likewise unlike the
        post from the stale page: the like button settles at 0, and `blog_posts.like_count` drops by
        one.
+
+- [ ] **H14 — Recommendation attribution and the new/re-anchored notifications never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-InertFeatures, which ran with no browser available.*
+  - Grid: **F16 L4.5=1, F30 L4.5=1, F41 L4.5=1** — flipped 5→1 by WU-InertFeatures (the UI and the
+    bell behavior beneath them changed; `grid_axes.md`'s L4.5 is "driven in a real browser").
+    Return all three to 5 when this pass runs (headline lines in `audit/UserStoryInteractions.md` F16,
+    `audit/Recommendations.md` F30, `audit/Notifications.md` F41).
+  - Source: `workplan.md` WU-InertFeatures; the Stage notes in those three audit files.
+  - Drive each on the circuit and the WASM pass, against `psql` ground truth (the workbench DB needs
+    the `WU_StoryLifecycle` and `WU_InertFeatures` migrations — the next dev start applies both):
+    1. As TestUser, on `/discover` Explore (a user anchor with recommendations) click **Read It
+       Later** on a recommendation card → `user_story_interactions.is_read_it_later` true, one
+       `user_story_recommendation_sources` row naming the rec; the StoryCard's panel beside it shows
+       Read It Later active and **stays** active after the 2-second debounce (the panel-clobber
+       closure). Repeat once on the story page's recommendation section and once on the homepage
+       Community Spotlight (signed in: the spotlight StoryCard now shows your real flags).
+    2. Anonymous: the same button sends you to `/Account/Login?ReturnUrl=…` and back.
+    3. Read Chapter 1 of that story to 90% → the prompt appears with the recommendation as a reminder
+       card and exactly two controls; **Yes** → a `recommendation_successes` row, `successful_rec_count`
+       +1, the sources row gone; repeat with another story and **X** → no success row, sources row gone;
+       re-read either Chapter 1 → no prompt.
+    4. Follow a card's **Read now** link (`/story/{id}/1?rec={recId}`) as a reader with no interaction
+       row: nothing is written on load (`psql`); at 90% the sources row appears with `has_started`.
+    5. As an author, publish a never-published chapter of a published story you are followed on → each
+       follower's bell shows "New chapter of {story}: {chapter}" deep-linking to the chapter;
+       unpublish/republish → nothing new.
+    6. Submit a report → the reporter's bell shows "Thanks — we received your report"; resolve it from
+       `/mod/reports` → the resolved notice shows no moderator name; `notifications.source_user_id`
+       is NULL on every 70–82 row.
+    7. Add a story to a group with another member → "{story} was added to {group}" for the member,
+       "Your story {story} was added to {group}" for the author (one each); re-add → nothing.
 
 ---
 

@@ -37,6 +37,8 @@ public class StoryExternalLinksRowTests : BunitContext
         Services.AddScoped<IViewCountWriteService>(_ => new FakeViewCountWriteService());
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
         Services.AddScoped<IRecommendationWriteService>(_ => new FakeRecommendationWriteService());
+        // RecommendationSection injects the USI write service for the card Read It Later (WU-InertFeatures).
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // RelatedStoriesSection (Feature 61, nested in the page) injects these; left at
         // their empty defaults so the section renders nothing (BothEmpty).

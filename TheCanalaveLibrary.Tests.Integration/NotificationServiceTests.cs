@@ -437,6 +437,97 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             "OldestUnreadFirst: unread notifications must appear before read ones regardless of creation time");
     }
 
+    // ── D4: a null source = no actor (WU-InertFeatures) ──────────────────────────
+
+    [Fact]
+    public async Task NullSourcedNotification_IsDeliveredToTheRecipient_NotDropped()
+    {
+        // Any recipient: with no actor, drop-self has nobody to compare against — including the user
+        // who happens to be the active one (the reporter submitting their own report).
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<INotificationWriteService>()
+                .NotifyReportReceivedAsync(_actorId, reportId: 42);
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Notification row = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == _actorId && n.NotificationTypeId == NotificationTypeEnum.ReportReceived);
+        row.SourceUserId.Should().BeNull();
+        row.RelatedEntityId.Should().Be(42);
+    }
+
+    [Fact]
+    public async Task NullSourcedNotification_IdenticalUnreadPair_DedupsAgainstTheNullSource()
+    {
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
+            await svc.NotifyReportResolvedAsync(_recipientId, reportId: 7);
+            await svc.NotifyReportResolvedAsync(_recipientId, reportId: 7);
+            await svc.NotifyReportResolvedAsync(_recipientId, reportId: 8);
+        }
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<long> related = await db.Notifications
+            .Where(n => n.RecipientUserId == _recipientId && n.NotificationTypeId == NotificationTypeEnum.ReportResolved)
+            .Select(n => n.RelatedEntityId).ToListAsync();
+        related.Should().BeEquivalentTo([7L, 8L],
+            "the dedup key (type, source, related, unread) matches NULL to NULL, so the retried call " +
+            "collapses while a different report id still lands");
+    }
+
+    [Fact]
+    public async Task AccountWarning_TwoWhileTheFirstIsUnread_AreTwoRows()
+    {
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
+            await svc.NotifyAccountWarningAsync(_recipientId);
+            await svc.NotifyAccountWarningAsync(_recipientId);
+        }
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.CountAsync(n => n.RecipientUserId == _recipientId
+                && n.NotificationTypeId == NotificationTypeEnum.AccountWarning))
+            .Should().Be(2, "D4: account actions are exempt from cross-existing dedup");
+    }
+
+    // ── A1: related_entity_id is bigint ───────────────────────────────────────────
+
+    [Fact]
+    public async Task RelatedEntityId_AboveIntRange_RoundTripsThroughTheFeed()
+    {
+        // A report id past int.MaxValue — the reason for the widen. ReportReceived maps to the None
+        // kind, so the target stays null; the id itself must survive storage and projection.
+        const long bigReportId = 3_000_000_000;
+        await SeedNotificationAsync(_recipientId, NotificationTypeEnum.ReportReceived, bigReportId);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] dtos = await CallGetNotificationsAsync(1, 10);
+
+        NotificationDto n = dtos.Single(d => d.NotificationTypeId == NotificationTypeEnum.ReportReceived);
+        n.RelatedEntityId.Should().Be(bigReportId);
+        n.TargetTitle.Should().BeNull();
+        n.TargetUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StoryKindNotification_WithAnOutOfIntRangeId_ResolvesToNoTarget_WithoutThrowing()
+    {
+        // The enricher narrows each kind's id set to int (every kind has an int key); an id that
+        // cannot be an int simply misses instead of overflowing or failing the query.
+        await SeedNotificationAsync(_recipientId, NotificationTypeEnum.StoryApproved, 5_000_000_000);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] dtos = await CallGetNotificationsAsync(1, 10);
+
+        NotificationDto n = dtos.Single(d => d.NotificationTypeId == NotificationTypeEnum.StoryApproved);
+        n.TargetTitle.Should().BeNull();
+        n.TargetUrl.Should().BeNull();
+    }
+
     // ── End-to-end: FollowAsync → notification ───────────────────────────────────
 
     [Fact]
@@ -516,6 +607,26 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             NotificationTypeId = NotificationTypeEnum.SiteAnnouncement,
             SourceUserId       = null,
             RelatedEntityId    = 0,
+            IsRead             = false,
+            DateCreated        = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Inserts a null-sourced notification with an arbitrary <paramref name="relatedEntityId"/> —
+    /// for ids no producer could mint in a test (above <c>int.MaxValue</c>). The column has no FK.
+    /// </summary>
+    private async Task SeedNotificationAsync(int recipientId, NotificationTypeEnum type, long relatedEntityId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Notifications.Add(new Notification
+        {
+            RecipientUserId    = recipientId,
+            NotificationTypeId = type,
+            SourceUserId       = null,
+            RelatedEntityId    = relatedEntityId,
             IsRead             = false,
             DateCreated        = DateTime.UtcNow
         });

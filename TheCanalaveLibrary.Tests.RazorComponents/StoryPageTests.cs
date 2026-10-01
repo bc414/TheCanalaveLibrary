@@ -23,6 +23,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class StoryPageTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeRecommendations = new();
+    private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
     private readonly FakeRelatedStoriesStoryReadService _storyReadService = new();
     private readonly FakeChapterReadService _chapterReadService = new();
     private readonly BunitAuthorizationContext _auth;
@@ -45,7 +46,7 @@ public class StoryPageTests : BunitContext
         // RecommendationSection injects IRecommendationWriteService.
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeRecommendations);
         // UserStoryInteractionPanel (authenticated renders) injects the USI write service.
-        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
         // TagChip injects ISpriteReadService.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ChapterList (WU45) injects the manual read-mark write service.
@@ -326,5 +327,30 @@ public class StoryPageTests : BunitContext
 
         cut.Markup.Should().NotContain("Recommend this story",
             "anonymous user must not see the Recommend CTA");
+    }
+
+    [Fact]
+    public async Task StoryPage_RecommendationCardReadItLater_TheInteractionPanelAdoptsTheSave()
+    {
+        // Owner ruling D3 + the panel-clobber closure (WU-InertFeatures): the card writes the same
+        // IsReadItLater bit the page's panel owns, so the page re-reads the state and hands it down.
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => _fakeInteractions);
+        AuthenticateAs(7);
+        _fakeRecommendations.SetGetForStoryResult(
+        [
+            new RecommendationDto(5, 1, new UserCardDto(43, "Recommender", null, null, []), "<p>read it</p>",
+                0, false, false, 0, DateTime.UtcNow, false, false),
+        ]);
+        IRenderedComponent<StoryPage> cut = RenderPage(MakeStory(storyId: 1, authorId: 42));
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeFalse();
+
+        _fakeInteractions.States[1] = UserStoryInteractionStateDto.AllFalse(1) with { IsReadItLater = true }; // the server after the write
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([5]);
+        cut.WaitForAssertion(() =>
+            cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+                "the panel adopts the re-read state, so its next flush can't write the bit back to false"));
     }
 }

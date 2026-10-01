@@ -18,8 +18,12 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   <item><c>ResolveNoActionAsync</c>: status → ResolvedNoAction, count decremented, notification sent.</item>
 ///   <item><c>ResolveWithRemovalAsync</c> (soft takedown): sets <c>IsTakenDown=true</c>, drops from
 ///   public reads, remains visible with <c>IgnoreQueryFilters(["IsTakenDown"])</c>.</item>
-///   <item>Dedup-key fix: two reports on *different* stories both produce <c>ReportReceived</c>
-///   notifications; two on the *same* story dedup to one notification.</item>
+///   <item>The moderation notification band (owner rulings D4/D5, WU-InertFeatures): every row in
+///   70–82 is null-sourced (no moderator id ever reaches the recipient); <c>ReportReceived</c> is
+///   delivered again, carrying the report id; 70/80/81/82 carry report ids so two outcomes never
+///   collapse; account actions (72–74) are exempt from cross-existing dedup; the moderator-initiated
+///   account action sends no report receipts (the D4 guardrail); story-outcome dedup still collapses
+///   an identical unread pair across null sources.</item>
 ///   <item><c>ApproveStoryAsync</c>: sets <c>StoryStatusId = PostApprovalStatus</c>, stamps
 ///   <c>PublishedDate</c> on first publication, adds 1 to the author's monotonic
 ///   <c>ApprovedStorySubmissions</c>, fires <c>StoryApproved</c> — and (WU-StoryLifecycle, D1)
@@ -169,10 +173,10 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         authorNotified.Should().BeTrue();
     }
 
-    // ── Dedup-key fix (RelatedEntityId in create-core) ────────────────────────────
+    // ── Story-outcome dedup (RelatedEntityId in the key, null source on both sides) ─
 
     [Fact]
-    public async Task NotifyReportReceivedAsync_TwoDifferentStories_BothNotificationsLand()
+    public async Task NotifyStoryRejectedAsync_TwoDifferentStories_BothNotificationsLand()
     {
         int storyA = await SeedStoryAsync();
         int storyB = await SeedStoryAsync();
@@ -182,18 +186,19 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        // Both calls share same sourceUserId (mod) and same type, but different RelatedEntityIds.
-        await notifSvc.NotifyStoryRejectedAsync(_reporterId, storyA, _modId);
-        await notifSvc.NotifyStoryRejectedAsync(_reporterId, storyB, _modId);
+        // Same type, same (null) source, different RelatedEntityIds → two rows.
+        await notifSvc.NotifyStoryRejectedAsync(_reporterId, storyA);
+        await notifSvc.NotifyStoryRejectedAsync(_reporterId, storyB);
 
-        int count = await db.Notifications.CountAsync(n =>
+        List<Notification> rows = await db.Notifications.Where(n =>
             n.RecipientUserId == _reporterId &&
-            n.NotificationTypeId == NotificationTypeEnum.StoryRejected);
-        count.Should().Be(2, "each distinct RelatedEntityId should produce its own notification");
+            n.NotificationTypeId == NotificationTypeEnum.StoryRejected).ToListAsync();
+        rows.Should().HaveCount(2, "each distinct RelatedEntityId should produce its own notification");
+        rows.Should().OnlyContain(n => n.SourceUserId == null, "D5: the moderation band is null-sourced");
     }
 
     [Fact]
-    public async Task NotifyReportReceivedAsync_SameStoryTwice_SecondDeduped()
+    public async Task NotifyStoryApprovedAsync_SameStoryTwiceWhileUnread_SecondDeduped()
     {
         int storyId = await SeedStoryAsync();
 
@@ -202,13 +207,239 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        await notifSvc.NotifyStoryApprovedAsync(_reporterId, storyId, _modId);
-        await notifSvc.NotifyStoryApprovedAsync(_reporterId, storyId, _modId);
+        await notifSvc.NotifyStoryApprovedAsync(_reporterId, storyId);
+        await notifSvc.NotifyStoryApprovedAsync(_reporterId, storyId);
 
         int count = await db.Notifications.CountAsync(n =>
             n.RecipientUserId == _reporterId &&
             n.NotificationTypeId == NotificationTypeEnum.StoryApproved);
-        count.Should().Be(1, "duplicate notification for same entity should be deduped");
+        count.Should().Be(1,
+            "a null source matches a null source (IS NULL), so an identical unread pair still dedups");
+    }
+
+    // ── The moderation notification band (owner rulings D4/D5, WU-InertFeatures) ──
+
+    [Fact]
+    public async Task SubmitReportAsync_DeliversANullSourcedReceipt_CarryingTheReportId()
+    {
+        int storyId = await SeedStoryAsync();
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(_reporterId);
+        await GetMod().SubmitReportAsync(new SubmitReportRequest(
+            ReportedEntityType.Story, storyId, reasonId, null));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        long reportId = await db.Reports.Where(r => r.ReportedEntityId == storyId)
+            .Select(r => r.ReportId).SingleAsync();
+
+        Notification receipt = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == _reporterId && n.NotificationTypeId == NotificationTypeEnum.ReportReceived);
+        receipt.SourceUserId.Should().BeNull(
+            "D4: the receipt has no actor — passing the reporter as their own source is what made " +
+            "drop-self delete every receipt before this WU");
+        receipt.RelatedEntityId.Should().Be(reportId);
+    }
+
+    [Fact]
+    public async Task SubmitReportAsync_TwoReports_TwoReceipts()
+    {
+        int storyA = await SeedStoryAsync();
+        int storyB = await SeedStoryAsync();
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(_reporterId);
+        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyA, reasonId, null));
+        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyB, reasonId, null));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        int receipts = await db.Notifications.CountAsync(n =>
+            n.RecipientUserId == _reporterId && n.NotificationTypeId == NotificationTypeEnum.ReportReceived);
+        receipts.Should().Be(2, "each receipt carries its own report id, so the unread first does not absorb the second");
+    }
+
+    [Fact]
+    public async Task ResolvePaths_CarryTheReportId_AndNoModeratorSource()
+    {
+        int authorId = await SeedUserAsync("RemovedAuthor");
+        int keptStory = await SeedStoryAsync(authorId);
+        int removedStory = await SeedStoryAsync(authorId);
+        long noActionReport = await SeedReportAsync(ReportedEntityType.Story, keptStory, _reporterId);
+        long removalReport = await SeedReportAsync(ReportedEntityType.Story, removedStory, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ResolveNoActionAsync(noActionReport, "fine");
+        await GetMod().ResolveWithRemovalAsync(removalReport, "rule violation");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Notification noAction = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == _reporterId && n.NotificationTypeId == NotificationTypeEnum.ReportResolvedNoAction);
+        noAction.RelatedEntityId.Should().Be(noActionReport);
+        noAction.SourceUserId.Should().BeNull();
+
+        Notification resolved = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == _reporterId && n.NotificationTypeId == NotificationTypeEnum.ReportResolved);
+        resolved.RelatedEntityId.Should().Be(removalReport);
+        resolved.SourceUserId.Should().BeNull();
+
+        Notification removed = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == authorId && n.NotificationTypeId == NotificationTypeEnum.ContentRemoved);
+        removed.RelatedEntityId.Should().Be(removalReport,
+            "70 anchors on the report row — a reported entity's id would collide across kinds");
+        removed.SourceUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TwoRemovalsOfOneAuthorsItems_WhileTheFirstIsUnread_DeliverTwoContentRemoved()
+    {
+        int authorId = await SeedUserAsync("TwiceRemoved");
+        int storyA = await SeedStoryAsync(authorId);
+        int storyB = await SeedStoryAsync(authorId);
+        long reportA = await SeedReportAsync(ReportedEntityType.Story, storyA, _reporterId);
+        long reportB = await SeedReportAsync(ReportedEntityType.Story, storyB, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ResolveWithRemovalAsync(reportA, "violation A");
+        await GetMod().ResolveWithRemovalAsync(reportB, "violation B");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        int removedRows = await db.Notifications.CountAsync(n =>
+            n.RecipientUserId == authorId && n.NotificationTypeId == NotificationTypeEnum.ContentRemoved);
+        removedRows.Should().Be(2,
+            "spec §5.21 'reporters always learn the outcome' — with RelatedEntityId 0 the second removal " +
+            "collapsed into the first while it was unread");
+        int resolvedRows = await db.Notifications.CountAsync(n =>
+            n.RecipientUserId == _reporterId && n.NotificationTypeId == NotificationTypeEnum.ReportResolved);
+        resolvedRows.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task WarnTwiceWhileTheFirstIsUnread_DeliversTwoAccountWarnings()
+    {
+        int targetId = await SeedUserAsync("TwiceWarned");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionToUserAsync(targetId, reasonId, ModeratorActionType.WarnUser, "First.");
+        await GetMod().ApplyAccountActionToUserAsync(targetId, reasonId, ModeratorActionType.WarnUser, "Second.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<Notification> warnings = await db.Notifications.Where(n =>
+            n.RecipientUserId == targetId && n.NotificationTypeId == NotificationTypeEnum.AccountWarning).ToListAsync();
+        warnings.Should().HaveCount(2,
+            "D4: account actions have no related entity (0), so they are exempt from cross-existing " +
+            "dedup — two warnings are two rows");
+        warnings.Should().OnlyContain(n => n.SourceUserId == null && n.RelatedEntityId == 0);
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionToUserAsync_SendsTheModeratorNoReportReceipts()
+    {
+        int targetId = await SeedUserAsync("GuardrailTarget");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionToUserAsync(targetId, reasonId, ModeratorActionType.WarnUser, "Mod-filed.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool modGotReceipt = await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId &&
+            (n.NotificationTypeId == NotificationTypeEnum.ReportReceived
+             || n.NotificationTypeId == NotificationTypeEnum.ReportResolved));
+        modGotReceipt.Should().BeFalse(
+            "D4 guardrail: the mod-filed report has ReporterUserId == ModeratorUserId, and a null " +
+            "source no longer drop-selfs — wiring 80/81 here would mail the moderator about their own action");
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == targetId
+            && n.NotificationTypeId == NotificationTypeEnum.AccountWarning)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ResolveWithRemoval_OnARecommendationReport_SweepsItsAttributions()
+    {
+        // FK parents: story author + story, the recommender + rec (+ detail), and a reader whose USI
+        // row is the attribution's composite-FK parent (testing.md "FK parents").
+        int authorId = await SeedUserAsync("RecStoryAuthor");
+        int storyId = await SeedStoryAsync(authorId);
+        int recommenderId = await SeedUserAsync("RemovedRecommender");
+        int readerId = await SeedUserAsync("AttributedReader");
+        int recId;
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Recommendation rec = new()
+            {
+                StoryId = storyId, RecommenderId = recommenderId,
+                StatusId = (short)RecommendationStatusEnum.Approved, DatePosted = DateTime.UtcNow,
+                RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
+            };
+            db.Recommendations.Add(rec);
+            await db.SaveChangesAsync();
+            recId = rec.RecommendationId;
+            db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = readerId, StoryId = storyId, IsReadItLater = true });
+            db.UserStoryRecommendationSources.Add(new UserStoryRecommendationSource
+            {
+                UserId = readerId, StoryId = storyId, SourceRecommendationId = recId,
+            });
+            await db.SaveChangesAsync();
+        }
+        long reportId = await SeedReportAsync(ReportedEntityType.Recommendation, recId, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ResolveWithRemovalAsync(reportId, "spam recommendation");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext verify = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await verify.UserStoryRecommendationSources.AnyAsync(s => s.SourceRecommendationId == recId))
+            .Should().BeFalse("owner ruling D3, trigger 5: a taken-down rec can't be reminded or collect credit");
+        (await verify.UserStoryInteractions.AnyAsync(i => i.UserId == readerId && i.IsReadItLater))
+            .Should().BeTrue("the sweep removes the attribution, never the reader's Read It Later");
+    }
+
+    [Fact]
+    public async Task NoNotificationInTheModerationBand_EverCarriesTheModeratorAsSource()
+    {
+        // Drive every moderator-facing path that notifies, then sweep the band.
+        int authorId = await SeedUserAsync("BandAuthor");
+        int reportedStory = await SeedStoryAsync(authorId);
+        int removedStory = await SeedStoryAsync(authorId);
+        long reportA = await SeedReportAsync(ReportedEntityType.Story, reportedStory, _reporterId);
+        long reportB = await SeedReportAsync(ReportedEntityType.Story, removedStory, _reporterId);
+        long reportC = await SeedReportAsync(ReportedEntityType.Story, reportedStory, _reporterId);
+        int approveMe = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        int rejectMe = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ResolveNoActionAsync(reportA, "fine");
+        await GetMod().ResolveWithRemovalAsync(reportB, "removed");
+        await GetMod().ApplyAccountActionAsync(reportC, ModeratorActionType.WarnUser, "warned");
+        await GetMod().ApproveStoryAsync(approveMe);
+        await GetMod().RejectStoryAsync(rejectMe, "not yet");
+        await GetMod().ApplyAccountActionToUserAsync(authorId, reasonId, ModeratorActionType.SuspendUser,
+            "suspended", DateTime.UtcNow.AddDays(3));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<Notification> band = await db.Notifications
+            .Where(n => (short)n.NotificationTypeId >= 70 && (short)n.NotificationTypeId <= 82)
+            .ToListAsync();
+
+        band.Select(n => n.NotificationTypeId).Should().Contain(
+        [
+            NotificationTypeEnum.ReportResolvedNoAction, NotificationTypeEnum.ReportResolved,
+            NotificationTypeEnum.ContentRemoved, NotificationTypeEnum.AccountWarning,
+            NotificationTypeEnum.StoryApproved, NotificationTypeEnum.StoryRejected,
+            NotificationTypeEnum.AccountSuspended,
+        ]);
+        band.Should().OnlyContain(n => n.SourceUserId == null,
+            "D5: the acting moderator is never disclosed to the recipient — the id would ship in " +
+            "NotificationDto over a WASM-reachable endpoint");
     }
 
     // ── ApproveStoryAsync ─────────────────────────────────────────────────────────

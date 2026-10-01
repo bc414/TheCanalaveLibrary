@@ -2,13 +2,18 @@
 @using TheCanalaveLibrary.Core
 @using Microsoft.Extensions.Logging
 @inject IRecommendationWriteService Recommendations
+@inject IUserStoryInteractionWriteService Interactions
+@inject NavigationManager Nav
 @inject ILogger<RecommendationSection> Logger
 
 @* Coordination composite — owns the story recommendation section: load, submission composer
    (gated on auth + not-already-recommended), optimistic like with rollback, Hidden-Gem toggle,
    author spotlight toggle, and delete-confirm dialog. Injects IRecommendationWriteService
    (which :IRecommendationReadService) — one injection gives read + write. All writes resolve
-   here; nothing bubbles to the page dispatcher. WU25 (story detail page) embeds this surface. *@
+   here; nothing bubbles to the page dispatcher except OnReadItLaterSaved, which lets the page
+   re-read the viewer's interaction state after a card's Read It Later (owner ruling D3 — the
+   card writes the story's IsReadItLater bit, which the page's interaction panel also owns).
+   WU25 (story detail page) embeds this surface. *@
 
 @* ── Section header ───────────────────────────────────────────────────────────── *@
 <div class="flex items-center gap-2 mb-4">
@@ -46,7 +51,10 @@ else
                                 OnToggleHighlight="@(viewerIsStoryAuthor && isLive ? EventCallback.Factory.Create<int>(this, HandleToggleHighlight) : default)"
                                 OnRequestRevision="@(viewerIsStoryAuthor && !isRejected && !rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleRequestRevisionClick) : default)"
                                 OnRemove="@(viewerIsStoryAuthor && !isRejected && !rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleRemoveClick) : default)"
-                                OnUnblock="@(viewerIsStoryAuthor && isRejected ? EventCallback.Factory.Create<int>(this, HandleUnblockAsync) : default)" />
+                                OnUnblock="@(viewerIsStoryAuthor && isRejected ? EventCallback.Factory.Create<int>(this, HandleUnblockAsync) : default)"
+                                OnReadItLater="@(isLive ? EventCallback.Factory.Create<int>(this, HandleReadItLaterAsync) : default)"
+                                IsReadItLaterSaved="@(StoryIsReadItLater || _savedForLater)"
+                                ShowReadNow="@isLive" />
 
             @* Inline editor for this card (edit-in-place) *@
             @if (_editingId == rec.RecommendationId)
@@ -155,6 +163,23 @@ else
 
     /// <summary>Null = anonymous viewer — hides submission, like, and owner affordances.</summary>
     [Parameter] public int? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// Whether the viewer already has this story on Read It Later — drives the cards' saved state.
+    /// The page owns the viewer's interaction state (it feeds the panel too), so it passes it down.
+    /// </summary>
+    [Parameter] public bool StoryIsReadItLater { get; set; }
+
+    /// <summary>
+    /// Raised after a card's Read It Later succeeds, so the page can re-read the viewer's interaction
+    /// state and hand it to <c>UserStoryInteractionPanel</c> — otherwise the panel's next flush would
+    /// write the bit back to false over this save (WU-InertFeatures, the panel-clobber closure).
+    /// </summary>
+    [Parameter] public EventCallback OnReadItLaterSaved { get; set; }
+
+    // Set on a successful card save so the cards show it before the page's re-read lands (or when
+    // no page is listening).
+    private bool _savedForLater;
 
     // ── Load state ────────────────────────────────────────────────────────────────
     private bool _loading = true;
@@ -466,6 +491,35 @@ else
             _error = Translate(ex, "Unblocking recommendation {RecommendationId} failed unexpectedly", id);
             _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
+        }
+    }
+
+    // ── Read It Later from a card (Feature 30, owner ruling D3) ────────────────────
+    private async Task HandleReadItLaterAsync(int recommendationId)
+    {
+        // Anonymous viewer → login nudge, returning here afterwards (Identity pages are server-rendered,
+        // so a full load).
+        if (CurrentUserId is null)
+        {
+            Nav.NavigateTo(
+                $"/Account/Login?ReturnUrl={Uri.EscapeDataString("/" + Nav.ToBaseRelativePath(Nav.Uri))}",
+                forceLoad: true);
+            return;
+        }
+
+        _error = null;
+        _errorIsSessionExpired = false;
+        try
+        {
+            await Interactions.SetReadItLaterFromRecommendationAsync(recommendationId);
+            _savedForLater = true;
+            if (OnReadItLaterSaved.HasDelegate)
+                await OnReadItLaterSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = Translate(ex, "Read It Later from recommendation {RecommendationId} failed unexpectedly", recommendationId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 

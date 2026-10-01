@@ -468,6 +468,10 @@ public class ServerRecommendationWriteService(
         // Flag invariant: leaving Live clears both curation flags (slots freed, not auto-restored).
         rec.IsHiddenGem = false;
         rec.IsHighlightedByAuthor = false;
+        // D3 removal trigger 5: a removed rec can't be displayed, so it can't be reminded or collect
+        // credit — every reader's attribution naming it goes in this same save. UnblockAsync does not
+        // restore them (accepted by D3).
+        await RecommendationAttribution.StageSweepAsync(writeDb, recommendationId);
         await writeDb.SaveChangesAsync();
         // Silent — no notification (matches the moderation model's silent-rejection stance).
     }
@@ -488,7 +492,7 @@ public class ServerRecommendationWriteService(
                 "RecommendationApproved", recommendationId);
     }
 
-    // ── Attribution (Feature 30 — minted here, triggered by WU26) ───────────────
+    // ── Attribution (Feature 30; owner ruling D3 — layer2-services.md §"Attribution") ─
 
     public async Task RecordSuccessAsync(int recommendationId)
     {
@@ -499,22 +503,40 @@ public class ServerRecommendationWriteService(
         if (rec is null)
             throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
 
-        // Kind (g), and the sharpest case in the sweep: this method awards real site badges
-        // (Recommender / RecommenderSilver) off an unverified parent, so a loop over guessed
-        // recommendation ids could farm another user's SuccessfulRecCount and badges without ever
-        // being able to see the stories involved. The anti-self-farm check below is not a substitute.
+        // Kind (g): this method awards real site badges off a parent the caller might not be able to
+        // see, so the visibility guard stays even though the attribution gate below is stricter.
         await RequireRecommendationVisibleAsync(recommendationId);
 
-        // Idempotent — composite PK prevents duplicates.
+        // Idempotent — composite PK prevents duplicates. A lingering attribution for this rec (a Yes
+        // retried after its first save) is still consumed, so the prompt can never come back.
         bool alreadyRecorded = await writeDb.RecommendationSuccesses
             .AnyAsync(s => s.UserId == userId && s.RecommendationId == recommendationId);
-        if (alreadyRecorded) return;
+        if (alreadyRecorded)
+        {
+            await writeDb.UserStoryRecommendationSources
+                .Where(s => s.UserId == userId && s.SourceRecommendationId == recommendationId)
+                .ExecuteDeleteAsync();
+            return;
+        }
 
+        // The credit gate (service audit §2.4.1, unblocked by D3): credit requires the caller's own
+        // attribution for exactly this recommendation on its story — the row a card Read It Later or a
+        // 90%-read direct link created — and a rec that is still displayable. Without it the success was
+        // a faucet: any signed-in reader could credit any visible rec. Refused as not-found (kind (g)).
+        UserStoryRecommendationSource? attribution = await writeDb.UserStoryRecommendationSources
+            .FirstOrDefaultAsync(s => s.UserId == userId
+                                      && s.StoryId == rec.StoryId
+                                      && s.SourceRecommendationId == recommendationId);
+        if (attribution is null || rec.StatusId != ApprovedStatusId || rec.IsTakenDown)
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+
+        // Record + consume in one save (D3 trigger 3 — the answered prompt never reappears).
         writeDb.RecommendationSuccesses.Add(new RecommendationSuccess
         {
             UserId           = userId,
             RecommendationId = recommendationId
         });
+        writeDb.UserStoryRecommendationSources.Remove(attribution);
         await writeDb.SaveChangesAsync();
 
         // Atomic delta after the insert commits (layer2-services.md counter rule — a tracked ++
@@ -563,34 +585,14 @@ public class ServerRecommendationWriteService(
         }
     }
 
-    public async Task RecordAttributionSourceAsync(int storyId, int recommendationId)
+    public async Task DismissHelpfulPromptAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser("Recording attribution source");
+        int userId = RequireAuthenticatedUser("Dismissing the helpful prompt");
 
-        // D3.2 (WU-RecLifecycle): the claimed source recommendation must exist AND belong to the
-        // claimed story — otherwise a bogus self-attribution could later feed credit via
-        // RecordSuccessAsync (modernization-audit/deferred-work.md §7).
-        bool recBelongsToStory = await writeDb.Recommendations
-            .AnyAsync(r => r.RecommendationId == recommendationId && r.StoryId == storyId);
-        if (!recBelongsToStory)
-            throw new KeyNotFoundException(
-                $"Recommendation {recommendationId} does not exist for story {storyId}.");
-
-        // Kind (g): D3.2 established that the rec must belong to the claimed story, but neither was
-        // checked for visibility — the attribution feeds RecordSuccessAsync credit downstream.
-        await RequireStoryVisibleAsync(storyId);
-
-        // Upsert — if the source row already exists, keep the original attribution.
-        bool alreadyExists = await writeDb.UserStoryRecommendationSources
-            .AnyAsync(s => s.UserId == userId && s.StoryId == storyId);
-        if (alreadyExists) return;
-
-        writeDb.UserStoryRecommendationSources.Add(new UserStoryRecommendationSource
-        {
-            UserId                = userId,
-            StoryId               = storyId,
-            SourceRecommendationId = recommendationId
-        });
-        await writeDb.SaveChangesAsync();
+        // The X control: a clear of the caller's own row (D6 — never guarded), idempotent. Keyed by the
+        // recommendation rather than the story so a stale prompt can't delete a newer attribution.
+        await writeDb.UserStoryRecommendationSources
+            .Where(s => s.UserId == userId && s.SourceRecommendationId == recommendationId)
+            .ExecuteDeleteAsync();
     }
 }

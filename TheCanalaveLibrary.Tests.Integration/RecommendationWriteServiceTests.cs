@@ -321,6 +321,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         int id = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, id); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(id);
 
         Recommendation? rec = await LoadRecAsync(id);
@@ -333,6 +334,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         int id = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, id); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(id);
         await CallRecordSuccessAsync(id); // second call for same user — idempotent
 
@@ -353,6 +355,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
 
         // Record success as a different user (not the recommender) to avoid the self-farm guard.
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(recId);
 
         int earned = await LoadRecommendationSuccessesEarned(_recommenderUserId);
@@ -366,6 +369,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(recId);
         await CallRecordSuccessAsync(recId); // same reader, same rec — idempotent
 
@@ -385,6 +389,9 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         // Switch to author first to avoid the "already recorded" idempotency path for the recommender.
         // Actually: self-record means the READER is the recommender. Submit as recommender, then
         // call RecordSuccess still as the recommender — the guard checks caller userId vs rec.RecommenderId.
+        // (D3: the recommender holds an attribution to their own rec here — an unruled edge, roadmap
+        // row 18; SuccessfulRecCount moves but the badge counter's anti-self-farm check still holds.)
+        await SeedAttributionAsync(_recommenderUserId, _storyId, recId);
         await CallRecordSuccessAsync(recId);
 
         int earned = await LoadRecommendationSuccessesEarned(_recommenderUserId);
@@ -413,6 +420,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         }
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, anonRecId);
         Func<Task> act = async () => await CallRecordSuccessAsync(anonRecId);
 
         // Must complete without throwing — no recommender to credit, no badge to fire.
@@ -429,6 +437,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(recId); // takes counter to 1 — award fires immediately
 
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -469,6 +478,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
 
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId); // D3: the success needs the reader's attribution
         await CallRecordSuccessAsync(recId); // takes counter to 2
 
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -476,40 +486,6 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         UserBadge badge = await db.UserBadges
             .SingleAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
         badge.EarnedCount.Should().Be(2, "a repeat qualifying success must keep EarnedCount in step with the counter");
-    }
-
-    // ── RecordAttributionSourceAsync ──────────────────────────────────────────────
-
-    [Fact]
-    public async Task RecordAttributionSource_WritesSourceRow()
-    {
-        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
-
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
-
-        // UserStoryRecommendationSource has a composite FK to UserStoryInteractions (UserId, StoryId).
-        // In real flow, opening the story creates the USI row before attribution is ever recorded.
-        // Seed it explicitly here (testing.md "FK parent rows" rule).
-        using (IServiceScope seedScope = Factory.Services.CreateScope())
-        {
-            ApplicationDbContext db = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            bool usiExists = await db.UserStoryInteractions
-                .AnyAsync(u => u.UserId == _authorUserId && u.StoryId == _storyId);
-            if (!usiExists)
-            {
-                db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = _authorUserId, StoryId = _storyId });
-                await db.SaveChangesAsync();
-            }
-        }
-
-        await CallRecordAttributionSourceAsync(_storyId, recId);
-
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext assertDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        bool exists = await assertDb.UserStoryRecommendationSources
-            .AnyAsync(s => s.UserId == _authorUserId && s.StoryId == _storyId
-                           && s.SourceRecommendationId == recId);
-        exists.Should().BeTrue();
     }
 
     // ── WU-RecLifecycle: self-rec block + submit notification ─────────────────────
@@ -732,18 +708,143 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
             "curation flags may only ever be true on live recommendations");
     }
 
-    // ── WU-RecLifecycle: D3.2 attribution ownership validation ────────────────────
+    // ── D3: RecordSuccessAsync requires and consumes the attribution (WU-InertFeatures) ──
 
     [Fact]
-    public async Task RecordAttributionSource_RecommendationOnDifferentStory_ThrowsKeyNotFound()
+    public async Task RecordSuccess_WithoutAnAttribution_IsRefused_AndCreditsNothing()
     {
+        await SeedUserStatAsync(_recommenderUserId);
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
-        int unrelatedStoryId = await SeedStoryAsync();
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
-        Func<Task> act = async () => await CallRecordAttributionSourceAsync(unrelatedStoryId, recId);
+        Func<Task> act = () => CallRecordSuccessAsync(recId);
+
         await act.Should().ThrowAsync<KeyNotFoundException>(
-            "the claimed source recommendation must belong to the claimed story (D3.2)");
+            "service audit §2.4.1: credit without an attribution was a faucet — any signed-in reader " +
+            "could credit any visible recommendation");
+        (await LoadRecAsync(recId))!.SuccessfulRecCount.Should().Be(0);
+        (await LoadRecommendationSuccessesEarned(_recommenderUserId)).Should().Be(0);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().RecommendationSuccesses
+            .AnyAsync(s => s.RecommendationId == recId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RecordSuccess_WithAnAttributionToAnotherRecommendation_IsRefused()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        int otherRecommender = await SeedUserAsync();
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(otherRecommender, showMatureContent: false));
+        int otherRecId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml("other")));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, otherRecId);
+
+        Func<Task> act = () => CallRecordSuccessAsync(recId);
+        await act.Should().ThrowAsync<KeyNotFoundException>("the attribution names the other recommendation");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_ConsumesTheAttribution()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId);
+
+        await CallRecordSuccessAsync(recId);
+
+        (await AttributionExistsAsync(_authorUserId, _storyId)).Should().BeFalse(
+            "D3 trigger 3: an answered prompt never reappears");
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().UserStoryInteractions
+            .AnyAsync(i => i.UserId == _authorUserId && i.StoryId == _storyId && i.IsReadItLater))
+            .Should().BeTrue("consuming the attribution leaves the Read It Later itself alone");
+    }
+
+    [Theory]
+    [InlineData("NeedsRevision")]
+    [InlineData("Rejected")]
+    [InlineData("TakenDown")]
+    public async Task RecordSuccess_OnARecThatIsNoLongerLive_IsRefused(string state)
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId);
+        // Flip the state underneath the surviving attribution (the sweeps would delete it — this pins
+        // the gate in RecordSuccessAsync itself).
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Recommendations.Where(r => r.RecommendationId == recId).ExecuteUpdateAsync(u =>
+            {
+                if (state == "NeedsRevision") u.SetProperty(r => r.StatusId, (short)RecommendationStatusEnum.NeedsRevision);
+                else if (state == "Rejected") u.SetProperty(r => r.StatusId, (short)RecommendationStatusEnum.Rejected);
+                else u.SetProperty(r => r.IsTakenDown, true);
+            });
+        }
+
+        Func<Task> act = () => CallRecordSuccessAsync(recId);
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await LoadRecAsync(recId))!.SuccessfulRecCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task DismissHelpfulPrompt_DeletesOnlyTheCallersMatchingRow()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        int otherReader = await SeedUserAsync();
+        await SeedAttributionAsync(_authorUserId, _storyId, recId);
+        await SeedAttributionAsync(otherReader, _storyId, recId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IRecommendationWriteService svc = scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>();
+            await svc.DismissHelpfulPromptAsync(recId + 999); // not theirs → no-op
+            (await AttributionExistsAsync(_authorUserId, _storyId)).Should().BeTrue();
+            await svc.DismissHelpfulPromptAsync(recId);
+            await svc.DismissHelpfulPromptAsync(recId); // idempotent
+        }
+
+        (await AttributionExistsAsync(_authorUserId, _storyId)).Should().BeFalse();
+        (await AttributionExistsAsync(otherReader, _storyId)).Should().BeTrue("another reader's row is untouched");
+    }
+
+    [Fact]
+    public async Task Remove_SweepsEveryAttributionNamingTheRecommendation()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        int readerA = await SeedUserAsync();
+        int readerB = await SeedUserAsync();
+        await SeedAttributionAsync(readerA, _storyWithAuthorId, recId);
+        await SeedAttributionAsync(readerB, _storyWithAuthorId, recId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        (await AttributionExistsAsync(readerA, _storyWithAuthorId)).Should().BeFalse(
+            "D3 trigger 5: a removed rec can't be reminded or credited");
+        (await AttributionExistsAsync(readerB, _storyWithAuthorId)).Should().BeFalse();
+
+        await CallUnblockAsync(recId);
+        (await AttributionExistsAsync(readerA, _storyWithAuthorId)).Should().BeFalse(
+            "accepted by D3: unblocking does not restore destroyed attributions");
+    }
+
+    [Fact]
+    public async Task Delete_CascadesTheAttribution_AndLeavesTheReadItLater()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        int reader = await SeedUserAsync();
+        await SeedAttributionAsync(reader, _storyId, recId);
+
+        await CallDeleteAsync(recId); // the recommender deletes their own rec (D3 trigger 4: FK cascade)
+
+        (await AttributionExistsAsync(reader, _storyId)).Should().BeFalse();
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().UserStoryInteractions
+            .AnyAsync(i => i.UserId == reader && i.StoryId == _storyId && i.IsReadItLater))
+            .Should().BeTrue("deleting a recommendation clears the attribution and leaves the interaction alone");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -821,11 +922,34 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
             .RecordSuccessAsync(id);
     }
 
-    private async Task CallRecordAttributionSourceAsync(int storyId, int recId)
+    /// <summary>
+    /// Seeds a reader's attribution the way the real producers leave it (owner ruling D3): the reader
+    /// saved the story to Read It Later from the recommendation's card, so a USI row with
+    /// <c>IsReadItLater = true</c> exists (the FK parent — testing.md "FK parents") and the sources
+    /// row names the recommendation.
+    /// </summary>
+    private async Task SeedAttributionAsync(int userId, int storyId, int recId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>()
-            .RecordAttributionSourceAsync(storyId, recId);
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        UserStoryInteraction? usi = await db.UserStoryInteractions
+            .FirstOrDefaultAsync(u => u.UserId == userId && u.StoryId == storyId);
+        if (usi is null)
+            db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = userId, StoryId = storyId, IsReadItLater = true });
+        else
+            usi.IsReadItLater = true;
+        db.UserStoryRecommendationSources.Add(new UserStoryRecommendationSource
+        {
+            UserId = userId, StoryId = storyId, SourceRecommendationId = recId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<bool> AttributionExistsAsync(int userId, int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
+            .UserStoryRecommendationSources.AnyAsync(s => s.UserId == userId && s.StoryId == storyId);
     }
 
     private async Task<Recommendation?> LoadRecAsync(int id)

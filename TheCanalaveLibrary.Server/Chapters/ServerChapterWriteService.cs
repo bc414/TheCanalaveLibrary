@@ -8,7 +8,9 @@ public class ServerChapterWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
-    IWriteRateLimitService rateLimit)
+    IWriteRateLimitService rateLimit,
+    INotificationWriteService notifications,
+    ILogger<ServerChapterWriteService> logger)
     : ServerChapterReadService(readDbFactory, activeUser), IChapterWriteService
 {
     public async Task<int> CreateChapterAsync(CreateChapterDto dto)
@@ -243,6 +245,11 @@ public class ServerChapterWriteService(
         if (chapter.Story.AuthorId != userId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
 
+        // The new-chapter fan-out fires on the chapter's FIRST publication only — exactly the call
+        // that performs the FirstPublishedDate null→non-null stamp below (D2's anchor; D1's anti-bump
+        // rider: first publication only, permanently, per artifact). Republish never qualifies.
+        bool firstPublication = isPublished && !chapter.IsPublished && chapter.FirstPublishedDate is null;
+
         if (isPublished && !chapter.IsPublished)
         {
             // D2 chapter anchor: stamped on the FIRST publish only and never moved — unpublish and
@@ -262,6 +269,26 @@ public class ServerChapterWriteService(
         await writeDb.SaveChangesAsync();
         // Story.ChapterCount is not a stored column — it's computed from Chapters.Count(IsPublished)
         // in EF projections. No counter to maintain here (forward_plan.md "Story.ChapterCount" Resolved).
+
+        // New-chapter fan-out (type 10), best-effort post-commit. Default, not an owner ruling
+        // (roadmap.md row 17): only while the story itself is publicly published — the explicit status
+        // predicate, NOT StoryVisibilityGuard, whose author clause would call a Draft "visible" to the
+        // publishing author. A chapter first-published while its story is unpublished therefore never
+        // notifies: its anchor is already stamped when the story later goes live.
+        if (firstPublication
+            && StoryLifecycle.IsPublished(chapter.Story.StoryStatusId)
+            && !chapter.Story.IsTakenDown)
+        {
+            try
+            {
+                await notifications.NotifyNewChapterAsync(chapter.StoryId, chapter.ChapterId, userId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "NewChapterOnFollowedStory notification failed for chapter {ChapterId} of story {StoryId}",
+                    chapter.ChapterId, chapter.StoryId);
+            }
+        }
     }
 
     public async Task MoveChapterAsync(int storyId, int fromNumber, int toNumber)

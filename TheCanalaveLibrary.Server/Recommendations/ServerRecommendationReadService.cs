@@ -133,31 +133,41 @@ public class ServerRecommendationReadService(
             || !await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
             return null;
 
-        return await readDb.Recommendations
-            .Where(r => r.RecommendationId == recommendationId && r.StatusId == ApprovedStatusId)
-            .Select(r => new RecommendationDto(
-                r.RecommendationId,
-                r.StoryId,
-                r.Recommender == null ? null : new UserCardDto(
-                    r.Recommender.Id,
-                    r.Recommender.UserName!,
-                    r.Recommender.Tagline,
-                    r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    r.Recommender.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0)
-                        .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
-                        .ToList()),
-                r.RecommendationDetail.Text,
-                r.LikeCount,
-                r.IsHiddenGem,
-                r.IsHighlightedByAuthor,
-                r.SuccessfulRecCount,
-                r.DatePosted,
-                currentUserId != null && r.Likes.Any(l => l.UserId == currentUserId),
-                currentUserId != null && r.RecommenderId == currentUserId))
+        return await ProjectPublicCard(
+                readDb.Recommendations
+                    .Where(r => r.RecommendationId == recommendationId && r.StatusId == ApprovedStatusId),
+                currentUserId)
             .FirstOrDefaultAsync();
     }
+
+    /// <summary>
+    /// The public (Approved-only) card projection shared by <see cref="GetByIdAsync"/> and
+    /// <see cref="GetHelpfulPromptAsync"/>: the recommender card with its curated badges, body, counts,
+    /// and the per-viewer like/ownership flags. Lifecycle fields keep their defaults — public reads
+    /// never carry them.
+    /// </summary>
+    private static IQueryable<RecommendationDto> ProjectPublicCard(IQueryable<Recommendation> source, int? currentUserId) =>
+        source.Select(r => new RecommendationDto(
+            r.RecommendationId,
+            r.StoryId,
+            r.Recommender == null ? null : new UserCardDto(
+                r.Recommender.Id,
+                r.Recommender.UserName!,
+                r.Recommender.Tagline,
+                r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
+                r.Recommender.UserBadges
+                    .Where(ub => ub.DisplayOrder > 0)
+                    .OrderBy(ub => ub.DisplayOrder)
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
+                    .ToList()),
+            r.RecommendationDetail.Text,
+            r.LikeCount,
+            r.IsHiddenGem,
+            r.IsHighlightedByAuthor,
+            r.SuccessfulRecCount,
+            r.DatePosted,
+            currentUserId != null && r.Likes.Any(l => l.UserId == currentUserId),
+            currentUserId != null && r.RecommenderId == currentUserId));
 
     public async Task<IReadOnlyList<int>> GetRecommendedStoryIdsAsync()
     {
@@ -185,26 +195,38 @@ public class ServerRecommendationReadService(
             .ToListAsync();
     }
 
-    public async Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId)
+    public async Task<RecommendationDto?> GetHelpfulPromptAsync(int storyId)
     {
         int? userId = ActiveUser.UserId;
         if (userId is null) return null;
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // Find the source recommendation this user opened the story from.
+        // Gate 1 — the viewer's attribution for this story (how their Read It Later bit was set, D3).
         int? recId = await readDb.UserStoryRecommendationSources
             .Where(src => src.UserId == userId && src.StoryId == storyId)
             .Select(src => (int?)src.SourceRecommendationId)
             .FirstOrDefaultAsync();
-
         if (recId is null) return null;
 
-        // Gate: only show the prompt if no success has already been recorded.
-        bool alreadyRecorded = await readDb.RecommendationSuccesses
-            .AnyAsync(s => s.UserId == userId && s.RecommendationId == recId);
+        // Gate 4 — no success recorded yet (Yes consumes the row, but a lingering one must not re-ask).
+        if (await readDb.RecommendationSuccesses.AnyAsync(s => s.UserId == userId && s.RecommendationId == recId))
+            return null;
 
-        return alreadyRecorded ? null : recId;
+        // Gate 2 — the rec is visible: its story passes the viewer's guard (rating, status, takedown);
+        // Approved + not taken down are in the query below (the read context's IsTakenDown filter).
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return null;
+
+        // Gate 3 — a named recommender, checked at read time so an account deleted between the save
+        // and this read gets no prompt (an anonymous card cannot be thanked).
+        return await ProjectPublicCard(
+                readDb.Recommendations.Where(r => r.RecommendationId == recId
+                                                  && r.StoryId == storyId
+                                                  && r.StatusId == ApprovedStatusId
+                                                  && r.RecommenderId != null),
+                userId)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId)

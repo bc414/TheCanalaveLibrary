@@ -10,7 +10,8 @@
      · NeedsRevision    — dashed border + "revision requested" strip with the author's note
      · Rejected/Removed — dashed border + "removed by the story author" strip
    Pure leaf: no service injection. All writes are optional EventCallbacks gated by HasDelegate
-   (recommender vs. author vs. anonymous viewer wire only what they own). *@
+   (recommender vs. author vs. anonymous viewer wire only what they own). Live cards can also carry
+   the two Feature 30 reader entry points (Read It Later / Read now — owner ruling D3), host-wired. *@
 
 <div class="relative rounded-xl border @CardBorderClass p-4 bg-(--color-surface)">
 
@@ -203,6 +204,36 @@
             </button>
         }
     </div>
+
+    @* ── Reader entry points (Feature 30, owner ruling D3) — live recommendations only ──────────
+       Read It Later saves the story AND records this recommendation as how it was saved (the
+       attribution); Read now is the same-session direct link — its attribution is persisted only
+       once the reader gets 90% through Chapter 1. Both are host-wired: the button is
+       HasDelegate-gated, the link opt-in via ShowReadNow. *@
+    @if (Rec.Status == RecommendationStatusEnum.Approved && (OnReadItLater.HasDelegate || ShowReadNow))
+    {
+        <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-(--color-border) pt-3 text-sm">
+            @if (OnReadItLater.HasDelegate)
+            {
+                <button type="button"
+                        class="flex items-center gap-1.5 transition-colors @(IsReadItLaterSaved ? "text-(--color-text)" : "text-(--color-text-muted) hover:text-(--color-text)")"
+                        aria-label="@(IsReadItLaterSaved ? "Saved to Read It Later" : "Save this story to Read It Later")"
+                        aria-pressed="@(IsReadItLaterSaved ? "true" : "false")"
+                        disabled="@IsReadItLaterSaved"
+                        @onclick="() => OnReadItLater.InvokeAsync(Rec.RecommendationId)">
+                    <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true"
+                         fill="@(IsReadItLaterSaved ? ReadLaterVisuals.AccentColor : "currentColor")">
+                        <path d="@ReadLaterVisuals.IconPath" />
+                    </svg>
+                    @(IsReadItLaterSaved ? "Saved for later" : "Read It Later")
+                </button>
+            }
+            @if (ShowReadNow)
+            {
+                <a href="@ReadNowHref" class="text-(--color-action-ink) hover:underline">Read now</a>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -219,6 +250,20 @@
     [Parameter] public EventCallback<int> OnRequestRevision { get; set; }
     [Parameter] public EventCallback<int> OnRemove { get; set; }
     [Parameter] public EventCallback<int> OnUnblock { get; set; }
+
+    // Feature 30 reader entry points (owner ruling D3). The host decides what a click means: an
+    // anonymous viewer gets a login nudge, a signed-in one the RIL-from-card write.
+    /// <summary>Read It Later from this card — raises the recommendation id.</summary>
+    [Parameter] public EventCallback<int> OnReadItLater { get; set; }
+    /// <summary>Whether the viewer already has this story on Read It Later (renders the pressed, inert state).</summary>
+    [Parameter] public bool IsReadItLaterSaved { get; set; }
+    /// <summary>Show the "Read now" direct link to Chapter 1 carrying <c>?rec=</c>.</summary>
+    [Parameter] public bool ShowReadNow { get; set; }
+
+    private static readonly UserStoryInteractionVisuals.Info ReadLaterVisuals =
+        UserStoryInteractionVisuals.For(UserStoryInteractionTypeEnum.ReadLater);
+
+    private string ReadNowHref => $"/story/{Rec.StoryId}/1?rec={Rec.RecommendationId}";
 
     private string CardBorderClass =>
         Rec.Status != RecommendationStatusEnum.Approved

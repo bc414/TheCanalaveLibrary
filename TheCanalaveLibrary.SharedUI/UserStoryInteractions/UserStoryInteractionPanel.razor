@@ -45,13 +45,23 @@
     [Parameter] public bool IsOwnStory { get; set; }
 
     private UserStoryInteractionStateDto? _localState;
+    private UserStoryInteractionStateDto? _lastStateParameter;
     private CancellationTokenSource? _debounce;
     private bool _flushPending;
 
     protected override void OnParametersSet()
     {
-        if (_localState is null)
+        // Adopt the parent's State on first render, and again whenever the parent passes a CHANGED
+        // value while this panel has no pending local toggle. The second half is what keeps a
+        // sibling's write from being clobbered (WU-InertFeatures, owner ruling D3): a recommendation
+        // card's Read It Later saves the story outside this panel, and the host re-reads the state and
+        // passes it down; without adopting it, this panel's next six-bit flush would write
+        // IsReadItLater = false over the card's save (and delete its attribution). An unchanged value
+        // (a parent re-render) is ignored, so already-flushed local toggles are never reverted; a
+        // pending toggle wins, because the user's most recent action here is in flight.
+        if (_localState is null || (!_flushPending && !Equals(State, _lastStateParameter)))
             _localState = State;
+        _lastStateParameter = State;
     }
 
     private bool GetIsActive(UserStoryInteractionTypeEnum type) => type switch

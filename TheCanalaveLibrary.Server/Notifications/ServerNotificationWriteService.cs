@@ -7,22 +7,22 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side write implementation of <see cref="INotificationWriteService"/>. Inherits
 /// <see cref="ServerNotificationReadService"/> for the CQRS-lite read path.
 ///
-/// <para><b>Private create-core (<see cref="CreateCoreAsync"/>).</b> All <c>NotifyNew*Async</c>
+/// <para><b>Private create-core (<see cref="CreateCoreAsync"/>).</b> All <c>Notify*Async</c>
 /// methods are thin wrappers over this single private method, which owns the two universal
-/// invariants: <b>drop-self</b> (a user is never notified of their own action) and
-/// <b>dedup</b> (skip a recipient who already holds an unread notification for the same
-/// type + source + related entity — prevents duplicate notifications from idempotent
-/// or retry-style call sites). There is <em>no</em> public generic <c>CreateAsync</c> that
-/// bypasses these invariants — see <c>cross-cutting.md</c> "Notification Creation" for the
-/// rationale.</para>
+/// invariants: <b>drop-self</b> (an actor is never notified of their own action — conditional on
+/// there being an actor: a null source drops nobody, owner ruling D4) and <b>dedup</b> (skip a
+/// recipient who already holds an unread notification for the same type + source + related entity,
+/// except for the D4-exempt types that have no related entity). There is <em>no</em> public generic
+/// <c>CreateAsync</c> that bypasses these invariants — see <c>layer2-services.md</c>
+/// §"Notification Generation" for the rationale.</para>
 ///
-/// <para><b>DAG rule:</b> fan-out <c>NotifyNew*</c> methods that need to resolve a
-/// recipient list (e.g. followers of an author) will inject <em>read</em> services (e.g.
-/// <c>IFollowingReadService</c>) when those methods land with their work-units. No write
-/// service of a feature that calls this service is injected here — that would create a
-/// cycle. See <c>layer2-services.md</c> "The DAG rule."</para>
+/// <para><b>Recipient resolution / DAG rule:</b> fan-out methods resolve their recipients with
+/// direct queries on this service's own write context — ground truth, Personal plane, never rating-
+/// or audience-filtered. No other feature's service (read or write) is injected here: a feature that
+/// calls this service must never be called back by it. See <c>layer2-services.md</c> "The DAG
+/// rule."</para>
 ///
-/// <para><b>Best-effort post-commit:</b> callers invoke the <c>NotifyNew*Async</c> methods
+/// <para><b>Best-effort post-commit:</b> callers invoke the <c>Notify*Async</c> methods
 /// after their own <c>SaveChangesAsync</c>, inside a <c>try/catch</c> that logs and swallows.
 /// This service's own <c>SaveChangesAsync</c> inside <see cref="CreateCoreAsync"/> is a
 /// separate transaction covering only the notification rows.</para>
@@ -44,6 +44,23 @@ public class ServerNotificationWriteService(
     ILogger<ServerNotificationWriteService> logger)
     : ServerNotificationReadService(readDbFactory, activeUser), INotificationWriteService
 {
+    /// <summary>
+    /// Owner ruling D4: types whose target is the recipient's account itself carry
+    /// <c>RelatedEntityId = 0</c>, and with a null (or constant) source the dedup key would degenerate
+    /// to "one unread row per type per user" — a second warning while the first is unread would
+    /// vanish. These skip the cross-existing dedup step entirely; within-batch dedup still applies.
+    /// Any future dedup unique index must respect this set (and the null source).
+    /// </summary>
+    private static readonly HashSet<NotificationTypeEnum> CrossExistingDedupExempt =
+    [
+        NotificationTypeEnum.AccountWarning,
+        NotificationTypeEnum.AccountSuspended,
+        NotificationTypeEnum.AccountBanned,
+        NotificationTypeEnum.ExternalAccountVerified,
+        NotificationTypeEnum.ExternalAccountRejected,
+        NotificationTypeEnum.SpotlightSlotGranted,
+    ];
+
     // ── Read-side mutations ──────────────────────────────────────────────────────
 
     public async Task MarkAsReadAsync(long notificationId)
@@ -127,29 +144,30 @@ public class ServerNotificationWriteService(
         CreateCoreAsync(NotificationTypeEnum.RecommendationApproved, sourceStoryAuthorId,
             [(recipientRecommenderId, storyId)]);
 
-    // ── Semantic generation methods (WU32 slice — group fan-out) ─────────────────
+    // ── Semantic generation methods (WU32 slice — group fan-out; D16) ────────────
 
     /// <inheritdoc/>
-    public async Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId)
+    public async Task NotifyNewGroupStoryAsync(int groupId, int groupStoryId, int? storyAuthorId, int sourceUserId)
     {
-        // Fan-out to all members with NotifyForNewStory = true (type NewGroupStory = 60).
+        // Fan-out to members with NotifyForNewStory = true (type NewGroupStory = 60). The story's
+        // author is excluded: they get the more specific 25 below — one event, one notification
+        // (service audit §2.8). The adder is dropped by the create-core's drop-self rule.
         List<int> memberIds = await writeDb.GroupMembers
-            .Where(m => m.GroupId == groupId && m.NotifyForNewStory)
+            .Where(m => m.GroupId == groupId && m.NotifyForNewStory
+                        && (storyAuthorId == null || m.UserId != storyAuthorId))
             .Select(m => m.UserId)
             .ToListAsync();
 
-        // Build (recipientId, relatedEntityId=groupId) pairs for fan-out.
-        IReadOnlyList<(int recipientId, int relatedEntityId)> fanOutTargets =
-            memberIds.Select(id => (id, groupId)).ToArray();
+        // D16: both types anchor on the GroupStory junction row — the single most specific entity
+        // of the event; the enricher's GroupStory kind resolves group name + story title from it.
+        if (memberIds.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewGroupStory, sourceUserId,
+                memberIds.Select(id => (id, (long)groupStoryId)).ToArray());
 
-        if (fanOutTargets.Count > 0)
-            await CreateCoreAsync(NotificationTypeEnum.NewGroupStory, sourceUserId, fanOutTargets);
-
-        // Also notify the story author (YourStoryAddedToGroup). Drop-self handled by create-core.
-        await CreateCoreAsync(
-            NotificationTypeEnum.YourStoryAddedToGroup,
-            sourceUserId,
-            [(storyAuthorId, groupId)]);
+        // An authorless story still notifies members (above); only the author's own type needs one.
+        if (storyAuthorId is int authorId)
+            await CreateCoreAsync(NotificationTypeEnum.YourStoryAddedToGroup, sourceUserId,
+                [(authorId, groupStoryId)]);
     }
 
     /// <inheritdoc/>
@@ -161,14 +179,10 @@ public class ServerNotificationWriteService(
             .Select(m => m.UserId)
             .ToListAsync();
 
-        IReadOnlyList<(int recipientId, int relatedEntityId)> targets =
-            memberIds.Select(id => (id, blogPostId)).ToArray();
-
-        if (targets.Count > 0)
-            await CreateCoreAsync(NotificationTypeEnum.NewGroupBlogPost, authorId, targets);
+        if (memberIds.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewGroupBlogPost, authorId,
+                memberIds.Select(id => (id, (long)blogPostId)).ToArray());
     }
-
-    // ── Semantic generation methods (WU42 slice — Story Lineage) ─────────────────
 
     /// <inheritdoc/>
     public async Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId)
@@ -177,12 +191,32 @@ public class ServerNotificationWriteService(
         // NotifyNewGroupBlogPostAsync's shape — GroupMembers swapped for the full Users table.
         List<int> allUserIds = await writeDb.Users.Select(u => u.Id).ToListAsync();
 
-        IReadOnlyList<(int recipientId, int relatedEntityId)> targets =
-            allUserIds.Select(id => (id, blogPostId)).ToArray();
-
-        if (targets.Count > 0)
-            await CreateCoreAsync(NotificationTypeEnum.SiteAnnouncement, authorId, targets);
+        if (allUserIds.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.SiteAnnouncement, authorId,
+                allUserIds.Select(id => (id, (long)blogPostId)).ToArray());
     }
+
+    // ── Semantic generation methods (WU-InertFeatures — new-chapter fan-out) ─────
+
+    /// <inheritdoc/>
+    public async Task NotifyNewChapterAsync(int storyId, int chapterId, int authorId)
+    {
+        // Story followers — presence of IsFollowed is the signal (no per-row opt-in on a story
+        // follow; ReceiveAlerts belongs to user-to-user follows). Personal plane: no rating filter.
+        // A hidden favorite does not enter — there is no private-follow flag (D17).
+        List<int> followerIds = await writeDb.UserStoryInteractions
+            .Where(i => i.StoryId == storyId && i.IsFollowed)
+            .Select(i => i.UserId)
+            .ToListAsync();
+
+        // RelatedEntityId = chapterId: the chapter joins up to its story (D16-conformant). The author
+        // is the source, so an author following their own story is dropped.
+        if (followerIds.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewChapterOnFollowedStory, authorId,
+                followerIds.Select(id => (id, (long)chapterId)).ToArray());
+    }
+
+    // ── Semantic generation methods (WU42 slice — Story Lineage) ─────────────────
 
     /// <inheritdoc/>
     public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) =>
@@ -205,71 +239,75 @@ public class ServerNotificationWriteService(
             sourceUserId: authorId,
             targets: [(acknowledgedUserId, storyId)]);
 
-    // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
+    // ── Semantic generation methods (WU34 slice — moderation; null-sourced, D4/D5) ─
+    //
+    // Every method in this band passes sourceUserId: null — the acting moderator is never disclosed
+    // to the recipient (D5), and none of these methods accepts a moderator id (type-level
+    // enforcement). The Report row (or ReviewedByModeratorUserId) keeps the real moderator.
 
     /// <inheritdoc/>
-    public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ReportReceived, moderatorSourceId,
-            [(reporterUserId, 0)]);
+    public Task NotifyReportReceivedAsync(int reporterUserId, long reportId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportReceived, sourceUserId: null,
+            [(reporterUserId, reportId)]);
 
     /// <inheritdoc/>
-    public Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ReportResolved, moderatorSourceId,
-            [(reporterUserId, 0)]);
+    public Task NotifyReportResolvedAsync(int reporterUserId, long reportId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportResolved, sourceUserId: null,
+            [(reporterUserId, reportId)]);
 
     /// <inheritdoc/>
-    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ReportResolvedNoAction, moderatorSourceId,
-            [(reporterUserId, 0)]);
+    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, long reportId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportResolvedNoAction, sourceUserId: null,
+            [(reporterUserId, reportId)]);
 
     /// <inheritdoc/>
-    public Task NotifyContentRemovedAsync(int contentAuthorUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ContentRemoved, moderatorSourceId,
-            [(contentAuthorUserId, 0)]);
+    public Task NotifyContentRemovedAsync(int contentAuthorUserId, long reportId) =>
+        CreateCoreAsync(NotificationTypeEnum.ContentRemoved, sourceUserId: null,
+            [(contentAuthorUserId, reportId)]);
 
     /// <inheritdoc/>
-    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.StoryApproved, moderatorSourceId,
+    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.StoryApproved, sourceUserId: null,
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
-    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.StoryRejected, moderatorSourceId,
+    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.StoryRejected, sourceUserId: null,
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
-    public Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ExternalAccountVerified, moderatorSourceId,
+    public Task NotifyExternalAccountVerifiedAsync(int userId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalAccountVerified, sourceUserId: null,
             [(userId, 0)]);
 
     /// <inheritdoc/>
-    public Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ExternalAccountRejected, moderatorSourceId,
+    public Task NotifyExternalAccountRejectedAsync(int userId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalAccountRejected, sourceUserId: null,
             [(userId, 0)]);
 
     /// <inheritdoc/>
-    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ExternalLinkVerified, moderatorSourceId,
+    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalLinkVerified, sourceUserId: null,
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
-    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.ExternalLinkRejected, moderatorSourceId,
+    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalLinkRejected, sourceUserId: null,
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
-    public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.AccountWarning, moderatorSourceId,
+    public Task NotifyAccountWarningAsync(int targetUserId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountWarning, sourceUserId: null,
             [(targetUserId, 0)]);
 
     /// <inheritdoc/>
-    public Task NotifyAccountSuspendedAsync(int targetUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.AccountSuspended, moderatorSourceId,
+    public Task NotifyAccountSuspendedAsync(int targetUserId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountSuspended, sourceUserId: null,
             [(targetUserId, 0)]);
 
     /// <inheritdoc/>
-    public Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.AccountBanned, moderatorSourceId,
+    public Task NotifyAccountBannedAsync(int targetUserId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountBanned, sourceUserId: null,
             [(targetUserId, 0)]);
 
     // ── Semantic generation methods (WU-Spotlight slice) ─────────────────────────
@@ -294,7 +332,7 @@ public class ServerNotificationWriteService(
     /// <inheritdoc/>
     public Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
         CreateCoreAsync(NotificationTypeEnum.PollUpdated, pollOwnerUserId,
-            voterUserIds.Select(id => (id, relatedEntityId)).ToArray());
+            voterUserIds.Select(id => (id, (long)relatedEntityId)).ToArray());
 
     // ── Semantic generation methods (WU-B2 slice — comments & profile blog posts) ─
 
@@ -351,8 +389,11 @@ public class ServerNotificationWriteService(
                 .Where(i => i.StoryId == sid && i.IsFollowed)
                 .Select(i => i.UserId)
                 .ToListAsync();
+            // D17: every favoriter state counts — public, hidden-from-visitors, and private-only. A
+            // hidden favorite suppresses public-plane consequences only; this notification goes to
+            // the favoriter alone, so withholding it would just punish choosing privacy.
             storyFavoriters = await writeDb.UserStoryInteractions
-                .Where(i => i.StoryId == sid && i.IsFavorite)
+                .Where(i => i.StoryId == sid && (i.IsFavorite || i.IsHiddenFavorite))
                 .Select(i => i.UserId)
                 .ToListAsync();
             storyReadLaters = await writeDb.UserStoryInteractions
@@ -370,81 +411,90 @@ public class ServerNotificationWriteService(
 
         if (authorFollowers.Count > 0)
             await CreateCoreAsync(NotificationTypeEnum.NewBlogPostByFollowedUser, authorId,
-                authorFollowers.Select(id => (id, blogPostId)).ToArray());
+                authorFollowers.Select(id => (id, (long)blogPostId)).ToArray());
         if (followedStorySet.Count > 0)
             await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnFollowedStory, authorId,
-                followedStorySet.Select(id => (id, blogPostId)).ToArray());
+                followedStorySet.Select(id => (id, (long)blogPostId)).ToArray());
         if (favoritedStorySet.Count > 0)
             await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnFavoritedStory, authorId,
-                favoritedStorySet.Select(id => (id, blogPostId)).ToArray());
+                favoritedStorySet.Select(id => (id, (long)blogPostId)).ToArray());
         if (readLaterStorySet.Count > 0)
             await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnReadItLaterStory, authorId,
-                readLaterStorySet.Select(id => (id, blogPostId)).ToArray());
+                readLaterStorySet.Select(id => (id, (long)blogPostId)).ToArray());
     }
 
     /// <inheritdoc/>
-    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId) =>
-        CreateCoreAsync(NotificationTypeEnum.TagUpdateSuggestion, moderatorSourceId,
-            recipientAuthorIds.Select(id => (id, targetTagId)).ToArray());
+    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId) =>
+        // Null-sourced: the invitation is a moderation act (D5's routed sub-edge).
+        CreateCoreAsync(NotificationTypeEnum.TagUpdateSuggestion, sourceUserId: null,
+            recipientAuthorIds.Select(id => (id, (long)targetTagId)).ToArray());
 
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>
     /// Inserts <c>Notification</c> rows for the given <paramref name="targets"/>, enforcing:
     /// <list type="bullet">
-    ///   <item><b>Drop-self:</b> any target whose <c>recipientId == sourceUserId</c> is silently
-    ///   skipped (users are never notified of their own actions).</item>
+    ///   <item><b>Drop-self (conditional, D4):</b> a target is skipped only when there IS an actor
+    ///   and the recipient is that actor (<c>sourceUserId is int s &amp;&amp; recipientId == s</c>). A
+    ///   null source — no actor — drops nobody.</item>
     ///   <item><b>Within-batch dedup:</b> duplicate <c>recipientId</c> values in
     ///   <paramref name="targets"/> are collapsed (first-wins).</item>
     ///   <item><b>Cross-existing dedup:</b> recipients who already hold an unread notification
-    ///   of the same <paramref name="type"/> + <paramref name="sourceUserId"/> + related entity
-    ///   are skipped (prevents duplicate notifications from idempotent or retry-style callers).
-    ///   </item>
+    ///   of the same <paramref name="type"/> + <paramref name="sourceUserId"/> + related entity are
+    ///   skipped (absorbs idempotent or retry-style callers). A null source matches a null source.
+    ///   Skipped entirely for <see cref="CrossExistingDedupExempt"/>.</item>
     /// </list>
     /// All remaining rows are bulk-inserted in a single <c>SaveChangesAsync</c>. No-ops when
     /// every target is filtered out.
     /// </summary>
     /// <param name="type">The notification type to create.</param>
-    /// <param name="sourceUserId">The user whose action triggered the notification.</param>
+    /// <param name="sourceUserId">
+    /// The actor whose action triggered the notification, or <c>null</c> for no actor
+    /// (system-sourced, self-caused, or de-identified — the moderation band and type 26). A type with
+    /// a real actor must always pass it: null removes drop-self's protection (D4 guardrail).
+    /// </param>
     /// <param name="targets">
-    /// Each element is <c>(recipientId, relatedEntityId)</c>. For follow/vouch the
-    /// <c>relatedEntityId</c> is the source user's id; for chapter notifications it will be
-    /// the chapter id; etc. — polymorphic, type-specific.
+    /// Each element is <c>(recipientId, relatedEntityId)</c> — the single most specific entity of the
+    /// event, interpreted per type (D16); <c>0</c> = none.
     /// </param>
     private async Task CreateCoreAsync(
         NotificationTypeEnum type,
-        int sourceUserId,
-        IReadOnlyList<(int recipientId, int relatedEntityId)> targets)
+        int? sourceUserId,
+        IReadOnlyList<(int recipientId, long relatedEntityId)> targets)
     {
         // Step 1 — drop-self + within-batch dedup (first-wins on duplicate recipientId).
-        Dictionary<int, int> deduped = new(); // recipientId → relatedEntityId
+        Dictionary<int, long> deduped = new(); // recipientId → relatedEntityId
         foreach (var (recipientId, relatedEntityId) in targets)
         {
-            if (recipientId != sourceUserId) // drop self
-                deduped.TryAdd(recipientId, relatedEntityId);
+            if (sourceUserId is int source && recipientId == source) continue; // drop self (D4)
+            deduped.TryAdd(recipientId, relatedEntityId);
         }
 
         if (deduped.Count == 0) return;
 
-        // Step 2 — cross-existing dedup: check all candidate recipients in one query,
-        // skipping those who already have an unread notification of this type + source + related.
-        IReadOnlyList<int> candidateIds = [.. deduped.Keys];
+        // Step 2 — cross-existing dedup: skip recipients who already hold an unread notification of
+        // this type + source + related entity. RelatedEntityId is in the key so two notifications
+        // about *different* targets both arrive — for the moderation band that target is the report
+        // id (D4), so two removals of one author's items are two rows. The D4-exempt types have no
+        // related entity at all (0) and skip this step: two warnings must be two rows.
+        HashSet<(int recipientId, long relatedEntityId)> alreadyNotified = [];
+        if (!CrossExistingDedupExempt.Contains(type))
+        {
+            IReadOnlyList<int> candidateIds = [.. deduped.Keys];
 
-        // Cross-existing dedup: load existing unread notifications of this type + source for the
-        // candidates, then match (recipientId, relatedEntityId) in memory. Including RelatedEntityId
-        // in the key ensures two notifications from the same source about *different* targets
-        // (e.g. two content-removed notifications for different stories) both reach the recipient.
-        var existingPairs = await writeDb.Notifications
-            .Where(n =>
-                candidateIds.Contains(n.RecipientUserId) &&
-                n.NotificationTypeId == type &&
-                n.SourceUserId == sourceUserId &&
-                !n.IsRead)
-            .Select(n => new { n.RecipientUserId, n.RelatedEntityId })
-            .ToListAsync();
+            // `n.SourceUserId == sourceUserId` with a null sourceUserId translates to IS NULL (EF's
+            // C# null semantics), so null-sourced rows dedup against null-sourced rows only.
+            var existingPairs = await writeDb.Notifications
+                .Where(n =>
+                    candidateIds.Contains(n.RecipientUserId) &&
+                    n.NotificationTypeId == type &&
+                    n.SourceUserId == sourceUserId &&
+                    !n.IsRead)
+                .Select(n => new { n.RecipientUserId, n.RelatedEntityId })
+                .ToListAsync();
 
-        HashSet<(int recipientId, int relatedEntityId)> alreadyNotified =
-            existingPairs.Select(x => (x.RecipientUserId, x.RelatedEntityId)).ToHashSet();
+            alreadyNotified = existingPairs.Select(x => (x.RecipientUserId, x.RelatedEntityId)).ToHashSet();
+        }
 
         List<Notification> rows = deduped
             .Where(kv => !alreadyNotified.Contains((kv.Key, kv.Value)))

@@ -46,8 +46,15 @@ public interface IChapterWriteService : IChapterReadService
     Task SetPrimaryVersionAsync(int chapterId, long chapterContentId);
 
     /// <summary>
-    /// Publishes or unpublishes a chapter. Maintains <c>Story.ChapterCount</c>
-    /// (<c>Story.ChapterCount</c> is not in the current C# model — see audit note.)
+    /// Publishes or unpublishes a chapter (author only). The first publish stamps the chapter's
+    /// <c>FirstPublishedDate</c> (D2's publish anchor, never moved afterwards) and each still-unstamped
+    /// version's <c>PublishDate</c>; unpublish touches no date. There is no stored chapter count to
+    /// maintain — <c>Story.ChapterCount</c> is computed from the published chapters in projections.
+    /// <para><b>New-chapter fan-out (WU-InertFeatures):</b> the call that performs the
+    /// <c>FirstPublishedDate</c> stamp fires <see cref="INotificationWriteService.NotifyNewChapterAsync"/>
+    /// best-effort after its commit — once per chapter, ever (republishing, adding or promoting a
+    /// version and editing never notify) — and only while the story is publicly published and not
+    /// taken down (a default, <c>roadmap.md</c> row 17).</para>
     /// </summary>
     /// <exception cref="KeyNotFoundException">Chapter not found.</exception>
     Task SetPublishedAsync(int chapterId, bool isPublished);

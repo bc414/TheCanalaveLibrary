@@ -13,13 +13,13 @@ namespace TheCanalaveLibrary.Server;
 /// Reads are public — recommendations cannot have spoilers (audit/Recommendations.md), mirroring
 /// the public story page's recommendation display. <see cref="IRecommendationReadService.GetRecommendedStoryIdsAsync"/>,
 /// <see cref="IRecommendationReadService.GetHiddenGemStoryIdsAsync"/>, and
-/// <see cref="IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync"/> resolve the viewer
+/// <see cref="IRecommendationReadService.GetHelpfulPromptAsync"/> resolve the viewer
 /// from <c>IActiveUserContext</c> but the service degrades gracefully to an empty list/null for
 /// anonymous callers rather than throwing (mirrors <c>IFollowingReadService.GetRelationshipStateAsync</c>'s
 /// zero-state pattern), so they stay public rather than <c>RequireAuthorization()</c>-gated.
 /// </para>
 /// <para>
-/// Writes (submit/edit/delete/like/Hidden-Gem toggle/spotlight/attribution) require an
+/// Writes (submit/edit/delete/like/Hidden-Gem toggle/spotlight/helpful-prompt answers) require an
 /// authenticated user — the service enforces author-only ownership via
 /// <see cref="UnauthorizedAccessException"/> (→ 403) and unauthenticated-caller guards via
 /// <see cref="InvalidOperationException"/> (→ 401); <c>RequireAuthorization()</c> is added as
@@ -63,7 +63,7 @@ public static class RecommendationEndpoints
 
         group.MapGet("/helpful-prompt/{storyId:int}",
             async (IRecommendationReadService recs, int storyId) =>
-                Results.Json(await recs.GetHelpfulPromptRecommendationIdAsync(storyId)));
+                Results.Json(await recs.GetHelpfulPromptAsync(storyId)));
 
         group.MapGet("/by-user/{userId:int}/story-ids",
             async (IRecommendationReadService recs, int userId) =>
@@ -170,15 +170,16 @@ public static class RecommendationEndpoints
                     }))
             .RequireAuthorization();
 
-        group.MapPost("/attribution/{storyId:int}/{recommendationId:int}", (
-                IRecommendationWriteService recs,
-                int storyId,
-                int recommendationId) =>
-                EndpointHelpers.ExecuteAsync(async () =>
-                {
-                    await recs.RecordAttributionSourceAsync(storyId, recommendationId);
-                    return Results.NoContent();
-                }))
+        // The helpful prompt's X (owner ruling D3): deletes the caller's own attribution for this rec.
+        // (The old on-load attribution POST was retired with D3 — attribution is now written only by the
+        // Read It Later card button and the Ch.1 90% MarkStarted call; see UserStoryInteractionEndpoints.)
+        group.MapPost("/{recommendationId:int}/helpful-prompt/dismiss",
+                (IRecommendationWriteService recs, int recommendationId) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                    {
+                        await recs.DismissHelpfulPromptAsync(recommendationId);
+                        return Results.NoContent();
+                    }))
             .RequireAuthorization();
 
         return app;

@@ -251,9 +251,12 @@ migration, and disposes it at the end of the run.
 ## Integration test setup: seed FK parents before testing a write
 
 When a service writes to a table that has FK constraints, all parent rows must exist before
-the call. In the real application, prior user navigation creates them (e.g. opening a story
-creates a `UserStoryInteraction` row before `RecordAttributionSourceAsync` is ever called). In
-integration tests, that prior navigation does not run.
+the call. In the real application, prior user activity creates them (e.g. a reader marks a story
+Read It Later — creating its `UserStoryInteraction` row — before `RecordSuccessAsync` can ever
+consume that story's attribution row). In integration tests, that prior activity does not run.
+(Corrected WU-InertFeatures, 2026-09-30: the old example claimed that opening a story creates a USI
+row before an attribution write — a production path that never existed, and the reason the
+attribution write FK-failed in practice.)
 
 **For every integration test that exercises a service write:**
 1. Map every FK on the target table (check the EF configuration file for the cluster).

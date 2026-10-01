@@ -19,9 +19,10 @@
 @inject IPublicUrlProvider PublicUrlProvider
 
 @* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
-   Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC, version list,
-   prompt-gate recommendation id, and wires reading-progress scroll JS.
-   Scroll progress → RecordProgressAsync; Ch.1 ≥90% → MarkStartedAsync + reveal helpful prompt.
+   Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC and version list, and
+   wires reading-progress scroll JS. Scroll progress → RecordProgressAsync; Ch.1 ≥90% →
+   MarkStartedAsync (carrying the ?rec= direct-link attribution, owner ruling D3 — nothing is written
+   on page load) → fetch the helpful prompt.
    [PersistentState] on Chapter/Toc/Versions eliminates the prerender→interactive double fetch;
    every reading-progress/read-mark signal stays ephemeral (layer5-wasm.md §"Avoiding the double
    fetch"). *@
@@ -153,11 +154,15 @@ else
             </CanalaveErrorBoundary>
         </section>
 
-        @* Recommendation helpful-prompt gate: source present + no prior success + Ch.1 scroll ≥90% *@
-        @if (_recId.HasValue && _progressReached90)
+        @* Recommendation helpful prompt (owner ruling D3): fetched at the Ch.1 ≥90% moment, after
+           MarkStartedAsync has had the chance to record a ?rec= direct-link attribution. Non-null only
+           when the reader holds an attribution for this story, the rec is still visible, its
+           recommender is named, and no success is recorded. *@
+        @if (_prompt is not null)
         {
-            <RecommendationHelpfulPrompt RecommendationId="@_recId.Value"
-                                         OnRespond="HandleHelpfulPromptResponse" />
+            <RecommendationHelpfulPrompt Recommendation="@_prompt"
+                                         OnHelpful="HandlePromptHelpfulAsync"
+                                         OnDismiss="HandlePromptDismissAsync" />
         }
     </div>
 }
@@ -209,7 +214,11 @@ else
     private StoryListingDto? _storyListing;
     private int? _currentUserId;
     private bool _isAuthor;
-    private int? _recId;
+    // ?rec= the reader arrived with (the recommendation's "Read now" link) — parsed at load, never
+    // written at load: it rides MarkStartedAsync at the Ch.1 ≥90% moment (owner ruling D3).
+    private int? _queryRecId;
+    // The helpful prompt's recommendation, fetched at that same moment; null = no prompt.
+    private RecommendationDto? _prompt;
     private bool _progressReached90;
     // A3 (2026-07-24): guards the final-chapter completion trigger so MarkCompletedAsync fires once
     // per page visit, mirroring _progressReached90's guard shape for MarkStartedAsync.
@@ -283,7 +292,8 @@ else
         _arcs = [];
         _storyListing = null;
         _isAuthor = false;
-        _recId = null;
+        _queryRecId = null;
+        _prompt = null;
         _progressReached90 = false;
         _completedMarked = false;
         _gate = null;
@@ -342,31 +352,18 @@ else
         _storyListing  = storyListingTask.Result.FirstOrDefault();
         _arcs          = arcsTask.Result;
 
-        // Prompt gate — null when: anonymous, no source, or success already recorded.
+        // Direct-link attribution carrier (?rec=, owner ruling D3) — remembered, NOT written. The old
+        // on-load write ran before any interaction row could exist and FK-failed for every new reader;
+        // it now rides MarkStartedAsync at the Ch.1 ≥90% moment, where the parent row is guaranteed.
+        // Authenticated readers only (an anonymous reader has nothing to attribute).
         if (_currentUserId.HasValue)
-            _recId = await RecommendationReadService.GetHelpfulPromptRecommendationIdAsync(StoryId);
-
-        // Attribution capture from ?rec= query param (fires only when the param is present).
-        var uri = new Uri(NavigationManager.Uri);
-        var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        if (int.TryParse(qs["rec"], out int queryRecId) && _currentUserId.HasValue)
-            _ = RecordAttributionObservedAsync(queryRecId);
+        {
+            var qs = System.Web.HttpUtility.ParseQueryString(new Uri(NavigationManager.Uri).Query);
+            if (int.TryParse(qs["rec"], out int queryRecId))
+                _queryRecId = queryRecId;
+        }
 
         _isLoading = false;
-    }
-
-    // Fire-and-forget by contract — attribution capture must never block or fail the chapter
-    // load. The loss is tolerated but observed (logging.md §"No silent catches").
-    private async Task RecordAttributionObservedAsync(int recId)
-    {
-        try
-        {
-            await RecommendationWriteService.RecordAttributionSourceAsync(StoryId, recId);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Attribution-source capture failed for story {StoryId}, recommendation {RecommendationId}", StoryId, recId);
-        }
     }
 
     // _jsRegistered is the sole gate (no firstRender check) so that re-registration works after
@@ -394,7 +391,11 @@ else
         if (ChapterNumber == 1 && progress >= 0.9f && !_progressReached90)
         {
             _progressReached90 = true;
-            await UserStoryInteractionWriteService.MarkStartedAsync(StoryId);
+            // MarkStarted first: it is where a ?rec= direct link becomes an attribution (D3), so the
+            // prompt read below can already see it.
+            await UserStoryInteractionWriteService.MarkStartedAsync(StoryId, _queryRecId);
+            if (_currentUserId.HasValue)
+                await LoadHelpfulPromptAsync();
             await InvokeAsync(StateHasChanged);
         }
 
@@ -410,11 +411,51 @@ else
         }
     }
 
-    private async Task HandleHelpfulPromptResponse(bool wasHelpful)
+    // The prompt is a reading-page nicety: a failed read just means no prompt this visit (the
+    // attribution survives, so it is offered again next time). Observed, not silent.
+    private async Task LoadHelpfulPromptAsync()
     {
-        if (wasHelpful && _recId.HasValue)
-            await RecommendationWriteService.RecordSuccessAsync(_recId.Value);
-        _recId = null;  // dismiss regardless of response
+        try
+        {
+            _prompt = await RecommendationReadService.GetHelpfulPromptAsync(StoryId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Helpful-prompt read failed for story {StoryId}", StoryId);
+        }
+    }
+
+    // Yes (thumbs up) — records the success and consumes the attribution server-side. The widget
+    // closes either way; a failure is logged (the attribution survives, so it is asked again later).
+    private async Task HandlePromptHelpfulAsync()
+    {
+        if (_prompt is not { } rec) return;
+        _prompt = null;
+        try
+        {
+            await RecommendationWriteService.RecordSuccessAsync(rec.RecommendationId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Recording a helpful recommendation failed for story {StoryId}, recommendation {RecommendationId}",
+                StoryId, rec.RecommendationId);
+        }
+    }
+
+    // X — the decline (D3): deletes the attribution so the prompt never returns. Closes either way.
+    private async Task HandlePromptDismissAsync()
+    {
+        if (_prompt is not { } rec) return;
+        _prompt = null;
+        try
+        {
+            await RecommendationWriteService.DismissHelpfulPromptAsync(rec.RecommendationId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Dismissing the helpful prompt failed for story {StoryId}, recommendation {RecommendationId}",
+                StoryId, rec.RecommendationId);
+        }
     }
 
     // Disposes the JS scroll-progress registration and the DotNetObjectReference.

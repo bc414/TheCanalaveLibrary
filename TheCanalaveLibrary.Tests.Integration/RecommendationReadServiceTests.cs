@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -198,7 +199,120 @@ public class RecommendationReadServiceTests(PostgresFixture postgres) : Integrat
         recs.Should().BeEmpty();
     }
 
+    // ── GetHelpfulPromptAsync — the four gates (owner ruling D3, WU-InertFeatures) ──
+
+    [Fact]
+    public async Task GetHelpfulPrompt_HappyPath_ReturnsTheRecommendationWithItsRecommenderCard()
+    {
+        int recId = await SeedRecAsync(_otherUserId, _storyId, RecommendationStatusEnum.Approved);
+        await SeedAttributionAsync(_userId, _storyId, recId);
+        SetActiveUser(_userId);
+
+        RecommendationDto? prompt = await CallGetHelpfulPromptAsync(_storyId);
+
+        prompt.Should().NotBeNull();
+        prompt!.RecommendationId.Should().Be(recId);
+        prompt.Recommender!.UserId.Should().Be(_otherUserId, "the widget shows the recommendation as a reminder");
+        prompt.BodyHtml.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_Anonymous_ReturnsNull()
+    {
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_NoAttribution_ReturnsNull()
+    {
+        await SeedRecAsync(_otherUserId, _storyId, RecommendationStatusEnum.Approved);
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_SuccessAlreadyRecorded_ReturnsNull()
+    {
+        int recId = await SeedRecAsync(_otherUserId, _storyId, RecommendationStatusEnum.Approved);
+        await SeedAttributionAsync(_userId, _storyId, recId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.RecommendationSuccesses.Add(new RecommendationSuccess { UserId = _userId, RecommendationId = recId });
+            await db.SaveChangesAsync();
+        }
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(RecommendationStatusEnum.NeedsRevision)]
+    [InlineData(RecommendationStatusEnum.Rejected)]
+    public async Task GetHelpfulPrompt_RecNotApproved_ReturnsNull(RecommendationStatusEnum status)
+    {
+        int recId = await SeedRecAsync(_otherUserId, _storyId, status);
+        await SeedAttributionAsync(_userId, _storyId, recId);
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull(
+            "a NeedsRevision rec keeps its attribution (not a removal trigger) but can't be shown");
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_RecTakenDown_ReturnsNull()
+    {
+        int recId = await SeedRecAsync(_otherUserId, _storyId, RecommendationStatusEnum.Approved);
+        await SeedAttributionAsync(_userId, _storyId, recId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Recommendations
+                .Where(r => r.RecommendationId == recId)
+                .ExecuteUpdateAsync(u => u.SetProperty(r => r.IsTakenDown, true));
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_AnonymousRecommender_ReturnsNull()
+    {
+        int recId = await SeedRecAsync(null, _storyId, RecommendationStatusEnum.Approved);
+        await SeedAttributionAsync(_userId, _storyId, recId);
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(_storyId)).Should().BeNull(
+            "gated at read time: a recommender deleted between the save and the read can't be thanked");
+    }
+
+    [Fact]
+    public async Task GetHelpfulPrompt_HiddenStory_ReturnsNull()
+    {
+        int draftStory = await SeedStoryAsync(await SeedUserAsync(), status: StoryStatusEnum.Draft);
+        int recId = await SeedRecAsync(_otherUserId, draftStory, RecommendationStatusEnum.Approved);
+        await SeedAttributionAsync(_userId, draftStory, recId);
+        SetActiveUser(_userId);
+        (await CallGetHelpfulPromptAsync(draftStory)).Should().BeNull();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private async Task<RecommendationDto?> CallGetHelpfulPromptAsync(int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IRecommendationReadService>()
+            .GetHelpfulPromptAsync(storyId);
+    }
+
+    /// <summary>The reader's attribution as the real producers leave it: an RIL'd USI row (FK parent)
+    /// plus the sources row (owner ruling D3).</summary>
+    private async Task SeedAttributionAsync(int userId, int storyId, int recId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = userId, StoryId = storyId, IsReadItLater = true });
+        db.UserStoryRecommendationSources.Add(new UserStoryRecommendationSource
+        {
+            UserId = userId, StoryId = storyId, SourceRecommendationId = recId,
+        });
+        await db.SaveChangesAsync();
+    }
 
     private async Task<List<RecommendationDto>> CallGetForStoryAsync(int storyId)
     {
