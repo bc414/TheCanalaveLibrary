@@ -17,17 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-InertFeatures (2026-09-30) — owner rulings **D3, D4, D5, D16, D17** plus the
-  new-chapter fan-out. Recommendation attribution now rides the Read-It-Later bit: a card RIL button
-  (every rec-card host) and a `?rec=` link persisted at Ch.1 90%, one save each; the on-load write is
-  retired; the prompt is a Yes/X reminder card; `RecordSuccessAsync` requires and consumes the row.
-  Notifications: nullable source, the 70–82 band and type 26 de-identified, report-id anchors,
-  dedup-exempt account types, `ReportReceived` restored, `GroupStory`-anchored group notices, hidden
-  favoriters in type 15, and type 10 on a chapter's first publish. Migration `WU_InertFeatures`
-  (bigint `related_entity_id`, phantom FK column dropped). F16/F30/F41 L4.5 → 1 (no browser).
-  `dotnet test`: Unit 1,047, RazorComponents 726, Integration 1,250. New decision rows **17–18**;
-  trackers **B20–B22** closed, **B23/B24/H14** opened. **Pointers:** its DONE entry;
-  `layer2-services.md` §"Notification Generation" and §"Attribution (Feature 30)".
+- **Last landed:** WU-InertFeatures (2026-09-30, build + review-fixes commits) — owner rulings **D3,
+  D4, D5, D16, D17** plus the new-chapter fan-out. Attribution rides the Read-It-Later bit: a card RIL
+  button in every rec-card host (its saved state is the host's, synced from the panel) and a `?rec=`
+  link persisted at Ch.1 90%, then dropped from the address; Yes/X reminder prompt; `RecordSuccessAsync`
+  requires and consumes the row. Notifications: nullable source, the 70–82 band and type 26
+  de-identified (each call site skips the acting moderator), report-id anchors, dedup-exempt account
+  types, `ReportReceived` restored, `GroupStory` anchors, hidden favoriters in 15, type 10 on a first
+  publish. Migration `WU_InertFeatures`. L4.5 → 1 for F16/F30/F33/F41/F55 (no browser — **H14**).
+  `dotnet test`: Unit 1,058, RazorComponents 754, Integration 1,261. Decision rows **17–19**; trackers
+  **B20–B22** closed, **B23/B24/H14** opened. **Pointers:** its DONE entry; `layer2-services.md`
+  §"Notification Generation" and §"Attribution (Feature 30)".
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
@@ -258,13 +258,14 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–18** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–19** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
-  story-lifecycle questions WU-StoryLifecycle left open — and 17–18 — the two defaults
-  WU-InertFeatures had to take — added 2026-09-30). Separately, not a
+  story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
+  WU-InertFeatures had to take — and 19 — type 90's moderator attribution, filed by its review
+  fixes — added 2026-09-30). Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, and tracker **H14**'s pass
-  over recommendation attribution and the new notifications (it returns F16/F30/F41 L4.5 to 5) need
+  over recommendation attribution and the new notifications (it returns F16/F30/F33/F41/F55 L4.5 to 5) need
   Brian's own browser session —
   see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -415,8 +416,9 @@ is pending except where a bullet says so.
 
 ## WU-InertFeatures — recommendation attribution rebuilt on the RIL bit, notification core (nullable source, de-identified moderation band, one-anchor rule, hidden favoriters), new-chapter fan-out (worksheet D3/D4/D5/D16/D17; extends `Recommendations/`, `UserStoryInteractions/`, `Notifications/`, `Moderation/`, `Groups/`, `Chapters/`, `Tags/`, `Stories/`, `Discovery/`, `Spotlight/`) — DONE ✓ (2026-09-30)
 
-- **Cells:** **F16 / F30 / F41 L4.5 5→1** (UI and bell behavior changed with no browser in this
-  environment — tracker **H14** restores them); everything else beneath Stage-5 cells: F30
+- **Cells:** **F16 / F30 / F41 L4.5 5→1** (UI and bell behavior changed; WU-InertFeatures ran with
+  no browser available — tracker **H14** restores them); the review fixes added **F33 / F55 L4.5
+  5→1** (same reason); everything else beneath Stage-5 cells: F30
   L1/L2/L3/L3.5/L5, F16 L2/L3, F41 L1/L2, F42 L2, F39 L2, F46/F47/F48/F53 L2, F6 L2.
 - **Trigger:** five answered, unbuilt owner rulings (D3, D4, D5, D16, D17) and three inert features
   the service audit found (§2.3.1 chapter publish notified nobody; §2.3.2 `ReportReceived` deleted by
@@ -461,7 +463,8 @@ is pending except where a bullet says so.
      `check-doc-hygiene.ps1` registers both retired method names.
 - **Left alone, with the reason:** D16's re-point backlog (owner: "none urgent" — tracker **B23**);
   unproduced types 11/12/20/21/41/42 (tracker **B24**); story-lineage surrogate PK (a schema
-  implication, not decided work); 90's source (outside D5's band, unruled); self-recommender credit
+  implication, not decided work); 90's source (outside D5's band, unruled — decision row 19 since the
+  review fixes); self-recommender credit
   (unruled — row 18); the report-driven account action sending 81 to a member reporter
   (WU-ModerationIntegrity); presenter arms for 90–92 and §2.8's remainder (WU-NotificationCorrectness);
   throttles on the new write endpoints (WU-ThrottleCoverage, D20 pending); a story-centric USI index
@@ -475,10 +478,49 @@ is pending except where a bullet says so.
   additions). Mutation-checked: dedup exemption, author exclusion, D17 predicate, credit gate, both
   trigger-5 sweeps, trigger 1, the panel's adoption clause and both fan-out guards each fail their
   tests when removed. All four PowerShell gates pass. **No browser was available** — tracker **H14**.
+- **Review fixes (second commit, 2026-09-30).** Three reviews; 19 findings (14 distinct), each
+  checked against the code and the worksheet. All were real; one needed no change once checked:
+  1. **The acting moderator is never notified of their own act.** D5's null source drops nobody, so
+     the band lost drop-self's protection. A moderator resolving a report they filed got 81/82, and
+     one removing their own content got 70; the same held for 75/71 (own story), 76–79 (own account
+     or link), 72–74 (a report-driven action on themselves) and 26 (a fanon name they used). Every call
+     site now skips them. This is D4's guardrail generalized in `layer2-services.md`; 80 stays, since
+     filing is the member's own act.
+  2. **The dismissed prompt stays dismissed.** X deleted the row, but `?rec=` stayed in the address,
+     so a reload minted a new one. The page now drops the carrier once used (replaced history entry,
+     scroll kept), and `IsAttributableAsync` refuses an already-credited rec. That second rule is
+     derived, not owner text: such a row could never be consumed.
+  3. **The card's saved state is the host's.** Both card hosts latched "Saved for later". A Read It
+     Later cleared in the panel left the button disabled, which blocks D3's re-RIL, and Deep Dive
+     carried the latch to the next node. The latches are gone; the panel raises `OnStateSaved`,
+     `StoryCard` forwards it, and the four hosts update their copy. Deep Dive and Explore key the
+     cards.
+  4. **Tests the WU owed:** new `ReadItLaterRecommendationCardTests` (nudge, error paths), the
+     section's error path, Deep Dive's C11 case (a gem node), and `RecordSuccessAsync`'s
+     lingering-row delete.
+  5. **Docs:**
+     - Moment 2: `layer3-logic.md` (idle adoption and reporting, and why not an `@key` remount) and
+       `layer3.5-structure.md` (the panel example).
+     - The audit notes the WU skipped: F5, F7/F44, F33 and F55. F33 and F55 L4.5 go to 1, and H14
+       is extended.
+     - Roadmap row 19 (type 90's moderator attribution); the enricher bound now reads "max 8";
+       session-relative wording fixed.
+     - WU-StoryLifecycle's "`StoryRejected` carrying its reason" hand-off is closed with no change. No
+       notification carries free text (`content-safety.md` §"Content Removal"); the author reads the
+       reason in the editor (`StoryUpdateDTO.RejectionReason`); the column issue is tracker **D6**.
+  6. **Checked, nothing to fix:** rows written before the migration. 60/25 rows anchored on a group
+     id and moderator-sourced 70–82/26 rows would display wrongly, but a `psql` count found 0 such
+     rows in the dev DB (reset since), the seed writes neither shape, and no production DB exists.
+  `dotnet test`: **Unit 1,058, RazorComponents 754 (+16), Integration 1,261 (+8)**. Every
+  fix-specific test failed against a targeted revert of its fix. Build clean in touched files; all
+  four gates pass. **No browser was available** — H14 gained the un-save, Deep Dive, carrier and
+  self-resolve steps.
 - **Pointers:** `layer2-services.md` §"Notification Generation", §"Polymorphic RelatedEntityId",
   §"Attribution (Feature 30)"; Stage notes in `audit/Recommendations.md` F30,
   `audit/UserStoryInteractions.md` F16, `audit/Notifications.md` F41/F42, `audit/Groups.md` F39,
-  `audit/Moderation.md` F46/F47/F48/F53, `audit/Chapters.md` F6, `audit/Tags.md` (type 26).
+  `audit/Moderation.md` F46/F47/F48/F53, `audit/Chapters.md` F6 and (review fixes) F7/F44,
+  `audit/Tags.md` (type 26), and (review fixes) `audit/Stories.md` F5, `audit/Discovery.md` F33,
+  `audit/Spotlight.md` F55.
 
 ## WU-AccessGateSweep2 — raises gated, clears free; service audit §2.6 access fixes (worksheet D6; extends `UserStoryInteractions/`, `Chapters/`, `BlogPosts/`, `Comments/`, `Recommendations/`, `Following/`, `Collaboration/`, `Stories/`, `Profiles/`, `Seo/`) — DONE ✓ (2026-09-30)
 
@@ -657,7 +699,8 @@ is pending except where a bullet says so.
   unthrottled by the existing `security.md` rule); the D21/D22 doctrine rewording →
   WU-CounterSymmetry (this WU wrote the trust-counter statement it must reuse); the rejection reason
   living in the takedown columns → D8 / WU-ModerationIntegrity (tracker **D6**); `StoryRejected`
-  carrying its reason → D4/D5 / WU-InertFeatures. Observed and filed, not fixed: chapter publish
+  carrying its reason → D4/D5 / WU-InertFeatures (closed there with no change at its review fixes —
+  no notification carries free text; see its DONE entry). Observed and filed, not fixed: chapter publish
   never bumps `Story.LastUpdatedDate` (tracker **D7**). Known interim gap: author lifecycle errors
   read "Story validation failed." on WASM until WU-ParityAndRemaining P1.
 - **Verification.** `dotnet build` green, no new warnings in touched files. `dotnet test` green:

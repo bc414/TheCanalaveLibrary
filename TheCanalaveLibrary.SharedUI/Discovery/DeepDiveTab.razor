@@ -56,9 +56,13 @@
                 <div class="flex flex-col gap-3 p-3">
                     @if (_openStory is { } story)
                     {
-                        <StoryCard Story="story"
+                        @* Keyed on the story: this one slot is re-pointed at every opened node, and the
+                           panel's local state / pending flush belong to the story they were made on. *@
+                        <StoryCard @key="story.StoryId"
+                                   Story="story"
                                    UserStoryInteractionState="StateFor(story.StoryId)"
-                                   IsOwnStory="CurrentUserId is not null && story.AuthorId == CurrentUserId" />
+                                   IsOwnStory="CurrentUserId is not null && story.AuthorId == CurrentUserId"
+                                   OnUserStoryInteractionStateSaved="HandleStoryStateSaved" />
                     }
                     else if (_openUser is { } user)
                     {
@@ -67,8 +71,9 @@
                     @if (_openRec is { } rec)
                     {
                         @* Read It Later / Read now (owner ruling D3); the save refreshes the story's state
-                           so the panel above can't flush it back. *@
-                        <ReadItLaterRecommendationCard Rec="rec"
+                           so the panel above can't flush it back. Keyed like the StoryCard above. *@
+                        <ReadItLaterRecommendationCard @key="rec.RecommendationId"
+                                                       Rec="rec"
                                                        CurrentUserId="CurrentUserId"
                                                        IsReadItLaterSaved="@(StateFor(rec.StoryId)?.IsReadItLater ?? false)"
                                                        OnSaved="RefreshStoryStateAsync" />
@@ -301,14 +306,25 @@
         StateHasChanged();
     }
 
+    // The open story's state (its StoryCard panel) and the open rec's story's (its card's "Saved for
+    // later") — the same story for a gem node, the parent story for a recommender node. The card has
+    // no saved state of its own, so the entry must be the server's.
     private async Task LoadPanelStatesAsync()
     {
-        if (CurrentUserId is null || _openStory is null) return;
-        _states = await InteractionReadService.GetStatesByStoryIdsAsync([_openStory.StoryId]);
+        if (CurrentUserId is null) return;
+        List<int> ids = [.. new[] { _openStory?.StoryId, _openRec?.StoryId }.OfType<int>().Distinct()];
+        if (ids.Count == 0) return;
+        _states = await InteractionReadService.GetStatesByStoryIdsAsync(ids);
     }
 
     private UserStoryInteractionStateDto? StateFor(int storyId) =>
         _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    // The StoryCard panel reports each flush the server accepted (layer3-logic.md §"Optimistic
+    // Updates & Debounce" item 5): keep this story's entry current, so a Read It Later cleared in the
+    // panel re-enables the recommendation card's button beside it.
+    private void HandleStoryStateSaved(UserStoryInteractionStateDto saved) =>
+        _states = new Dictionary<int, UserStoryInteractionStateDto>(_states) { [saved.StoryId] = saved };
 
     // After the panel's recommendation card saves its story for later (owner ruling D3): refresh that
     // story's state entry so the StoryCard panel adopts the saved bit rather than flushing it back to

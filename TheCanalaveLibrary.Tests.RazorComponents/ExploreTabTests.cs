@@ -127,6 +127,30 @@ public class ExploreTabTests : BunitContext
     }
 
     [Fact]
+    public async Task FamilyRow_ReadItLaterClearedInThePanel_ReEnablesTheRecommendationCard()
+    {
+        // The panel reports its accepted flush, the tab updates the story's entry, and the card — which
+        // has no saved state of its own — follows. A latched "Saved for later" here blocked D3's "a
+        // re-RIL after a clear starts a new one" (review fixes).
+        _manualTree.UserResult = new ManualTreeNeighborsDto
+        {
+            RecommendationFamily = new ManualTreeSectionDto<ManualTreeRecItemDto>(
+                [new ManualTreeRecItemDto(MakeRec(8, 5, MakeUser(10, "RootUser")), MakeStory(5, "Recommended"))], 1),
+        };
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot();
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Saved to Read It Later']"));
+
+        // Un-save in the StoryCard's panel; the click runs through its debounce and flush.
+        await cut.Find("button[aria-label='Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.SetStateCalls.Should().ContainSingle().Which.Update.IsReadItLater.Should().BeFalse();
+        cut.WaitForAssertion(() =>
+            cut.Find("[aria-label='Save this story to Read It Later']").HasAttribute("disabled").Should().BeFalse());
+    }
+
+    [Fact]
     public void ShowMore_RendersOnlyWhenMoreExist_WithHonestCount()
     {
         _manualTree.StoryResult = new ManualTreeNeighborsDto

@@ -304,6 +304,39 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
             && n.SourceUserId == null, "D5: null-sourced");
     }
 
+    [Fact]
+    public async Task AModeratorReviewingTheirOwnAccountAndLink_GetsNoOutcomeNotification()
+    {
+        // The D4 guardrail's general rule (layer2-services.md §"Notification Generation"): 76–79 are
+        // null-sourced (D5), so drop-self no longer keeps a moderator's own review out of their bell —
+        // the call site must. Before D5 the moderator was the source and drop-self did it.
+        int storyId = await SeedStoryAsync(_modId);
+        int linkId = await SeedExternalLinkAsync(storyId, requestedAt: DateTime.UtcNow);
+        await VerifyAccountAsync(_modId, 1, "modhandle");     // 76 — self-reviewed
+        await SubmitAccountAsync(_modId, 2, "modhandle2");
+        int rejectedIdentity = await GetIdentityIdAsync(_modId, 2);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await using (AsyncServiceScope scope = Factory.Services.CreateAsyncScope())
+        {
+            IExternalVerificationWriteService svc = scope.ServiceProvider.GetRequiredService<IExternalVerificationWriteService>();
+            await svc.RejectAccountVerificationAsync(rejectedIdentity, "Wrong handle.");   // 77
+            await svc.ApproveLinkVerificationAsync(linkId);                                   // 78
+            await svc.RejectLinkVerificationAsync(linkId, "Second look.");                   // 79
+        }
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Notifications.Where(n => n.RecipientUserId == _modId).Select(n => n.NotificationTypeId)
+            .Should().NotContain(
+            [
+                NotificationTypeEnum.ExternalAccountVerified, NotificationTypeEnum.ExternalAccountRejected,
+                NotificationTypeEnum.ExternalLinkVerified, NotificationTypeEnum.ExternalLinkRejected,
+            ], "a moderator gets no receipt for their own review");
+        db.UserExternalIdentities.Single(i => i.UserExternalIdentityId == rejectedIdentity)
+            .VerificationStatus.Should().Be(VerificationStatusEnum.Rejected, "the review itself still lands");
+    }
+
     // ── Moderator queues ─────────────────────────────────────────────────────────
 
     [Fact]

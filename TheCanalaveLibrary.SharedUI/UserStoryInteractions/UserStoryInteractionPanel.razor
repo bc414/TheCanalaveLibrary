@@ -15,7 +15,10 @@
    A refused flush (the story was hidden after the page loaded — raises stay guarded, owner ruling
    D6 — or a throttle / expired session) rolls the buttons back to the last server-accepted state and
    shows the refusal inline; it never escapes the handler (it would replace the whole page with the
-   error boundary — WU-AccessGateSweep2 browser pass, layer3-logic.md §"Optimistic Updates"). *@
+   error boundary — WU-AccessGateSweep2 browser pass, layer3-logic.md §"Optimistic Updates").
+   After a flush the server accepted it raises OnStateSaved with the state it sent, so a host that
+   derives other UI from the same bits (a recommendation card's "Saved for later") re-syncs — the
+   host's copy is the single source (layer3-logic.md §"Optimistic Updates & Debounce" item 5). *@
 
 <div class="flex flex-col gap-2">
     <div class="flex items-center gap-2">
@@ -50,6 +53,13 @@
     [Parameter] public UserStoryInteractionStateDto? State { get; set; }
     [Parameter] public UserStoryInteractionDisplayContext Context { get; set; }
     [Parameter] public bool IsOwnStory { get; set; }
+
+    /// <summary>
+    /// Raised after a flush the server accepted, with the six bits it wrote (on the current
+    /// <see cref="StoryId"/>). Optional: a host that also renders UI from these bits updates its copy
+    /// and passes it back as <see cref="State"/>, which this panel adopts while idle.
+    /// </summary>
+    [Parameter] public EventCallback<UserStoryInteractionStateDto> OnStateSaved { get; set; }
 
     private UserStoryInteractionStateDto? _localState;
     private UserStoryInteractionStateDto? _lastStateParameter;
@@ -146,6 +156,7 @@
             return;
         }
 
+        UserStoryInteractionStateDto? accepted = null;
         try
         {
             UserStoryInteractionStateDto sent = await FlushAsync();
@@ -153,6 +164,7 @@
             {
                 _confirmedState = sent;
                 _flushPending = false;
+                accepted = sent;
             }
         }
         catch (Exception ex)
@@ -171,6 +183,12 @@
             _error = ExceptionPresenter.GetUserMessage(ex);
             _errorIsSessionExpired = ex is SessionExpiredException;
         }
+
+        // Report outside the flush's try: only the latest toggle's accepted flush reports (an older
+        // one is about to be overwritten by the newer flush, which reports in turn), and a host
+        // handler's failure is not a refused write to roll back.
+        if (accepted is not null && OnStateSaved.HasDelegate)
+            await OnStateSaved.InvokeAsync(accepted);
     }
 
     /// <summary>Writes the current six bits; returns the state it sent.</summary>

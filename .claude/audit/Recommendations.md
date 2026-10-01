@@ -270,11 +270,14 @@ revisit).** Rule text: `layer2-services.md` §"Attribution (Feature 30)".
   `RecommenderId` non-null, no success yet), two controls (Yes / X — "No thanks" deleted).
 - **Write gates:** no attribution for the story's author (the RIL itself is allowed); anonymous card
   click → login nudge; first attribution wins; `RecordSuccessAsync` requires and consumes the
-  sources row (service audit §2.4.1).
+  sources row (service audit §2.4.1). *Derived (review fixes, 2026-09-30), not owner text:* no
+  attribution for a rec the caller already credited (the prompt's fourth gate would hide it forever),
+  and the `?rec=` carrier is consumed once — the reading page drops it from the address after
+  `MarkStartedAsync`, so X's deletion cannot be undone by a reload.
 - **Unruled, status quo:** a recommender attributing their *own* rec (roadmap row 18).
 
-**Stages (updated 2026-09-30, WU-InertFeatures):** L1, L2, L3-Logic, L3.5, L4, L5 = 5 (the feature was
-rebuilt beneath them — see the WU-InertFeatures Stage note at the end of this feature); **L4.5 = 1**
+**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes):** L1, L2, L3-Logic, L3.5, L4, L5 = 5 (the feature was
+rebuilt beneath them — see the WU-InertFeatures Stage note and its review-fixes note at the end of this feature); **L4.5 = 1**
 (flipped 5→1: the card's Read It Later / Read now, the reminder-card prompt and the 90%-moment flow are
 new UI never driven in a browser — returns to 5 with tracker **H14**'s pass); L6/L8 = N/A. Tracker
 **B22** closed.
@@ -350,8 +353,43 @@ recommender; exactly two answer controls; Yes → `OnHelpful`, X → `OnDismiss`
 saved state + Read now link), new `ChapterReadingPageAttributionTests` (5: nothing written or fetched on
 load; at 90% `MarkStarted(1, 5)` then the prompt; Yes → success; X → dismiss; anonymous → no rec, no
 prompt fetch — `CommentSection` stubbed). Mutation-checked: removing the credit gate, the trigger-5
-sweeps (service and moderation) or trigger 1 each fails its tests. **Browser: not run** (no browser in
-this environment) — L4.5 → 1, tracker H14. Totals in the workplan entry.
+sweeps (service and moderation) or trigger 1 each fails its tests. **Browser: not run** —
+WU-InertFeatures (2026-09-30) ran with no browser available; L4.5 → 1, tracker H14. Totals in the
+workplan entry.
+
+### Feature 30 — WU-InertFeatures review fixes (2026-09-30): the dismissed prompt stays dismissed; the card's saved state is the host's
+
+**No cell flips** (L4.5 stays 1 — tracker **H14**, extended).
+
+- **X could be undone by a reload.** X deletes the attribution, but the address still read
+  `/story/{id}/1?rec={recId}`. A reload or Back, then 90% of Chapter 1 again, made `MarkStartedAsync`
+  mint a fresh row, and the dismissed prompt came back — what D3's X ruling forbids. After a Yes the
+  same reload minted a row the prompt's fourth gate hides forever: a dormant row of the kind the author
+  gate exists to prevent. **Now:** `ChapterReadingPage` drops `?rec=` from the address once
+  `MarkStartedAsync` has used it (`NavigateTo(..., replace: true)`, so the history entry is replaced,
+  and on .NET 10 a query-only change keeps the scroll position — checked in `blazor.web.js`). And
+  `RecommendationAttribution.IsAttributableAsync` refuses a rec the caller has already credited, on both
+  entry points. Following "Read now" again is a new deliberate act and starts a new attribution, as a
+  re-RIL after a clear does.
+- **The card's "Saved for later" was latched.** `ReadItLaterRecommendationCard` and
+  `RecommendationSection` both latched their own success. A Read It Later cleared in the interaction
+  panel beside them left the button disabled; in Deep Dive the latch even carried to the next opened
+  recommendation. Both now render the host's state only, and the hosts keep it current from the panel's
+  new `OnStateSaved` (`audit/UserStoryInteractions.md` F16's review-fixes note). `OnSaved` is
+  `[EditorRequired]` on the composite, and Deep Dive/Explore key it on the rec id.
+- **How verified:** Integration — `RecommendationAttributionTests.AnAlreadyCreditedRec_IsNotAttributable_OnEitherEntryPoint`
+  (direct link and card: HasStarted/RIL land, no attribution) and
+  `RecommendationWriteServiceTests.RecordSuccess_AlreadyRecorded_StillDeletesALingeringAttribution_AndCreditsNothing`
+  (the already-recorded branch deletes a live row, keeps the RIL and credits nothing. The existing
+  idempotency tests reached that branch only after their first call had already consumed the row).
+  RazorComponents — new `ReadItLaterRecommendationCardTests` (5: anonymous → login nudge with no call;
+  signed-in → call + `OnSaved(storyId)`; refused → inline alert, nothing raised; expired session → sign-in
+  link; the saved state follows the host, never latched), `RecommendationSectionTests` (the save test
+  now asserts no latch; +2: cleared elsewhere re-enables the button; a refused save shows the refusal and
+  raises nothing — the fake's throw hook is now used), `ChapterReadingPageAttributionTests` +2 (the
+  carrier is replaced out of the address and a reload after X marks started with no rec; no carrier → no
+  navigation). Every fix-specific test fails against its reverted fix (mutation-checked); the nudge and
+  error-path tests are coverage the WU owed for behavior it built. **Not browser-driven** — H14.
 
 ## L4.5-Browser verification (2026-07-01/02) — F27 + F28 + F29 + F30 → Stage 5
 

@@ -169,8 +169,13 @@ public class ServerFanonWriteService(
         // Best-effort post-commit (layer2-services.md §"Notification Generation").
         try
         {
-            // Null-sourced: the invitation is a moderation act, so the moderator is not named (D5).
-            await notifications.NotifyTagAdoptionSuggestedAsync(fresh, link.TargetTagId);
+            // Null-sourced: the invitation is a moderation act, so the moderator is not named (D5). A
+            // null source drops no one, so the acting moderator — when they used the name themselves —
+            // is left out explicitly: no invitation about their own act (layer2-services.md, the D4
+            // guardrail's general rule). Their adoption state is still stamped above, as before D5.
+            List<int> recipients = fresh.Where(a => a != ActiveUser.UserId).ToList();
+            if (recipients.Count > 0)
+                await notifications.NotifyTagAdoptionSuggestedAsync(recipients, link.TargetTagId);
         }
         catch (Exception ex)
         {

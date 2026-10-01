@@ -304,6 +304,45 @@ public class UserStoryInteractionPanelTests : BunitContext
         await pending;
     }
 
+    // ── Reporting an accepted flush to the host (WU-InertFeatures review fixes) ──
+
+    [Fact]
+    public async Task AcceptedFlush_RaisesOnStateSaved_WithTheBitsItWrote()
+    {
+        // The host's copy feeds other UI from the same bits (a recommendation card's "Saved for later");
+        // without this report a Read It Later cleared here left that card disabled.
+        UserStoryInteractionStateDto? reported = null;
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 5)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5) with { IsReadItLater = true, IsFavorite = true })
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail)
+            .Add(c => c.OnStateSaved, Microsoft.AspNetCore.Components.EventCallback.Factory
+                .Create<UserStoryInteractionStateDto>(this, s => reported = s)));
+
+        await cut.Find("button[aria-label='Read It Later']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        reported.Should().Be(UserStoryInteractionStateDto.AllFalse(5) with { IsFavorite = true });
+    }
+
+    [Fact]
+    public async Task RefusedFlush_ReportsNothing()
+    {
+        _fakeService.SetStateThrows = new KeyNotFoundException();
+        bool reported = false;
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 5)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(5))
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail)
+            .Add(c => c.OnStateSaved, Microsoft.AspNetCore.Components.EventCallback.Factory
+                .Create<UserStoryInteractionStateDto>(this, _ => reported = true)));
+
+        await cut.Find("button[aria-label='Following']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        reported.Should().BeFalse("the server kept its old state, which the host already holds");
+    }
+
     // ── A refused flush (WU-AccessGateSweep2 browser pass) ──────────────────────
 
     [Fact]

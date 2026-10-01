@@ -41,7 +41,8 @@
                     <div class="min-w-0">
                         <StoryCard Story="@spotlight.Story"
                                    UserStoryInteractionState="@StateFor(spotlight.Story.StoryId)"
-                                   IsOwnStory="@(_currentUserId is not null && spotlight.Story.AuthorId == _currentUserId)" />
+                                   IsOwnStory="@(_currentUserId is not null && spotlight.Story.AuthorId == _currentUserId)"
+                                   OnUserStoryInteractionStateSaved="HandleStoryStateSaved" />
                     </div>
                     @if (spotlight.Recommendation is not null)
                     {
@@ -109,6 +110,12 @@
 
     private UserStoryInteractionStateDto? StateFor(int storyId) =>
         _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    // The StoryCard panel reports each flush the server accepted (layer3-logic.md §"Optimistic
+    // Updates & Debounce" item 5): keep this story's entry current, so a Read It Later cleared in the
+    // panel re-enables the recommendation card's button beside it.
+    private void HandleStoryStateSaved(UserStoryInteractionStateDto saved) =>
+        _states = new Dictionary<int, UserStoryInteractionStateDto>(_states) { [saved.StoryId] = saved };
 
     // After the recommendation's Read It Later: refresh that story's state so its StoryCard panel
     // adopts the saved bit (the panel-clobber closure). A missing row after a known save is marked locally.

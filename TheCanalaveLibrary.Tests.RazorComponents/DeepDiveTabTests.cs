@@ -83,6 +83,66 @@ public class DeepDiveTabTests : BunitContext
         cut.WaitForAssertion(() => cut.Find("[aria-label='Saved to Read It Later']"));
     }
 
+    // A user root whose Hidden Gem edge adds a story node carrying the gem rec: opening that node shows
+    // the story's StoryCard (with its interaction panel) AND the rec card for the same story.
+    private IRenderedComponent<DeepDiveTab> RenderUserRootWithGemNode(params (int RecId, int StoryId)[] gems)
+    {
+        _manualTree.UserResult = new ManualTreeNeighborsDto
+        {
+            RecommendationFamily = new ManualTreeSectionDto<ManualTreeRecItemDto>(
+                [.. gems.Select(g => new ManualTreeRecItemDto(MakeRec(g.RecId, g.StoryId, MakeUser(10, "Gemmer"), gem: true), MakeStory(g.StoryId, $"Gem {g.StoryId}")))],
+                gems.Length),
+        };
+        IRenderedComponent<DeepDiveTab> cut = Render<DeepDiveTab>(p => p
+            .Add(c => c.RootUser, MakeUser(10, "Gemmer"))
+            .Add(c => c.CurrentUserId, 99));
+        cut.WaitForAssertion(() =>
+            cut.FindComponents<ManualTreeCanvas>().Single().FindAll("[data-tree-node]").Should().HaveCount(1 + gems.Length));
+        return cut;
+    }
+
+    [Fact]
+    public async Task GemNode_CardReadItLater_TheStoryCardPanelBesideItAdoptsTheSave()
+    {
+        // The panel-clobber closure (C11, the spec's "sharpest trap"): the panel beside the card must
+        // show the card's save, or its next six-bit flush writes IsReadItLater = false over it. Fails
+        // if the tab stops refreshing its state entry on the card's OnSaved.
+        IRenderedComponent<DeepDiveTab> cut = RenderUserRootWithGemNode((6, 3));
+        cut.FindComponents<ManualTreeCanvas>().Single().FindAll("[data-tree-node]")[1].Click(); // the gem story
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeFalse();
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([6]);
+        cut.WaitForAssertion(() =>
+            cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
+                "the StoryCard panel adopts the card's save"));
+    }
+
+    [Fact]
+    public async Task OpeningAnotherNode_DoesNotCarryTheRecCardsStateAcross()
+    {
+        // Deep Dive re-points one panel slot at each opened node; the rec card is keyed on its rec, so a
+        // refusal shown for one recommendation never sits under the next one.
+        IRenderedComponent<DeepDiveTab> cut = RenderUserRootWithGemNode((6, 3), (7, 4));
+        IReadOnlyList<AngleSharp.Dom.IElement> nodes() =>
+            cut.FindComponents<ManualTreeCanvas>().Single().FindAll("[data-tree-node]");
+        nodes()[1].Click();
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Save this story to Read It Later']"));
+        _fakeInteractions.ReadItLaterFromRecommendationThrows = new KeyNotFoundException();
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+        cut.FindAll("[role=alert]").Should().NotBeEmpty();
+
+        nodes()[2].Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindComponent<ReadItLaterRecommendationCard>().Instance.Rec.RecommendationId.Should().Be(7);
+            cut.FindAll("[role=alert]").Should().BeEmpty("the previous rec's refusal belongs to that rec");
+        });
+    }
+
     [Fact]
     public void FourDirectionLabeledToggles_AllRenderAtOnce()
     {

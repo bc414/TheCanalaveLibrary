@@ -402,7 +402,7 @@ system-sourced notification.)
 `NotificationCleanupTests.cs:81` seeds a null source commented "no actor needed." Both become legal
 shapes — but the `TagUpdateSuggestion` divergence is a real fork, routed to D5.
 
-**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Notification Generation" (null source, conditional drop-self, guardrail, two-nulls display rule, 0 sentinel, dedup enumeration).
+**Built:** WU-InertFeatures (2026-09-30) — rule now stated in `layer2-services.md` §"Notification Generation" (null source, conditional drop-self, guardrail, two-nulls display rule, 0 sentinel, dedup enumeration); its review fixes the same day applied the guardrail at every moderation-band call site ("the acting moderator is never a recipient of their own act").
 
 ### D5. De-identify moderation notifications
 

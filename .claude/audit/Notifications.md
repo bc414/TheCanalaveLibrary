@@ -169,8 +169,8 @@ Phase 7.
 
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-09-30, WU-InertFeatures):** L1, L2, L6 = 5 (the D4/D5/D16/D17 rebuild and the
-new-chapter fan-out landed beneath them — Stage note at the end of this feature); **L4.5 = 1**
+**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes):** L1, L2, L6 = 5 (the D4/D5/D16/D17 rebuild and the
+new-chapter fan-out landed beneath them — Stage notes at the end of this feature); **L4.5 = 1**
 (flipped 5→1: the new-chapter notification, the restored report receipt and the re-anchored group
 notifications were never seen in a browser bell — returns to 5 with tracker **H14**'s pass);
 L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
@@ -205,7 +205,9 @@ L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
     §"Comment & blog-post semantic methods", §"Polymorphic RelatedEntityId"):**
     - **D4 — null source = no actor.** `CreateCoreAsync(int? sourceUserId, …)`; drop-self only when
       `sourceUserId is int s && recipient == s`. `ReportReceived` (80) is restored by deleting the
-      parameter that broke it. Guardrail: the moderator-initiated account action never sends 80/81.
+      parameter that broke it. Guardrail: the moderator-initiated account action never sends 80/81 —
+      and, generalized at the review fixes (2026-09-30), every band call site skips the acting
+      moderator as a recipient (`audit/Moderation.md`'s cluster Settled note).
       `RelatedEntityId` stays non-nullable with 0 = none. Dedup: 70/80/81/82 carry the report id;
       72/73/74/76/77/90 are exempt from cross-existing dedup. Two nulls (deleted actor vs. no actor)
       are disambiguated by type at display time. Prerequisite widen `related_entity_id` int→bigint
@@ -213,7 +215,7 @@ L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
     - **D5 — the moderation band 70–82 is null-sourced, good news included**, and so is
       `TagUpdateSuggestion` (26 — D5's routed sub-edge, taken per the owner's recommendation). No
       band method takes a moderator id. `SpotlightSlotGranted` (90) is outside the stated band — its
-      source stays (unruled).
+      source stays (unruled — roadmap decision row 19).
     - **D16 — one anchor per event.** 60 and 25 carry the `GroupStory` row's id (new
       `RelatedEntityKind.GroupStory`); a second id column is never added; the re-point backlog is
       recorded as a conformance list (tracker B23), not built. Riders: the story's author is excluded
@@ -360,6 +362,27 @@ report ids, no source; two removals → two 70s; warn twice → two 72s; the D4 
 (+3, D17's three cases), new `NewChapterNotificationTests` (7). Unit — `NotificationPresenterTests` (F42).
 Mutation-checked: removing the exemption, the author exclusion or the D17 predicate each fails its tests.
 **Browser: not run** — L4.5 → 1, tracker H14. Totals in the workplan entry.
+
+### Feature 41 L2 — WU-InertFeatures review fixes (2026-09-30)
+
+**No cell flips.**
+- **A moderator could be notified of their own act — fixed at the call sites.** D5's null
+  source drops nobody, so every caller in the band now skips the acting moderator explicitly
+  (narrative and tests: `audit/Moderation.md` F47/F48/F53 review-fixes notes; type 26 in
+  `audit/Tags.md`). The interface's class doc says so. Rule: `layer2-services.md` §"Notification
+  Generation" → "The general rule for the de-identified band".
+- **Type 90's moderator attribution has an owner-facing home:** roadmap decision row 19 (status quo
+  default: source kept). The three "unruled" mentions point at it.
+- **Rows written before the migration — checked, nothing to fix.** The migration re-interprets 60/25's
+  `related_entity_id` (a group id before, a `GroupStory` id now) and leaves older 70–82/26 rows
+  carrying a moderator source. No data statement was added, because no such row exists. A `psql` count
+  on the dev DB (2026-09-30) found 0 rows of types 25/26/60/70–82: it was reset after the migration, and
+  the seed writes neither shape. No production database exists. A clone taken before WU-InertFeatures
+  would show stale anchors until it is reset.
+- **Doc:** `layer2-services.md`'s enricher query bound reads "max 8" (one per non-`None` kind; the
+  WU added `GroupStory`).
+- **How verified:** Integration — the band tests named in the Moderation, Tags and verification notes;
+  the full Integration tier is green (totals in the workplan entry).
 
 ## Feature 42 — Notification Display
 

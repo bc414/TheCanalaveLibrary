@@ -13,11 +13,16 @@
    already owns a full error/translate surface, wires the card directly.)
    After a successful save it raises OnSaved with the story id: the host must refresh its interaction
    state for that story and pass it to the StoryCard's panel, or the panel's next flush writes the bit
-   back to false (the panel-clobber closure, WU-InertFeatures). *@
+   back to false (the panel-clobber closure, WU-InertFeatures).
+   The saved state is the HOST's (IsReadItLaterSaved), never latched here: the panel beside the card
+   can clear the same bit, and a latched "saved" would leave the button disabled over a story that is
+   no longer saved — blocking D3's "a re-RIL after a clear starts a new one" (review fixes). Holds a
+   per-item error slot, so a host that swaps the Rec under one instance keys it on the rec id
+   (layer3.5-structure.md §"@key"). *@
 
 <RecommendationCard Rec="@Rec"
                     OnReadItLater="HandleReadItLaterAsync"
-                    IsReadItLaterSaved="@(IsReadItLaterSaved || _saved)"
+                    IsReadItLaterSaved="@IsReadItLaterSaved"
                     ShowReadNow="true" />
 @if (_error is not null)
 {
@@ -30,13 +35,18 @@
     /// <summary>Null = anonymous viewer: Read It Later becomes a login nudge.</summary>
     [Parameter] public int? CurrentUserId { get; set; }
 
-    /// <summary>Whether the viewer already has the recommended story on Read It Later.</summary>
+    /// <summary>
+    /// Whether the viewer has the recommended story on Read It Later — the host's current copy of the
+    /// bit (refreshed after <see cref="OnSaved"/> and whenever the story's interaction panel saves).
+    /// </summary>
     [Parameter] public bool IsReadItLaterSaved { get; set; }
 
-    /// <summary>Raised with the story id after a successful save, inside this component's error handling.</summary>
-    [Parameter] public EventCallback<int> OnSaved { get; set; }
+    /// <summary>
+    /// Raised with the story id after a successful save, inside this component's error handling. The
+    /// host re-reads that story's state; it is what turns the button to "Saved for later".
+    /// </summary>
+    [Parameter, EditorRequired] public EventCallback<int> OnSaved { get; set; }
 
-    private bool _saved;
     private string? _error;
     private bool _errorIsSessionExpired;
 
@@ -56,7 +66,6 @@
         try
         {
             await Interactions.SetReadItLaterFromRecommendationAsync(recommendationId);
-            _saved = true;
             if (OnSaved.HasDelegate)
                 await OnSaved.InvokeAsync(Rec.StoryId);
         }

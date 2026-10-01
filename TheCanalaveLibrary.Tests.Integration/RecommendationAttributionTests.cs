@@ -226,6 +226,32 @@ public class RecommendationAttributionTests(PostgresFixture postgres) : Integrat
         row.RecommendationSource.Should().BeNull();
     }
 
+    // ── Already credited: no row that could never be consumed (review fixes) ─────
+
+    [Fact]
+    public async Task AnAlreadyCreditedRec_IsNotAttributable_OnEitherEntryPoint()
+    {
+        // The prompt's fourth gate (no success recorded) hides such a row forever, so minting one is the
+        // dormant row D3's author gate exists to prevent. The direct-link half is what let a reload of a
+        // ?rec= address re-mint a row after the reader had already answered Yes.
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.RecommendationSuccesses.Add(new RecommendationSuccess { UserId = _readerId, RecommendationId = _recId });
+            await db.SaveChangesAsync();
+        }
+
+        await MarkStartedAsync(_storyId, _recId);
+        UserStoryInteraction started = (await LoadRowAsync(_readerId, _storyId))!;
+        started.HasStarted.Should().BeTrue();
+        started.RecommendationSource.Should().BeNull("the direct link mints nothing for an already-credited rec");
+
+        await ReadItLaterFromCardAsync(_recId);
+        UserStoryInteraction saved = (await LoadRowAsync(_readerId, _storyId))!;
+        saved.IsReadItLater.Should().BeTrue("the save itself is never refused for this");
+        saved.RecommendationSource.Should().BeNull("nor does the card");
+    }
+
     // ── Removal trigger 1 (and 2) ─────────────────────────────────────────────────
 
     [Fact]

@@ -442,6 +442,99 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             "NotificationDto over a WASM-reachable endpoint");
     }
 
+    // ── The acting moderator is never a recipient (the D4 guardrail's general rule, review fixes) ──
+    // Before D5 every band call passed the moderator as source, so drop-self kept their own acts out of
+    // their bell. A null source drops nobody, so each call site must skip them explicitly.
+
+    [Fact]
+    public async Task AModeratorResolvingAReportTheyFiled_GetsNoResolutionReceipt()
+    {
+        int authorId = await SeedUserAsync("ReportedAuthor");
+        int keptStory = await SeedStoryAsync(authorId);
+        int removedStory = await SeedStoryAsync(authorId);
+        short reasonId = await GetFirstReasonIdAsync();
+
+        // The moderator files both through the ordinary Report button, then resolves them.
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, keptStory, reasonId, null));
+        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, removedStory, reasonId, null));
+        long noActionReport, removalReport;
+        using (IServiceScope lookup = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = lookup.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            noActionReport = await db.Reports.Where(r => r.ReportedEntityId == keptStory).Select(r => r.ReportId).SingleAsync();
+            removalReport = await db.Reports.Where(r => r.ReportedEntityId == removedStory).Select(r => r.ReportId).SingleAsync();
+        }
+        await GetMod().ResolveNoActionAsync(noActionReport, "fine");
+        await GetMod().ResolveWithRemovalAsync(removalReport, "rule violation");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext verify = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<NotificationTypeEnum> modTypes = await verify.Notifications
+            .Where(n => n.RecipientUserId == _modId).Select(n => n.NotificationTypeId).ToListAsync();
+        modTypes.Should().NotContain([NotificationTypeEnum.ReportResolved, NotificationTypeEnum.ReportResolvedNoAction],
+            "the moderator resolved these reports themselves — a receipt would mail them their own act");
+        modTypes.Count(t => t == NotificationTypeEnum.ReportReceived).Should().Be(2,
+            "filing is the member act D4 restored the receipt for; only the resolution is the moderator's own");
+        (await verify.Notifications.AnyAsync(n => n.RecipientUserId == authorId
+            && n.NotificationTypeId == NotificationTypeEnum.ContentRemoved)).Should().BeTrue(
+            "everyone else still hears the outcome");
+    }
+
+    [Fact]
+    public async Task AModeratorRemovingTheirOwnContent_GetsNoContentRemoved_ButTheReporterHearsTheOutcome()
+    {
+        int modStory = await SeedStoryAsync(_modId);
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, modStory, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ResolveWithRemovalAsync(reportId, "removing my own story");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId
+            && n.NotificationTypeId == NotificationTypeEnum.ContentRemoved)).Should().BeFalse();
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _reporterId
+            && n.NotificationTypeId == NotificationTypeEnum.ReportResolved)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AModeratorApprovingOrRejectingTheirOwnStory_GetsNoOutcomeNotification()
+    {
+        int approveMe = await SeedPendingStoryAsync(_modId, StoryStatusEnum.InProgress);
+        int rejectMe = await SeedPendingStoryAsync(_modId, StoryStatusEnum.InProgress);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApproveStoryAsync(approveMe);
+        await GetMod().RejectStoryAsync(rejectMe, "not yet");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId
+            && (n.NotificationTypeId == NotificationTypeEnum.StoryApproved
+                || n.NotificationTypeId == NotificationTypeEnum.StoryRejected))).Should().BeFalse();
+        (await db.Stories.IgnoreQueryFilters(["IsTakenDown"]).SingleAsync(s => s.StoryId == rejectMe))
+            .StoryStatusId.Should().Be(StoryStatusEnum.Rejected, "the decision itself still lands");
+    }
+
+    [Fact]
+    public async Task AReportDrivenAccountActionOnTheActingModerator_SendsThemNothing()
+    {
+        // A report against the moderator's own story resolves to the moderator as the action target.
+        int modStory = await SeedStoryAsync(_modId);
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, modStory, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionAsync(reportId, ModeratorActionType.WarnUser, "self-warned");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId
+            && n.NotificationTypeId == NotificationTypeEnum.AccountWarning)).Should().BeFalse();
+        (await db.Reports.SingleAsync(r => r.ReportId == reportId)).ReportStatusId
+            .Should().Be(ReportStatusEnum.ResolvedActionTaken, "the action itself still lands");
+    }
+
     // ── ApproveStoryAsync ─────────────────────────────────────────────────────────
 
     [Fact]

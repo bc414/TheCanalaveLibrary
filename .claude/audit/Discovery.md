@@ -511,10 +511,14 @@ re-seed guard from the start.
 - **L1 — N/A** (stateless graph pivots over live tables, plus one new field —
   `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12;
   candidate-pane filter axes added WU-ExploreFilterAxes, 2026-07-31 — see both Stage notes).**
-  **L3/L3.5 — Stage 5 (WU40; Explore filter disclosure added WU-ExploreFilterAxes, 2026-07-31)**
+  **L3/L3.5 — Stage 5 (WU40; Explore filter disclosure added WU-ExploreFilterAxes, 2026-07-31;
+  recommendation cards' Read It Later + interaction-state sync WU-InertFeatures and its review fixes,
+  2026-09-30 — Stage note at the end of this feature)**
   (distinct graph/node visualization — NOT
   `StoryDeck`). **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU44 precedent).
-  **L4.5 — Stage 5 (WU40 + WU-ExploreFilterAxes, behavioral browser verification — see Stage notes).**
+  **L4.5 — Stage 1 (flipped 5→1 2026-09-30, WU-InertFeatures review fixes:** Explore's family rows and
+  Deep Dive's panel changed undriven — tracker **H14**; the WU40 + WU-ExploreFilterAxes browser
+  verification below covers what was there before).
   **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
@@ -837,6 +841,25 @@ re-seed guard from the start.
   disclosure is **gone** and the toggle row swaps to story→user. A full reload re-seeds the
   default (Authored 3), confirming filters are session-only. No console errors.
   `check-design-tokens.ps1` and `check-doc-hygiene.ps1` both clean.
+
+  **WU-InertFeatures and its review fixes — Stage note (2026-09-30): recommendation cards gained
+  Feature 30's entry points.** Cells: L3/L3.5 stay 5; **L4.5 flips 5→1** (tracker **H14**). The WU
+  left this file untouched; the review fixes caught the omission and made the flip.
+  - **What changed.** Explore's family rows and Deep Dive's floating panel render each recommendation
+    as a `ReadItLaterRecommendationCard` (Read It Later + "Read now", owner ruling D3 —
+    `audit/Recommendations.md` F30). A card save re-reads that story's interaction state so the
+    `StoryCard` panel beside it adopts it (the WU). Both tabs now take the panel's `OnStateSaved`, so a
+    Read It Later cleared in the panel re-enables the card (review fixes).
+  - **Keys (review fixes):** Deep Dive re-points one `StoryCard` and one rec card at every opened node.
+    Both are now keyed on the item id, so neither a card's error nor the panel's local state or pending
+    flush crosses to the next node. Explore's family rows are keyed on the recommendation.
+  - **Deep Dive state load:** it also loads the open rec's story (for a recommender node that is the
+    parent story), because the card has no saved state of its own.
+  - **How verified:** RazorComponents `ExploreTabTests` (+2: card save → panel adopts it; panel clear →
+    card re-enabled) and `DeepDiveTabTests` (+3: a recommender node's card calls the producer; a gem
+    node's card save shows in the `StoryCard` panel beside it; opening another node leaves the card's
+    state behind). Each review-fix test fails with its wiring or key removed. **Not browser-driven** —
+    H14.
 
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 5 (WU27.5, 2026-06-25 — see Stage note below:** `GetTagDirectoryAsync`

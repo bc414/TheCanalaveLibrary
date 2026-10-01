@@ -352,5 +352,29 @@ public class StoryPageTests : BunitContext
         cut.WaitForAssertion(() =>
             cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeTrue(
                 "the panel adopts the re-read state, so its next flush can't write the bit back to false"));
+        cut.Find("[aria-label='Saved to Read It Later']"); // the section's cards follow the page's state
+    }
+
+    [Fact]
+    public async Task StoryPage_ReadItLaterClearedInThePanel_ReEnablesTheRecommendationCards()
+    {
+        // The other direction (WU-InertFeatures review fixes): the panel reports its accepted flush, the
+        // page keeps its copy current, and the section's cards — which latch nothing — come back.
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => _fakeInteractions);
+        AuthenticateAs(7);
+        _fakeInteractions.States[1] = UserStoryInteractionStateDto.AllFalse(1) with { IsReadItLater = true };
+        _fakeRecommendations.SetGetForStoryResult(
+        [
+            new RecommendationDto(5, 1, new UserCardDto(43, "Recommender", null, null, []), "<p>read it</p>",
+                0, false, false, 0, DateTime.UtcNow, false, false),
+        ]);
+        IRenderedComponent<StoryPage> cut = RenderPage(MakeStory(storyId: 1, authorId: 42));
+        cut.WaitForAssertion(() => cut.Find("[aria-label='Saved to Read It Later']"));
+
+        await cut.Find("button[aria-label='Read It Later']").ClickAsync(new()); // runs through its debounce
+
+        _fakeInteractions.SetStateCalls.Should().ContainSingle().Which.Update.IsReadItLater.Should().BeFalse();
+        cut.WaitForAssertion(() =>
+            cut.Find("[aria-label='Save this story to Read It Later']").HasAttribute("disabled").Should().BeFalse());
     }
 }

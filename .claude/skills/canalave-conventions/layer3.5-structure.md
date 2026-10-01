@@ -650,7 +650,7 @@ slot *i*, regardless of the item's identity. Only the `[Parameter]` values are o
 fields survive.
 
 This is a **data-corruption bug** the instant a child caches a parameter into a private field and then
-stops re-syncing it. The canonical example is `UserStoryInteractionPanel`:
+stops re-syncing it. The canonical example is `UserStoryInteractionPanel`, as it was built (WU16):
 
 ```csharp
 protected override void OnParametersSet()
@@ -663,6 +663,20 @@ protected override void OnParametersSet()
 On pagination from stories [A, B, C] → [D, E, F], the panel at slot 0 stays alive, gets `StoryId`=D
 but keeps `_localState` from A. `FlushAsync` then writes A's interaction booleans onto D's id —
 server-side corruption.
+
+The panel now re-adopts a *changed* `State` while idle (WU-InertFeatures, 2026-09-30 — the rule and
+why it is not an `@key` remount: `layer3-logic.md` §"Optimistic Updates & Debounce"):
+
+```csharp
+if (_localState is null || (!_flushPending && !Equals(State, _lastStateParameter)))
+    _localState = State;
+_lastStateParameter = State;
+```
+
+That narrows the bleed but **does not remove the need for `@key`**: a reused slot whose new story has an
+*equal* state (both null, both all-false) adopts nothing and shows the old story's local toggles, and a
+toggle still pending when the slot is reused flushes onto the new `StoryId`. Positional reuse stays a
+corruption path; `@key` stays required.
 
 ### The fix: `@key` on a stable domain id
 
@@ -686,6 +700,12 @@ stable domain id. Indicators that a child holds per-item state:
   `if (field is null)` guard — the hallmark of the corruption pattern.
 - Ephemeral reveal / menu flags (`_isRevealed`, `_menuOpen`, `_showSpoilerConfirm`).
 - A disposable resource scoped per row (debounce `CancellationTokenSource`).
+- A per-item error slot from the child's own write (`ReadItLaterRecommendationCard`'s `_error`) —
+  reused positionally, one recommendation's refusal shows under the next.
+
+The same holds outside a `@foreach`: a **single** slot whose item swaps underneath it (Deep Dive's
+floating panel re-pointing its `StoryCard` and recommendation card at the newly opened node) is
+positional reuse too — key it on the item's id.
 
 ### When `@key` is NOT required (and why)
 

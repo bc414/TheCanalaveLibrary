@@ -119,6 +119,48 @@ public class ChapterReadingPageAttributionTests : BunitContext
     }
 
     [Fact]
+    public async Task TheRecCarrier_IsConsumedOnce_SoAReloadAfterXCannotBringThePromptBack()
+    {
+        // Review fixes: X deletes the attribution, but the address still carried ?rec= — a reload or Back
+        // re-minted the row at the next 90% and the dismissed prompt returned (what D3's X rules out).
+        SignIn();
+        _recs.SetHelpfulPrompt(PromptRec());
+        BunitNavigationManager nav = Services.GetRequiredService<BunitNavigationManager>();
+        IRenderedComponent<ChapterReadingPage> cut = RenderChapterOne("/story/1/1?rec=5");
+
+        await ScrollTo(cut, 0.95f);
+
+        nav.Uri.Should().Be("http://localhost/story/1/1", "the carrier is dropped once MarkStarted has used it");
+        nav.History.First().Options.ReplaceHistoryEntry.Should().BeTrue(
+            "the history entry is replaced, so Back doesn't return to the ?rec= address either");
+
+        cut.WaitForAssertion(() => cut.Find("[aria-label*='Dismiss']"));
+        await cut.Find("[aria-label*='Dismiss']").ClickAsync(new());
+
+        // A reload of the current address carries no rec.
+        _interactions.MarkStartedCalls.Clear();
+        IRenderedComponent<ChapterReadingPage> reloaded = Render<ChapterReadingPage>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.ChapterNumber, 1));
+        reloaded.WaitForAssertion(() => reloaded.Find("#chapter-body"));
+        await ScrollTo(reloaded, 0.95f);
+        _interactions.MarkStartedCalls.Should().Equal([(1, (int?)null)]);
+    }
+
+    [Fact]
+    public async Task WithoutACarrier_TheAddressIsLeftAlone()
+    {
+        SignIn();
+        BunitNavigationManager nav = Services.GetRequiredService<BunitNavigationManager>();
+        IRenderedComponent<ChapterReadingPage> cut = RenderChapterOne("/story/1/1");
+        int entries = nav.History.Count;
+
+        await ScrollTo(cut, 0.95f);
+
+        nav.History.Should().HaveCount(entries, "no navigation happens when there is nothing to consume");
+    }
+
+    [Fact]
     public async Task AnonymousReader_MarkStartedCarriesNoRec_AndNoPromptIsFetched()
     {
         IRenderedComponent<ChapterReadingPage> cut = RenderChapterOne("/story/1/1?rec=5");

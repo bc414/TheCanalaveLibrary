@@ -761,6 +761,34 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
             .Should().BeTrue("consuming the attribution leaves the Read It Later itself alone");
     }
 
+    [Fact]
+    public async Task RecordSuccess_AlreadyRecorded_StillDeletesALingeringAttribution_AndCreditsNothing()
+    {
+        // The already-recorded branch is reached here with a live attribution row (a success recorded
+        // earlier, then a row the reader still holds for the same rec) — the idempotency tests above only
+        // reach it after their first call has already consumed the row.
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await SeedAttributionAsync(_authorUserId, _storyId, recId);
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.RecommendationSuccesses.Add(new RecommendationSuccess { UserId = _authorUserId, RecommendationId = recId });
+            await db.SaveChangesAsync();
+        }
+
+        await CallRecordSuccessAsync(recId);
+
+        (await AttributionExistsAsync(_authorUserId, _storyId)).Should().BeFalse(
+            "an already-recorded success still consumes a lingering row, so the prompt can never come back");
+        (await LoadRecAsync(recId))!.SuccessfulRecCount.Should().Be(0,
+            "the idempotent branch credits nothing (the seeded success was inserted directly, not counted)");
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().UserStoryInteractions
+            .AnyAsync(i => i.UserId == _authorUserId && i.StoryId == _storyId && i.IsReadItLater))
+            .Should().BeTrue("the reader's Read It Later is untouched");
+    }
+
     [Theory]
     [InlineData("NeedsRevision")]
     [InlineData("Rejected")]

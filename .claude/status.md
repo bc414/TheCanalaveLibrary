@@ -109,7 +109,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
 | 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
-| 33 | Manual Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
+| 33 | Manual Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 1 | 5 | 2 | N/A |
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
@@ -131,7 +131,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 53 | External Story Links & Verification | Stories | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |
-| 55 | Community Spotlight | Spotlight | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
+| 55 | Community Spotlight | Spotlight | 5 | 5 | 5 | 5 | 3 | 1 | 5 | N/A | N/A |
 | 57 | Notification Cleanup Worker | Notifications | N/A | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 58 | UserStat Recalculation Worker | Profiles | N/A | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 59 | Automatic Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | 5 |

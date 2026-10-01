@@ -36,6 +36,13 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 - **Guardrail:** the moderator-initiated account action (`ApplyAccountActionToUserAsync`) never sends
   80 or 81. *Routed, not built here:* the report-driven `ApplyAccountActionAsync` sending 81 to a member
   reporter is a report-lifecycle defect owned by WU-ModerationIntegrity.
+- **The acting moderator is never a recipient of their own act** (D4's guardrail generalized,
+  WU-InertFeatures review fixes 2026-09-30). Null-sourcing gave up drop-self, so every band call site
+  skips the acting moderator explicitly: no 81/82 for a report they filed and resolved, no 70 for their
+  own removed content, no 75/71 for their own story, no 76–79 for their own account or link, no 72–74
+  for a report-driven action on themselves, no 26 for a fanon name they used. This restores what
+  drop-self did before D5. 80 is the exception: filing is the member's own act, and D4 restored that
+  receipt on purpose.
 - **Attribution sweep (D3 trigger 5):** a Recommendation takedown through the removal path deletes
   every attribution row naming that recommendation (`layer2-services.md` §"Attribution (Feature 30)").
 
@@ -91,6 +98,17 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**Review-fixes Stage note (WU-InertFeatures, 2026-09-30) — no flip; L2 stays 5.** D5 null-sourced the
+band and so dropped drop-self's protection: a moderator who filed a report through the ordinary Report
+button and then resolved it received the resolution receipt (81/82), and a moderator removing their own
+content received 70. Before D5 the moderator was the source and drop-self stopped both. The resolve
+paths now skip the acting moderator explicitly, and so does `ApplyStatusAndNotifyAsync` (which takes
+the moderator id back) when a report-driven action lands on the moderator's own account. Integration
+`ModerationServiceTests` covers it: `AModeratorResolvingAReportTheyFiled_GetsNoResolutionReceipt` (the
+two 80 receipts still arrive), `AModeratorRemovingTheirOwnContent_GetsNoContentRemoved_ButTheReporterHearsTheOutcome`
+and `AReportDrivenAccountActionOnTheActingModerator_SendsThemNothing`. All three fail with the skips
+removed. Rule: the cluster Settled note above.
+
 **WU-InertFeatures Stage note (2026-09-30) — no cell flips; L2 stays 5 (owner rulings D3/D4/D5).**
 Every outcome notification the queue sends is now null-sourced (the moderator is never named to the
 recipient) and anchored per D4: `ResolveNoActionAsync` → 82 and `ResolveWithRemovalAsync` → 81 + 70
@@ -104,7 +122,8 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
+**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass; WU-InertFeatures review fixes beneath L2,
+no flip):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
 (the review fixes dropped it to 1 because the auto-approve control and trust line on `/mod/users/{id}`
 were undriven; the browser pass drove both on circuit and WASM and returned it to 5 — see F48's
 browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the end of this section).
@@ -324,7 +343,10 @@ of this section). **WU-InertFeatures (2026-09-30), no flip:** `StoryApproved` (7
 their moderator parameter and `ApproveStoryAsync`/`RejectStoryAsync` now only gate on the role — and
 75 has its own actor-free presenter arm ("{story} was approved for the library"; it previously fell to
 the catch-all). Covered by Integration `ModerationServiceTests` (the band sweep and the renamed
-story-outcome dedup tests) and Unit `NotificationPresenterTests`.
+story-outcome dedup tests) and Unit `NotificationPresenterTests`. **WU-InertFeatures review fixes
+(2026-09-30), no flip:** approve and reject read the moderator id again, solely to skip a moderator
+who approves or rejects their own story (no 75/71 about their own act — drop-self did this before D5).
+Integration `AModeratorApprovingOrRejectingTheirOwnStory_GetsNoOutcomeNotification`.
 
 **WU34 settled constraints:**
 - `StoryDetail.PostApprovalStatus` (live field, enforced by `StoryValidations.CanSubmitForApproval`) is the
@@ -640,9 +662,13 @@ are null-sourced (owner ruling D5 — the reviewing moderator is no longer named
 account tier still records `ReviewedByModeratorUserId` internally), 76/77 are exempt from
 cross-existing dedup (D4), and 76–79 gained their own actor-free presenter arms (previously the
 catch-all "You have a new notification"). Covered by Integration `ExternalVerificationTests` (all four
-assert `SourceUserId == null`) and Unit `NotificationPresenterTests`.
+assert `SourceUserId == null`) and Unit `NotificationPresenterTests`. **Review fixes (2026-09-30), no
+flip:** a moderator reviewing their own account or their own story's link gets no 76–79 (the link tier
+reads the moderator id again for this check only). Integration
+`AModeratorReviewingTheirOwnAccountAndLink_GetsNoOutcomeNotification`.
 
-**Stages (updated 2026-07-25, WU39):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
+**Stages (updated 2026-07-25, WU39; re-confirmed 2026-09-30 — WU-InertFeatures and its review fixes
+changed only the outcome notifications beneath L2, no flip):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
 (WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).
 L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41
 precedent — functional browser verification is not the same as visual polish). L4.5-Browser —

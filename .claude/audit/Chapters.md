@@ -218,7 +218,9 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   is **not** used on the story landing page — it is reading-context-only; the story page uses
   `ChapterList` (WU25 new leaf in `SharedUI/Chapters/`).
   Verified: see WU25 stage note in `audit/Stories.md` Feature 5 L3-Logic.
-- **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** `ChapterReadingPage` dispatcher built with content-rating
+- **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24; attribution and prompt rebuilt WU-InertFeatures and
+  its review fixes, 2026-09-30 — see "Features 7 and 44 — WU-InertFeatures" below; the WU26 wording
+  that follows is history).** `ChapterReadingPage` dispatcher built with content-rating
   handling, scroll-progress JS interop, attribution capture, helpful-prompt gate. Reader settings cascade
   provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` officially
   cut 2026-07-24 (was never "post-MVP" scope, just unexamined scope — traced to a Gemini brainstorm
@@ -229,7 +231,9 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
 - **L3.5-Structure — Stage 5 (WU26 page slice, DONE ✓ 2026-06-24; WU18 nav slice and WU5 leaf also Stage 5).**
   `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
 - **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**
-- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the
+- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24; stays 5 through WU-InertFeatures,
+  2026-09-30 — the reading page's changed parts are Feature 30's prompt and attribution flow, whose
+  L4.5 = 1 carries the browser debt, tracker H14 steps 3–4).** Real-circuit pass closes the
   WU45 deferral. See the WU-ChapterArcBrowserPass Stage note in this file's Feature 6 section.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; chapter reading page verified in a real WASM runtime during
@@ -347,14 +351,46 @@ list's `PublishDate` unchanged — mutation-checked: re-pointing the read at the
 date fails it). L8 consequence (`new_chapters`/`new_words`) is in `audit/Moderation.md` F62. No
 UI changed here (the list already rendered a nullable date), so no browser pass is owed.
 
+### Features 7 and 44 — WU-InertFeatures and its review fixes (2026-09-30): the reading page's attribution flow
+
+**No cell flips.** F7 and F44 stay 5 at every layer, L4.5 included. What changed on this page is
+Feature 30's flow, hosted here: the prompt widget and the `?rec=` attribution. F30's L4.5 = 1 (tracker
+**H14** steps 3–4) carries the browser debt. Reading, progress tracking and `HasStarted` behave as
+before. The WU itself wrote this file only under F6; the review fixes added this note.
+
+**What changed** (owner ruling D3; rule text `layer2-services.md` §"Attribution (Feature 30)"):
+- **No write on page load.** `ChapterReadingPage` used to call `RecordAttributionSourceAsync` from
+  `?rec=` on first render (now retired; it FK-failed for every reader without an interaction row). It
+  now only parses `?rec=` for a signed-in reader.
+- **At the Ch.1 ≥90% moment** the page calls `MarkStartedAsync(storyId, rec)`, which records the
+  attribution in the same save as `HasStarted`, and **then** fetches the prompt with
+  `GetHelpfulPromptAsync` (the DTO-returning replacement of `GetHelpfulPromptRecommendationIdAsync`,
+  which is retired). Before, the prompt id was fetched on load.
+- **The carrier is consumed once (review fixes).** After that call the page drops `?rec=` from the
+  address with a replaced history entry, so a reload or Back after X cannot mint a new attribution and
+  bring the dismissed prompt back. On .NET 10 a query-only change keeps the scroll position; the same
+  route parameters make `OnParametersSetAsync` a no-op.
+- **F44 (L2):** `MarkStartedAsync` gained the optional `attributedRecommendationId` (endpoint
+  `/started?recommendationId=`). `ServerChapterReadMarkWriteService`'s callers pass nothing.
+
+**How verified:** RazorComponents `ChapterReadingPageAttributionTests` (7: nothing written or fetched on
+load; at 90% MarkStarted carries the rec, then the prompt; Yes; X; anonymous; the carrier dropped from
+the address with a replaced entry, so a reload after X marks started with no rec; no carrier means no
+navigation). Integration: F16's `RecommendationAttributionTests` (the `MarkStartedAsync` parameter).
+Detail: `audit/Recommendations.md` F30's two Stage notes.
+
 ## Feature 44 — Reading Progress Tracking
 - **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`. `UserChapterInteraction.cs` moved
   from deprecated `Core/Models/` → `Core/Chapters/` (vertical org rule, WU26 2026-06-24).
 - **L2 — Stage 5 (WU26, DONE ✓ 2026-06-24; manual read-marks' clear path WU-AccessGateSweep2, 2026-09-30 — see its Stage note below).** `IReadingProgressWriteService` + `ServerReadingProgressWriteService`
-  in `Core/Chapters/`/`Server/Chapters/`. `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService`.
-  `IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync(int storyId)` added. See WU26 Phase 1–3 Stage note.
+  in `Core/Chapters/`/`Server/Chapters/`. `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService`
+  (since WU-InertFeatures, 2026-09-30: `MarkStartedAsync(storyId, attributedRecommendationId = null)`).
+  `IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync(int storyId)` added — **retired**
+  WU-InertFeatures, replaced by the DTO-returning `GetHelpfulPromptAsync`; see "Features 7 and 44 —
+  WU-InertFeatures" at the end of Feature 7. See WU26 Phase 1–3 Stage note.
 - **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** JS scroll interop (reading-progress.js), `[JSInvokable]
-  OnScrollProgress` callback, Ch.1 ≥90% `MarkStartedAsync` trigger, helpful-prompt gate.
+  OnScrollProgress` callback, Ch.1 ≥90% `MarkStartedAsync` trigger, helpful-prompt gate (the trigger now
+  carries the `?rec=` attribution and fetches the prompt after it — WU-InertFeatures, 2026-09-30).
 - **L3.5-Structure — Stage 5 (WU26, DONE ✓ 2026-06-24).** Progress tracking wired into `ChapterReadingPage`.
 - **L4 — N/A** (no dedicated visual surface). **L5 — Stage 5** (grid corrected from N/A 2026-07-27:
   the buffered-signal ping endpoint `ReadingProgressEndpoints.cs` + `ClientReadingProgressWriteService`
@@ -496,7 +532,8 @@ directives (primary + versioned URL). Key design:
 - Author-only edit link (UX visibility; server is authority).
 - `CascadingParameter Task<AuthenticationState>` resolves `_currentUserId` from `NameIdentifier` claim.
 - Attribution capture: `?rec={id}` query param → `RecordAttributionSourceAsync` on first render (fire-
-  and-forget with `_ =`).
+  and-forget with `_ =`). *Retired WU-InertFeatures, 2026-09-30 — see "Features 7 and 44 —
+  WU-InertFeatures" at the end of Feature 7.*
 
 **Reading-progress JS scroll tracker:**
 Added `SharedUI/wwwroot/js/reading-progress.js`: IIFE module exporting `register(dotnetRef, elementId)`

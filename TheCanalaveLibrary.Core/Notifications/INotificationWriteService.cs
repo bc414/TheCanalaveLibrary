@@ -21,7 +21,9 @@ namespace TheCanalaveLibrary.Core;
 /// moderator id parameter</b> — the type-level enforcement that stops a future call site from
 /// shipping a moderator's identity in <c>NotificationDto</c>. A null source never drop-selfs, so a
 /// caller must not route a self-caused moderator action through these (the guardrail:
-/// <c>ApplyAccountActionToUserAsync</c> never sends 80/81).</para>
+/// <c>ApplyAccountActionToUserAsync</c> never sends 80/81), and every caller skips the acting
+/// moderator as a recipient explicitly — the job drop-self did before D5 (layer2-services.md
+/// §"Notification Generation").</para>
 ///
 /// <para><b>Semantic methods land with their triggering work-units.</b> Types seeded but not yet
 /// produced: tracker B24.</para>
@@ -263,7 +265,7 @@ public interface INotificationWriteService : INotificationReadService
     /// grant time (called by <c>ServerSpotlightSlotAllocator.GrantSlotAsync</c> after its primary
     /// commit). <c>RelatedEntityId = 0</c> (the redemption page is a fixed route, not an entity), so
     /// the type is exempt from cross-existing dedup (D4). Keeps its granting-moderator source: it sits
-    /// outside D5's stated 70–82 band (unruled).
+    /// outside D5's stated 70–82 band (unruled — roadmap decision row 19).
     /// </summary>
     Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId);
 

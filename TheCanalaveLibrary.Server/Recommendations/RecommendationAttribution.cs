@@ -20,23 +20,35 @@ internal static class RecommendationAttribution
     /// <summary>
     /// Whether <paramref name="recommendationId"/> may become <paramref name="userId"/>'s attribution
     /// for <paramref name="storyId"/>: the recommendation exists, belongs to that story, is
-    /// <c>Approved</c> and not taken down, and the caller is not the story's author (D3's author gate —
+    /// <c>Approved</c> and not taken down, the caller is not the story's author (D3's author gate —
     /// the author may save their own story for later, but no attribution row is created that could
-    /// never be consumed). Reads the unfiltered write context: this is ground truth, not a viewer read.
+    /// never be consumed), and the caller has not already credited it (the prompt's fourth gate hides
+    /// such a row forever, so it could never be consumed either — the same reasoning, derived at the
+    /// WU-InertFeatures review fixes). Reads the unfiltered write context: this is ground truth, not a
+    /// viewer read.
     /// </summary>
     public static async Task<bool> IsAttributableAsync(
         ApplicationDbContext writeDb, int userId, int storyId, int recommendationId)
     {
         var rec = await writeDb.Recommendations
             .Where(r => r.RecommendationId == recommendationId)
-            .Select(r => new { r.StoryId, r.StatusId, r.IsTakenDown, StoryAuthorId = r.Story.AuthorId })
+            .Select(r => new
+            {
+                r.StoryId,
+                r.StatusId,
+                r.IsTakenDown,
+                StoryAuthorId = r.Story.AuthorId,
+                AlreadyCredited = writeDb.RecommendationSuccesses
+                    .Any(s => s.UserId == userId && s.RecommendationId == r.RecommendationId),
+            })
             .FirstOrDefaultAsync();
 
         return rec is not null
             && rec.StoryId == storyId
             && rec.StatusId == ApprovedStatusId
             && !rec.IsTakenDown
-            && rec.StoryAuthorId != userId;
+            && rec.StoryAuthorId != userId
+            && !rec.AlreadyCredited;
     }
 
     /// <summary>

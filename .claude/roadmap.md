@@ -124,6 +124,8 @@ Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved. Rows 
 2026-09-30 (WU-StoryLifecycle review fixes), promoted out of `hidden-deferrals-tracker.md` **F9** under
 the same rule; F9's other two items already sit on the worksheet as pending D20 and D30. Rows 17–18
 were added 2026-09-30 by WU-InertFeatures: two unruled edges its build had to take a default on.
+Row 19 was added the same day by its review fixes (a third such edge, previously only labelled
+"unruled" in the conventions).
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -136,6 +138,7 @@ were added 2026-09-30 by WU-InertFeatures: two unruled edges its build had to ta
 | 16 | **When does a chapter "go live" if its story isn't live yet?** `Chapter.FirstPublishedDate` is stamped on the chapter's own first publish, even while its story is Draft/Pending/Rejected (D2's "stamped once on the chapter's first publish", invariant tied to `IsPublished`). D2 also says the anchor means "went live **on this site**", which such a chapter has not. | As built: stamp on the chapter's own first publish. Consequence: L8 `new_chapters`/`new_words` count chapters of stories that never went live (including rejected spam), while `new_stories` excludes those stories; the fan-out anchor (WU-InertFeatures) predates the story's own `PublishedDate`. | The two halves of D2's wording disagree on this edge, and the answer fixes the "New"-badge, fan-out and L8 semantics for good once real data exists. Tracker **F9** item 5. |
 | 17 | **Should a new chapter notify its story's followers when the story itself isn't live?** The new-chapter fan-out (type 10) fires once, when the chapter's `FirstPublishedDate` is stamped. | As built (a default, not a ruling): suppress it when the story is not publicly published at that moment (Draft / PendingApproval / Rejected, or taken down). Consequence: a chapter first published while its story was unpublished never notifies, because its anchor is already stamped when the story later goes live; a story that is unpublished and republished does not re-announce its chapters. | Who gets told about what, and when, is reader-facing policy; it is tied to row 16 (whether such a chapter has "gone live" at all). Rule text: `layer2-services.md` §"Notification Generation" → "New-chapter fan-out". |
 | 18 | **May a recommender earn a "helpful" credit from their own recommendation?** A recommender who saves a story for later from their own recommendation card (or follows its "Read now" link) gets an attribution row, and answering the prompt adds +1 to that recommendation's `SuccessfulRecCount`. | As built (status quo): allowed. Only the recommender badge counter skips the reader-is-recommender case; D3's author gate covers the *story's* author, not the recommender. | It decides what the public "N helpful" count means; D3 did not address it. Rule text: `layer2-services.md` §"Attribution (Feature 30)". |
+| 19 | **Should a Spotlight slot grant name the moderator who granted it?** `SpotlightSlotGranted` (90) carries the granting moderator as its source, so the awardee's notification shows that moderator's name (and ships their id in `NotificationDto`). | As built (status quo): the source is kept. D4's dedup exemption already applies to 90. | D5 de-identifies the 70–82 moderation band "including the good news" so a name's presence cannot leak an outcome, but D5 scopes itself to 70–82 and 90 sits outside it; whether a reward from a moderator is a moderation act is policy. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". Filed WU-InertFeatures review fixes, 2026-09-30. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -215,7 +218,9 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   report id and 72/73/74/76/77/90 are exempt from cross-existing dedup; `related_entity_id` widened to
   `bigint` on the same migration; two nulls are told apart by type, never by column. D5: the whole
   70–82 band is null-sourced, good news included, and — D5's routed sub-edge, taken per the owner's
-  recommendation — so is the tag-adoption invitation (26). No band method takes a moderator id. Rule:
+  recommendation — so is the tag-adoption invitation (26). No band method takes a moderator id, and
+  (review fixes, 2026-09-30) every band call site skips the acting moderator as a recipient — the
+  D4 guardrail generalized. Type 90's attribution stays open as decision row 19. Rule:
   `layer2-services.md` §"Notification Generation"; threat model in `content-safety.md`
   §"Notification Loop". Narrative: `audit/Notifications.md` F41, `audit/Moderation.md` (cluster
   Settled note).

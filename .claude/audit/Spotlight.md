@@ -79,7 +79,9 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   fires-once idempotency, FK cascade/SetNull, settings round-trip + non-mod write rejection) and
   the Unit tier (`SpotlightBlocksTests`, 12 tests: grid floor/pre-epoch/on-grid, bookable-block
   tiling/horizon bounds).
-- **L3-Logic / L3.5-Structure — Stage 5.** `CommunitySpotlightDisplay` (coordination composite,
+- **L3-Logic / L3.5-Structure — Stage 5** (behavior changed beneath them 2026-09-30 by
+  WU-InertFeatures and its review fixes — Stage note at the end of this feature).
+  `CommunitySpotlightDisplay` (coordination composite,
   sanctioned injection — NotificationBell precedent), `SpotlightRedemptionPage` (`/spotlight`:
   two pick paths, any-of-the-story's-recs attach with own-rec preselect, occupancy calendar),
   `ModSpotlightPage` (`/mod/spotlight`: grant/revoke/knobs). Covered by the RazorComponents tier
@@ -88,7 +90,10 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
 - **L4-Style — Stage 3.** Functional and token-clean (`check-design-tokens.ps1` green for these
   files), composed from existing roled components; not design-reviewed — rides the Phase-3 freeze
   sweep like the rest.
-- **L4.5-Browser — Stage 5.** Verified 2026-07-12 in a real browser against the standing dev DB
+- **L4.5-Browser — Stage 1 (flipped 5→1 2026-09-30, WU-InertFeatures review fixes).** The placement
+  verified below changed undriven: the recommendation half gained Read It Later / Read now, and a
+  signed-in viewer's `StoryCard` now shows their real flags (Stage note at the end of this feature).
+  Returns to 5 with tracker **H14**'s pass. *History:* Verified 2026-07-12 in a real browser against the standing dev DB
   (kept, not wiped): grant as AdminUser (capacity 12→11) → redeem as TestUser via the primary
   pick path into the current block → placement live on `/` (StoryCard + RecommendationCard) →
   psql ground truth: slot Redeemed, worker stamped `GoLiveNotifiedUtc` within its 1-min cadence
@@ -126,3 +131,24 @@ The full grant flow is covered by Integration (`SpotlightServiceTests`'s existin
 browser-verified end to end: search "TestUser" → pick → Grant slot → toast "Slot granted to
 TestUser." → row appears in Recent grants, `psql`-confirmed. Full context: `audit/Badges.md`
 §"WU-StatBadgeProducers".
+
+### WU-InertFeatures and its review fixes — Stage note (2026-09-30): the placement gained Feature 30's entry points and real interaction state
+
+**Cells:** L3-Logic/L3.5 stay 5; **L4.5 flips 5→1** (behavior a browser should see changed with no
+browser available — tracker **H14**, step 1). The WU itself left this file and this cell untouched; the
+review fixes caught the omission and made the flip.
+
+**What changed.** `CommunitySpotlightDisplay` (owner ruling D3, `audit/Recommendations.md` F30):
+- The recommendation half is a `ReadItLaterRecommendationCard` (Read It Later + "Read now"; an
+  anonymous click is a login nudge) instead of a read-only `RecommendationCard`.
+- The display takes the auth cascade and, for a signed-in viewer, batch-loads the spotlight stories'
+  interaction states in one call and passes them (and `IsOwnStory`) to each `StoryCard`. The card's
+  panel used to get **no** state, so its first flush wrote all-false over the viewer's real flags (a
+  pre-existing bug this fixes).
+- After a card save the display re-reads that story's state, so the panel cannot flush the save back.
+  Since the review fixes it also takes the panel's `OnStateSaved`, so a Read It Later cleared in the
+  panel re-enables the card (`audit/UserStoryInteractions.md` F16's review-fixes note).
+
+**How verified:** RazorComponents `CommunitySpotlightDisplayTests` (+4 across the WU and its review
+fixes: states batch-loaded and handed to the card; anonymous loads none; card save → panel adopts it;
+panel clear → card re-enabled). **Not browser-driven** — H14.

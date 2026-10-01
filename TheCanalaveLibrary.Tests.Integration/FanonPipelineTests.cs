@@ -198,6 +198,34 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
     }
 
     [Fact]
+    public async Task LinkGroupAsync_TheLinkingModeratorsOwnUse_GetsNoInvitation()
+    {
+        // The D4 guardrail's general rule (layer2-services.md §"Notification Generation"): 26 is
+        // null-sourced (D5), so drop-self no longer keeps the canonizing moderator out of the fan-out
+        // when they used the name themselves — the call site must. Their adoption state is still
+        // stamped, as it was before D5.
+        string name = $"Self{Guid.NewGuid():N}"[..12];
+        await SeedClusterStoryAsync(_modId, name);
+        await SeedClusterStoryAsync(_authorA, name);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using (IServiceScope scope = NewScope())
+        {
+            IFanonWriteService fanon = scope.ServiceProvider.GetRequiredService<IFanonWriteService>();
+            await fanon.LinkGroupAsync(new FanonLinkCreateDto(name, _baseTagId, _targetTagId));
+        }
+
+        using IServiceScope verify = NewScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<int> invited = await db.Notifications
+            .Where(n => n.NotificationTypeId == NotificationTypeEnum.TagUpdateSuggestion)
+            .Select(n => n.RecipientUserId).ToListAsync();
+        invited.Should().Equal([_authorA], "the moderator gets no invitation about their own act");
+        (await db.TagAdoptionStates.AnyAsync(s => s.UserId == _modId && s.TargetTagId == _targetTagId
+            && s.DateNotified != null)).Should().BeTrue("the never-twice record still covers the moderator");
+    }
+
+    [Fact]
     public async Task LinkGroupAsync_DuplicateLink_Throws()
     {
         string name = $"Dup{Guid.NewGuid():N}"[..12];

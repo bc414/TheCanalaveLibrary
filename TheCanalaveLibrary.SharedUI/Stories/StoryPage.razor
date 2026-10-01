@@ -110,7 +110,8 @@ else
                 <UserStoryInteractionPanel StoryId="@Story.StoryId"
                                            State="@_usiState"
                                            Context="UserStoryInteractionDisplayContext.Detail"
-                                           IsOwnStory="@_isAuthor" />
+                                           IsOwnStory="@_isAuthor"
+                                           OnStateSaved="HandleInteractionStateSaved" />
             }
 
             @* Tag chips — sprite-resolved, read-only (no OnRemove); includes character chips *@
@@ -350,12 +351,6 @@ else
         _initialized = true;
     }
 
-    // The six supplementary loads are mutually independent, so they run under Task.WhenAll
-    // (layer2-services.md §"Read-Context Concurrency" — server reads are factory-per-method, so
-    // concurrent calls are safe; under WASM this collapses six serial HTTP round-trips on the
-    // heaviest page in the app). Shared by both lifecycle methods (MA-203). Chapters only
-    // participates when not already restored by [PersistentState] (init) or nulled for a reload
-    // (OnParametersSetAsync); _usiState only for an authenticated viewer.
     // After a recommendation card's Read It Later: hand the panel the server's view of the six bits
     // (it adopts a changed State when it has no pending toggle) so its next flush can't undo the save.
     private async Task ReloadInteractionStateAsync()
@@ -364,6 +359,17 @@ else
         _usiState = await UsiReadService.GetStateAsync(StoryId);
     }
 
+    // The panel reports each flush the server accepted; the page's copy feeds the recommendation
+    // section's "Saved for later" too, so a Read It Later cleared in the panel re-enables the cards'
+    // button (layer3-logic.md §"Optimistic Updates & Debounce" item 5).
+    private void HandleInteractionStateSaved(UserStoryInteractionStateDto saved) => _usiState = saved;
+
+    // The six supplementary loads are mutually independent, so they run under Task.WhenAll
+    // (layer2-services.md §"Read-Context Concurrency" — server reads are factory-per-method, so
+    // concurrent calls are safe; under WASM this collapses six serial HTTP round-trips on the
+    // heaviest page in the app). Shared by both lifecycle methods (MA-203). Chapters only
+    // participates when not already restored by [PersistentState] (init) or nulled for a reload
+    // (OnParametersSetAsync); _usiState only for an authenticated viewer.
     private async Task LoadSupplementaryAsync()
     {
         Task<IReadOnlyList<ChapterListEntryDto>>? chaptersTask =

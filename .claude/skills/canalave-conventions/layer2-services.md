@@ -750,6 +750,17 @@ could not express it.
   moderator-initiated account action (`ApplyAccountActionToUserAsync`, the report row where
   `ReporterUserId == ModeratorUserId`) must **never** send `ReportReceived` (80) or `ReportResolved`
   (81): under a null source they would deliver, mailing moderators receipts for their own actions.
+- **The general rule for the de-identified band (WU-InertFeatures review fixes, 2026-09-30).** Where
+  D5 forces a null source on a type that *has* a real actor (70–82 and 26, below), the call site does
+  drop-self's job explicitly: **the acting moderator is never a recipient of a notification about
+  their own act.** Every such call site compares the recipient with the acting moderator's id and
+  skips the match — a moderator resolving a report they filed through the ordinary Report button
+  gets no 81/82; removing their own content, no 70; approving or rejecting their own story, no
+  75/71; verifying their own account or link, no 76–79; a report-driven account action on
+  themselves, no 72–74; canonizing a fanon name they used, no 26. This restores exactly what drop-self
+  did before D5 — de-identification changes what the row says, never who receives it. `ReportReceived`
+  (80) is the exception that proves it: its "actor" is the reporter themselves, a self-caused event
+  D4 restored on purpose.
 - **Two nulls share one column.** "Actor deleted" (SET NULL on account deletion) and "no actor" are
   indistinguishable in storage. Disambiguate **by notification type at display time, never by the
   column**: actor-free types compose actor-free text ("Your account has been suspended"), and the
@@ -768,7 +779,7 @@ ledger. **Type-level enforcement: no `INotificationWriteService` method in this 
 moderator id parameter** — that is what stops a future call site from reintroducing the leak. The
 band is uniform on purpose, good news included: if only sanctions were anonymous, a name's presence
 would itself say "you're fine". `SpotlightSlotGranted` (90) sits outside D5's stated band and keeps its
-granting-moderator source (unruled).
+granting-moderator source (unruled — roadmap decision row 19).
 
 **Dedup.** The cross-existing key is `(type, source, related entity, unread)`: a recipient who already
 holds an unread row with that key is skipped. A null source matches a null source (EF's C# null
@@ -991,7 +1002,7 @@ as the `Group` kind. `Chapter` → Title = chapter title, ContextTitle = story t
 A deleted junction row (`RemoveStoryAsync`) is a miss → title-less, non-navigating — the designed
 graceful path, accepted by D16.
 
-**Extra queries:** at most as many as distinct kinds appearing on the page (max 7, typically 1–3). Never N+1.
+**Extra queries:** at most as many as distinct kinds appearing on the page (max 8 — one per non-`None` kind; typically 1–3). Never N+1.
 
 **Forward-compat:** kinds whose triggering feature isn't built yet produce no rows, but their `KindFor` branch
 is coded now — dormant branches compile and need no future edit.
@@ -1354,13 +1365,23 @@ shadow `user_story_interactions.recommendation_id` FK, was a fossil of the pre-s
    there, and a URL-farm attempt must reach 90% of Chapter 1 per target. The URL is untrusted and
    `MarkStartedAsync` is the primary action, so an unattributable parameter is **silently ignored**. A
    reader who stops early and comes back without the parameter gets no attribution — correct.
+   **The carrier is consumed once** (WU-InertFeatures review fixes, 2026-09-30): once
+   `MarkStartedAsync` has run with it, the reading page drops `?rec=` from the address
+   (`NavigateTo(..., replace: true)` — the history entry is replaced, so neither a reload nor Back
+   carries it again; on .NET 10 a query-only change does not reset the scroll position). Without this,
+   X deleted the row and a reload of the same address minted a fresh one, so the dismissed prompt came
+   back — what D3's X ruling forbids. Following a recommendation's "Read now" link again is a new
+   deliberate act and starts a new attribution, the direct-link twin of "a re-RIL after a clear starts
+   a new one".
 
 **Write gates (both entry points, shared helper `RecommendationAttribution.IsAttributableAsync`).** The
 rec exists, belongs to the story, is `Approved` and not taken down; the caller is **not the story's
 author** (the RIL itself is allowed — only the attribution is skipped, so no row exists that can never
 be consumed); **first attribution wins** within one attribution's life (no row is overwritten; a re-RIL
-after a clear starts a new one). Anonymous card click → login nudge (UI), `InvalidOperationException`
-(service).
+after a clear starts a new one); and **no success is already recorded** for (caller, rec) — the
+prompt's fourth gate hides such a row forever, so it could never be consumed (the author gate's own
+reasoning; derived WU-InertFeatures review fixes, 2026-09-30, not owner text). Anonymous card click →
+login nudge (UI), `InvalidOperationException` (service).
 
 **Removal — five triggers.** The attribution describes the RIL bit, so it dies when the bit does.
 Cascade-only is rejected: it would let a stale attribution outlive its RIL, and an un-RIL→re-RIL from a

@@ -488,7 +488,9 @@ only rec is hidden → "No recommendations given yet."
   breakpoints or the loading visual; requires live-server render check (1→2→3-col grid, empty message,
   loading state, pager shown/hidden). **How verified:** `dotnet build` green (8 projects, 0
   warnings/errors). `dotnet test` green: 112 Unit + 136 RazorComponents + 133 Integration = 381 total.
-- **L3-Logic — Stage 5 (WU25, 2026-06-24).** `StoryPage` rebuilt: route `/story/{StoryId:int}/{*StorySlug}`
+- **L3-Logic — Stage 5 (WU25, 2026-06-24; the page's interaction state now also syncs with its
+  recommendation section — WU-InertFeatures and its review fixes, 2026-09-30, Stage note at the end of
+  this feature; L4.5 unaffected, see there).** `StoryPage` rebuilt: route `/story/{StoryId:int}/{*StorySlug}`
   (catch-all cosmetic slug); `[PersistentState]` on `Story` and `Chapters` (kills prerender→interactive
   double-fetch flicker); anonymous-safe `[CascadingParameter] Task<AuthenticationState>? AuthState`
   to resolve `_currentUserId`; loads `GetStoryByIdAsync` + `GetChapterListAsync`; computes
@@ -540,6 +542,25 @@ only rec is hidden → "No recommendations given yet."
   (−76%); the §8.7 exclusion-probe page −68% (riding these + the restored USI `ignored` partial).
   Story-centric USI mirror indexes were REJECTED under R4 — no story-centric interaction query
   exists (favorite counts are denormalized on `UserStat`). Detail: `layer6-indexes.md`.
+
+### WU-InertFeatures and its review fixes — Stage note (2026-09-30): the story page keeps one copy of the viewer's interaction state
+
+**No cell flips.** F5's L4.5 stays 5: the reading-list button on the recommendation cards is
+Feature 30's surface and the panel's adoption is Feature 16's. Both have L4.5 = 1, and tracker **H14**
+step 1 drives them on this page, so they carry the browser debt. The page's own browsing and display
+behavior is unchanged. The WU left this file untouched; the review fixes added this note.
+
+**What changed.** `StoryPage` passes the viewer's Read It Later bit to `RecommendationSection`
+(`StoryIsReadItLater`) and re-reads its state when a card saves (`OnReadItLaterSaved`), so the
+interaction panel adopts the save instead of flushing it back (the WU). Since the review fixes it also
+takes the panel's `OnStateSaved`, so its copy, and with it the cards' "Saved for later", follows a Read
+It Later cleared in the panel. The section no longer latches its own copy. A misplaced comment was
+also fixed: `ReloadInteractionStateAsync` had been inserted between `LoadSupplementaryAsync`'s comment
+and that method.
+
+**How verified:** RazorComponents `StoryPageTests` (+2 across the WU and its review fixes: a card save
+shows in the panel and the cards; a panel clear re-enables the cards). The second test fails without
+the page's `OnStateSaved` wiring. **Not browser-driven** (H14).
 
 ## Feature 8 — Story Arcs
 

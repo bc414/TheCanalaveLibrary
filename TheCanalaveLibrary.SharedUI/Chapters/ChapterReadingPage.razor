@@ -22,7 +22,7 @@
    Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC and version list, and
    wires reading-progress scroll JS. Scroll progress → RecordProgressAsync; Ch.1 ≥90% →
    MarkStartedAsync (carrying the ?rec= direct-link attribution, owner ruling D3 — nothing is written
-   on page load) → fetch the helpful prompt.
+   on page load; the carrier is then dropped from the address, used once) → fetch the helpful prompt.
    [PersistentState] on Chapter/Toc/Versions eliminates the prerender→interactive double fetch;
    every reading-progress/read-mark signal stays ephemeral (layer5-wasm.md §"Avoiding the double
    fetch"). *@
@@ -394,6 +394,8 @@ else
             // MarkStarted first: it is where a ?rec= direct link becomes an attribution (D3), so the
             // prompt read below can already see it.
             await UserStoryInteractionWriteService.MarkStartedAsync(StoryId, _queryRecId);
+            if (_queryRecId is not null)
+                await ConsumeRecCarrierAsync();
             if (_currentUserId.HasValue)
                 await LoadHelpfulPromptAsync();
             await InvokeAsync(StateHasChanged);
@@ -409,6 +411,18 @@ else
             await UserStoryInteractionWriteService.MarkCompletedAsync(StoryId);
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    // The ?rec= carrier is used once (layer2-services.md §"Attribution (Feature 30)"). X deletes the
+    // attribution, and a reload or Back to the same address would otherwise mint a fresh one at the
+    // next 90% and bring the dismissed prompt back — what D3's X ruling forbids. Replacing the history
+    // entry drops the parameter without a reload; .NET 10 keeps the scroll position on a query-only
+    // change, and the same route parameters make OnParametersSetAsync a no-op.
+    private async Task ConsumeRecCarrierAsync()
+    {
+        _queryRecId = null;
+        string withoutRec = NavigationManager.GetUriWithQueryParameter("rec", (string?)null);
+        await InvokeAsync(() => NavigationManager.NavigateTo(withoutRec, replace: true));
     }
 
     // The prompt is a reading-page nicety: a failed read just means no prompt this visit (the

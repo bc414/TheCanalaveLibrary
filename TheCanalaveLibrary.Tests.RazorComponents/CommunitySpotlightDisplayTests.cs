@@ -193,6 +193,24 @@ public class CommunitySpotlightDisplayTests : BunitContext
             "the host refreshes the story's state so the panel can't flush the save back to false");
     }
 
+    [Fact]
+    public async Task ReadItLaterClearedInThePanel_ReEnablesTheRecommendationCard()
+    {
+        // Review fixes: the panel reports its accepted flush and the host's entry follows, so the card
+        // (which latches nothing) offers Read It Later again — D3's "a re-RIL after a clear".
+        SignIn(5);
+        _fakeInteractions.States[7] = UserStoryInteractionStateDto.AllFalse(7) with { IsReadItLater = true };
+        _fakeSpotlights.Active = [MakeSpotlight(1, MakeStory(), MakeRec(recId: 3))];
+        IRenderedComponent<CommunitySpotlightDisplay> cut = Render<CommunitySpotlightDisplay>();
+        cut.Find("[aria-label='Saved to Read It Later']");
+
+        await cut.Find("button[aria-label='Read It Later']").ClickAsync(new()); // through its debounce
+
+        _fakeInteractions.SetStateCalls.Should().ContainSingle().Which.Update.IsReadItLater.Should().BeFalse();
+        cut.WaitForAssertion(() =>
+            cut.Find("[aria-label='Save this story to Read It Later']").HasAttribute("disabled").Should().BeFalse());
+    }
+
     // ── Fake ──────────────────────────────────────────────────────────────────────
 
     private sealed class FakeSpotlightReadService : ISpotlightReadService

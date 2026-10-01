@@ -90,15 +90,17 @@ the USI row (do not decouple). Three write-path consequences, rule text in `laye
   true→false, in the same unit of work (it is a clear — never guarded, D6).
 - *Derived, not owner text:* `UserStoryInteractionPanel` adopts a **changed** `State` parameter when
   it has no pending local toggle — otherwise its next six-bit flush would write `IsReadItLater = false`
-  over a card's RIL and fire trigger 1.
+  over a card's RIL and fire trigger 1. In the other direction it raises `OnStateSaved` after an
+  accepted flush, and the host's copy is the single source for every sibling that shows the same bits
+  (review fixes, 2026-09-30). Rule: `layer3-logic.md` §"Optimistic Updates & Debounce" item 5.
 
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
   all false; date row only when relevant") survived intact.
-**Stages (updated 2026-09-30, WU-InertFeatures; WU-AccessGateSweep2 browser pass the same day):**
-L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the panel now adopts a changed `State` from its host so a
-recommendation card's Read It Later can't be flushed back — never browser-driven; returns to 5 with
-tracker H14's pass). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and refused-raise
+**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes; WU-AccessGateSweep2 browser pass
+the same day):** L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the panel now adopts a changed `State`
+from its host so a recommendation card's Read It Later can't be flushed back, and reports each accepted
+flush back to the host — never browser-driven; returns to 5 with tracker H14's pass). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and refused-raise
 paths and fixed a page crash on a refused raise, but not the rec-card adoption H14 covers. Stage
 notes at the end of this feature.
 
@@ -306,8 +308,8 @@ no-oracle test failed. `dotnet build` green, no new warnings in touched files; `
 ### Feature 16 L2/L3/L4.5 — WU-InertFeatures Stage note (2026-09-30): recommendation attribution rides the RIL bit (owner ruling D3)
 
 **Cells:** L2 and L3-Logic stay Stage 5; **L4.5 flips 5→1** (the panel's behavior beside a
-recommendation card changed and was never browser-driven — no browser in this environment; returns to
-5 with tracker **H14**'s pass).
+recommendation card changed and was never browser-driven — WU-InertFeatures (2026-09-30) ran with no
+browser available; returns to 5 with tracker **H14**'s pass).
 
 **What changed (L2):** three write-path consequences of D3 (Settled note at the top of this feature).
 (1) New `SetReadItLaterFromRecommendationAsync(recId)` — the rec card's targeted single-bit setter:
@@ -345,6 +347,39 @@ overwritten), `StoryPageTests` +1 (card save → panel shows it), `CommunitySpot
 `ExploreTabTests` +1, `DeepDiveTabTests` +1. Mutation-checked: removing trigger 1 fails two tests;
 removing the panel's adoption clause fails the idle-adoption and story-page tests. Totals in the
 workplan entry. Rule: `layer2-services.md` §"Attribution (Feature 30)".
+
+### Feature 16 L3-Logic/L3.5 — WU-InertFeatures review fixes (2026-09-30): the panel reports what it saved
+
+**No cell flips** (L4.5 stays 1 — tracker **H14**, extended with the steps below).
+
+**What was wrong.** The closure above ran one way only. A recommendation card beside the panel showed
+"Saved for later" from a flag it latched on its own success (`ReadItLaterRecommendationCard._saved`,
+`RecommendationSection._savedForLater`), and the panel never told its host about a flush. So clearing
+Read It Later in the panel — which fires trigger 1 and deletes the attribution — left the card
+disabled over a story that was no longer saved, and the reader could not start a new attribution there
+(D3: "a re-RIL after a clear starts a new one"). The same happened when a pending panel flush won the
+accepted race and wrote the bit back to false. In Deep Dive one card instance served every opened node,
+so the latch (and an error) carried from one recommendation to the next.
+
+**What changed.** `UserStoryInteractionPanel` raises `OnStateSaved` with the six bits after a flush the
+server accepted (only the latest toggle's, outside the flush's `try`). `StoryCard` forwards it as
+`OnUserStoryInteractionStateSaved`. The story page, Explore, Deep Dive and the homepage spotlight update
+their copy, and both card hosts dropped their latches: the saved state is the host's parameter only.
+Deep Dive keys its re-pointed `StoryCard` and rec card on the item id (a pending flush also belonged to
+the story it was made on), Explore keys its family rows, and Deep Dive loads the open rec's story's
+state too (a recommender node's rec is about the parent story). Conventions: `layer3-logic.md`
+§"Optimistic Updates & Debounce" item 5 and §"Forcing a Child to Re-Seed via `@key`" (why idle
+adoption, not a remount); `layer3.5-structure.md` §"`@key` on `@foreach`" (the example now shows the
+guarded adoption and says why `@key` is still required).
+
+**How verified:** RazorComponents — `UserStoryInteractionPanelTests` +2 (an accepted flush reports the
+bits it wrote; a refused one reports nothing), `StoryPageTests` +1, `ExploreTabTests` +1 and
+`CommunitySpotlightDisplayTests` +1 (Read It Later cleared in the panel re-enables the card),
+`DeepDiveTabTests` +2 (a gem node's card save shows in the `StoryCard` panel beside it — the C11 case
+the WU's own Deep Dive test never rendered; opening another node does not carry the card's state
+across), plus the card tests listed in `audit/Recommendations.md` F30's review-fixes note. Each new host
+test fails with its wiring removed; the Deep Dive key test fails without the key. **Not
+browser-driven** — tracker H14.
 
 ### Feature 16 L2/L3-Logic — WU-AccessGateSweep2 browser verification (2026-09-30): D6 driven live; a refused raise no longer replaces the page
 

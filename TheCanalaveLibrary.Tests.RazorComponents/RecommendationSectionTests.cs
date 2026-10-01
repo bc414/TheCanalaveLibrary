@@ -302,7 +302,49 @@ public class RecommendationSectionTests : BunitContext
 
         _fakeInteractions.ReadItLaterFromRecommendationCalls.Should().Equal([5]);
         saved.Should().BeTrue("the page re-reads the viewer's state so the interaction panel can't flush it back");
+
+        // The saved state is the page's, never latched by the section (review fixes): it shows once the
+        // page's re-read hands the bit back down.
+        cut.Find("[aria-label='Save this story to Read It Later']");
+        cut.Render(p => p.Add(c => c.StoryIsReadItLater, true));
         cut.Find("[aria-label='Saved to Read It Later']").GetAttribute("aria-pressed").Should().Be("true");
+    }
+
+    [Fact]
+    public async Task ReadItLater_ClearedElsewhere_ReEnablesTheButton()
+    {
+        // The page's interaction panel can clear the same bit; a latched "saved" here left the button
+        // disabled over a story that was no longer saved, blocking D3's "a re-RIL after a clear starts
+        // a new one".
+        _fakeService.SetGetForStoryResult([MakeRec(5)]);
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 99)
+            .Add(c => c.CurrentUserId, 3)
+            .Add(c => c.OnReadItLaterSaved, Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => { })));
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+        cut.Render(p => p.Add(c => c.StoryIsReadItLater, true));
+
+        cut.Render(p => p.Add(c => c.StoryIsReadItLater, false)); // the panel un-saved it
+
+        cut.Find("[aria-label='Save this story to Read It Later']").HasAttribute("disabled").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ReadItLater_Refused_ShowsTheRefusal_AndRaisesNothing()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(5)]);
+        _fakeInteractions.ReadItLaterFromRecommendationThrows = new KeyNotFoundException();
+        bool saved = false;
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 99)
+            .Add(c => c.CurrentUserId, 3)
+            .Add(c => c.OnReadItLaterSaved, Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => saved = true)));
+
+        await cut.Find("[aria-label='Save this story to Read It Later']").ClickAsync(new());
+
+        saved.Should().BeFalse("a refused save gives the page nothing to re-read");
+        cut.Find("[role=alert]").TextContent.Should().Contain(ExceptionPresenter.NotFoundMessage);
+        cut.Find("[aria-label='Save this story to Read It Later']").HasAttribute("disabled").Should().BeFalse();
     }
 
     [Fact]

@@ -199,6 +199,19 @@ For high-frequency interactions (Favorite/Follow/Ignore buttons):
    one trips the page-level `CanalaveErrorBoundary` and replaces the whole page
    (`error-handling.md` §"Layered error boundaries").
 
+5. **Adopt a changed parent value only while idle; report what you saved** (WU-InertFeatures,
+   2026-09-30; the second half from its review fixes the same day). Another component can write the
+   same bits the panel owns — a recommendation card's Read It Later sets `IsReadItLater` (owner ruling
+   D3). The host then re-reads and passes the panel a new `State`, and the panel's next six-bit flush
+   must not write the old value back. So in `OnParametersSet` the panel adopts `State` when it is
+   **changed** from the last value it was given **and** no local toggle is pending: an unchanged
+   value (a plain parent re-render) is ignored, so already-flushed local toggles are never reverted,
+   and a pending toggle wins, because the user's latest action here is in flight. In the other
+   direction, after a flush the server accepted, the panel raises `OnStateSaved` with the state it
+   sent, so the host updates its copy and every sibling that derives from the same bits (the card's
+   "Saved for later" state) re-syncs. The host's state is the single source; siblings never latch
+   their own copy of a bit the panel can change.
+
 The debounce timer lives in the coordination composite (`UserStoryInteractionPanel`), not in
 individual leaf buttons.
 
@@ -228,6 +241,17 @@ the key from `{tagType}-{generation}` — the type keeps siblings distinct; a `_
 bumped once per apply forces all of them to remount together. Reach for this pattern whenever a child
 component is deliberately init-only-seeded (typeahead/editor-style "the child owns it after that") but
 a parent later needs to hard-replace its contents from an external source.
+
+**When idle adoption beats a remount.** `UserStoryInteractionPanel` re-adopts a changed `State` in
+`OnParametersSet` instead (§"Optimistic Updates & Debounce" item 5), and that is deliberate, not a
+departure from this idiom. A remount disposes the instance, and this child's disposal *flushes* a
+pending debounced toggle — a remount forced by the host's re-read would fire that flush at the worst
+moment, writing the panel's stale bits over the very save that triggered the re-read. Idle adoption
+leaves a pending toggle alone and takes the parent's value only when nothing is in flight. Use the
+`@key` remount for a child whose seed the parent must replace wholesale; use guarded idle adoption for
+a child with an in-flight write a remount would fire or drop. The two are independent of positional
+reuse: a looped or re-pointed instance still needs `@key` on its item id
+(`layer3.5-structure.md` §"`@key` on `@foreach` Over Stateful Children").
 
 ## Deferring DI Behind `AuthorizeView` (WU43)
 

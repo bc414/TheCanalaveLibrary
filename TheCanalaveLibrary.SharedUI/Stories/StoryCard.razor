@@ -123,7 +123,8 @@
     <UserStoryInteractionPanel StoryId="@Story.StoryId"
                                State="@UserStoryInteractionState"
                                Context="UserStoryInteractionDisplayContext.Listing"
-                               IsOwnStory="@IsOwnStory" />
+                               IsOwnStory="@IsOwnStory"
+                               OnStateSaved="@OnUserStoryInteractionStateSaved" />
 
 </div>
 
@@ -144,6 +145,13 @@
     /// an Edit Story link instead of interaction buttons.
     /// </summary>
     [Parameter] public bool IsOwnStory { get; set; }
+
+    /// <summary>
+    /// Forwarded to the panel's <c>OnStateSaved</c>: raised with the six bits after a toggle's flush is
+    /// accepted. Optional — a host that renders other UI from this story's state (a recommendation
+    /// card's "Saved for later" beside it) updates its copy here.
+    /// </summary>
+    [Parameter] public EventCallback<UserStoryInteractionStateDto> OnUserStoryInteractionStateSaved { get; set; }
 
     // Optional caret-menu actions — consumers wire only what exists (HasDelegate gating).
     // (Download is NOT one of these — it's per-format anchor links, never a callback; WU38c.)

@@ -99,6 +99,11 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 > `FanonPipelineTests` (the two invitations assert `SourceUserId == null`) and Unit
 > `NotificationPresenterTests` (26 is in the actor-free theory). Rule: `layer2-services.md`
 > §"Notification Generation" → "Moderation-band de-identification". The Stage note below predates it.
+> **Review fixes (2026-09-30, no flip):** a null source drops nobody, so a moderator who canonizes a
+> fanon name they used themselves was invited about their own act; drop-self had excluded them before
+> D5. `NotifyNewAuthorsCoreAsync` now leaves the acting moderator out of the recipients, though their
+> `TagAdoptionState.DateNotified` is still stamped, as before. Integration
+> `FanonPipelineTests.LinkGroupAsync_TheLinkingModeratorsOwnUse_GetsNoInvitation` covers it.
 
 ## WU-TagFanon Stage note (2026-07-26) — F11 + F12 + F31 + F41, all touched cells keep their current Stage (F11/F12/F31 L4 remain Stage 1 — standing Phase-3 visual pass)
 

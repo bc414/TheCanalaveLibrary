@@ -37,7 +37,12 @@ namespace TheCanalaveLibrary.Server;
 /// <c>ModeratorUserId</c> as the internal ledger. The report outcomes (70/80/81/82) carry the report
 /// id so two outcomes for one recipient never collapse. Guardrail: the moderator-initiated account
 /// action (<see cref="ApplyAccountActionToUserAsync"/>) must never send 80 or 81 — a null source
-/// no longer drop-selfs, so it would mail the moderator receipts for their own action.</para>
+/// no longer drop-selfs, so it would mail the moderator receipts for their own action. The same
+/// reasoning binds every other call site here: the acting moderator is never a recipient of a
+/// notification about their own act (a report they filed and resolved, their own removed content,
+/// their own story, a report-driven action on themselves) — each site skips that recipient
+/// explicitly, doing the job drop-self did before D5 (layer2-services.md §"Notification
+/// Generation").</para>
 /// </summary>
 public class ServerModerationWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -137,8 +142,10 @@ public class ServerModerationWriteService(
 
         try
         {
-            if (reporterUserId.HasValue)
-                await notifications.NotifyReportResolvedNoActionAsync(reporterUserId.Value, reportId);
+            // A moderator who filed this report through the ordinary Report button and now resolves it
+            // gets no receipt for their own act (the D4 guardrail's general rule).
+            if (reporterUserId is int reporter && reporter != modId)
+                await notifications.NotifyReportResolvedNoActionAsync(reporter, reportId);
         }
         catch (Exception ex)
         {
@@ -169,10 +176,12 @@ public class ServerModerationWriteService(
 
         try
         {
-            if (reporterUserId.HasValue)
-                await notifications.NotifyReportResolvedAsync(reporterUserId.Value, reportId);
-            if (contentAuthorId.HasValue)
-                await notifications.NotifyContentRemovedAsync(contentAuthorId.Value, reportId);
+            // Never the acting moderator (the D4 guardrail's general rule): not as the reporter of a
+            // report they then resolved, nor as the author of content they removed themselves.
+            if (reporterUserId is int reporter && reporter != modId)
+                await notifications.NotifyReportResolvedAsync(reporter, reportId);
+            if (contentAuthorId is int author && author != modId)
+                await notifications.NotifyContentRemovedAsync(author, reportId);
         }
         catch (Exception ex)
         {
@@ -205,7 +214,7 @@ public class ServerModerationWriteService(
         // counter upward forever — and that counter is what the mod-triage sort orders on.
         await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
 
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc);
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc, modId);
     }
 
     public async Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
@@ -248,7 +257,7 @@ public class ServerModerationWriteService(
         // must NOT send ReportReceived (80) or ReportResolved (81). Those are null-sourced now, so
         // drop-self no longer protects this path — wiring them here would mail the moderator receipts
         // for their own action. Only the target's account notification (72/73/74) is sent.
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc);
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc, modId);
     }
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
@@ -262,9 +271,9 @@ public class ServerModerationWriteService(
 
     public async Task ApproveStoryAsync(int storyId)
     {
-        // Role gate only — the moderator is not recorded on the story, and the outcome notification
-        // is null-sourced (D5), so the id itself is not needed.
-        RequireModerator();
+        // The moderator is not recorded on the story, and the outcome notification is null-sourced
+        // (D5); the id only keeps a moderator approving their own story from notifying themselves.
+        int modId = RequireModerator();
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -338,7 +347,8 @@ public class ServerModerationWriteService(
 
         try
         {
-            await notifications.NotifyStoryApprovedAsync(authorId, storyId);
+            if (authorId != modId) // no receipt for the moderator's own act (D4 guardrail)
+                await notifications.NotifyStoryApprovedAsync(authorId, storyId);
         }
         catch (Exception ex)
         {
@@ -348,7 +358,7 @@ public class ServerModerationWriteService(
 
     public async Task RejectStoryAsync(int storyId, string reason)
     {
-        RequireModerator(); // role gate only (see ApproveStoryAsync)
+        int modId = RequireModerator(); // see ApproveStoryAsync
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -382,8 +392,8 @@ public class ServerModerationWriteService(
 
         try
         {
-            if (authorId.HasValue)
-                await notifications.NotifyStoryRejectedAsync(authorId.Value, storyId);
+            if (authorId is int author && author != modId) // never the acting moderator (D4 guardrail)
+                await notifications.NotifyStoryRejectedAsync(author, storyId);
         }
         catch (Exception ex)
         {
@@ -490,7 +500,7 @@ public class ServerModerationWriteService(
     /// WU-UserModeration so the report-driven and moderator-initiated paths cannot drift apart.
     /// </summary>
     private async Task ApplyStatusAndNotifyAsync(User targetUser, ModeratorActionType action,
-        AccountStatusEnum newStatus, DateTime? suspendedUntilUtc)
+        AccountStatusEnum newStatus, DateTime? suspendedUntilUtc, int actingModeratorId)
     {
         targetUser.AccountStatus = newStatus;
         if (newStatus == AccountStatusEnum.Suspended)
@@ -504,6 +514,11 @@ public class ServerModerationWriteService(
         // attempt is blocked by CanalaveSignInManager.CanSignInAsync.
         if (newStatus is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
             await userManager.UpdateSecurityStampAsync(targetUser);
+
+        // A report-driven action can land on the acting moderator (a report against their own
+        // story); like every band call site, they get no notification about their own act (the D4
+        // guardrail's general rule). The moderator-initiated path already refuses a self-target.
+        if (targetUser.Id == actingModeratorId) return;
 
         try
         {
