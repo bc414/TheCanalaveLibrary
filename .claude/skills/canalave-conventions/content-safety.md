@@ -103,7 +103,8 @@ buttons: "View this story" / "View this group".
 
 **Write paths: rating-blind where it is recorded, full guard on interaction raises, clears always
 free** (narrowed by WU-ParentVisibility and owner ruling D6 — this paragraph previously read "write
-paths stay rating-blind" for favoriting/following too, which the shipped code never matched).
+paths stay rating-blind" for favoriting/following too, which the shipped code stopped matching when
+WU-ParentVisibility (2026-07-26) put interaction raises behind the full guard).
 - **Rating-blind (confidentiality-only guard):** listing a story in a custom list, recommending it
   (WU29), and adding it to a group — the recorded decisions that listing or recommending is not
   reading. Status and takedown still apply.
@@ -111,9 +112,10 @@ paths stay rating-blind" for favoriting/following too, which the shipped code ne
   following a story, marking it read (`UserStoryInteraction` panel bits, chapter read-marks and their
   `MarkStarted`/`MarkCompleted` cascade). D6 reaffirmed the full guard for raises; the consent path
   for a mature-off reader is the interstitial's reveal.
-- **Clears/lowers are never gated** — un-favoriting, unfollowing, mark-unread, unliking the
-  caller's own row succeed on every axis (`identity-and-authorization.md` §"Parent-visibility
-  guards" → "Raises vs clears").
+- **Clears/lowers are never gated** — un-favoriting, unfollowing, mark-unread, unliking,
+  withdrawing a poll vote on the caller's own row succeed on every axis; the response of a clear on a
+  hidden parent carries none of the parent's data (`identity-and-authorization.md`
+  §"Parent-visibility guards" → "Raises vs clears").
 
 The one legitimate write-path rating check *beyond* the parent guard is spotlight redemption
 validating story rating against the slot's rating class — that is inventory integrity, not consent. Spotlight runs **dedicated

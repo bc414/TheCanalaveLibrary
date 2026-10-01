@@ -86,7 +86,8 @@ public interface IRecommendationWriteService : IRecommendationReadService
     /// caller's new like state. No notification — anti-addictive design (§6.11).
     /// A new like requires the recommendation's story to be visible to the caller; an unlike (the
     /// caller already holds a like row) is a clear and always succeeds, even when the story is now
-    /// hidden (owner ruling D6).
+    /// hidden (owner ruling D6). The response is a read and stays gated: an unlike under a hidden
+    /// story returns <c>(LikeCount: 0, IsLiked: false)</c>.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Recommendation not found, or (liking only) its story is not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>

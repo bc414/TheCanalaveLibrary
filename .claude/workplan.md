@@ -17,17 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-AccessGateSweep2 (2026-09-30) — the second worksheet-campaign build: owner
-  ruling **D6** (a flag raise keeps the full parent-visibility guard; a clear on the caller's own row
-  is never guarded, on any axis) plus service audit §2.6's unblocked items. The USI panel and manual
-  read-marks now load, diff, then guard raises only; three unlike paths stopped guarding; alerts-on
-  became a guarded raise; every unguarded sibling clear is enrolled in `ParentVisibilityContractTests`.
-  Profile blog posts respect the author's `ProfileVisibility` (detail, gate, children, sitemap);
-  acknowledgment and lineage by-story reads gained the story guard; `RevokeAsync` checks ownership
-  first; `AllowProfileComments` is enforced in the comment write service, after fixing the settings
-  form's "Off" (it wrote `Following`). No migration, no contract change, no cell flips. `dotnet test`:
-  Unit 1,022, RazorComponents 701, Integration 1,171. Owner sub-edges: tracker **F10**; browser pass:
-  **H13**. **Pointers:** its DONE entry; `identity-and-authorization.md` §"Parent-visibility guards".
+- **Last landed:** WU-AccessGateSweep2 (2026-09-30, plus review fixes the same day) — owner ruling
+  **D6** (a raise keeps the full parent-visibility guard; a clear on the caller's own row is never
+  guarded, on any axis) plus service audit §2.6's unblocked items. USI panel, manual read-marks and
+  poll votes load, diff, then guard raises only; three unlikes and vote withdrawal are clears whose
+  *response* stays gated (no count, or `null`, on a hidden parent); alerts-on became a guarded raise.
+  Profile blog posts respect the author's `ProfileVisibility` on every path (detail, gate, children,
+  sitemap, reveal list, publish fan-out); acknowledgment/lineage reads gained the story guard;
+  `AllowProfileComments` is service-enforced. No migration, no cell flips; one contract change
+  (`VoteAsync` → `PollDto?`). `dotnet test`: Unit 1,022, RazorComponents 703, Integration 1,180.
+  Owner sub-edges: tracker **F10**; D25/D26 slice: **F11**; browser pass: **H13**. **Pointers:** its
+  DONE entry; `identity-and-authorization.md` §"Parent-visibility guards".
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
@@ -443,12 +443,12 @@ is pending except where a bullet says so.
      `ToggleLikeAsync` — the remaining `cross-cutting.md` cites (Following, other Comment, BlogPost)
      are WU-DocCorrections'.
 - **Left alone, with the reason:** saved-selection copy path (**D25** pending); series and custom-list
-  by-id reads and `CloneListAsync`'s messages (**D26** family); edit-read 403-vs-null oracles,
-  poll-vote retraction on a hidden parent, own-content curation raises, `AllowProfileComments=Nobody`
-  read semantics — owner-open, tracker **F10** items 1–4; E6's four clauses (annotated; clause 1 →
-  WU-ThrottleCoverage). Accepted risk routed to WU-NotificationCorrectness/WU-InertFeatures: a blog
-  fan-out notification for a later-Private author links to a 404. Flagged derivation (not an owner
-  sentence): an unlike response still carries the hidden parent's `LikeCount`.
+  by-id reads and `CloneListAsync`'s messages (**D26** family) — ledger home since the review fixes:
+  tracker **F11**; edit-read 403-vs-null oracles, own-content curation raises,
+  `AllowProfileComments=Nobody` read semantics — owner-open, tracker **F10** items 2–4; E6's four
+  clauses (annotated; clause 1 → WU-ThrottleCoverage). *(The build also left poll-vote retraction as
+  F10 item 1, recorded a blog fan-out "accepted risk", and returned a hidden parent's `LikeCount` on
+  unlike as a "flagged derivation" — all three were corrected by the review fixes below.)*
 - **Verification.** `dotnet build` green, no new warnings in touched files. `dotnet test` green:
   **Unit 1,022** (+12, `VisibilityGuardRuleTests`), **RazorComponents 701** (+5,
   `PrivacySettingsFormTests`), **Integration 1,171** (+40 — `ParentVisibilityContractTests` clear /
@@ -457,12 +457,36 @@ is pending except where a bullet says so.
   Mutation check: with the production changes stashed, every fix-specific Integration test (26) and all
   five bUnit tests failed; the Unit bot-ordering test failed when the bot check was moved back up. All four
   PowerShell gates pass. **No browser was available** — tracker **H13**.
+- **Review fixes (second commit, 2026-09-30).** Three reviews; 11 findings (8 distinct) checked
+  against the code and the worksheet, all real, none rejected (one overstated its scope):
+  1. **A clear's response is a read and stays gated.** The three unlikes returned the hidden
+     parent's post-toggle `LikeCount` — a WU derivation that `identity-and-authorization.md` stated
+     under the D6 heading as if owner text, and that contradicts D6's "deleting your own row teaches
+     them nothing". On a hidden parent they now return `(0, false)`; the counter still moves.
+  2. **Poll-vote withdrawal moved** (was F10 item 1 — D6 leaves no sub-edge open, and the return
+     shape is engineering). `VoteAsync` loads, diffs, then guards: a pure withdrawal skips the
+     guard; an added option or an anonymity flip guards the whole call; with no vote a hidden poll
+     answers like a missing one. Contract `Task<PollDto?>` (null = withdrawn from a poll the caller
+     can no longer see); client, endpoint and `PollView` (raises `OnPollChanged(null)`) follow.
+  3. **Two more paths follow the profile-post rule:** the reveal-management list's post titles
+     (a title oracle for drafts and Private authors' posts — the consent endpoint mints rows for
+     any id), and the publish fan-out — a Private author's post now notifies nobody (`UsersOnly`
+     needs no check; the review's `UsersOnly` claim was the overstatement). Residual (notifications
+     minted before the author went Private) → tracker **D8**, WU-NotificationCorrectness.
+  4. **Ledgers and docs:** tracker **F11** is the home for the D25/D26 slice, and the worksheet's
+     Block G / D6 "Built:" lines point at it; the read-mark clear theory gained the rating axis;
+     `content-safety.md`'s history line corrected; service audit §2.6/§3.5/§4/§7 annotated;
+     `layer2-services.md` §"Comment & blog-post semantic methods" gained the fan-out rule.
+  `dotnet test`: **Unit 1,022, RazorComponents 703 (+2, `PollViewTests`), Integration 1,180 (+9)**;
+  every fix-specific new test failed against a targeted mutation of its fix (the controls — visible-post unlike, `UsersOnly` fan-out, refreshed `PollView` result — pass both ways by design); build clean in touched files; all
+  four gates pass. **No browser was available** — H13 gained step 5 (stale-page withdrawal/unlike).
 - **Pointers:** `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears";
-  `layer2-services.md` §"`AllowProfileComments` Gate"; `audit/AccessGate.md` F66 (enumeration
-  record), `audit/UserStoryInteractions.md` F16, `audit/Chapters.md` F44, `audit/BlogPosts.md`
-  F35–37, `audit/Comments.md` F23/F25, `audit/Recommendations.md` F28, `audit/Following.md` F18,
-  `audit/Stories.md` F10, `audit/Badges.md` F50, `audit/Profiles.md` F20, `audit/Messaging.md` F49,
-  `audit/Seo.md` F64; `roadmap.md` §Resolved (D6); tracker E6, F10, H13.
+  `layer2-services.md` §"`AllowProfileComments` Gate", §"Comment & blog-post semantic methods";
+  `audit/AccessGate.md` F66 (enumeration record), `audit/UserStoryInteractions.md` F16,
+  `audit/Chapters.md` F44, `audit/BlogPosts.md` F35–37, `audit/Comments.md` F23/F25,
+  `audit/Recommendations.md` F28, `audit/Following.md` F18, `audit/Stories.md` F10,
+  `audit/Badges.md` F50, `audit/Profiles.md` F20, `audit/Messaging.md` F49, `audit/Seo.md` F64,
+  `audit/Notifications.md` F41; `roadmap.md` §Resolved (D6); tracker D8, E6, F10, F11, H13.
 
 ## WU-StoryLifecycle — story status transition table, first-submission approval gate + trust waiver, nullable publish anchors (worksheet D1 + D2; extends `Stories/`, `Chapters/`, `Moderation/`, `Identity/`, `Export/`) — DONE ✓ (2026-09-30)
 

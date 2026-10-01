@@ -109,14 +109,18 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 2. **F25 L2 — an unlike is a clear (owner ruling D6).** `ToggleLikeAsync` calls
    `RequireCommentContextVisibleAsync` only when the caller holds no like row, so a reader can unlike a
    comment that was later taken down or whose context went hidden. The "Counter mutation rule" cite
-   now points at `layer2-services.md`.
+   now points at `layer2-services.md`. *Review fixes (same day):* the predicate became
+   `IsCommentContextVisibleAsync` (bool) so the unlike path can also gate its *response* — a hidden
+   comment returns `(0, false)` instead of its post-toggle `LikeCount` (a clear's response is a read;
+   `identity-and-authorization.md` §"Raises vs clears").
 
 **How verified:** Integration — `CommentWriteServiceTests`: Nobody refuses a stranger's root post and
 reply (nothing written) and lets the owner post; Following refuses when only the commenter follows
 the owner and allows when the owner follows the commenter; Public/UsersOnly allow (theory); a direct
 POST to `/api/comments/profile` returns 400 carrying the message. `ParentVisibilityContractTests`:
-unlike succeeds on a taken-down comment. Against the pre-fix service the refusal tests and the unlike
-test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+unlike succeeds on a taken-down comment — and, since the review fixes, returns `(0, false)` while the
+stored count goes 3 → 2 (fails against the build's version, which returned 2). Against the pre-fix
+service the refusal tests and the unlike test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180 (after the review fixes); all four PowerShell gates pass.
 
 ## Feature 24 — Comment Display & Pagination
 - **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
@@ -198,7 +202,7 @@ test failed. `dotnet build` green, no new warnings in touched files; `dotnet tes
   always correct; only the entity model was wrong). **Verified:** `dotnet test` green (see Feature 23 note);
   `ToggleLikeAsync` tested by `CommentWriteServiceTests` (like increments `LikeCount` + creates junction row;
   unlike decrements + removes row; anonymous guard; delete cascades `CommentLike`).
-- **L2 — Stage 5 (WU19, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30 — see F23's Stage note):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
+- **L2 — Stage 5 (WU19, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count on a hidden comment since its review fixes — see F23's Stage note):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
   `ServerCommentWriteService`. Loads `BaseComment` + its `CommentLike` for the current user in one round-trip
   (filtered `Include`); toggles presence + adjusts denormalized `LikeCount` (floor 0 on decrement); saves;
   returns `CommentLikeResultDto(int LikeCount, bool IsLiked)`. No notification, no `DateLiked` — §6.11

@@ -43,6 +43,19 @@ public interface IPollWriteService : IPollReadService
     /// (empty = retract all). Single-choice polls accept at most one id. Only while Open.
     /// <paramref name="voteAnonymously"/> is honored only when the poll's anonymity mode is
     /// <c>VoterChoice</c>. Returns the refreshed viewer-relative poll.
+    /// <para>
+    /// Kind (g), raise only (owner ruling D6): adding a vote, or flipping the anonymity of a kept
+    /// one, requires the parent blog post to be visible to the caller. A <b>pure withdrawal</b> —
+    /// dropping some or all of the caller's existing votes, nothing else — is a clear and succeeds
+    /// even when the post is now hidden; the response is a read and stays gated, so it is
+    /// <c>null</c> when the caller can no longer see the poll. With no existing vote there is nothing
+    /// to withdraw: a hidden poll answers like a missing one. The Open window binds withdrawals too.
+    /// </para>
     /// </summary>
-    Task<PollDto> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously);
+    /// <returns>The refreshed poll, or <c>null</c> after a withdrawal from a poll the caller can no
+    /// longer see.</returns>
+    /// <exception cref="KeyNotFoundException">Poll not found, or (anything but a withdrawal) its parent post is not visible to the caller.</exception>
+    /// <exception cref="PollValidationException">Poll not open; option not on this poll; several options on a single-choice poll.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously);
 }

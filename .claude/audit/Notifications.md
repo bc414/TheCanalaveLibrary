@@ -176,7 +176,8 @@ Phase 7.
   sort, bounded by the 60-day cleanup worker). Detail: `layer6-indexes.md`.
 
 - **L2 — Stage 2 → 5 (WU22; extended WU-NotifEmail 2026-07-31 — create-core now also enqueues the
-  email fan-out, stage unchanged).** Settled constraints (do not revisit):
+  email fan-out, stage unchanged; a Private author's profile post fans out to nobody since the
+  WU-AccessGateSweep2 review fixes, 2026-09-30 — see that slice below, stage unchanged).** Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
     services; called via a semantic per-event method after the primary `SaveChangesAsync` (best-effort
     post-commit, `try/catch`-with-log). See `layer2-services.md` "Notification Generation"
@@ -255,6 +256,23 @@ Phase 7.
   practice for this type. Verified: `RequestAcknowledgment_Author_CreatesPendingAndNotifiesRecipient`
   in `StoryAcknowledgmentServiceTests` (asserts the notification row); browser-verified end to end
   (credit → notification renders for the recipient → accept → badge).
+  **WU-AccessGateSweep2 review-fixes slice (2026-09-30) — a Private author's profile post notifies
+  nobody. No cell flips — F41 L2 stays Stage 5.** WU-AccessGateSweep2 made a profile blog post
+  profile-tab data (exactly as visible as its author's profile — `audit/AccessGate.md` Settled), but
+  `NotifyNewProfileBlogPostAsync` resolved recipients with no look at the author's
+  `ProfileVisibility`: a post published by an already-Private author fanned out to their alert
+  followers and to the linked story's followers/favoriters/read-it-later users — none of whom can
+  open it — and `NotificationEnricher`'s `BlogPostDirect` branch showed them its title. The method now
+  reads the author's setting first and returns when it is `Private`. `UsersOnly` needs no check
+  (every recipient is signed in). This is the one recipient-side visibility rule in the fan-outs: the
+  "recipients are ground truth, Personal plane" posture covers rating/audience (Class B), and profile
+  privacy is Class A (`layer2-services.md` §"Comment & blog-post semantic methods"). **Residual,
+  routed:** notifications minted while the author was still visible keep resolving the post's title
+  through the recipient-agnostic enricher after the author goes Private — tracker **D8**, owner
+  WU-NotificationCorrectness. Verified: Integration — `CommentAndBlogNotificationTests`
+  `PublishTransition_AuthorProfileVisibility_GatesTheWholeFanOut` (Private → no type-13 or type-15
+  row; UsersOnly → both; the Private case fails with the early return removed). `dotnet test` green —
+  Unit 1,022, RazorComponents 703, Integration 1,180.
 
 ## Feature 42 — Notification Display
 

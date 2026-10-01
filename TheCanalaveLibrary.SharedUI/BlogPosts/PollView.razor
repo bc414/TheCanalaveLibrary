@@ -216,7 +216,8 @@
     /// <summary>Site polls only: show the Archive/Unarchive toggle.</summary>
     [Parameter] public bool ShowArchiveToggle { get; set; }
 
-    /// <summary>Raised with the refreshed poll after a vote/close/archive, or null after delete.</summary>
+    /// <summary>Raised with the refreshed poll after a vote/close/archive, or null after delete or after a
+    /// vote withdrawal on a poll the viewer can no longer see.</summary>
     [Parameter] public EventCallback<PollDto?> OnPollChanged { get; set; }
 
     /// <summary>Raised when the manager clicks Edit — the parent owns the edit form.</summary>
@@ -277,16 +278,23 @@
     }
 
     private Task SubmitVoteAsync() => RunAsync(async () =>
-    {
-        PollDto updated = await PollService.VoteAsync(Poll.PollId, [.. _selected], _voteAnonymously);
-        await ApplyUpdatedAsync(updated);
-    });
+        await ApplyVoteResultAsync(await PollService.VoteAsync(Poll.PollId, [.. _selected], _voteAnonymously)));
 
     private Task RetractVoteAsync() => RunAsync(async () =>
+        await ApplyVoteResultAsync(await PollService.VoteAsync(Poll.PollId, [], _voteAnonymously)));
+
+    /// <summary>
+    /// A null vote result means the withdrawal landed on a poll this viewer can no longer see (its
+    /// post was hidden after the page loaded — owner ruling D6). The parent drops it, exactly as
+    /// after a delete.
+    /// </summary>
+    private async Task ApplyVoteResultAsync(PollDto? updated)
     {
-        PollDto updated = await PollService.VoteAsync(Poll.PollId, [], _voteAnonymously);
-        await ApplyUpdatedAsync(updated);
-    });
+        if (updated is null)
+            await OnPollChanged.InvokeAsync(null);
+        else
+            await ApplyUpdatedAsync(updated);
+    }
 
     private Task CloseAsync() => RunAsync(async () =>
     {

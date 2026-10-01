@@ -45,7 +45,10 @@ The model is fully specified outside this file — do not re-derive it here:
   2026-09-30).** A flag raise keeps the full parent-visibility guard; a clear or lower on the
   caller's own existing row is always permitted, on all three axes (content rating, lifecycle
   status, takedown). Mechanism (load first, diff, then decide) and riders:
-  `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
+  `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears". A clear's
+  *response* is still a read and stays gated — an unlike on a hidden parent returns `(0, false)`, a
+  poll-vote withdrawal returns `null` (corrected by the WU-AccessGateSweep2 review fixes; the build had
+  returned the hidden parent's `LikeCount` on a derivation, not owner text).
 - **Blog-post detail is profile-tab data** (derived WU-AccessGateSweep2 from first-principles §5
   row 1b — `access-gating-audit.md` §1b lists "published blogs" as profile-tab data — and the F15
   permalink precedent, `audit/Tags.md`: "a permalink is just another path to profile-tab data"). A
@@ -53,6 +56,8 @@ The model is fully specified outside this file — do not re-derive it here:
   detail, gated-existence read, and every child (comments, polls, votes, likes, reports). Group and
   site posts carry no profile check (a Private moderator's site announcement stays public). Class A:
   verified bots do not bypass it. The sitemap lists only Public-visibility authors' profile posts.
+  Since the review fixes, two more paths follow it: the reveal-management list's post titles, and
+  the publish fan-out (a Private author's post notifies nobody).
 
 **Open (deferred, tracked elsewhere):**
 - Interstitial *wording* (willingness assertion text) — interim AO3-style copy ships now; final
@@ -183,7 +188,7 @@ pending stories (E and M).
 still passes (it pins raw filter mechanics; service-level policy elevates per-path) and
 `BookshelfStoryIdsTests` pins id-collection (hydration, not ids, is where personalScope acts).
 
-### Stage 5 — WU-AccessGateSweep2: the D6 enumeration record + service audit §2.6 (2026-09-30)
+### Stage 5 — WU-AccessGateSweep2: the D6 enumeration record + service audit §2.6 (2026-09-30; review fixes same day)
 
 **No cell flips — F66 stays Stage 5.** Builds owner ruling **D6** (raises gated, clears free — now
 in Settled above) and the service audit §2.6 items not blocked on pending D25/D26/D27. D6 required
@@ -200,7 +205,7 @@ walking every clear before fixing; the record of that walk, surface by surface:
 | `Group.LeaveAsync` | unguarded | conforming — enrolled |
 | `CustomList.RemoveStoryAsync`, `Series.RemoveStoryAsync` | owner-gated, no story guard | conforming — enrolled |
 | `SetHiddenGemAsync(false)`, `SetHighlightedByAuthorAsync(false)` | unguarded | conforming — enrolled |
-| Poll-vote retraction (`VoteAsync` with fewer options) | guarded both ways | **left** — needs a return-contract ruling (tracker **F10** item 1) |
+| Poll-vote withdrawal (`VoteAsync` dropping some or all of the caller's votes) | guarded both ways | **moved** by the review fixes — a pure withdrawal skips the guard and returns `null` on a hidden poll (`audit/BlogPosts.md` F37). The build had left it for a "return-contract ruling", but D6 left no sub-edge open and a nullable return is engineering, not policy |
 
 **§2.6 fixes in the same WU:** profile blog posts respect the author's `ProfileVisibility` (derived
 from first-principles §5 row 1b, settled above; `audit/BlogPosts.md`); the story-acknowledgment and
@@ -210,7 +215,8 @@ lineage by-story reads gained the story guard (`audit/Badges.md` F50, `audit/Sto
 (`audit/Profiles.md` F20). The sitemap follows the blog rule (`audit/Seo.md` F64).
 
 **Left alone, with the reason:** the saved-selection copy path (**D25**, pending), series and
-custom-list by-id reads and `CloneListAsync`'s two messages (**D26** family / D25 principle),
+custom-list by-id reads and `CloneListAsync`'s two messages (**D26** family / D25 principle) — the
+build slice waiting on those answers is tracker **F11**;
 `GetChapterForEditAsync`'s 403-vs-null (no ruling extends non-disclosure to ownership gates — tracker
 **F10** item 3), own-content curation raises (F10 item 2), `AllowProfileComments = Nobody` read-side
 semantics (F10 item 4), and all four **E6** clauses (annotated in the tracker; consent-endpoint
@@ -218,9 +224,44 @@ throttling closes in WU-ThrottleCoverage). `content-safety.md`'s "write paths st
 corrected to match the shipped full guard on interaction raises — a doc fix; raise behavior did not
 change.
 
+**Review fixes (second commit, 2026-09-30).** Three reviews; 11 findings (8 distinct), all real —
+one overstated its scope (a `UsersOnly` author's fan-out is not a leak; see the fan-out bullet).
+- **A clear's response is a read.** The three unlike paths returned the hidden parent's
+  post-toggle `LikeCount` — written into `identity-and-authorization.md` under the D6 heading as if
+  owner text, though it was a WU derivation and contradicts D6's own premise ("deleting your own row
+  teaches them nothing"). They now return `(0, false)` on a hidden parent; the counter still moves.
+- **Poll-vote withdrawal moved** (table above): `VoteAsync` diffs like the USI panel — a pure
+  withdrawal skips the guard; adding an option or flipping a kept row's anonymity is a raise and
+  guards the whole call; with no vote, a hidden poll answers like a missing one. The contract is now
+  `Task<PollDto?>` (null = withdrawn from a poll the caller can no longer see); client, endpoint and
+  `PollView` follow (`PollView` hands the null to its parent, which drops the poll). The Open window
+  still binds withdrawals — it is the poll's own rule, not a visibility guard.
+- **Reveal-management list** (`GetMyRevealsAsync`): the consent endpoint mints a row for any
+  `(BlogPost, id)`, and the title lookup had no publication or author-privacy check — a title oracle
+  for drafts and Private authors' posts. Titles now pass `BlogPostVisibilityGuard.IsVisible` with
+  `isRevealed: true` (rating satisfied by the listed reveal; confidentiality not); a hidden post lists
+  as "(deleted post)", the placeholder a hidden story already got from the read filters.
+- **Blog fan-out** (`audit/Notifications.md` F41): a Private author's profile post now notifies
+  nobody. The build had recorded only "an author who later goes Private links to a 404"; in fact every
+  publish by an already-Private author fanned out to followers and the linked story's interaction
+  sets, with the enricher showing the title. `UsersOnly` needs no check (every recipient is signed
+  in). Residual — notifications minted before the author went Private keep resolving the title — is
+  tracker **D8**, routed to WU-NotificationCorrectness.
+- Tests and docs: the read-mark clear theory gained the rating axis (an M story, mature-off reader);
+  the D25/D26 slice got a ledger home (**F11**) and the worksheet's Block G routing now points at it;
+  `content-safety.md`'s history line corrected; service audit §2.6/§3.5/§4/§7 annotated.
+
 **How verified:** Unit (`VisibilityGuardRuleTests`), Integration (`ParentVisibilityContractTests` —
 its class doc now states the raise/clear split, and its "Clears on the caller's own row" section is
 the enrolment; plus `CommentWriteServiceTests`, `StoryAcknowledgmentServiceTests`,
 `StoryVisibilityTests`), RazorComponents (`PrivacySettingsFormTests`). Every fix-specific test was
-run against the pre-fix code and failed; the conformance tests pass both ways by design. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
-**No browser was available** — tracker **H13**.
+run against the pre-fix code and failed; the conformance tests pass both ways by design. Review
+fixes: Integration — the three unlike tests now seed `LikeCount = 3` and assert `(0, false)` plus a
+landed count of 2, with a visible-post control returning 2; three poll tests (withdrawal returns null
+and removes the vote; a switch and an anonymity flip are refused whole with the vote unchanged; no
+vote on a hidden poll answers like a missing poll); the reveal-list test; the fan-out theory
+(`CommentAndBlogNotificationTests`, Private notifies nobody, UsersOnly still notifies).
+RazorComponents — `PollViewTests` (null result raises null, no error; a refreshed result is raised
+as-is). Each fix-specific test failed against a targeted mutation of its fix; the controls (visible-post unlike, `UsersOnly` fan-out, refreshed result) pass both ways by design. `dotnet build` green, no new
+warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180;
+all four PowerShell gates pass. **No browser was available** — tracker **H13** (step 5 added).

@@ -7,8 +7,12 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side <see cref="IContentRevealService"/> (WU-AccessGate). Reads resolve display titles
 /// through elevated queries — Personal plane: the member consented to these items, so their own
 /// management list is never re-filtered by their current ceiling (that would recreate the
-/// ghost-row trap this feature exists to prevent). Removal is self-scoped by construction (the
-/// key includes the caller's own id).
+/// ghost-row trap this feature exists to prevent). The elevation is rating/audience only:
+/// confidentiality still applies (story status and takedown through the read context's filters; a
+/// blog post's publication and its author's <c>ProfileVisibility</c> through
+/// <see cref="BlogPostVisibilityGuard.IsVisible"/>), and a hidden item lists under the same
+/// "(deleted …)" placeholder as an absent one. Removal is self-scoped by construction (the key
+/// includes the caller's own id).
 /// </summary>
 public class ServerContentRevealService(
     ApplicationDbContext writeDb,
@@ -46,11 +50,33 @@ public class ServerContentRevealService(
                 .Select(g => new { g.GroupId, g.GroupName })
                 .ToDictionaryAsync(x => x.GroupId, x => x.GroupName);
 
-        Dictionary<int, string> postTitles = postIds.Count == 0 ? [] :
-            await readDb.ProfileBlogPosts
+        // A reveal row can be minted for any (BlogPost, id) — the consent endpoint does not check the
+        // target — so the title lookup applies the post's visibility rule itself. The rating axis is
+        // satisfied by the reveal being listed (isRevealed: true — Personal plane, see class doc), but
+        // confidentiality is not: an unpublished draft or a profile post whose author's
+        // ProfileVisibility hides it (Class A, WU-AccessGateSweep2) shows as "(deleted post)", the
+        // same placeholder a story reveal gets once the StoryStatus/IsTakenDown filters drop it.
+        Dictionary<int, string> postTitles = [];
+        if (postIds.Count > 0)
+        {
+            var posts = await readDb.ProfileBlogPosts
                 .Where(p => postIds.Contains(p.BlogPostId))
-                .Select(p => new { p.BlogPostId, p.Title })
-                .ToDictionaryAsync(x => x.BlogPostId, x => x.Title);
+                .Select(p => new
+                {
+                    p.BlogPostId, p.Title, p.AuthorId, p.IsPublished, p.Rating,
+                    AuthorProfileVisibility = p.Author != null
+                        ? (ProfileVisibility?)p.Author.PrivacySettings.ProfileVisibility
+                        : null,
+                })
+                .ToListAsync();
+
+            postTitles = posts
+                .Where(p => BlogPostVisibilityGuard.IsVisible(
+                    new BlogPostVisibilityFacts(p.BlogPostId, p.AuthorId, p.IsPublished, p.Rating,
+                        IsGroupPost: false, GroupId: null, GroupAudience: null, p.AuthorProfileVisibility),
+                    activeUser, isRevealed: true))
+                .ToDictionary(p => p.BlogPostId, p => p.Title);
+        }
 
         return reveals
             .Select(r => new RevealDisplayDto(

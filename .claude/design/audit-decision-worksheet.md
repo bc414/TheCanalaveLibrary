@@ -540,7 +540,7 @@ artifact from reappearing.
 
 *Sequencing.* Gates WU-AccessGateSweep2 together with D25; independent of the Block B/C rulings.
 
-**Built:** WU-AccessGateSweep2 (2026-09-30) — rule now stated in `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
+**Built:** WU-AccessGateSweep2 (2026-09-30) — rule now stated in `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears". D25 was still pending when it landed, so the *Sequencing* line above was met for D6 only; the D25-gated slice is tracked as `hidden-deferrals-tracker.md` **F11**.
 
 ## Block B — Moderation policy
 
@@ -2309,7 +2309,10 @@ regression that matters here.
 
 ## Block G — Access-gate rules
 
-Gates WU-AccessGateSweep2 (with D6, answered in Block A).
+Gated WU-AccessGateSweep2 (with D6, answered in Block A). That WU landed 2026-09-30 having built D6
+and the unblocked §2.6 items only; D25–D27 were still pending. Answers here now route to the
+follow-up build slice tracked as `hidden-deferrals-tracker.md` **F11** (copy path, series and
+custom-list by-id reads, `CloneListAsync`'s messages) and, for D25's generalization, F10 item 3.
 
 ### D25. Selection-by-id single gate rule
 

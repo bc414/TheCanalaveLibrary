@@ -111,7 +111,11 @@ public class PollServiceTests(PostgresFixture postgres) : IntegrationTestBase(po
         SetActiveUser(userId);
         using IServiceScope scope = NewScope();
         IPollWriteService service = scope.ServiceProvider.GetRequiredService<IPollWriteService>();
-        return await service.VoteAsync(pollId, optionIds, anonymously);
+        // Every poll here is visible to its voter, so the D6 null (a withdrawal from a hidden poll —
+        // ParentVisibilityContractTests) never arises.
+        PollDto? result = await service.VoteAsync(pollId, optionIds, anonymously);
+        result.Should().NotBeNull();
+        return result!;
     }
 
     // ── Create: permissions + persisted config ───────────────────────────────────

@@ -199,14 +199,17 @@ public class ServerBlogPostWriteService(
             bool exists = await writeDb.BlogPosts.AnyAsync(b => b.BlogPostId == blogPostId);
             if (!exists)
                 throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
-
-            // Kind (g), raise only: writeDb is unfiltered, so the existence probe above proves
-            // nothing about visibility — a non-author could inflate LikeCount on someone's
-            // unpublished draft. Same message as a missing post (non-disclosure).
-            await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
-            if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
-                throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
         }
+
+        // Kind (g), raise only: writeDb is unfiltered, so the existence probe above proves nothing
+        // about visibility — a non-author could inflate LikeCount on someone's unpublished draft.
+        // Same message as a missing post (non-disclosure). On the unlike path the same answer
+        // decides only what the response may carry (below), never whether the clear lands.
+        bool postVisible;
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+            postVisible = await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId);
+        if (!alreadyLiked && !postVisible)
+            throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
 
         bool nowLiked;
         if (alreadyLiked)
@@ -233,6 +236,12 @@ public class ServerBlogPostWriteService(
             .ExecuteUpdateAsync(s => s.SetProperty(
                 b => b.LikeCount,
                 b => b.LikeCount + delta < 0 ? 0 : b.LikeCount + delta));
+
+        // A clear's response is a read and stays gated (identity-and-authorization.md §"Raises vs
+        // clears"): the unlike on a post now hidden from the caller has landed, but its current
+        // aggregate is not theirs to learn.
+        if (!postVisible)
+            return new BlogPostLikeResultDto(0, false);
 
         // Re-read the landed value so the returned count is accurate under concurrency.
         int newCount = await writeDb.BlogPosts

@@ -150,7 +150,7 @@ the four generated notifications restored/deleted — workbench left at seed sta
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
   (`RecommendationLikesAndConstraints`). Now fully stage 5.
-- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30 — see its Stage note).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
+- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count under a hidden story since its review fixes — see its Stage note).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
   first then DatePosted desc; per-viewer `IsLikedByCurrentUser` via short-circuited EXISTS subquery
   (EF Core anonymous-safe pattern). `ToggleLikeAsync`: load rec with filtered `Likes` include,
   add/remove, atomic counter update, return `RecommendationLikeResultDto`. **No notification
@@ -191,16 +191,21 @@ the four generated notifications restored/deleted — workbench left at seed sta
 
 **No cell flips — F28 stays Stage 5.** `ToggleLikeAsync` calls `RequireRecommendationVisibleAsync`
 only when the caller holds no like row, so a reader can unlike a recommendation whose story was later
-taken down, unpublished or put above their ceiling; the response still carries the rec's `LikeCount`
-(accepted as part of the clear — flagged derivation, as for blog likes). The "Counter mutation rule"
+taken down, unpublished or put above their ceiling. *Review fixes (same day):* the build's response
+still carried the rec's post-toggle `LikeCount` (a flagged WU derivation that contradicted D6's
+premise); a clear's response is a read and stays gated, so an unlike under a hidden story now returns
+`(0, false)` — the counter still moves. The "Counter mutation rule"
 cite now points at `layer2-services.md`. Recorded as D6 conformance, unchanged:
 `SetHiddenGemAsync(false)` and `SetHighlightedByAuthorAsync(false)` are unguarded clears. Their
 `true` raises carry no story guard either; which guard should apply is owner-open (tracker **F10**
 item 2), so they were left alone.
 
 **How verified:** Integration — `ParentVisibilityContractTests`: unlike succeeds on a taken-down
-story (fails against the pre-fix service); both curation-flag clears succeed on a taken-down story
-(conformance). `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+story (fails against the pre-fix service) and returns `(0, false)` while the stored count goes 3 → 2
+(fails against the build's version, which returned 2); both curation-flag clears succeed on a
+taken-down story (conformance). `dotnet build` green, no new warnings in touched files; `dotnet test`
+green — Unit 1,022, RazorComponents 703, Integration 1,180 (after the review fixes); all four
+PowerShell gates pass.
 
 ## Feature 29 — Hidden Gem Management
 - **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 5 (WU29, 2026-06-23).** 5-per-user limit in C#:

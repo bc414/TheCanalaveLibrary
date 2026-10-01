@@ -317,6 +317,9 @@ public interface INotificationWriteService : INotificationReadService
     /// </list>
     /// <c>RelatedEntityId = blogPostId</c> for all four types. Republish re-notifies (unread-dedup
     /// absorbs back-to-back duplicates) — intentional.
+    /// <para>A <c>Private</c> author's post notifies nobody: a profile post is as visible as its
+    /// author's profile (Class A), and no recipient is the author. <c>UsersOnly</c> needs no check —
+    /// every recipient is signed in.</para>
     /// </summary>
     Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId);
 

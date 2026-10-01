@@ -25,7 +25,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// entangles nothing. The "Clears on the caller's own row always succeed" section mirrors the raise
 /// cases one axis at a time, plus the riders (a mixed payload is refused whole; no row + all-false is
 /// a silent no-op with no existence oracle) and the conformance of every sibling clear that was
-/// already unguarded — enrolment is the record. Without those mirrors a future sweep for missing
+/// already unguarded — enrolment is the record. A clear's <i>response</i> is still a read: where it
+/// returns parent data (a like count, a refreshed poll) the hidden parent's state is not disclosed —
+/// those tests assert that too. Without those mirrors a future sweep for missing
 /// guards would re-add one to a clear, which is how the over-filtering lockout D6 corrected shipped.
 /// </para>
 ///
@@ -104,7 +106,8 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
     }
 
     /// <summary>Attaches a poll (owned by the post's author) to a blog post.</summary>
-    private async Task<int> SeedBlogPostPollAsync(int blogPostId)
+    private async Task<int> SeedBlogPostPollAsync(
+        int blogPostId, PollAnonymityMode anonymityMode = PollAnonymityMode.Public)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
@@ -118,7 +121,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
             DateOpened = DateTime.UtcNow.AddMinutes(-5),
             AllowMultiple = false,
             ResultsVisibility = PollResultsVisibility.Always,
-            AnonymityMode = PollAnonymityMode.Public,
+            AnonymityMode = anonymityMode,
         };
         poll.PollOptions.Add(new PollOption { Text = "Option A", SortOrder = 0 });
         poll.PollOptions.Add(new PollOption { Text = "Option B", SortOrder = 1 });
@@ -1131,9 +1134,11 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
     [InlineData("taken-down story")]
     [InlineData("draft story")]
     [InlineData("unpublished chapter")]
+    [InlineData("M-rated story")] // the rating axis: mature-off reader, no reveal
     public async Task ChapterReadMark_Unread_HiddenParent_Succeeds_HasStartedKept(string hiddenBy)
     {
         int storyId = await SeedStoryAsync(_authorId,
+            rating: hiddenBy == "M-rated story" ? Rating.M : Rating.E,
             status: hiddenBy == "draft story" ? StoryStatusEnum.Draft : StoryStatusEnum.InProgress);
         int chapterId = await SeedChapterAsync(storyId, isPublished: hiddenBy != "unpublished chapter");
         await SeedReadMarkAsync(_strangerId, chapterId);
@@ -1183,33 +1188,58 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
 
     // ── Likes: an existing like row makes the toggle an unlike, i.e. a clear ─────────
 
-    [Fact]
-    public async Task BlogPost_Unlike_PostUnpublishedAfterLike_Succeeds()
+    // LikeCount is seeded at 3 (two other likers plus the caller) so the response can tell "the
+    // hidden parent's landed count" (2) from "nothing disclosed" (0). A clear's response is a read
+    // and stays gated (identity-and-authorization.md §"Raises vs clears", corrected by the
+    // WU-AccessGateSweep2 review fixes).
+
+    private async Task<int> SeedLikedProfilePostAsync(bool unpublishAfterLike)
     {
         int postId = await SeedProfileBlogPostAsync(isPublished: true);
-        using (IServiceScope seedScope = Factory.Services.CreateScope())
-        {
-            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
-            db.BlogPostLikes.Add(new BlogPostLike { BlogPostId = postId, UserId = _strangerId });
-            ProfileBlogPost post = await db.Set<ProfileBlogPost>().FirstAsync(p => p.BlogPostId == postId);
-            post.LikeCount = 1;
-            post.IsPublished = false; // the author pulled it back after the like
-            await db.SaveChangesAsync();
-        }
+        using IServiceScope seedScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+        db.BlogPostLikes.Add(new BlogPostLike { BlogPostId = postId, UserId = _strangerId });
+        ProfileBlogPost post = await db.Set<ProfileBlogPost>().FirstAsync(p => p.BlogPostId == postId);
+        post.LikeCount = 3;
+        post.IsPublished = !unpublishAfterLike; // the author pulled it back after the like
+        await db.SaveChangesAsync();
+        return postId;
+    }
+
+    [Fact]
+    public async Task BlogPost_Unlike_PostUnpublishedAfterLike_Succeeds_DisclosesNoCount()
+    {
+        int postId = await SeedLikedProfilePostAsync(unpublishAfterLike: true);
 
         SetActiveUser(_strangerId);
         using IServiceScope scope = Factory.Services.CreateScope();
         BlogPostLikeResultDto result = await Resolve<IBlogPostWriteService>(scope).ToggleLikeAsync(postId);
 
-        result.IsLiked.Should().BeFalse();
+        result.Should().Be(new BlogPostLikeResultDto(0, false),
+            "the clear lands, but the hidden post's current LikeCount is not the caller's to learn");
         using IServiceScope verifyScope = Factory.Services.CreateScope();
         ApplicationDbContext verifyDb = Resolve<ApplicationDbContext>(verifyScope);
         (await verifyDb.BlogPostLikes.AnyAsync(l => l.BlogPostId == postId && l.UserId == _strangerId))
             .Should().BeFalse("the caller's own like row is removed");
+        (await verifyDb.BlogPosts.Where(b => b.BlogPostId == postId).Select(b => b.LikeCount).SingleAsync())
+            .Should().Be(2, "the counter still moves — the like is genuinely withdrawn");
     }
 
     [Fact]
-    public async Task Comments_Unlike_TakenDownComment_Succeeds()
+    public async Task BlogPost_Unlike_VisiblePost_ReturnsLandedCount()
+    {
+        int postId = await SeedLikedProfilePostAsync(unpublishAfterLike: false);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        BlogPostLikeResultDto result = await Resolve<IBlogPostWriteService>(scope).ToggleLikeAsync(postId);
+
+        result.Should().Be(new BlogPostLikeResultDto(2, false),
+            "the gate on the response only withholds a HIDDEN parent's count — control case");
+    }
+
+    [Fact]
+    public async Task Comments_Unlike_TakenDownComment_Succeeds_DisclosesNoCount()
     {
         int postId = await SeedProfileBlogPostAsync(isPublished: true);
         long commentId;
@@ -1222,7 +1252,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
                 UserId = _authorId,
                 CommentText = "<p>later removed by a moderator</p>",
                 DatePosted = DateTime.UtcNow,
-                LikeCount = 1,
+                LikeCount = 3,
                 IsTakenDown = true,
             };
             db.BlogPostComments.Add(comment);
@@ -1236,15 +1266,17 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         using IServiceScope scope = Factory.Services.CreateScope();
         CommentLikeResultDto result = await Resolve<ICommentWriteService>(scope).ToggleLikeAsync(commentId);
 
-        result.IsLiked.Should().BeFalse();
+        result.Should().Be(new CommentLikeResultDto(0, false), "a hidden comment's count is not disclosed");
         using IServiceScope verifyScope = Factory.Services.CreateScope();
         ApplicationDbContext verifyDb = Resolve<ApplicationDbContext>(verifyScope);
         (await verifyDb.CommentLikes.AnyAsync(l => l.CommentId == commentId && l.UserId == _strangerId))
             .Should().BeFalse();
+        (await verifyDb.BaseComments.Where(c => c.CommentId == commentId).Select(c => c.LikeCount).SingleAsync())
+            .Should().Be(2);
     }
 
     [Fact]
-    public async Task Recommendations_Unlike_TakenDownStory_Succeeds()
+    public async Task Recommendations_Unlike_TakenDownStory_Succeeds_DisclosesNoCount()
     {
         int storyId = await SeedStoryAsync(_authorId);
         int recId;
@@ -1258,7 +1290,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
                 RecommenderId = recommenderId,
                 StatusId = (short)RecommendationStatusEnum.Approved,
                 DatePosted = DateTime.UtcNow,
-                LikeCount = 1,
+                LikeCount = 3,
                 RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
             };
             db.Recommendations.Add(rec);
@@ -1274,11 +1306,98 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         RecommendationLikeResultDto result =
             await Resolve<IRecommendationWriteService>(scope).ToggleLikeAsync(recId);
 
-        result.IsLiked.Should().BeFalse();
+        result.Should().Be(new RecommendationLikeResultDto(0, false),
+            "a recommendation under a hidden story discloses no count");
         using IServiceScope verifyScope = Factory.Services.CreateScope();
         ApplicationDbContext verifyDb = Resolve<ApplicationDbContext>(verifyScope);
         (await verifyDb.RecommendationLikes.AnyAsync(l => l.RecommendationId == recId && l.UserId == _strangerId))
             .Should().BeFalse();
+        (await verifyDb.Recommendations.Where(r => r.RecommendationId == recId).Select(r => r.LikeCount).SingleAsync())
+            .Should().Be(2);
+    }
+
+    // ── Polls: a pure vote withdrawal is a clear (WU-AccessGateSweep2 review fixes) ──────
+
+    /// <summary>
+    /// A published post with a single-choice poll; the stranger votes option A while it is visible,
+    /// then the author unpublishes the post. Returns the poll and its two option ids.
+    /// </summary>
+    private async Task<(int PollId, int OptionA, int OptionB)> SeedVoteThenHidePostAsync(
+        PollAnonymityMode anonymityMode = PollAnonymityMode.Public)
+    {
+        int postId = await SeedProfileBlogPostAsync(isPublished: true);
+        int pollId = await SeedBlogPostPollAsync(postId, anonymityMode);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
+        int[] options = await db.PollOptions.Where(o => o.PollId == pollId)
+            .OrderBy(o => o.SortOrder).Select(o => o.PollOptionId).ToArrayAsync();
+        db.PollVotes.Add(new PollVote { PollOptionId = options[0], UserId = _strangerId, IsAnonymous = false });
+        await db.SaveChangesAsync();
+        await db.Set<ProfileBlogPost>().Where(p => p.BlogPostId == postId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPublished, false));
+        return (pollId, options[0], options[1]);
+    }
+
+    private async Task<List<PollVote>> LoadStrangerVotesAsync(int pollId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
+        return await db.PollVotes.AsNoTracking()
+            .Where(v => v.UserId == _strangerId && v.PollOption.PollId == pollId)
+            .ToListAsync();
+    }
+
+    [Fact]
+    public async Task Polls_Withdraw_PostUnpublishedAfterVote_Succeeds_ReturnsNull()
+    {
+        (int pollId, _, _) = await SeedVoteThenHidePostAsync();
+
+        SetActiveUser(_strangerId);
+        PollDto? result;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            result = await Resolve<IPollWriteService>(scope).VoteAsync(pollId, [], false);
+
+        result.Should().BeNull(
+            "the withdrawal lands, but the hidden poll's content and tallies are not the caller's to learn");
+        (await LoadStrangerVotesAsync(pollId)).Should().BeEmpty("the caller's own vote is withdrawn");
+    }
+
+    [Theory]
+    [InlineData("switch option")]
+    [InlineData("anonymity flip")]
+    public async Task Polls_RaiseOverExistingVote_PostUnpublished_RefusedWhole_VoteUnchanged(string raise)
+    {
+        bool flip = raise == "anonymity flip";
+        (int pollId, int optionA, int optionB) = await SeedVoteThenHidePostAsync(
+            flip ? PollAnonymityMode.VoterChoice : PollAnonymityMode.Public);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        Func<Task> act = () => Resolve<IPollWriteService>(scope).VoteAsync(
+            pollId, flip ? [optionA] : [optionB], voteAnonymously: flip);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>(
+            $"a {raise} edits what others see — a raise, so the whole call is guarded");
+        List<PollVote> votes = await LoadStrangerVotesAsync(pollId);
+        votes.Should().ContainSingle().Which.Should().Match<PollVote>(
+            v => v.PollOptionId == optionA && !v.IsAnonymous, "no partial apply: the drop half must not land either");
+    }
+
+    [Fact]
+    public async Task Polls_Withdraw_NoExistingVote_HiddenPoll_AnswersLikeMissing()
+    {
+        int postId = await SeedProfileBlogPostAsync(isPublished: false);
+        int pollId = await SeedBlogPostPollAsync(postId);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IPollWriteService polls = Resolve<IPollWriteService>(scope);
+
+        await polls.Invoking(p => p.VoteAsync(pollId, [], false)).Should().ThrowAsync<KeyNotFoundException>(
+            "with no vote there is nothing to withdraw, so the guard runs");
+        await polls.Invoking(p => p.VoteAsync(999_999, [], false)).Should().ThrowAsync<KeyNotFoundException>(
+            "and a hidden poll answers exactly like a missing one — no existence oracle");
     }
 
     // ── Following: alerts on is a raise, alerts off a clear ───────────────────────────
@@ -1703,6 +1822,55 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         (await posts.GetByIdAsync(groupPostId)).Should().NotBeNull("a group post is the group's content");
         (await posts.GetByIdAsync(sitePostId)).Should().NotBeNull(
             "a site announcement by a Private moderator stays public");
+    }
+
+    /// <summary>
+    /// The reveal-management list (<c>GetMyRevealsAsync</c>) is Personal plane: a listed reveal is
+    /// the consent, so the rating gate is satisfied — but the consent endpoint mints a row for any
+    /// (BlogPost, id), so without the post's own visibility rule the list was a title oracle for
+    /// drafts and Private authors' posts (WU-AccessGateSweep2 review fixes).
+    /// </summary>
+    [Fact]
+    public async Task ContentReveal_MyReveals_BlogPostTitles_RespectPublicationAndAuthorPrivacy()
+    {
+        int matureId = await SeedProfileBlogPostAsync(isPublished: true, rating: Rating.M);
+        int draftId = await SeedProfileBlogPostAsync(isPublished: false);
+        string matureTitle;
+        string draftTitle;
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+            matureTitle = await db.BlogPosts.Where(b => b.BlogPostId == matureId).Select(b => b.Title).SingleAsync();
+            draftTitle = await db.BlogPosts.Where(b => b.BlogPostId == draftId).Select(b => b.Title).SingleAsync();
+            foreach (int userId in new[] { _strangerId, _authorId })
+            foreach (int postId in new[] { matureId, draftId })
+                db.UserContentReveals.Add(new UserContentReveal
+                {
+                    UserId = userId, EntityType = RevealedEntityType.BlogPost,
+                    EntityId = postId, DateRevealed = DateTime.UtcNow,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<Dictionary<int, string>> MyRevealTitlesAsync(int userId)
+        {
+            SetActiveUser(userId); // mature off — the reveal row is what admits the M post
+            using IServiceScope scope = Factory.Services.CreateScope();
+            return (await Resolve<IContentRevealService>(scope).GetMyRevealsAsync())
+                .ToDictionary(r => r.EntityId, r => r.Title);
+        }
+
+        Dictionary<int, string> stranger = await MyRevealTitlesAsync(_strangerId);
+        stranger[matureId].Should().Be(matureTitle, "the listed reveal satisfies the rating gate");
+        stranger[draftId].Should().Be("(deleted post)", "an unpublished draft's title is not disclosed");
+
+        await SetProfileVisibilityAsync(_authorId, ProfileVisibility.Private);
+
+        (await MyRevealTitlesAsync(_strangerId))[matureId].Should().Be("(deleted post)",
+            "a Private author's post is profile-tab data — Class A, which no reveal bypasses");
+        Dictionary<int, string> author = await MyRevealTitlesAsync(_authorId);
+        author[matureId].Should().Be(matureTitle, "the author always sees their own post");
+        author[draftId].Should().Be(draftTitle);
     }
 
     // ══ Story acknowledgments + lineage: the by-story reads (WU-AccessGateSweep2) ═════

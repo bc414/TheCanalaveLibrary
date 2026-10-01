@@ -313,6 +313,17 @@ change that is free today and painful after UI/tests encode current behavior.
 
 ### 2.6 Access-control asymmetries (Class-A families)
 
+> **Built:** WU-AccessGateSweep2 (2026-09-30, plus its review fixes the same day), per worksheet D6
+> and `access-gating-first-principles.md` §5 row 1b — see `identity-and-authorization.md`
+> §"Parent-visibility guards" → "Raises vs clears", `layer2-services.md` §"`AllowProfileComments`
+> Gate", and `audit/AccessGate.md` F66. **Closed:** blog-post detail (profile posts respect the
+> author's `ProfileVisibility` on every path, incl. the reveal list and the publish fan-out),
+> acknowledgments, lineage, the over-filtering lockout (USI panel, read-marks, three unlikes, poll-vote
+> withdrawal), `AllowProfileComments`, and the `RevokeAsync` half of the LOW oracles. **Still open:**
+> the saved-selection copy path (**D25**), series and custom-list by-id reads and `CloneListAsync`'s
+> messages (**D26**) — together tracker **F11**; the `GetChapterForEditAsync` edit-read oracle
+> (tracker **F10** item 3). The bullets below are history for the closed items.
+
 - **Private-profile bypass on blog-post detail. MEDIUM, CONFIRMED.** `GetByAuthorAsync` gates on
   `ProfileVisibilityGuard`; `GetByIdAsync` never consults `ProfileVisibility` — a Private
   profile's posts (plus comments, polls, votes) are fully readable by id enumeration. The
@@ -488,6 +499,8 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
 5. **Visibility-gating asymmetry, raises vs clears** (§2.6): flag-raises require the full guard;
    clears/lowers on an existing row are always permitted (decide whether takedown/status also lift
    for clears — arguably yes; clearing reveals nothing).
+   > **Ruled and built:** worksheet D6 (2026-08-04 — all three axes lift), built WU-AccessGateSweep2
+   > (2026-09-30); rule in `identity-and-authorization.md` §"Raises vs clears".
 6. **Group fan-out `RelatedEntityId`**: groupId (current — can never name the story; distinct
    stories dedup-collapse while unread) vs storyId. Ratify the digest behavior or switch; fix the
    author-double-notify either way.
@@ -584,9 +597,11 @@ Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb; `RejectL
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —
 the explicit window now suppresses the author-exception, which must be said or a future
 simplification opens an author-draft leak); the USI "reject impossible combinations" comment (R3
-made it fiction); `FindUserByUsernameAsync`'s ILike narration; the moderation client's "no method
-produces 400 today"; `ClientSavedTagSelectionReadService`'s auth claim; stale `cross-cutting.md`
-citations in the USI write service; `StoryFilterDto.Sort`'s wrong fallback claim
+made it fiction — *fixed WU-AccessGateSweep2, 2026-09-30*); `FindUserByUsernameAsync`'s ILike
+narration; the moderation client's "no method produces 400 today";
+`ClientSavedTagSelectionReadService`'s auth claim; stale `cross-cutting.md` citations in the USI
+write service (*fixed WU-AccessGateSweep2, with the comment and recommendation `ToggleLikeAsync`
+cites; the rest are WU-DocCorrections'*); `StoryFilterDto.Sort`'s wrong fallback claim
 (LastUpdated vs shipped DatePublished — the DTO is the shared contract surface; pick one).
 
 **Pattern-uniformity items:** three private `RequireAuthenticatedUser`/`RequireModerator` copies
@@ -702,6 +717,8 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 7. **WU-AccessGateSweep2** — §2.6's asymmetries in one pass (blog detail, acknowledgments,
    lineage source, selection copy, series ruling, clears-vs-raises, AllowProfileComments), against
    `access-gating-first-principles.md`.
+   > **Built 2026-09-30 without** the selection copy and the series ruling — both wait on owner
+   > decisions D25/D26, so they were left for a follow-up (tracker **F11**); see the §2.6 banner.
 8. **WU-FolderIntegrity** — §2.10 with schema §2.4. **WU-CounterSymmetry** — §2.4.2/3/5/6.
    **Notification-correctness batch** — §2.8. Remaining §2.12 items ride whichever WU touches
    their cluster next.

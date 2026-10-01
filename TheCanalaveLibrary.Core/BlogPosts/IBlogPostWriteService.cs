@@ -43,6 +43,8 @@ public interface IBlogPostWriteService : IBlogPostReadService
     /// caller's new like state. No notification generated (anti-addictive design — §6 <c>BlogPostLike</c>).
     /// A new like requires the post to be visible to the caller; an unlike (the caller already holds
     /// a like row) is a clear and always succeeds, even on a post that is now hidden (owner ruling D6).
+    /// The response is a read and stays gated: an unlike on a post hidden from the caller returns
+    /// <c>(LikeCount: 0, IsLiked: false)</c>, never the hidden post's current count.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Liking only: blog post not found or not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>

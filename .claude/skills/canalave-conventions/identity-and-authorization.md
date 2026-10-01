@@ -243,9 +243,26 @@ payload, and call the guard only if some bit goes **false→true**. Riders:
   but real succeeds, absent 404s" is itself an oracle. A clear on a nonexistent parent is a silent no-op.
 
 *Toggles.* A toggle whose caller already holds the row (a like) is a clear by definition: an existing
-like row makes the call an unlike, which skips the guard; the row's FK proves the parent exists. A
-toggle's response may still carry the parent's aggregate (the post-toggle `LikeCount`) — accepted as
-part of the clear: the caller's row proves prior access.
+like row makes the call an unlike, which skips the guard; the row's FK proves the parent exists.
+
+*A clear's response is a read, and stays gated.* Ungating the write does not ungate what the call
+returns. Where a clear's contract returns parent data, the response goes through the same guard as any
+read: on a hidden parent it carries nothing — an unlike returns `(LikeCount: 0, IsLiked: false)`, a
+poll-vote withdrawal returns `null` — so the clear lands and the caller learns nothing about the
+hidden parent's current state (D6: "deleting your own row teaches them nothing"). *(Corrected by the
+WU-AccessGateSweep2 review fixes, 2026-09-30: the build first returned the hidden parent's
+post-toggle `LikeCount`, justified as "the caller's row proves prior access" — a derivation, not owner
+text, and it disclosed a current aggregate the guard withholds from every read.)*
+
+*Poll votes.* `VoteAsync` is a replace-set, so it is diffed like the USI panel: a **pure withdrawal**
+— the caller holds votes on the poll and the payload only drops some or all of them, keeping the
+kept rows' anonymity choice unchanged — is a clear and skips the guard. Adding an option, or flipping
+anonymity on a kept row, edits what others see and guards the whole call (the anonymity half is the
+review fixes' conservative reading, not owner text: it keeps the guard that was already there, and
+only row deletion is unambiguously "deleting your own row"). With no existing vote there
+is nothing to withdraw, so the guard runs and a hidden poll answers exactly like a missing one
+(`KeyNotFoundException`). The "poll must be Open" rule is not a visibility guard and still applies to
+withdrawals.
 
 *Read-mark asymmetry.* `SetChapterReadAsync(id, false)`/`SetAllChaptersReadAsync(id, false)` are
 ungated clears; the `isRead: true` paths keep the full guard, and their cascade into

@@ -692,6 +692,22 @@ unless noted. All sit under Stage-5 cells.
     question, so it is recorded rather than fixed. A status move deliberately does not touch
     `LastUpdatedDate` (`layer2-services.md` §"Story Lifecycle"); this item is about chapters only.
 
+- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness.*
+  - Grid: F41/F42 L2=5 (unchanged).
+  - Source: `NotificationEnricher.BatchLoadEntitiesAsync`, `BlogPostDirect` branch (used by
+    `NewBlogPostByFollowedUser`/`OnFollowedStory`/`OnFavoritedStory`/`OnReadItLaterStory`,
+    `NewCommentOnBlog`, `PollUpdated`); `audit/Notifications.md` F41 review-fixes slice.
+  - Context: the publish-time half is fixed — a Private author's profile post fans out to nobody
+    (`layer2-services.md` §"Comment & blog-post semantic methods"). What remains: notifications minted
+    while the author was visible keep resolving the post's **current** title and a `/blog/{id}` link
+    after the author goes Private, though `BlogPostVisibilityGuard` now 404s the post for those
+    recipients. The recipient saw the title at notification time, so the exposure is a title *edited*
+    after going Private, plus a dead link. The enricher is deliberately recipient-agnostic (the email
+    flusher has no active user), so the fix is a design choice for the notification WU: carry the
+    author's `ProfileVisibility` in the `BlogPostDirect` projection and drop title + link when it is
+    `Private` (no per-recipient work needed — `UsersOnly` admits every recipient), or accept and
+    record it.
+
 ---
 
 ## E. Cross-cutting work with no grid cell at all
@@ -903,13 +919,15 @@ built rows at 5 and no signal these exist.
   - Source: worksheet D6 (the enumeration rule) and D25 (pending); service audit §2.6;
     `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
   - Open items, none of which the build guessed at:
-    1. **Poll-vote retraction on a hidden parent.** `ServerPollWriteService.VoteAsync` is guarded
-       both ways, so a reader cannot retract a vote once the post is hidden — a clear D6 would move.
-       It was not moved because the method returns the refreshed `PollDto`, i.e. the hidden poll's
-       content: an ungated retraction either commits and then throws when it re-reads, or discloses
-       the poll. Needs a return-contract ruling (a void `RetractAsync`, or a nullable return) and
-       interacts with the independent "poll must be Open" rule (and **D42**, archived-poll
-       votability). WU-PollVoteIntegrity also restructures this method.
+    1. ~~**Poll-vote retraction on a hidden parent.**~~ **BUILT 2026-09-30 by the WU-AccessGateSweep2
+       review fixes — not an owner sub-edge after all.** D6 leaves no sub-edge open ("No axis is
+       exempt from the exemption"), and the return contract is engineering: `VoteAsync` now returns
+       `PollDto?` — `null` after a pure withdrawal from a poll the caller can no longer see, the same
+       "a clear's response is a read and stays gated" rule that corrected the unlike responses (which
+       the build had let return the hidden parent's `LikeCount`). The "poll must be Open" rule still
+       binds withdrawals (it is not a visibility guard); **D42** concerns site polls, which have no
+       parent guard. Rule: `identity-and-authorization.md` §"Raises vs clears". WU-PollVoteIntegrity
+       restructures this method's schema later and must keep the diff-then-guard order.
     2. **Own-content curation raises have no parent guard.** `SetHiddenGemAsync(true)` and
        `SetHighlightedByAuthorAsync(true)` raise flags on the caller's own recommendation with no
        story-visibility check (a Hidden Gem fires a notification to the story's author). Which guard
@@ -924,6 +942,28 @@ built rows at 5 and no signal these exist.
        hides the wall; `GetUserProfileCommentsAsync` returns it to anyone who can see the profile.
        Read-side semantics of the setting are unruled (`layer2-services.md` §"`AllowProfileComments`
        Gate" — posting only).
+
+- [ ] **F11 — Access-gate build slice waiting on D25/D26 (service audit §2.6 remainder)** `[decision · med · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; the worksheet's Block G and D6 "Sequencing" line had routed D25–D27 to that WU, which landed without them.*
+  - Grid: F15 (saved selections), F9 (series), F51 (custom lists) — all Stage 5, unchanged.
+  - Source: service audit §2.6 (banner names what stayed open); worksheet **D25** (selection-by-id
+    single gate rule) and **D26** (series & custom-list by-id visibility), both pending;
+    `access-gating-first-principles.md` §8 (leans toward conflating the failures).
+  - Build when D25/D26 are answered (one WU — the items are twins and fixing one alone recreates the
+    asymmetry):
+    1. **Saved-selection copy path** — `ServerSavedTagSelectionWriteService.CopyPublicSelectionAsync`
+       (`Server/Tags/ServerSavedTagSelectionWriteService.cs:81`) distinguishes "no longer exists" from
+       "not public" (the oracle its own permalink forbids) and skips the owner-`ProfileVisibility`
+       check. MEDIUM, CONFIRMED (§2.6). D25.
+    2. **`CloneListAsync`'s two messages** (`Server/CustomLists/ServerCustomListWriteService.cs:128`)
+       — same two-message shape as item 1 for custom lists. D25 principle, D26 family.
+    3. **Series detail by id** — `ServerSeriesReadService.GetSeriesByIdAsync`
+       (`Server/Series/ServerSeriesReadService.cs:30`) ignores the owner's `ProfileVisibility` that
+       `GetSeriesByAuthorAsync` respects. D26 (independent public artifact vs profile-tab data).
+    4. **Custom-list direct reads by id** — `ServerCustomListReadService.GetListDetailAsync` and
+       siblings (`Server/CustomLists/ServerCustomListReadService.cs:30`) vs the F15 permalink precedent
+       (IsPublic **and** ProfileVisibility). D26.
+  - **D27** ("My X" anonymous semantics) gates none of these; it stays on the worksheet. D25's
+    generalization to ownership gates is F10 item 3.
 
 ---
 
@@ -1054,9 +1094,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     HTTP (moderator messages already round-trip — WU-StoryLifecycle changed that client mapping).
 
 - [ ] **H13 — Access-gate sweep behavior never browser-verified** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available.*
-  - Grid: F16, F20, F23, F36, F44, F49 — all unchanged. No markup changed visually (only
-    `PrivacySettingsForm`'s option *values*), so no L4.5 cell was flipped; the behavior beneath them
-    did change and is covered by Integration/bUnit only.
+  - Grid: F16, F20, F23, F35, F36, F37, F44, F49 — all unchanged. No markup changed visually (only
+    `PrivacySettingsForm`'s option *values*, and `PollView`'s handling of a null vote result — review
+    fixes), so no L4.5 cell was flipped; the behavior beneath them did change and is covered by
+    Integration/bUnit only.
   - Source: `workplan.md` WU-AccessGateSweep2; `audit/AccessGate.md` F66 and `audit/Profiles.md` F20
     Stage notes.
   - Drive each on the circuit and the WASM pass, against `psql` ground truth:
@@ -1073,6 +1114,13 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. Set a wall to `Following` in `psql` (the form has no option for it); post on it as a user the
        owner does not follow — the inline error reads "This user only accepts profile comments from
        people they follow."
+    5. *(Added by the review fixes.)* As a reader, vote in a poll on AuthorAlpha's published blog
+       post; keep the page open; in another session unpublish the post; back on the open page click
+       "Retract vote" — no error shows, the poll block disappears, and `poll_votes` holds no row for
+       the reader. Then, with the post still unpublished, the same flow with "Update vote" to a
+       different option shows the not-found error and leaves the original vote. Likewise unlike the
+       post from the stale page: the like button settles at 0, and `blog_posts.like_count` drops by
+       one.
 
 ---
 

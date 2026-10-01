@@ -297,6 +297,40 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
         (await CountNotificationsAsync(mutedFollowerId)).Should().Be(0);
     }
 
+    /// <summary>
+    /// A profile post is exactly as visible as its author's profile (WU-AccessGateSweep2), and no
+    /// fan-out recipient is the author — so a Private author's post notifies nobody, on any of the
+    /// four types; a UsersOnly author's post still notifies (every recipient is signed in).
+    /// </summary>
+    [Theory]
+    [InlineData(ProfileVisibility.Private, false)]
+    [InlineData(ProfileVisibility.UsersOnly, true)]
+    public async Task PublishTransition_AuthorProfileVisibility_GatesTheWholeFanOut(
+        ProfileVisibility visibility, bool notified)
+    {
+        int storyId = await SeedStoryAsync(authorId: _authorId);
+        int followerId = await SeedUserAsync("PvFollower");
+        int favoriterId = await SeedUserAsync("PvFavoriter");
+        await SeedFollowAsync(followerId, _authorId, receiveAlerts: true);
+        await SeedInteractionAsync(favoriterId, storyId, favorite: true);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            User author = await db.Users.FirstAsync(u => u.Id == _authorId);
+            author.PrivacySettings.ProfileVisibility = visibility;
+            await db.SaveChangesAsync();
+        }
+
+        await CreateAndPublishProfilePostAsync(_authorId, storyId);
+
+        (await CountNotificationsAsync(followerId, NotificationTypeEnum.NewBlogPostByFollowedUser))
+            .Should().Be(notified ? 1 : 0);
+        (await CountNotificationsAsync(favoriterId, NotificationTypeEnum.NewBlogPostOnFavoritedStory))
+            .Should().Be(notified ? 1 : 0,
+                notified ? "UsersOnly admits every signed-in recipient"
+                         : "no recipient can open a Private author's post — a notification would only leak its title");
+    }
+
     [Fact]
     public async Task PublishTransition_StoryLinked_FansOutToInteractionSets_WithPrecedenceDedup()
     {

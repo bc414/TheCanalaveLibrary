@@ -361,10 +361,14 @@ before saving, row or no row; mark-all-unread stays published-chapters-only (WU4
 `<exception>` docs now scope `KeyNotFoundException` to mark-read.
 
 **How verified:** Integration — `ParentVisibilityContractTests`: mark-unread succeeds on a
-taken-down story, a Draft story and an unpublished chapter with `HasStarted` kept (theory, three
-cases); both unread methods are silent on id 999 999; mark-all-unread clears rows on a taken-down
-story. `ChapterReadMarkServiceTests` (incl. `MarkUnread_DiscardsPendingBufferedPing`) unchanged and
-green. Mutation-checked: all five fail against the pre-fix service. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+taken-down story, a Draft story, an unpublished chapter and — added by the WU's review fixes, since
+D6 asks for one mirror per axis — an M story read by a mature-off reader with no reveal, with
+`HasStarted` kept (theory, four cases); both unread methods are silent on id 999 999; mark-all-unread
+clears rows on a taken-down story. `ChapterReadMarkServiceTests` (incl.
+`MarkUnread_DiscardsPendingBufferedPing`) unchanged and green. Mutation-checked: every case fails
+against the pre-fix service (the M case was checked by disabling the clear branch). `dotnet build` green, no new warnings in touched files;
+`dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180 (after the review fixes);
+all four PowerShell gates pass.
 
 ### A3 Stage note (2026-07-24) — story-completion auto-producer, DONE ✓
 

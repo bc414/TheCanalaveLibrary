@@ -94,6 +94,8 @@ public static class PollEndpoints
         // infers as [FromBody] — the unattributed version demanded a JSON body the client never
         // sends and 400'd every vote ("Implicit body inferred for parameter") — found live in the
         // Global Flip browser wave. Sibling rule to StoryEndpoints' /query [FromQuery] note.
+        // The result is null after a withdrawal from a poll the caller can no longer see (D6);
+        // Results.Ok(null) writes an empty 200 body, which the client reads back as null.
         group.MapPost("/{pollId:int}/vote", (
                 IPollWriteService polls, int pollId, [FromQuery] int[] optionIds, bool voteAnonymously) =>
                 EndpointHelpers.ExecuteAsync(async () =>

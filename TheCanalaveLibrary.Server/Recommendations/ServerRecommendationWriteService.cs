@@ -287,9 +287,14 @@ public class ServerRecommendationWriteService(
         // Kind (g), raise only: liking requires seeing. writeDb also bypasses the Recommendation
         // IsTakenDown filter, so without this a moderator-removed rec on a hidden story stayed
         // likeable. An existing like row makes this call an unlike, a clear on the caller's own
-        // row, which is never guarded (owner ruling D6).
-        if (existing is null)
-            await RequireRecommendationVisibleAsync(recommendationId);
+        // row, which is never guarded (owner ruling D6); there the answer decides only what the
+        // response may carry (below). Same predicate as RequireRecommendationVisibleAsync — the
+        // rec's StoryId is already loaded.
+        bool storyVisible;
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+            storyVisible = await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, rec.StoryId);
+        if (existing is null && !storyVisible)
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
 
         bool nowLiked;
         int delta;
@@ -319,6 +324,11 @@ public class ServerRecommendationWriteService(
         await writeDb.Recommendations
             .Where(r => r.RecommendationId == recommendationId)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.LikeCount, r => r.LikeCount + delta));
+
+        // A clear's response is a read and stays gated (identity-and-authorization.md §"Raises vs
+        // clears"): the unlike under a now-hidden story has landed, but its aggregate is not disclosed.
+        if (!storyVisible)
+            return new RecommendationLikeResultDto(0, false);
 
         return new RecommendationLikeResultDto(Math.Max(0, rec.LikeCount + delta), nowLiked);
     }

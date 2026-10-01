@@ -808,6 +808,15 @@ The comment and profile-blog seams are wired through five semantic methods. Rule
 - **Profile blog fan-out fires on the publish transition** (`IsPublished` false→true in
   `UpdateBlogPostAsync`), never on draft create. Republish re-notifies (unread-dedup absorbs
   back-to-back duplicates) — intentional.
+- **A Private author's profile post fans out to nobody** (WU-AccessGateSweep2 review fixes,
+  2026-09-30). A profile post is profile-tab data and is exactly as visible as its author's profile
+  (`identity-and-authorization.md` guard table, `BlogPostVisibilityGuard`), and every fan-out
+  recipient is someone other than the author — so under `ProfileVisibility.Private` no recipient can
+  open the post, and a notification would only disclose its title beside a link that 404s.
+  `NotifyNewProfileBlogPostAsync` reads the author's setting and returns before resolving
+  recipients. `UsersOnly` needs no check: every recipient is signed in. This is the one recipient-side
+  visibility rule in the fan-outs — the "recipients are ground truth, Personal plane" posture is about
+  rating and audience (Class B); profile privacy is Class A and is never bypassed.
 - **Fan-out precedence-dedup:** `NotifyNewProfileBlogPostAsync` resolves four recipient sets —
   author-followers (`FollowedUser.ReceiveAlerts`, type 13) and, when story-linked, story
   followers/favoriters/read-it-later (`UserStoryInteraction.IsFollowed/IsFavorite/IsReadItLater`,

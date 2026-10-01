@@ -10,7 +10,10 @@ namespace TheCanalaveLibrary.Core;
 public interface IContentRevealService
 {
     /// <summary>The caller's reveals, newest first, with display titles resolved from ground
-    /// truth (Personal plane — the member consented to these; titles are never re-filtered).</summary>
+    /// truth (Personal plane — the member consented to these, so titles are never re-filtered by
+    /// rating or audience). Confidentiality still applies: an item that is unpublished, taken down,
+    /// out of public status, or a profile post whose author's <c>ProfileVisibility</c> hides it
+    /// lists under the same "(deleted …)" placeholder as an absent one.</summary>
     Task<IReadOnlyList<RevealDisplayDto>> GetMyRevealsAsync();
 
     /// <summary>Removes one reveal — the item gates again on the caller's next visit.</summary>

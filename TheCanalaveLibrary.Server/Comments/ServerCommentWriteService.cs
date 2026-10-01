@@ -23,51 +23,36 @@ public class ServerCommentWriteService(
 {
     /// <summary>
     /// Kind (g) for comment likes, which are context-agnostic at the call site: resolves which of
-    /// the four TPT contexts owns this comment and applies that context's guard.
+    /// the four TPT contexts owns this comment and applies that context's guard. A hidden context, a
+    /// taken-down comment and an absent one all answer false (non-disclosure).
     /// <para>
     /// Resolution runs on the <b>read</b> context, which also applies <c>BaseComment</c>'s
-    /// <c>IsTakenDown</c> filter — so a moderator-removed comment resolves to no context and is
-    /// refused here. <c>writeDb</c> sees it and would have let the like through.
+    /// <c>IsTakenDown</c> filter — so a moderator-removed comment resolves to no context and counts
+    /// as hidden here. <c>writeDb</c> sees it and would have let the like through.
     /// </para>
     /// </summary>
-    private async Task RequireCommentContextVisibleAsync(long commentId)
+    private async Task<bool> IsCommentContextVisibleAsync(long commentId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
         if (await readDb.ChapterComments.Where(c => c.CommentId == commentId)
                 .Select(c => (int?)c.ChapterId).FirstOrDefaultAsync() is int chapterId)
-        {
-            if (!await StoryVisibilityGuard.IsChapterVisibleAsync(readDb, ActiveUser, chapterId))
-                throw new KeyNotFoundException($"Comment {commentId} not found.");
-            return;
-        }
+            return await StoryVisibilityGuard.IsChapterVisibleAsync(readDb, ActiveUser, chapterId);
 
         if (await readDb.BlogPostComments.Where(c => c.CommentId == commentId)
                 .Select(c => (int?)c.BlogPostId).FirstOrDefaultAsync() is int blogPostId)
-        {
-            if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
-                throw new KeyNotFoundException($"Comment {commentId} not found.");
-            return;
-        }
+            return await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId);
 
         if (await readDb.GroupComments.Where(c => c.CommentId == commentId)
                 .Select(c => (int?)c.GroupId).FirstOrDefaultAsync() is int groupId)
-        {
-            if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
-                throw new KeyNotFoundException($"Comment {commentId} not found.");
-            return;
-        }
+            return await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId);
 
         if (await readDb.UserProfileComments.Where(c => c.CommentId == commentId)
                 .Select(c => (int?)c.ProfileUserId).FirstOrDefaultAsync() is int profileUserId)
-        {
-            if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, profileUserId))
-                throw new KeyNotFoundException($"Comment {commentId} not found.");
-            return;
-        }
+            return await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, profileUserId);
 
-        // No context resolved: the comment is absent or taken down. Both are "not found".
-        throw new KeyNotFoundException($"Comment {commentId} not found.");
+        // No context resolved: the comment is absent or taken down. Both are "not visible".
+        return false;
     }
 
     /// <summary>
@@ -531,9 +516,11 @@ public class ServerCommentWriteService(
         // Kind (g), raise only: a new like must be refused when the content hosting the comment is
         // invisible — and, because writeDb bypasses BaseComment's IsTakenDown filter, when the
         // comment itself has been removed by a moderator. An existing like row makes this call an
-        // unlike, a clear on the caller's own row, which is never guarded (owner ruling D6).
-        if (existingLike is null)
-            await RequireCommentContextVisibleAsync(commentId);
+        // unlike, a clear on the caller's own row, which is never guarded (owner ruling D6); there
+        // the answer decides only what the response may carry (below).
+        bool contextVisible = await IsCommentContextVisibleAsync(commentId);
+        if (existingLike is null && !contextVisible)
+            throw new KeyNotFoundException($"Comment {commentId} not found.");
 
         bool nowLiked;
         int delta;
@@ -561,6 +548,11 @@ public class ServerCommentWriteService(
         await writeDb.BaseComments
             .Where(c => c.CommentId == commentId)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.LikeCount, c => c.LikeCount + delta));
+
+        // A clear's response is a read and stays gated (identity-and-authorization.md §"Raises vs
+        // clears"): the unlike on a now-hidden comment has landed, but its aggregate is not disclosed.
+        if (!contextVisible)
+            return new CommentLikeResultDto(0, false);
 
         return new CommentLikeResultDto(Math.Max(0, comment.LikeCount + delta), nowLiked);
     }

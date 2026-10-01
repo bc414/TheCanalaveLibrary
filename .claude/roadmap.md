@@ -201,14 +201,18 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   raise keeps the full parent-visibility guard; a clear or lower on the caller's own existing row is
   always permitted, on all three axes (rating, status, takedown); load first, diff, then decide, with
   no row + all-false staying a silent no-op. The D6-mandated enumeration also moved three guarded
-  unlike paths (blog post, comment, recommendation) and guarded one unguarded raise
-  (`SetReceiveAlertsAsync(true)`). Built in the same WU, from first principles rather than an owner
+  unlike paths (blog post, comment, recommendation) and — in the WU's review fixes — poll-vote
+  withdrawal, and guarded one unguarded raise (`SetReceiveAlertsAsync(true)`). A clear's *response*
+  stays gated (an unlike on a hidden parent returns no count; a withdrawal from a hidden poll returns
+  null). Built in the same WU, from first principles rather than an owner
   sentence: **profile blog posts by id respect the author's `ProfileVisibility`** (blog posts are
   profile-tab data — `access-gating-first-principles.md` §5 row 1b, the F15 permalink precedent),
   and **`AllowProfileComments` is enforced in the comment write service**, not only by the profile
   page. Rule: `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears";
   `layer2-services.md` §"`AllowProfileComments` Gate". Narrative: `audit/AccessGate.md` F66,
-  `audit/UserStoryInteractions.md` F16. Sub-edges left for the owner: tracker **F10**.
+  `audit/UserStoryInteractions.md` F16. Sub-edges left for the owner: tracker **F10**; the §2.6 slice
+  waiting on worksheet D25/D26 (copy path, series and custom-list by-id reads, `CloneListAsync`):
+  tracker **F11**.
 
 - **Story approval queue: mandatory for first submissions only (worksheet D1) — answered 2026-08-04,
   built WU-StoryLifecycle 2026-09-30.** Had no decision row: it came out of the 2026-08-03 service-layer

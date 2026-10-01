@@ -321,8 +321,20 @@ public class ServerNotificationWriteService(
     /// <inheritdoc/>
     public async Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId)
     {
+        // Class A first (WU-AccessGateSweep2 review fixes): a profile post is exactly as visible as
+        // its author's profile, and every recipient below is someone other than the author — so a
+        // Private author's post has no recipient who could open it, and a notification would only
+        // disclose its title beside a link that 404s. UsersOnly needs no check: every recipient is
+        // signed in. (layer2-services.md §"Comment & blog-post semantic methods".)
+        ProfileVisibility? authorVisibility = await writeDb.Users
+            .Where(u => u.Id == authorId)
+            .Select(u => (ProfileVisibility?)u.PrivacySettings.ProfileVisibility)
+            .FirstOrDefaultAsync();
+        if (authorVisibility == ProfileVisibility.Private)
+            return;
+
         // Recipient resolution on the write context — ground truth, Personal plane (same pattern
-        // as the group fan-outs above; no audience/visibility filtering applies to recipients).
+        // as the group fan-outs above; no rating/audience filtering applies to recipients).
         // Author-followers gate on the per-follow ReceiveAlerts flag; story-interaction sets have
         // no per-row opt-in — presence of the flag is the signal.
         List<int> authorFollowers = await writeDb.FollowedUsers

@@ -223,7 +223,7 @@ public class ServerPollWriteService(
         await writeDb.SaveChangesAsync();
     }
 
-    public async Task<PollDto> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously)
+    public async Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously)
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Voting requires an authenticated user.");
@@ -240,37 +240,49 @@ public class ServerPollWriteService(
         if (poll is null)
             throw new KeyNotFoundException($"Poll {pollId} not found.");
 
-        // Kind (g): you cannot vote on a poll hanging off a post you cannot see. This is the write
-        // half of D2 and the more damaging one — a vote on someone's draft sets ConfigLocked, which
-        // freezes AllowMultiple/ResultsVisibility/AnonymityMode before the author ever publishes.
-        // writeDb is unfiltered, so the existence check above proves nothing about visibility; the
-        // guard needs the read context. Same message as a missing poll (non-disclosure).
-        if (poll.BlogPostId is int parentId)
+        int[] picked = optionIds.Distinct().ToArray();
+
+        // IsAnonymous is only meaningful under VoterChoice; forced false otherwise so a later
+        // display never has stray flags to honor.
+        bool isAnonymous = poll.AnonymityMode == PollAnonymityMode.VoterChoice && voteAnonymously;
+
+        // Load first, diff, then decide (owner ruling D6 — identity-and-authorization.md §"Raises
+        // vs clears"). Replace semantics: the new set fully supersedes the viewer's votes on this
+        // poll (empty = retract all). Kept rows also refresh IsAnonymous — re-voting is how a
+        // VoterChoice voter flips their own visibility.
+        List<PollVote> existing = await writeDb.PollVotes
+            .Where(v => v.UserId == userId && poll.OptionIds.Contains(v.PollOptionId))
+            .ToListAsync();
+
+        // A pure withdrawal — the caller holds votes here, and the payload only drops some or all of
+        // them without flipping a kept row's anonymity — is a clear of the caller's own rows. With
+        // no existing vote there is nothing to withdraw, so the guard runs and a hidden poll answers
+        // exactly like a missing one.
+        bool isWithdrawal = existing.Count > 0
+            && picked.All(id => existing.Any(v => v.PollOptionId == id))
+            && existing.Where(v => picked.Contains(v.PollOptionId)).All(v => v.IsAnonymous == isAnonymous);
+
+        // Kind (g), raise only: you cannot vote on a poll hanging off a post you cannot see. This is
+        // the write half of D2 and the more damaging one — a vote on someone's draft sets
+        // ConfigLocked, which freezes AllowMultiple/ResultsVisibility/AnonymityMode before the
+        // author ever publishes. writeDb is unfiltered, so the existence check above proves nothing
+        // about visibility; the guard needs the read context. Same message as a missing poll
+        // (non-disclosure). Any raise in the payload guards the whole call, before any mutation.
+        if (poll.BlogPostId is int parentId && !isWithdrawal)
         {
             await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
             if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, parentId))
                 throw new KeyNotFoundException($"Poll {pollId} not found.");
         }
 
+        // Not a visibility guard: the Open window is the poll's own rule and binds withdrawals too.
         if (PollRules.StatusFor(poll.DateOpened, poll.DateClosed, DateTime.UtcNow) != PollStatus.Open)
             throw new PollValidationException("This poll is not open for voting.");
 
-        int[] picked = optionIds.Distinct().ToArray();
         if (picked.Except(poll.OptionIds).Any())
             throw new PollValidationException("One of the selected options does not belong to this poll.");
         if (!poll.AllowMultiple && picked.Length > 1)
             throw new PollValidationException("This poll allows a single choice.");
-
-        // IsAnonymous is only meaningful under VoterChoice; forced false otherwise so a later
-        // display never has stray flags to honor.
-        bool isAnonymous = poll.AnonymityMode == PollAnonymityMode.VoterChoice && voteAnonymously;
-
-        // Replace semantics: the new set fully supersedes the viewer's votes on this poll
-        // (empty = retract all). Kept rows also refresh IsAnonymous — re-voting is how a
-        // VoterChoice voter flips their own visibility.
-        List<PollVote> existing = await writeDb.PollVotes
-            .Where(v => v.UserId == userId && poll.OptionIds.Contains(v.PollOptionId))
-            .ToListAsync();
 
         foreach (PollVote vote in existing.Where(v => !picked.Contains(v.PollOptionId)))
             writeDb.PollVotes.Remove(vote);
@@ -281,11 +293,15 @@ public class ServerPollWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        // The re-read applies the same kind-(g) guard. It can only come back null if the parent post
+        // The response is a read and applies the same kind-(g) guard. After a withdrawal from a poll
+        // the caller can no longer see it is null: the clear landed, and the hidden poll's content
+        // and tallies are not disclosed. After a raise it can only come back null if the parent post
         // was hidden between the check above and here (author unpublished it, or a mod took it down
-        // mid-vote) — report that as the poll being gone rather than dereferencing null.
-        return await GetPollAsync(pollId)
-               ?? throw new KeyNotFoundException($"Poll {pollId} not found.");
+        // mid-vote) — report that as the poll being gone rather than returning null.
+        PollDto? refreshed = await GetPollAsync(pollId);
+        if (refreshed is null && !isWithdrawal)
+            throw new KeyNotFoundException($"Poll {pollId} not found.");
+        return refreshed;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────

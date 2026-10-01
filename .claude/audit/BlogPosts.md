@@ -16,7 +16,7 @@ split one line down). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
 when Feature 56 was cut — see the Feature 56 CUT note below.)
 
 ## Feature 35 — Blog Post Writing
-- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30 — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
@@ -163,9 +163,10 @@ auth services; listed in E2E checklist). Convention in
 
 ---
 
-### Features 35–37 — WU-AccessGateSweep2 Stage note (2026-09-30): profile posts respect the author's ProfileVisibility; an unlike is a clear
+### Features 35–37 — WU-AccessGateSweep2 Stage note (2026-09-30; review fixes same day): profile posts respect the author's ProfileVisibility; an unlike and a vote withdrawal are clears
 
-**No cell flips — F35, F36, F37 keep their stages.** Two changes beneath sound cells:
+**No cell flips — F35, F36, F37 keep their stages.** Three changes beneath sound cells (item 3 and
+the corrections marked *review fixes* landed in the WU's second commit):
 
 1. **F36 L2 — blog-post detail is profile-tab data** (service audit §2.6: `GetByAuthorAsync` gated on
    `ProfileVisibilityGuard` while `GetByIdAsync` never did, so a Private profile's posts — with their
@@ -183,14 +184,27 @@ auth services; listed in E2E checklist). Convention in
    `BlogPostVisibilityGuard` consumer inherits the check: comment reads and writes, poll reads and
    votes (**F37**), like raises, report submission. The sitemap lists only Public authors' profile
    posts (`audit/Seo.md` F64). `IBlogPostReadService.GetByIdAsync`'s doubled `<summary>` was merged
-   and its stale `IgnoreQueryFilters(["ContentRating"])` claim removed. **Accepted risk, routed to the
-   notification WUs:** a blog fan-out notification for an author who later goes Private links to a
-   404.
+   and its stale `IgnoreQueryFilters(["ContentRating"])` claim removed. *Review fixes:* the build
+   recorded only "an author who later goes Private links to a 404" as an accepted risk; in fact every
+   publish by an *already*-Private author fanned out to followers and the linked story's interaction
+   sets, with the enricher showing the title. A Private author's post now notifies nobody
+   (`audit/Notifications.md` F41); the residual (notifications minted before the author went Private)
+   is tracker **D8**. The reveal-management list's post titles now follow the same rule
+   (`audit/AccessGate.md` F66).
 2. **F35 L2 — an unlike is a clear (owner ruling D6).** `ToggleLikeAsync` checks the caller's like
    row first; an existing row makes the call an unlike, which skips the existence check and the guard
-   (the row's FK proves the post exists). A new like keeps both. The unlike response still carries
-   the post's `LikeCount` — accepted as part of the clear (the caller's row proves prior access);
-   flagged as a derivation from D6's reasoning, not an owner sentence.
+   (the row's FK proves the post exists). A new like keeps both. *Review fixes:* the build returned
+   the hidden post's post-toggle `LikeCount` on the unlike path (a WU derivation that contradicted
+   D6's premise); the response is a read and stays gated, so a hidden post now returns `(0, false)`.
+   The counter still moves.
+3. **F37 L2 — a poll-vote withdrawal is a clear (review fixes).** `VoteAsync` loads the caller's
+   votes, diffs, then decides: a pure withdrawal (drop some or all, no anonymity flip on a kept row)
+   skips the guard; anything else guards the whole call before any mutation; with no vote, a hidden
+   poll throws exactly like a missing one. `IPollWriteService.VoteAsync` now returns `PollDto?` —
+   `null` after a withdrawal from a poll the caller can no longer see (client reads the empty 200 body
+   as null; `PollView` raises `OnPollChanged(null)`, so the page drops the poll as after a delete). The
+   Open window still binds withdrawals. The build had filed this as owner-open (tracker F10 item 1);
+   D6 leaves no sub-edge open and a nullable return is engineering, so it was built.
 
 **How verified:** Unit — `VisibilityGuardRuleTests` (the profile truth table; the blog guard's
 Private / UsersOnly / owner / draft / bot / reveal / group / site cases; mutation-checked by moving
@@ -200,7 +214,15 @@ like refused, for a stranger and for anonymous; the M gate is null; the author s
 UsersOnly is visible signed-in and null anonymous; a verified bot is served a Public author's M post
 but not a Private author's; group and site posts by a Private author are unaffected; an unlike
 succeeds on a post unpublished after the like. `SiteAnnouncementServiceTests`' site branch still
-green. Against the pre-fix code every new privacy and unlike test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+green. Against the pre-fix code every new privacy and unlike test failed. *Review fixes:*
+Integration — the hidden-post unlike asserts `(0, false)` with `LikeCount` 3 → 2 in the database,
+plus a visible-post control returning 2; the poll withdrawal returns null and removes the vote; a
+switch and an anonymity flip on a hidden poll are refused whole with the vote unchanged; no vote on a
+hidden poll throws like a missing poll; `PollServiceTests` asserts the visible-poll result is never
+null; the fan-out theory in `CommentAndBlogNotificationTests`. RazorComponents — `PollViewTests`.
+Each fix-specific test failed against a targeted mutation of its fix (the visible-post control passes both ways by design). `dotnet build` green, no new warnings in touched
+files; `dotnet test` green — Unit 1,022, RazorComponents 703, Integration 1,180; all four PowerShell
+gates pass. **No browser was available** — tracker **H13**.
 
 ## WU-SiteNews — staff site announcements (extends Features 35/36, no new grid row) — Stage 5 (2026-07-28)
 
@@ -384,7 +406,7 @@ bullet below, 2026-07-13.)
 
 - **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30 — see F36's Stage note).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock

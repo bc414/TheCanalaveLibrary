@@ -90,7 +90,8 @@ public interface ICommentWriteService : ICommentReadService
     /// caller's new like state. No notification generated (§6.11 — anti-addictive design).
     /// A new like requires the comment and the content hosting it to be visible to the caller; an
     /// unlike (the caller already holds a like row) is a clear and always succeeds, even when the
-    /// comment or its context is now hidden (owner ruling D6).
+    /// comment or its context is now hidden (owner ruling D6). The response is a read and stays
+    /// gated: an unlike on a hidden comment returns <c>(LikeCount: 0, IsLiked: false)</c>.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Comment not found, or (liking only) not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>

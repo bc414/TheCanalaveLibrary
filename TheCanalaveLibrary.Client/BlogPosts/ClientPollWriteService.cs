@@ -55,7 +55,7 @@ public sealed class ClientPollWriteService(HttpClient http) : ClientPollReadServ
         await ThrowIfWriteFailedAsync(response);
     }
 
-    public async Task<PollDto> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously)
+    public async Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously)
     {
         // optionIds may be empty (retract all votes) — build the query without a stray leading
         // '&' in that case.
@@ -63,7 +63,9 @@ public sealed class ClientPollWriteService(HttpClient http) : ClientPollReadServ
         HttpResponseMessage response = await Http.PostAsync(
             $"api/polls/{pollId}/vote?{optionIdsQuery}voteAnonymously={voteAnonymously}", content: null);
         await ThrowIfWriteFailedAsync(response);
-        return (await response.Content.ReadFromJsonAsync<PollDto>())!;
+        // Null after a withdrawal from a poll the caller can no longer see (D6) — the server writes
+        // an empty 200 body for a null result, which ReadFromJsonAsync would throw on.
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<PollDto>(response.Content);
     }
 
     /// <summary>Status-code → contract-exception translation (inverse of PollEndpoints') — the
