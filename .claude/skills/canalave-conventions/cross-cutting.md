@@ -136,7 +136,14 @@ context, since even a genuine replica would trail the primary slightly.
   `TptDelete` (owner ruling D10; `layer1-data-model.md` §"Hard-deleting a content parent").
 - **Interaction data** (follows, interactions, badges, settings): CASCADE on user.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
-- **Self-references** (parent comments, parent tags, parent folders): SET NULL → children become top-level.
+- **Comment deletion** (owner ruling D12, 2026-08-06): a hard delete. Replies are reparented to top
+  level by `base_comments.parent_comment_id` `ON DELETE SET NULL`. There is no tombstone row, no
+  placeholder node and no "removed" affordance anywhere in the thread; spec §5.9's placeholder is
+  superseded, and deletion is invisible by design (`content-safety.md` §"Author-Controlled Content
+  Actions"). That SET NULL **is** the reparent mechanism, so it is load-bearing and is **excluded from
+  D10's content-parent RESTRICT set**. The spec's mechanism never worked: SET NULL erases which parent
+  an orphan had, so any future revival of a placeholder needs a retained row, not this cascade.
+- **Self-references** (parent tags, parent folders): SET NULL → children become top-level.
 
 ## Dev-Only Diagnostic Endpoints
 

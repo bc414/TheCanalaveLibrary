@@ -17,17 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-TptHardDelete (2026-09-30) — owner rulings **D10** and **D11**. Every
-  content-parent delete (a chapter, a blog post of any subtype, the moderation hard delete of a story or
-  post, the account deletion's profile wall) removes its TPT children through their base rows with the
-  new set-based `TptDelete`; the five parent → TPT-child FKs are RESTRICT, so a forgotten cleanup now
-  fails instead of orphaning `base_comments`/`base_polls` rows. Blog-post lifecycle is per subtype:
-  group posts got update/delete (+ routes), and the profile methods answer 404 for a group or site id
-  (delete was a 500). Polls survive their owner (`owner_id` SET NULL); a NULL owner is nobody at every
-  gate. Migration `WU_TptHardDelete_FkPosture`. F36 L4.5 5→1 (the post page's Edit link is now
-  profile-only; no browser — **H21**); **B25/F16** opened. `dotnet test`: Unit 1,074, RazorComponents
-  764, Integration 1,338. **Pointers:** its DONE entry; `layer1-data-model.md` §"Hard-deleting a
-  content parent".
+- **Last landed:** WU-TptHardDelete (2026-09-30) — owner rulings **D10**, **D11** and (at its review
+  fixes) **D12**. Every content-parent delete (chapter, blog post of any subtype, the moderation hard
+  delete, the account deletion's profile wall) removes its TPT children through their base rows with
+  the set-based `TptDelete`; the five parent → TPT-child FKs are RESTRICT, so a forgotten cleanup fails
+  instead of orphaning. Blog-post lifecycle is per subtype (group posts got update/delete + routes; a
+  cross-subtype id is 404). Polls survive their owner (SET NULL; NULL owns nothing). Review fixes: the
+  chapter and user deletes clear the tracker first (a circuit-tracked comment made the chapter delete
+  throw), a lost blog-post delete race 404s instead of double-decrementing, and D12's doc sweep + copy
+  fix landed ("[Deleted Comment]" retired). F36 L4.5 5→1 (no browser — **H21**); **B25/F16** opened.
+  `dotnet test`: Unit 1,079, RazorComponents 764, Integration 1,345. **Pointers:** its DONE entry;
+  `layer2-services.md` §"Hard deletes of content parents".
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
@@ -427,7 +427,8 @@ is pending except where a bullet says so.
 - **Cells:** **F36 L4.5 5→1** (`BlogPostPage`'s Edit link is now profile-only; the WU ran with no
   browser available — tracker **H21**). Everything else lands beneath Stage-5 cells: F35 L1/L2/L5, F36
   L2/L3.5, F37 L1/L2, F6 L2, F47 L2, F40 L1/L2, F23 L1, F52 L1/L2; F58 L2 carries an open-item note
-  only. L1 stays 5 with the migration applied.
+  only. L1 stays 5 with the migration applied. Review fixes, all beneath Stage 5: F6 L2, F35 L2/L5, F52
+  L2/L4 (the D12 copy), F23/F24 docs (D12).
 - **Trigger:** owner rulings D10 (fix every TPT hard-delete site through one set-based helper, RESTRICT
   as the guardrail, no orphan sweep, TPH closed) and D11 (poll owner SET NULL; NULL = nobody), with
   service §2.2's group-post lifecycle defect and its false "cascades handle it" comments; schema
@@ -459,15 +460,43 @@ is pending except where a bullet says so.
   editor → **B25** (UX unruled; D13's GDPR rider (i) makes it matter). Pending worksheet rows, not
   decided: D42 (ownerless-poll votability — still votable), D43 (group-post rating on update — mirrors
   create), D47(b) (group delete), D20/D39 (caps, `CancellationToken`). Reports on what an author deletes
-  and on the TPT comments a hard delete destroys stay Open → existing **F13** (annotated). The
-  `DeletePersonalData.razor` copy and `poll_votes` survival → WU-UserDeletion. The orphan sweep is
+  and on the TPT comments a hard delete destroys stay Open → existing **F13** (annotated). D13's full
+  `DeletePersonalData.razor` rewrite and `poll_votes` survival → WU-UserDeletion (D12's minimal copy
+  fix and doc sweep were wrongly routed away too; the review fixes did them). The orphan sweep is
   declined by D10(d), so no tracker item. No one-shot orphan purge in the migration: a dev DB holding
   pre-WU orphans is reset with `reset-dev-db.ps1`.
 - **Found while building:** Postgres reports an `ON DELETE RESTRICT` refusal as **23001**
   (`restrict_violation`), not the 23503 D10's text names; the posture tests assert 23001. The spec's K1
   risk (the story cascade past the Restrict `primary_content_id` FK) did not materialize.
+- **Review fixes (2026-09-30)** — three reviews, 14 findings (11 distinct), each checked against the
+  code and the worksheet; all real, none needed an owner ruling.
+  1. **A regression on the circuit** (high): `DeleteChapterAsync` threw when the circuit's scoped write
+     context still tracked a comment on that chapter (an author replies, then deletes it). EF refuses to
+     `Remove` a principal with a tracked RESTRICT dependent, and the raw `DELETE` never reaches the
+     tracker. The gate is now a projection; the delegate clears the tracker and loads the chapter
+     inside. `UserDeletionService` (the other EF `Remove` after a `TptDelete`) clears too.
+  2. **A lost delete race double-decremented `BlogPostsWritten`**: `TptDelete.BlogPostAsync`'s row count
+     was ignored. A 0-row delete now throws `KeyNotFoundException` inside the delegate (404, rollback).
+  3. **D12 restored to its owner routing** (worksheet: "the doc sweep and the one-line copy fix ride
+     WU-TptHardDelete"; the spec's X1 had moved both, unamended). "[Deleted Comment]" is a retired term
+     in `check-doc-hygiene.ps1` (case-sensitive; Check 1 now strips the term before the marker test,
+     since "deleted" exempted it; the worksheet is exempt from Check 1 only). Rule: `cross-cutting.md`
+     §"Delete Policy Summary" and `content-safety.md` §"Author-Controlled Content Actions"; swept:
+     `grid_axes.md` F24, `folder_clusters.md`, the Comments settled note and F23 headline, the
+     Identity WU38a note, the service audit's §3/§6 rows, `roadmap.md` §Resolved, two code comments.
+     `DeletePersonalData.razor`: comments stay as "[deleted user]"; profile-wall comments go.
+  4. **Docs**: `IChapterWriteService`'s doc no longer claims a cascade removes comments; layer2's step 3
+     names the moderation `ActiveReportCount` exception; the WU31.5 stub-delete settled bullet is
+     annotated superseded; tracker F13's annotation is scoped to sites 3–5; D10's Built marker and the
+     roadmap entry record 23001.
+  5. **Owed tests**: Unit `ClientBlogPostWriteServiceTests` (5); Integration — the two same-scope
+     deletes, the interleaved race, authorless update and group update/delete, `PUT /group` 403/204, `Kind
+     == Site`, the deletion page's copy. Each of the four code fixes was mutation-checked.
+  No browser was available: tracker **H21** gains two optional steps (circuit chapter delete; the
+  deletion page's copy). No cell flips.
 - **Verification:** `dotnet build` 0 errors, no new warnings. `dotnet test` all green: Unit 1,074,
-  RazorComponents 764, Integration 1,338 (+4 / +4 / +33). The four gates pass. New
+  RazorComponents 764, Integration 1,338 (+4 / +4 / +33); after the review fixes Unit 1,079,
+  RazorComponents 764, Integration 1,345. The four gates pass. New
   `TptHardDeleteTests` (12): zero surviving base comment/poll/option/vote rows on every delete path,
   including the moderation hard delete of a story (two chapters, a reply, a like) and of a blog post;
   five raw-SQL posture tests; a `pg_constraint` catalog guard (five `r`, plus `parent_comment_id` and the
@@ -479,12 +508,14 @@ is pending except where a bullet says so.
   the next dev start applies the migration.
 - **Hand-offs:** WU-AuthorStoryDelete consumes `TptDelete.StoryCommentsAsync` (the story cascade needs
   no `primary_content_id` release — proven by the hard-delete test). WU-BlobCleanup edits
-  `ApplyHardDeleteAsync` next. WU-UserDeletion edits `UserDeletionService` after this WU. WU-SchemaHardening
-  must not re-flip these FKs.
+  `ApplyHardDeleteAsync` next. WU-UserDeletion edits `UserDeletionService` after this WU (keep the
+  delegate's `ChangeTracker.Clear()`) and rewrites the D13 copy over the D12-minimal one.
+  WU-DocCorrections' D12 items (its §A) are done — verify, then skip. WU-SchemaHardening must not
+  re-flip these FKs.
 - **Pointers:** `layer1-data-model.md` §"Hard-deleting a content parent" and §"Relationships & Queries";
   `layer2-services.md` §"Hard deletes of content parents"; `cross-cutting.md` §"Delete Policy Summary";
   audit Stage notes in BlogPosts F35/F36/F37, Chapters F6, Moderation F47, Groups F40, Comments F23,
-  Identity F52, Profiles F58; `roadmap.md` §Resolved (D10, D11).
+  Identity F52, Profiles F58; `roadmap.md` §Resolved (D10, D11, D12).
 
 ## WU-ModerationIntegrity — report lifecycle integrity: lock-and-guard resolves, sibling closing, dedup, `ReportedUserId`, account-status table + Reinstate, zombie closure at the source, service-side mod read gates (worksheet D7/D8/D9; extends `Moderation/`, `Stories/` (ExternalVerification), `Identity/`, `Spotlight/`, `SiteSettings/`, `Tags/`, `BlogPosts/`, and the auth-guard sweep in `CustomLists/`, `Following/`, `Groups/`, `Notifications/`, `Recommendations/`, `Messaging/`) — DONE ✓ (2026-09-30)
 

@@ -44,10 +44,15 @@ $retiredTerms = [ordered]@{
     'UserCustomFilter / FilterEntityType (cut, both directions unbuilt/unrequested, WU-DiscoveryOverrideUI 2026-07-31)' = '\bUserCustomFilter\b|\bFilterEntityType\b|\buser_custom_filters?\b'
     'RecordAttributionSourceAsync (on-load attribution write retired; owner ruling D3, WU-InertFeatures 2026-09-30)' = '\bRecordAttributionSourceAsync\b'
     'GetHelpfulPromptRecommendationIdAsync (replaced by the DTO-returning GetHelpfulPromptAsync, WU-InertFeatures 2026-09-30)' = '\bGetHelpfulPromptRecommendationIdAsync\b'
+    # (?-i) makes this one case-sensitive (Select-String ignores case by default), so the live
+    # moderation-history label "[deleted Comment]" (D8's "[deleted {type}]") never trips it.
+    '"[Deleted Comment]" placeholder (declined, worksheet D12 / WU-TptHardDelete review fixes 2026-09-30)' = '(?-i)\[Deleted Comment\]'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a
 # lint over terms that are ALREADY dead; past-tense/negation words are strong-enough signal.
+# Check 1 strips the term itself from the line before testing for a marker: a term that contains a
+# marker word ("[Deleted Comment]" contains "deleted") would otherwise exempt every line naming it.
 $historicalMarker = 'retired|superseded|replaced|REMOVED|removed|deleted|dissolved|former|pre-merge|absorbed|carri|historical|archived|cancelled|\bruled\b|dropped|exorcised|no longer|\bno\b|\bnot\b|\bCUT\b|folded|renamed|merged|used to|\bmoot\b|proposed|\bwas\b|\bwere\b'
 
 # Live docs: loaded-as-current conventions and orientation. Everything else is a dated record.
@@ -60,6 +65,9 @@ $historicalMarker = 'retired|superseded|replaced|REMOVED|removed|deleted|dissolv
 #    inventory predates WU-ResponsiveMerge and will be REWRITTEN FROM THE GROUND UP once the
 #    foundation work (most of hidden-deferrals-tracker) completes. Linting it until then is
 #    noise; its banner carries the caveat. Remove this exemption at the rewrite.
+#  - audit-decision-worksheet.md, from Check 1 only — it is the decision-capture record where terms
+#    get retired, so its entries necessarily quote them (D12 quotes "[Deleted Comment]"). It stays in
+#    $liveDocs, so Checks 3 and 4 still apply to it.
 $liveDocs = @(
     Get-Item 'CLAUDE.md'
     Get-Item '.claude/status.md'
@@ -73,11 +81,13 @@ $liveDocs = @(
 $violations = New-Object System.Collections.Generic.List[string]
 
 # --- Check 1: retired terms in live docs -------------------------------------------------------
-foreach ($doc in $liveDocs) {
+$check1Docs = $liveDocs | Where-Object { $_.Name -ne 'audit-decision-worksheet.md' }
+foreach ($doc in $check1Docs) {
     foreach ($entry in $retiredTerms.GetEnumerator()) {
         $hits = Select-String -Path $doc.FullName -Pattern $entry.Value
         foreach ($hit in $hits) {
-            if ($hit.Line -notmatch $historicalMarker) {
+            # The term itself is stripped before the marker test (see $historicalMarker's comment).
+            if (($hit.Line -replace $entry.Value, '') -notmatch $historicalMarker) {
                 $violations.Add(("RETIRED TERM [{0}] {1}:{2}: {3}" -f $entry.Key, $hit.Path, $hit.LineNumber, $hit.Line.Trim()))
             }
         }

@@ -486,7 +486,8 @@ public class ServerCommentWriteService(
                     "You can only delete your own comments, or comments on your own stories.");
         }
 
-        // Hard delete. DB FKs handle the rest:
+        // Hard delete, invisible by design — no tombstone, no placeholder (owner ruling D12; rule:
+        // cross-cutting.md §"Delete Policy Summary"). DB FKs handle the rest:
         //  • ParentCommentId SET NULL  → replies become flat top-level comments.
         //  • CommentLike CASCADE       → likes removed.
         int? authorId = comment.UserId;

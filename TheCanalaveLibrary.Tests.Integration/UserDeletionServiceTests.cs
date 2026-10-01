@@ -179,6 +179,35 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
             .Should().Be(0, "the profile-wall delete removes the base_comments row, not only the child row");
     }
 
+    [Fact]
+    public async Task DeleteUserAsync_WhileItsScopeTracksAProfileWallComment_Succeeds()
+    {
+        // The scope's write context still tracks a comment on the target's wall (one scope stands in
+        // for one circuit). The wall goes by raw SQL, which never reaches the tracker, and EF refuses to
+        // Remove the user while a tracked RESTRICT dependent remains — so the service clears the tracker
+        // first (WU-TptHardDelete review fixes; layer2-services.md §"Hard deletes of content parents").
+        int targetUserId = await SeedUserAsync();
+        int commenterUserId = await SeedUserAsync();
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        UserProfileComment tracked = new()
+        {
+            CommentText = "Tracked in the same scope", DatePosted = DateTime.UtcNow,
+            UserId = commenterUserId, ProfileUserId = targetUserId
+        };
+        db.BaseComments.Add(tracked);
+        await db.SaveChangesAsync();
+
+        bool deleted = await scope.ServiceProvider.GetRequiredService<UserDeletionService>().DeleteUserAsync(targetUserId);
+
+        deleted.Should().BeTrue();
+        (await db.Database.SqlQuery<int>(
+                $"SELECT COUNT(*)::int AS \"Value\" FROM base_comments WHERE comment_id = {tracked.CommentId}")
+            .SingleAsync())
+            .Should().Be(0);
+    }
+
     // ── Polls survive their owner anonymized (owner ruling D11) ──────────────────
 
     [Fact]

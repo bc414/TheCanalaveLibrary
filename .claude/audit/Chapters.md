@@ -72,7 +72,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, Stage note just below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, Stage notes just below).**
   **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip.** `DeleteChapterAsync` no
   longer materializes the chapter's comments to `RemoveRange` them (the template D10 found the other
   three delete sites had failed to copy). It runs `TptDelete.ChapterCommentsAsync` — one set-based
@@ -84,6 +84,17 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   unchanged and green; `TptHardDeleteTests` adds a reply and a like and counts surviving base rows with
   raw SQL, plus the RESTRICT posture test on this FK. The moderation hard delete of a story now clears
   every chapter's comments the same way (`audit/Moderation.md` F47).
+  **WU-TptHardDelete review fixes (2026-09-30) — no flip.** The build regressed one flow on the
+  circuit: the write context is circuit-scoped, so after an author replied to a comment on chapter X,
+  deleting X threw (EF refuses to `Remove` a principal while a tracked RESTRICT dependent remains,
+  and the raw `DELETE` never reaches the tracker; the old materialize + `RemoveRange` had removed the
+  tracked instance too). The ownership gate is now a projection, and the strategy delegate starts with
+  `ChangeTracker.Clear()` and loads the chapter (and its number) inside — also the retry-safety half of
+  the rule (`layer2-services.md` §"Hard deletes of content parents"). `IChapterWriteService`'s doc no
+  longer claims a cascade removes the comments. Tier: Integration —
+  `TptHardDeleteTests.ChapterDelete_InTheScopeThatPostedAComment_Succeeds` (posts through
+  `ICommentWriteService`, then deletes, in one DI scope; fails without the clear). Optional browser
+  step: tracker H21.
   **WU-InertFeatures Stage note (2026-09-30) — tracker B20 closed.** `SetPublishedAsync` now fires
   `INotificationWriteService.NotifyNewChapterAsync` (type 10 to the story's followers) best-effort
   after its commit, **iff that call performed the `FirstPublishedDate` null→non-null stamp** — D2's

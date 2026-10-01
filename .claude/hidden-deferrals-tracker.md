@@ -1091,8 +1091,11 @@ built rows at 5 and no signal these exist.
     4. `ServerChapterWriteService.DeleteChapterAsync` (its chapter comments);
     5. the D15 author story delete (WU-AuthorStoryDelete), and the TPT child comments a moderation
        hard delete destroys (WU-TptHardDelete).
-    Since WU-TptHardDelete every one of these destroys its comments through `TptDelete` (one statement
-    per scope), so the ids to close are reachable with the same child-table subquery the helper uses.
+    Since WU-TptHardDelete, sites 3 and 4 and the moderation hard delete in 5 destroy their comments
+    through `TptDelete` (one statement per scope), so the ids to close are reachable with the same
+    child-table subquery the helper uses; the D15 author story delete will reuse
+    `TptDelete.StoryCommentsAsync` once built. Sites 1 and 2 remove one loaded entity each, so the id is
+    already in hand.
   - The question: what status should an author's own deletion give a report against that content?
     WU-AuthorStoryDelete's spec (its X2) treats it as owner-open. `ResolvedNoAction` with a NULL
     moderator (the user-deletion choice) is the obvious candidate, but an author deleting content
@@ -1410,8 +1413,18 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. Optional, no UI exists (tracker B25): over HTTP as a signed-in author, `DELETE
        /api/blog-posts/group/{id}` answers 204 and `psql` shows no `base_comments` / `base_polls` row
        left for that post; `DELETE /api/blog-posts/{groupId}` answers 404, not 500.
+    5. Optional, added by the WU's review fixes (2026-09-30), on the circuit (first visit): as a
+       story's author, reply to a reader's comment on a chapter, then delete that chapter from
+       `/story/{id}/edit`'s chapter manager — it succeeds, and `psql` shows none of its
+       `base_comments` rows left. (Before the fix this threw; F6 L4.5 stays 5 — Integration
+       simulates the circuit with one DI scope.)
+    6. Optional glance (review fixes, owner ruling D12): `/Account/Manage/DeletePersonalData` says
+       comments stay as "[deleted user]" and no longer mentions a placeholder. F52 L4.5 stays 5: same
+       markup shape, and Integration renders the page and asserts the text.
   - Covered meanwhile: RazorComponents `BlogPostPageTests` (the link per kind) and Integration
-    `BlogPostEndpointsTests` (`Kind` over the wire; the group routes).
+    `BlogPostEndpointsTests` (`Kind` over the wire, all three kinds; the group routes),
+    `TptHardDeleteTests.ChapterDelete_InTheScopeThatPostedAComment_Succeeds` and
+    `StaticSsrPageRenderTests.DeletePersonalDataPage_DescribesCommentsAsAnonymized_NotAPlaceholder`.
   - Narrative: `audit/BlogPosts.md` F36's WU-TptHardDelete Stage note.
 
 ---

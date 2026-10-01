@@ -15,7 +15,9 @@ public sealed class BaseCommentConfiguration : IEntityTypeConfiguration<BaseComm
         builder.HasMany(c => c.InverseParentComment)
             .WithOne(c => c.ParentComment)
             .HasForeignKey(c => c.ParentCommentId)
-            .OnDelete(DeleteBehavior.SetNull); // Keep replies as top-level comments
+            .OnDelete(DeleteBehavior.SetNull); // Keep replies as top-level comments. Ratified by owner
+            // ruling D12 (hard delete + reparent, no placeholder): this SET NULL *is* the reparent
+            // mechanism, so it never joins D10's content-parent RESTRICT set.
 
         // Future indexes for querying (e.g., by AuthorId, DatePosted)...
     }

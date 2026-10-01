@@ -196,6 +196,22 @@ public class BlogPostEndpointsTests(PostgresFixture postgres) : IntegrationTestB
     }
 
     [Fact]
+    public async Task PutGroupPost_NonAuthor_Returns403_Author_Returns204()
+    {
+        int postId = await SeedGroupPostAsync(_authorId);
+        int otherId = await SeedUserAsync("other");
+        UpdateGroupBlogPostDto dto = new() { BlogPostId = postId, Title = "Edited", Content = "<p>c</p>", Rating = Rating.E };
+
+        SetActiveUser(otherId);
+        (await Factory.CreateClient().PutAsJsonAsync($"/api/blog-posts/group/{postId}", dto))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        SetActiveUser(_authorId);
+        (await Factory.CreateClient().PutAsJsonAsync($"/api/blog-posts/group/{postId}", dto))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
     public async Task DeleteGroupPost_NonAuthor_Returns403_Author_Returns204()
     {
         int postId = await SeedGroupPostAsync(_authorId);
@@ -215,14 +231,32 @@ public class BlogPostEndpointsTests(PostgresFixture postgres) : IntegrationTestB
     {
         // BlogPostPage offers Edit for Kind == Profile only; on WASM the kind arrives through this JSON.
         int groupPostId = await SeedGroupPostAsync(_authorId);
+        int sitePostId = await SeedSitePostAsync(_authorId);
         SetActiveUser(_authorId);
         HttpClient client = Factory.CreateClient();
 
         BlogPostDto? profile = await ReadNullableAsync<BlogPostDto>(await client.GetAsync($"/api/blog-posts/{_publishedPostId}"));
         BlogPostDto? group   = await ReadNullableAsync<BlogPostDto>(await client.GetAsync($"/api/blog-posts/{groupPostId}"));
+        BlogPostDto? site    = await ReadNullableAsync<BlogPostDto>(await client.GetAsync($"/api/blog-posts/{sitePostId}"));
 
         profile!.Kind.Should().Be(BlogPostKind.Profile);
         group!.Kind.Should().Be(BlogPostKind.Group);
+        site!.Kind.Should().Be(BlogPostKind.Site, "a site announcement's author is a moderator, who must get no Edit link (U9)");
+    }
+
+    /// <summary>Inline published site announcement (FK parent: the author user).</summary>
+    private async Task<int> SeedSitePostAsync(int authorId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        SiteBlogPost post = new()
+        {
+            AuthorId = authorId, Title = "Site news", Content = "<p>news</p>", Rating = Rating.E,
+            IsPublished = true, DateCreated = DateTime.UtcNow, LastUpdatedDate = DateTime.UtcNow
+        };
+        db.SiteBlogPosts.Add(post);
+        await db.SaveChangesAsync();
+        return post.BlogPostId;
     }
 
     [Fact]

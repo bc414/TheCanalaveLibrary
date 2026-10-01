@@ -197,6 +197,10 @@ public class ServerBlogPostWriteService(
     /// <c>BeginTransactionAsync</c> throws under <c>EnableRetryOnFailure</c>). The delegate tracks
     /// nothing, and every statement is idempotent, so a retry is safe. Counters stay with the caller,
     /// after this returns.
+    /// <para><b>A 0-row delete is a lost race</b> (layer2-services.md §"Hard deletes of content
+    /// parents"): two deletes of one post can both pass the caller's owner probe. The loser deletes
+    /// nothing, so it throws <see cref="KeyNotFoundException"/> (rolling back) — the 404 a sequential
+    /// re-delete gets — and never reaches the caller's counter decrement.</para>
     /// </summary>
     private async Task DeleteWithDependentsAsync(int blogPostId)
     {
@@ -204,7 +208,8 @@ public class ServerBlogPostWriteService(
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await writeDb.Database.BeginTransactionAsync();
-            await TptDelete.BlogPostAsync(writeDb, blogPostId);
+            if (await TptDelete.BlogPostAsync(writeDb, blogPostId) == 0)
+                throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
             await tx.CommitAsync();
         });
     }

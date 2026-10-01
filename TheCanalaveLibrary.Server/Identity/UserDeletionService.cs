@@ -38,6 +38,11 @@ public class UserDeletionService
 
         return await strategy.ExecuteAsync(async () =>
         {
+            // Clear first (layer2-services.md §"Hard deletes of content parents"): the profile wall goes
+            // by raw SQL below, which never reaches the tracker, and EF refuses to Remove the user while
+            // a tracked UserProfileComment (a RESTRICT dependent) remains. A retried attempt must not
+            // inherit the failed one's tracked state either.
+            _context.ChangeTracker.Clear();
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);

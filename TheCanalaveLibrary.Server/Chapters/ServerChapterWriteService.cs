@@ -346,20 +346,33 @@ public class ServerChapterWriteService(
     {
         int userId = ActiveUser.RequireUserId();
 
-        Chapter? chapter = await writeDb.Chapters
-            .Include(c => c.Story)
-            .FirstOrDefaultAsync(c => c.ChapterId == chapterId);
-        if (chapter is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
-        if (chapter.Story.AuthorId != userId)
+        // The gate is a projection: the chapter entity is loaded inside the delegate, after the
+        // tracker is cleared (below).
+        var gate = await writeDb.Chapters
+            .Where(c => c.ChapterId == chapterId)
+            .Select(c => new { c.StoryId, c.Story.AuthorId })
+            .FirstOrDefaultAsync();
+        if (gate is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+        if (gate.AuthorId != userId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
 
-        int storyId = chapter.StoryId;
-        int deletedNumber = chapter.ChapterNumber;
+        int storyId = gate.StoryId; // stable: a chapter never changes story
 
         var strategy = writeDb.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
+            // Clear first (layer2-services.md §"Hard deletes of content parents"). The write context is
+            // circuit-scoped, so it can still track a ChapterComment this circuit posted on this chapter
+            // (an author replies, then deletes the chapter). The raw DELETE below never reaches the
+            // tracker, and EF refuses to Remove a principal while a tracked RESTRICT dependent remains.
+            // Clearing also keeps a retried attempt from inheriting the failed one's tracked state.
+            writeDb.ChangeTracker.Clear();
             await using var tx = await writeDb.Database.BeginTransactionAsync();
+
+            // Gone since the gate → a concurrent delete won; answer as a sequential re-delete would.
+            Chapter chapter = await writeDb.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId)
+                ?? throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+            int deletedNumber = chapter.ChapterNumber; // read here: a reorder may land after the gate
 
             // The chapter's comments go first, through their base rows (owner ruling D10): no cascade
             // from chapters can reach base_comments, and chapter_comments.chapter_id is RESTRICT, so

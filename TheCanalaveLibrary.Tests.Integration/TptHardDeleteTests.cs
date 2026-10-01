@@ -76,6 +76,35 @@ public class TptHardDeleteTests(PostgresFixture postgres) : IntegrationTestBase(
             .Should().Be(0);
     }
 
+    [Fact]
+    public async Task ChapterDelete_InTheScopeThatPostedAComment_Succeeds()
+    {
+        // One DI scope stands in for one Blazor Server circuit, whose write context is circuit-scoped:
+        // the author replies to a reader on chapter X, then deletes chapter X. PostChapterCommentAsync
+        // leaves its ChapterComment tracked, and EF refuses to delete a principal while a tracked
+        // dependent of a RESTRICT relationship remains — so the delete's delegate must clear the
+        // tracker first (WU-TptHardDelete review fix; layer2-services.md §"Hard deletes of content parents").
+        int storyId = await SeedStoryAsync(_authorId);
+        int chapterId = await CreateChapterAsync(storyId, "Ch 1");
+        long rootId = await SeedChapterCommentAsync(chapterId, _otherId, "root");
+
+        SetActiveUser(_authorId);
+        long replyId;
+        using (IServiceScope circuit = Factory.Services.CreateScope())
+        {
+            replyId = await circuit.ServiceProvider.GetRequiredService<ICommentWriteService>()
+                .PostChapterCommentAsync(new PostChapterCommentDto
+                {
+                    ChapterId = chapterId, ParentCommentId = rootId, CommentText = "<p>Thanks for reading!</p>"
+                });
+            await circuit.ServiceProvider.GetRequiredService<IChapterWriteService>().DeleteChapterAsync(chapterId);
+        }
+
+        (await CountBaseCommentsAsync([rootId, replyId])).Should().Be(0);
+        (await CountAsync($"SELECT COUNT(*)::int AS \"Value\" FROM chapters WHERE chapter_id = {chapterId}"))
+            .Should().Be(0);
+    }
+
     // ── 2–4. Blog-post deletes, all three subtypes ───────────────────────────────
 
     [Fact]

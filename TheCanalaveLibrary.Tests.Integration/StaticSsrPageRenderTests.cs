@@ -76,6 +76,26 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
     }
 
     /// <summary>
+    /// The account-deletion page is the compliance surface for what survives a deletion (worksheet
+    /// D13), so its copy must not promise a "[Deleted Comment]" placeholder — owner ruling D12 declined
+    /// it, and account deletion anonymizes comments to "[deleted user]" (WU-TptHardDelete review fixes).
+    /// </summary>
+    [Fact]
+    public async Task DeletePersonalDataPage_DescribesCommentsAsAnonymized_NotAPlaceholder()
+    {
+        int userId = await SeedUserAsync("deletion-copy-viewer");
+        SetActiveUser(userId);
+        using HttpClient client = Factory.CreateClient();
+
+        using HttpResponseMessage response = await client.GetAsync("/Account/Manage/DeletePersonalData");
+        string html = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        html.Should().Contain("[deleted user]");
+        html.Should().NotContain("[Deleted Comment]", "D12 declined the placeholder; it never existed");
+    }
+
+    /// <summary>
     /// <c>ContentGate/StatusCodePage.razor</c> is the other static-SSR page that opts into the
     /// SharedUI chrome — explicitly, via <c>@layout TheCanalaveLibrary.SharedUI.MainLayout</c>, while
     /// its folder <c>_Imports</c> carries <c>[ExcludeFromInteractiveRouting]</c>. It is reached two

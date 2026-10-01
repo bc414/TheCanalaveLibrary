@@ -202,6 +202,16 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **Comment deletion — hard delete + reparent ratified (worksheet D12) — answered 2026-08-06, docs
+  swept WU-TptHardDelete review fixes 2026-09-30.** No decision row: it came out of the service audit's
+  §3.20 and spec §5.9. The "[Deleted Comment]" placeholder is declined (now a retired term in
+  `check-doc-hygiene.ps1`); deletion leaves no trace, and `parent_comment_id` SET NULL stays as the
+  reparent mechanism, outside D10's RESTRICT set. The account-deletion page no longer promises the
+  placeholder (the one code change). Rule: `cross-cutting.md` §"Delete Policy Summary";
+  `content-safety.md` §"Author-Controlled Content Actions". Narrative: `audit/Comments.md` §Shared
+  Context. Still open elsewhere: D13's full survival-set copy on that page (WU-UserDeletion) and the
+  reply-depth defect D12 left open (service §2.12, WU-ParityAndRemaining).
+
 - **TPT FK posture (worksheet D10) — answered 2026-08-06, built WU-TptHardDelete 2026-09-30.** No
   decision row: it came out of the schema audit's §2.2 and the service audit's §2.2. Three blog-post
   delete sites orphaned `base_comments`/`base_polls` rows, because no cascade from a content parent can
@@ -210,6 +220,8 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   RESTRICT as the guardrail, **no** scheduled orphan sweep (declined, not deferred), and TPH stays
   closed on warm/cold read-shape grounds. Built with the adjacent group-post lifecycle defect: per-subtype
   update/delete methods, and the profile methods return 404 for group and site ids instead of a 500.
+  D10's posture test expected Postgres 23503; Postgres reports an `ON DELETE RESTRICT` refusal as
+  **23001** (`restrict_violation` — 23503 is NO ACTION's), so the tests assert 23001 (`testing.md`).
   Rule: `layer1-data-model.md` §"Hard-deleting a content parent"; `layer2-services.md` §"Hard deletes
   of content parents". Narrative: `audit/BlogPosts.md` F35, `audit/Comments.md` F23, `audit/Groups.md`
   F40. Still open: D43 (group-post rating on update), D47(b) (a group-delete path), tracker F16

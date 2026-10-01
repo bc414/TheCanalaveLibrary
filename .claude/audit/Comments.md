@@ -16,6 +16,16 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 (2026-06-23) — organizational only, namespace unchanged. Services (`ICommentRead/WriteService` +
 `ServerComment{Read,Write}Service`) live in `Core/Comments/` and `Server/Comments/` respectively.
 
+- **Settled — comment deletion is a hard delete + reparent-to-root (owner ruling D12, 2026-08-06;
+  docs swept WU-TptHardDelete review fixes, 2026-09-30). Do not revisit.** No tombstone row, no
+  placeholder node, no "removed" affordance; spec §5.9's "[Deleted Comment]" placeholder is superseded
+  (now a retired term in `scripts/check-doc-hygiene.ps1`). `parent_comment_id` `ON DELETE SET NULL` is
+  the reparent mechanism and is excluded from D10's RESTRICT set. Deletion is invisible by design,
+  including a story author deleting someone else's comment; accountability, if ever needed, is a
+  moderation-visible log. Rule: `cross-cutting.md` §"Delete Policy Summary" (FK level) and
+  `content-safety.md` §"Author-Controlled Content Actions" (actor level). Ratified-behavior test:
+  `CommentWriteServiceTests.DeleteComment_ReparentsReplies_ToTopLevel` (Integration).
+
 ## Feature 23 — Comment Posting
 - **Settled — FK posture (owner rulings D10 and D12, 2026-08-06; built WU-TptHardDelete 2026-09-30).**
   A content parent's FK to its comment child table is RESTRICT (`chapter_comments.chapter_id`,
@@ -35,8 +45,9 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   likes included), and its catalog guard pins `fk_base_comments_base_comments_parent_comment_id` at SET
   NULL (D12) beside the RESTRICT flips.
 - **L1 — Stage 5** (parent → comment-child FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above). TPT hierarchy + per-child `DatePosted` (declared on each derived class, lands on
-  child table — denormalized per §1117); orphan handling via `SetNull` (replies — the parent FK; a
-  content-parent delete is RESTRICT since WU-TptHardDelete, 2026-09-30 — see the settled note above). Matches §5.9.
+  child table — denormalized per §1117); reparent-to-root via `SetNull` (replies — the parent FK; a
+  content-parent delete is RESTRICT since WU-TptHardDelete, 2026-09-30 — see the settled note above).
+  Spec §5.9's placeholder is superseded by owner ruling D12 (see §Shared Context).
   **WU31.5 Stage-5 note (2026-06-24):** `DatePosted` moved from `BaseComment` → each derived class
   (`ChapterComment`, `BlogPostComment`, `GroupComment`, `UserProfileComment`); migration
   `WU31_5_DenormalizeTptDiscoveryColumns` copies data (base→child) before dropping base column;

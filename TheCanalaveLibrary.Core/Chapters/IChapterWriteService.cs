@@ -74,8 +74,11 @@ public interface IChapterWriteService : IChapterReadService
     Task MoveChapterAsync(int storyId, int fromNumber, int toNumber);
 
     /// <summary>
-    /// Deletes a chapter and renumbers every later chapter down by one (WU45). Cascades remove
-    /// the chapter's contents/comments/read state; <c>Chapter.PrimaryContentId</c>'s Restrict FK
+    /// Deletes a chapter and renumbers every later chapter down by one (WU45). The chapter's
+    /// comments (replies and likes included) are deleted first through their <c>base_comments</c>
+    /// rows (<c>TptDelete.ChapterCommentsAsync</c>) — <c>chapter_comments.chapter_id</c> is RESTRICT
+    /// and no cascade from a chapter reaches a TPT base row (owner ruling D10). Contents and read
+    /// state then cascade with the chapter; <c>Chapter.PrimaryContentId</c>'s Restrict FK
     /// is released first (mirror of the two-step create). StoryArc bounds shrink in the same
     /// transaction; an arc emptied by the deletion is auto-deleted. Refreshes
     /// <c>Story.WordCount</c>. Author-gated.

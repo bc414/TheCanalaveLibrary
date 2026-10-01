@@ -323,8 +323,11 @@ wall) is deleted in this order, inside **one** `CreateExecutionStrategy().Execut
    poll options and poll votes cascade off the base rows.
 2. **Then the parent**, by EF `Remove` on a loaded entity or by the helper's own base-row `DELETE`
    (`TptDelete.BlogPostAsync` deletes the post through `base_blog_posts`).
-3. **Commit, then counters and notifications** — outside the retried delegate (D22), so a retry never
-   double-counts or double-notifies.
+3. **Commit, then `UserStats` counters and notifications** — outside the retried delegate (D22), so a
+   retry never double-counts or double-notifies. The one exception is the moderation resolve's
+   `ActiveReportCount` move, which runs inside its transaction because the report row lock needs one
+   (§"Resolve paths — lock, guard, then transition"); `ApplyHardDeleteAsync` sits inside that
+   transaction and moves no `UserStats` counter.
 
 Why the order is forced, and why the FKs are RESTRICT: `layer1-data-model.md` §"Hard-deleting a content
 parent". Skip step 1 and the delete fails with 23001 (`restrict_violation` — Postgres reports an
@@ -332,14 +335,26 @@ parent". Skip step 1 and the delete fails with 23001 (`restrict_violation` — P
 partial delete.
 - **The helper's SQL runs immediately; EF's `Remove` waits for `SaveChangesAsync`.** Both must be in
   the same transaction, or a failure between them leaves the children gone and the parent standing.
-  A delegate that tracks entities clears the tracker or loads inside the delegate (retry safety).
-- **Never `Include` the TPT children on a delete path.** EF refuses to delete a principal while
-  RESTRICT dependents are tracked.
-- **Callers today:** `ServerChapterWriteService.DeleteChapterAsync`;
-  `ServerBlogPostWriteService.DeleteBlogPostAsync`/`DeleteGroupBlogPostAsync`/`DeleteSiteBlogPostAsync`;
-  `ServerModerationWriteService.ApplyHardDeleteAsync` (Story, BlogPost); `UserDeletionService`
-  (the profile wall). A comment, poll or recommendation delete removes a loaded entity of its own and
-  needs no helper.
+- **A delegate that `Remove`s the parent through EF starts with `writeDb.ChangeTracker.Clear()` and
+  loads the parent inside the delegate** (the existence/owner gate before the delegate is a projection).
+  Two reasons. The write context is scoped per **circuit** under InteractiveServer, so it can still
+  track a TPT child added earlier in the circuit — an author replies to a comment, then deletes that
+  chapter. The raw `DELETE` never reaches the tracker, and EF refuses to delete a principal while a
+  tracked dependent of a RESTRICT relationship remains (`InvalidOperationException`, "the association
+  … has been severed"). And a retried delegate must not inherit the failed attempt's tracked state.
+  Callers that delete the parent by raw SQL (`TptDelete.BlogPostAsync`) are immune to the first reason.
+- **Never `Include` the TPT children on a delete path** — the same refusal, from the delete's own load.
+- **A 0-row base delete is a lost race, not a success.** Two deletes of one post can both pass the
+  owner probe; `TptDelete.BlogPostAsync` returns the rows deleted, and the loser (0) throws
+  `KeyNotFoundException` inside the delegate, so it rolls back and never reaches the counter
+  decrement — the counter moves only on the actual delete.
+- **Callers today:** `ServerChapterWriteService.DeleteChapterAsync` (clears the tracker since the
+  WU-TptHardDelete review fixes, 2026-09-30);
+  `ServerBlogPostWriteService.DeleteBlogPostAsync`/`DeleteGroupBlogPostAsync`/`DeleteSiteBlogPostAsync`
+  (raw SQL for the post too); `ServerModerationWriteService.ApplyHardDeleteAsync` (Story, BlogPost —
+  `InResolveTransactionAsync` clears the tracker); `UserDeletionService` (the profile wall; clears the
+  tracker too). A comment, poll or recommendation delete removes a loaded entity of its own and needs
+  no helper.
 
 **Blog-post lifecycle methods are per subtype.** Each subtype has its own update/delete pair with its
 own gate: profile posts (`UpdateBlogPostAsync`/`DeleteBlogPostAsync`, author-only), group posts

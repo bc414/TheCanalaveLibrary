@@ -157,6 +157,25 @@ from now is caught without anyone remembering the rule.
   test strengthened with a raw-SQL `base_comments` count. The `DeletePersonalData.razor` copy (D12/D13)
   is WU-UserDeletion's, not changed here.
 
+**WU-TptHardDelete review fixes (2026-09-30) — no flip.**
+- **L2.** `DeleteUserAsync`'s strategy delegate now starts with `ChangeTracker.Clear()`. The profile
+  wall goes by raw SQL, which never reaches the tracker, so a scope still tracking a comment on the
+  target's wall made EF refuse to `Remove` the user (the old materialize + `RemoveRange` had covered
+  it). The service is reached only from per-request scopes today (static-SSR `DeletePersonalData`, the
+  dev endpoint), so this is the rule applied to every governed surface rather than a live bug
+  (`layer2-services.md` §"Hard deletes of content parents"). Tier: Integration —
+  `UserDeletionServiceTests.DeleteUserAsync_WhileItsScopeTracksAProfileWallComment_Succeeds` (fails
+  without the clear).
+- **L4 copy (owner ruling D12).** Correcting the WU-TptHardDelete note above: the reviewers found D12
+  routes the minimal copy fix to this WU, not WU-UserDeletion. `DeletePersonalData.razor` no longer
+  promises that replies become "[Deleted Comment]" (the placeholder never existed, and D12 declined it).
+  The page now says your comments stay in their threads as "[deleted user]" and the comments on your
+  own profile go with it. Same element and markup shape. D13's full survival-set rewrite stays
+  WU-UserDeletion's. Tier: Integration —
+  `StaticSsrPageRenderTests.DeletePersonalDataPage_DescribesCommentsAsAnonymized_NotAPlaceholder`
+  renders the page as a signed-in user and asserts the copy. No browser was available, so tracker H21
+  carries an optional glance.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `UserDeletionService` moved from the
 legacy `Server/Services/` folder to `Server/Identity/` (the code-organization rule: a WU that touches a
 legacy-folder file moves it; the namespace is flat, so no reference changed; `Server/Services/` is now
@@ -180,7 +199,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
@@ -212,7 +231,8 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   `UserManager.DeleteAsync(user)` (which would throw on the `Restrict` FKs) to
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
-  (WU38a, 2026-07-11 — see the WU38a Stage note below). L5 — N/A.**
+  (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
+  D12 by WU-TptHardDelete's review fixes, 2026-09-30 — Stage note above). L5 — N/A.**
 
 ## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
 
@@ -341,7 +361,9 @@ Integration). Rule: `identity-and-authorization.md` "Identity & Auth"; `run-serv
 `workplan.md` WU38a for the reconciliation): (A) `DeletePersonalData.razor` gained a delete-vs-
 anonymize consequence disclosure (account permanently deleted; authored content anonymized, not
 deleted, with orphaned comment threads reading "[Deleted Comment]"; interaction/social data
-permanently deleted) and a dedicated anonymous-accessible `Identity/Pages/AccountDeleted.razor`
+permanently deleted — *corrected 2026-09-30, WU-TptHardDelete review fixes: that placeholder never
+existed; account deletion anonymizes comments to "[deleted user]", owner ruling D12 declined the
+placeholder outright, and the page copy now says so*) and a dedicated anonymous-accessible `Identity/Pages/AccountDeleted.razor`
 goodbye page, replacing the `RedirectToCurrentPage()` call that used to bounce a just-signed-out
 user back at the `[Authorize]` Manage page and flash a bare 401 (found in the 2026-07-01 browser
 pass, fixed here). (B) Account-status login enforcement, folded in from the deferred follow-up

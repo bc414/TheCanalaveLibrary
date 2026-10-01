@@ -1044,7 +1044,7 @@ children present, expecting Postgres 23503 — this is the only test that catche
 silently reverting RESTRICT to CASCADE. Plus the group-post lifecycle case: the author of a group
 post deletes it and succeeds.
 
-**Built:** WU-TptHardDelete (2026-09-30) — rule now stated in `layer1-data-model.md` §"TPT Inheritance" → "Hard-deleting a content parent" (the structural fact, the five RESTRICT FKs and their exclusions, no sweep, TPH closed) and `layer2-services.md` §"Hard deletes of content parents" (callers, transaction order, per-subtype blog-post lifecycle).
+**Built:** WU-TptHardDelete (2026-09-30) — rule now stated in `layer1-data-model.md` §"TPT Inheritance" → "Hard-deleting a content parent" (the structural fact, the five RESTRICT FKs and their exclusions, no sweep, TPH closed) and `layer2-services.md` §"Hard deletes of content parents" (callers, transaction order, per-subtype blog-post lifecycle). The posture tests assert **23001** (`restrict_violation`, Postgres 18), not the 23503 named above — 23503 is a NO ACTION FK's code (`testing.md`).
 
 ### D11. Poll-owner delete behavior
 
@@ -1144,6 +1144,8 @@ audit's §2 defect list or the deferrals tracker rather than riding D12.
 ([CommentWriteServiceTests.cs:232](TheCanalaveLibrary.Tests.Integration/CommentWriteServiceTests.cs#L232),
 Integration tier) is now a ratified-behavior test rather than a description of an undecided default.
 No new tests are owed.
+
+**Built:** WU-TptHardDelete review fixes (2026-09-30) — rule now stated in `cross-cutting.md` §"Delete Policy Summary" (FK level: hard delete, reparent by SET NULL, excluded from D10) and `content-safety.md` §"Author-Controlled Content Actions" (invisible by design; a moderation-visible log if ever needed). "[Deleted Comment]" is in `check-doc-hygiene.ps1`'s registry; `grid_axes.md` F24, `folder_clusters.md` and `audit/Identity.md`'s WU38a note are corrected; `DeletePersonalData.razor` gets the D12-minimal copy fix (the commit 93c8bd9 had routed both halves elsewhere; the review restored this ruling's routing). D13's full survival-set rewrite of that copy stays with WU-UserDeletion, because poll-vote survival is not built yet.
 
 ### D13. User-deletion survival set ratification
 

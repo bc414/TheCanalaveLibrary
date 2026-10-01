@@ -318,6 +318,63 @@ public class BlogPostWriteServiceTests(PostgresFixture postgres) : IntegrationTe
     }
 
     [Fact]
+    public async Task UpdateBlogPost_OnAnAuthorlessPost_ThrowsUnauthorized_AndThePostIsUnchanged()
+    {
+        // The old probe read (int?)AuthorId off the base table, so an authorless post read as missing
+        // (404). It is owned by nobody: 403, and nothing is written.
+        int id = await CreatePostAsync();
+        await ClearAuthorAsync(id);
+
+        Func<Task> act = () => CallUpdateAsync(id, title: "Hijacked");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await LoadPostAsync(id))!.Title.Should().Be("Test Blog Post");
+    }
+
+    [Fact]
+    public async Task GroupPostUpdateAndDelete_OnAnAuthorlessPost_ThrowUnauthorized_AndThePostSurvivesUnchanged()
+    {
+        (_, int postId) = await CreateGroupWithPostAsync(_authorId);
+        await ClearAuthorAsync(postId);
+
+        Func<Task> update = () => CallUpdateGroupAsync(GroupUpdate(postId));
+        Func<Task> delete = () => CallDeleteGroupAsync(postId);
+
+        await update.Should().ThrowAsync<UnauthorizedAccessException>();
+        await delete.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await LoadGroupPostAsync(postId))!.Title.Should().Be("Group post");
+    }
+
+    [Fact]
+    public async Task DeleteBlogPost_LosingARaceToAnotherDelete_ThrowsKeyNotFound_AndDoesNotDecrementAgain()
+    {
+        // A double-click: both deletes pass the owner probe. The competing delete lands between this
+        // one's probe and its first statement (InterleavingCommandInterceptor), so this one deletes 0
+        // base rows. It must answer 404, as a sequential re-delete does, and leave the counter alone —
+        // the old stub delete threw on 0 rows; the raw-SQL delete must not report success instead.
+        await EnsureUserStatRowAsync(_authorId);
+        int id = await CreatePostAsync();
+        int before = await GetBlogPostsWrittenAsync(_authorId);
+        InterleavingCommandInterceptor otherClickDeletes = new(ConnectionString, "DELETE FROM base_comments",
+            $"DELETE FROM base_blog_posts WHERE blog_post_id = {id}");
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (ServerBlogPostWriteService svc, ApplicationDbContext writeDb) =
+                InterleavingCommandInterceptor.CreateService<ServerBlogPostWriteService>(scope, ConnectionString, otherClickDeletes);
+            await using (writeDb)
+            {
+                Func<Task> act = () => svc.DeleteBlogPostAsync(id);
+                await act.Should().ThrowAsync<KeyNotFoundException>();
+            }
+        }
+
+        otherClickDeletes.Fired.Should().BeTrue("the competing delete must land between the probe and the delete");
+        (await GetBlogPostsWrittenAsync(_authorId)).Should().Be(before,
+            "the competing delete here moved no counter, so a decrement could only be the loser's");
+    }
+
+    [Fact]
     public async Task UpdateGroupBlogPost_ByAuthor_UpdatesEveryEditableField_AndStaysPublished()
     {
         (_, int postId) = await CreateGroupWithPostAsync(_authorId);

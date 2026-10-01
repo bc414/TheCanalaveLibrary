@@ -506,8 +506,8 @@ logic. Background workers read these for badge checks.
 denormalized from base into each child. Server-side sanitization.
 
 **24. Comment Display & Pagination** — Threaded comment view with parent/child rendering. Pagination
-using the golden index `(chapter_id, date_posted DESC)`. Orphaned replies displayed as children of
-"[Deleted Comment]."
+using the golden index `(chapter_id, date_posted DESC)`. A deleted comment leaves no trace: its replies
+are reparented to top level (owner ruling D12, 2026-08-06 — spec §5.9's placeholder node was declined).
 
 **25. Comment Likes** — Toggle like via `CommentLike` junction table (no `DateLiked` — anti-addictive).
 No notifications. Denormalized `LikeCount` on `BaseComment`.

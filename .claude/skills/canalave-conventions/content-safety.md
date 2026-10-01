@@ -353,7 +353,12 @@ trolls from their own story pages.
   `ChapterComment.Chapter.Story.AuthorId`). Same hard-delete semantics as self-delete (replies
   reparent, likes cascade); no uniqueness constraint, so a removed commenter *can* re-post —
   deliberately weaker stickiness than rec-Remove. Blog/group/profile comments are NOT covered
-  (no story linkage); profile-owner deletion is a tracked follow-up, not built.
+  (no story linkage); profile-owner deletion is a tracked follow-up, not built. The deletion is
+  invisible by design (owner ruling D12): the replies are promoted to top level with no sign that the
+  comment they answered was removed, and that holds when a story author deletes someone else's
+  comment. If author-side deletion ever needs accountability, the answer is a
+  **moderation-visible log, not a reader-facing placeholder** — the log solves a different problem and
+  never touches the read path. Not built; recorded as the rule.
 
 ### Auto-Hide Policy — None
 

@@ -594,7 +594,8 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     HTML-as-source ratification (schema §3.9 — the export/import round-trip is the de facto
     migration path); "mark read elsewhere sets HasStarted" spec conflict (WU45's position is
     coherent — ratify it); comment deletion placeholder-vs-reparent (spec §5.9 — genuinely open,
-    no note rejects the placeholder); comment length cap; group blog-post rating vs audience
+    no note rejects the placeholder) [ruled D12: ratify hard delete + reparent; docs swept
+    WU-TptHardDelete review fixes 2026-09-30]; comment length cap; group blog-post rating vs audience
     waterfall; archived-poll votability; account re-verification silently un-verifying;
     "My X" anonymous semantics discriminator (zero-state vs 401); CancellationToken policy
     (expensive-reads-only — ratify); server-only methods living on WASM-registered interfaces
@@ -717,7 +718,7 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 | §5.6 success = attributed post-Ch1 prompt | Open endpoint, UI-only gate | ⚠ §2.4.1 — spec wins |
 | §5.7 hidden favorite | Fully honored every surface checked | ✅ (+ one fan-out sentence, §3.20) |
 | §5.8 vouch 280-char / IsVouched bool | Unbounded rich text / first-class table | ✅ recorded supersessions |
-| §5.9 [Deleted Comment] placeholder | Hard-delete + reparent-to-root | ⬜ genuinely open (§3.20) |
+| §5.9 [Deleted Comment] placeholder | Hard-delete + reparent-to-root | ✅ ratified: hard delete + reparent (worksheet D12, 2026-08-06); placeholder retired |
 | §5.12 read-elsewhere leaves HasStarted unset | Per-chapter mark sets it (WU45) | ⬜ ratify WU45's position |
 | §5.13 view counts on Story | Buffer → `daily_story_stats`; no column | ✅ improvement |
 | §5.18 per-type in-app + email toggles | In-app always-on; email+collapsed only | ✅ recorded — ⚠ granularity §3.17 |

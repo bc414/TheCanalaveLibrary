@@ -35,8 +35,9 @@ all three tiers green.
   delete), `BlogPostWriteServiceTests` +10 (cross-subtype 404s, authorless 403, group update fields,
   group gates, the author who left the group); Unit — `BlogPostValidationsTests` +4.
 - **L5.** `PUT`/`DELETE /api/blog-posts/group/{id}` plus `ClientBlogPostWriteService` twins. Tier:
-  Integration — `BlogPostEndpointsTests` +4 (route/body mismatch 400, non-author 403 then author 204,
-  the profile route with a group id 404, `BlogPostDto.Kind` over the wire).
+  Integration — `BlogPostEndpointsTests` +4 (route/body mismatch 400, `DELETE /group` non-author 403
+  then author 204, the profile route with a group id 404, `BlogPostDto.Kind` over the wire). The
+  client twins themselves had no test until the review fixes below (Unit).
 - **Found while building:** Postgres reports an `ON DELETE RESTRICT` refusal as **23001**
   (`restrict_violation`), not the 23503 D10's text names (that is NO ACTION's code). The posture tests
   assert 23001, which also pins RESTRICT against a silent drift to NO ACTION.
@@ -44,6 +45,22 @@ all three tiers green.
   orchestrator excluded the spec's R10); delete UI for any subtype and a group-post editor (tracker
   **B25**); rating against group audience on update (D43, pending). UI: `BlogPostPage`'s Edit link — see
   F36's note.
+
+**WU-TptHardDelete review fixes (2026-09-30) — no flip.**
+- **L2 — a lost delete race no longer double-decrements.** `TptDelete.BlogPostAsync` returns the base
+  rows deleted, and the build ignored it: two deletes of one profile post (a double-click) both passed
+  the owner probe, the loser deleted 0 rows, answered 204 and decremented `BlogPostsWritten` again (the
+  old stub delete threw on 0 rows). `DeleteWithDependentsAsync` now throws `KeyNotFoundException` on 0
+  inside the delegate — a rollback and the 404 a sequential re-delete gets — for all three subtypes.
+  Tier: Integration — `BlogPostWriteServiceTests.DeleteBlogPost_LosingARaceToAnotherDelete_…` (the
+  competing delete lands between probe and delete through `InterleavingCommandInterceptor`; fails
+  without the check). Also Integration: the authorless 403 for `UpdateBlogPostAsync` and for both group
+  methods (+2; the build tested only the profile delete).
+- **L5.** Unit — new `ClientBlogPostWriteServiceTests` (5): verb, `api/blog-posts/group/{id}` path and
+  body for both twins, and 403/404/400 → `UnauthorizedAccessException`/`KeyNotFoundException`/
+  `BlogPostValidationException`. Integration — `BlogPostEndpointsTests` +1 (`PUT /group` non-author 403,
+  author 204) and the `Kind` test now covers `Site`.
+- **Settled bullet above** (WU31.5's "change-tracker stub deletes") is annotated as superseded by D10.
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** The site-announcement gates
 (`CreateSiteBlogPostAsync`, `UpdateSiteBlogPostAsync`, `DeleteSiteBlogPostAsync`, and the read
@@ -53,8 +70,8 @@ answers an anonymous caller 401 (it was 403). `GetSiteAnnouncementsAsync`'s unpu
 *downgrade* is deliberately not a gate and is unchanged. Verified by the existing Integration blog-post
 suites.
 
-- **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30 — see its Stage note above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; group-post `PUT`/`DELETE` routes + client twins since WU-TptHardDelete, 2026-09-30).** Endpoints + client impl live (WU-L5Sweep) and the
+- **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30, a lost delete race 404s since its review fixes — see both Stage notes above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; group-post `PUT`/`DELETE` routes + client twins since WU-TptHardDelete, 2026-09-30, Unit-tested since its review fixes).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
   the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
@@ -85,6 +102,9 @@ suites.
     explicit `.Where(p => p.Rating <= max)` projection checks (see `content-safety.md` "Content Rating
     Filtering"). The EF Core 10 TPT + named-filter combination generates broken entity-materialization
     SQL and blocks `ExecuteDeleteAsync`; projection checks + change-tracker stub deletes replace it.
+    *(The stub deletes are **SUPERSEDED 2026-09-30** by WU-TptHardDelete's `TptDelete` — they orphaned
+    the post's `base_comments`/`base_polls` rows; owner ruling D10, see the D10 settled note below. The
+    projection-check half stands.)*
   - Optional story-link picker via `IStoryReadService.GetStoryIdsByAuthorAsync` (bypasses content-rating filter;
     author always sees own mature stories). Method confirmed present (parallel session, IStoryReadService.cs:55).
   - `AuthorId` server-stamped in write service; absent from create DTO (mirrors `CreateStoryDTO`).
@@ -155,11 +175,12 @@ gates, a guaranteed `KeyNotFoundException`). `BlogPostDto` gains `Kind` (`BlogPo
 `Kind == Profile`. No UX ruling was needed to hide it; a group/site edit or delete affordance is tracker
 **B25**. Tiers: RazorComponents — `BlogPostPageTests` +4 (profile author sees the link with the right
 href; group and site authors do not; a non-author does not); Integration — `BlogPostEndpointsTests`
-reads `Kind` back over HTTP for a profile and a group post (the WASM path). **L4.5 lowered 5→1:**
+reads `Kind` back over HTTP for a profile and a group post (the WASM path) — and, since the WU's review
+fixes (2026-09-30), a site post, the server-side branch a moderator author depends on. **L4.5 lowered 5→1:**
 WU-TptHardDelete (2026-09-30) ran with no browser available, and the page's behavior changed undriven
 (the WU-InertFeatures precedent). Owed pass: tracker **H21**.
 
-- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below; `BlogPostDto.Kind` since WU-TptHardDelete, 2026-09-30).
+- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below; `BlogPostDto.Kind` since WU-TptHardDelete, 2026-09-30, all three kinds Integration-tested since its review fixes).
   **L3/L3.5 — Stage 5** (Edit link profile-only since WU-TptHardDelete, 2026-09-30 — see its Stage note above). **L4 — Stage 1** (visual sign-off pending). **L4.5 — Stage 1** (lowered from 5 by WU-TptHardDelete, 2026-09-30, no browser available; tracker H21).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
