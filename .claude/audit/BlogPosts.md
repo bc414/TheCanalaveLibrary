@@ -16,7 +16,16 @@ split one line down). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
 when Feature 56 was cut — see the Feature 56 CUT note below.)
 
 ## Feature 35 — Blog Post Writing
-- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** The site-announcement gates
+(`CreateSiteBlogPostAsync`, `UpdateSiteBlogPostAsync`, `DeleteSiteBlogPostAsync`, and the read
+`GetSiteAnnouncementForEditAsync`) collapse their authentication-then-role pairs into the shared
+`ActiveUser.RequireModerator()` (owner ruling D9). Same 401/403 split for writes; the edit read now
+answers an anonymous caller 401 (it was 403). `GetSiteAnnouncementsAsync`'s unpublished-view
+*downgrade* is deliberately not a gate and is unchanged. Verified by the existing Integration blog-post
+suites.
+
+- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
@@ -391,6 +400,13 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** The site-poll gates
+(`CreateSitePollAsync`, `SetSitePollArchivedAsync`, and the site-poll branch of
+`LoadAuthorizedPollWithOptionsAsync`) use the shared `ActiveUser.RequireModerator()` (owner ruling D9).
+An anonymous caller now gets 401 where the role-only checks answered 403; signed-in non-moderators still
+get 403. `ServerPollReadService`'s `viewerIsMod` flag is a projection, not a gate, and is unchanged.
+Verified by the existing Integration poll suites.
+
 ### Requirements settled 2026-07-12 (chat deliberation; closes spec Open Question #6)
 
 The Gemini discussions (2025-10-31, entries ~#1076) specified schema only — never behavior. The
@@ -441,7 +457,7 @@ bullet below, 2026-07-13.)
 
 - **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock

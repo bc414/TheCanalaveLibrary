@@ -319,10 +319,7 @@ public class ServerBlogPostWriteService(
 
     public async Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto)
     {
-        if (ActiveUser.UserId is not int authorId)
-            throw new InvalidOperationException("Creating a site announcement requires an authenticated user.");
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can create site announcements.");
+        int authorId = ActiveUser.RequireModerator();
         rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, authorId);
 
         List<string> errors = dto.CanSave();
@@ -356,10 +353,7 @@ public class ServerBlogPostWriteService(
 
     public async Task UpdateSiteBlogPostAsync(UpdateSiteBlogPostDto dto)
     {
-        if (ActiveUser.UserId is not int userId)
-            throw new InvalidOperationException("Updating a site announcement requires an authenticated user.");
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
+        int userId = ActiveUser.RequireModerator();
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new BlogPostValidationException(errors);
@@ -400,10 +394,7 @@ public class ServerBlogPostWriteService(
 
     public async Task DeleteSiteBlogPostAsync(int blogPostId)
     {
-        if (ActiveUser.UserId is not int)
-            throw new InvalidOperationException("Deleting a site announcement requires an authenticated user.");
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can delete site announcements.");
+        ActiveUser.RequireModerator();
 
         bool exists = await writeDb.SiteBlogPosts.AnyAsync(p => p.BlogPostId == blogPostId);
         if (!exists)

@@ -12,18 +12,20 @@ namespace TheCanalaveLibrary.Server;
 ///
 /// <para><b>Read auth.</b> The author-facing reads (platforms, my-accounts) are
 /// <c>RequireAuthorization()</c>-only — any signed-in user's own data. The two moderator-queue
-/// reads carry the named <see cref="AuthorizationPolicies.RequireModerator"/> policy here — like
-/// <c>ModerationEndpoints</c>' <c>/reports</c> and <c>/submissions</c>, the service performs no
-/// role check of its own for these reads (today gated only at the page level), so the endpoint is
-/// the actual security boundary (identity-and-authorization.md).</para>
+/// reads carry the named <see cref="AuthorizationPolicies.RequireModerator"/> policy here as the edge
+/// half; the service gates them too (<c>ActiveUser.RequireModerator()</c>, owner ruling D9 —
+/// WU-ModerationIntegrity 2026-09-30), so both handlers wrap in <c>ExecuteAsync</c> like the writes
+/// (layer5-wasm.md: every handler whose service can throw).</para>
 ///
 /// <para><b>Write auth.</b> Every mod-only write carries the same edge policy on top of the
 /// service's own <c>RequireModerator()</c> gate — defense in depth (MA-702 pattern). The service
 /// gate remains authoritative: a signed-in non-mod who somehow reaches it gets
 /// <see cref="UnauthorizedAccessException"/> → 403; unauthenticated throws
-/// <see cref="InvalidOperationException"/> → 401 via <c>ExecuteAsync</c>'s auth-safety-net
-/// case (same known EndpointHelpers 401-vs-400 business-rule mismatch as <c>ModerationEndpoints</c>
-/// — e.g. "Verify your X account first" also maps to 401, not 400).</para>
+/// <see cref="InvalidOperationException"/> → 401 via <c>ExecuteAsync</c>'s auth-safety-net case.
+/// Business rules ("Verify your X account first", a malformed URL) throw
+/// <see cref="ExternalVerificationValidationException"/> → 400, and an unknown identity, link or
+/// platform id <see cref="KeyNotFoundException"/> → 404 — fixed at the throw sites
+/// (WU-ModerationIntegrity; they used to arrive as 401).</para>
 /// </summary>
 public static class ExternalVerificationEndpoints
 {
@@ -41,14 +43,16 @@ public static class ExternalVerificationEndpoints
                 Results.Ok(await svc.GetMyExternalAccountsAsync()))
             .RequireAuthorization();
 
-        // ── Reads — moderator queues (mod-only; service performs no role check itself) ──
+        // ── Reads — moderator queues (edge policy + the service's own RequireModerator(), D9) ──
 
-        group.MapGet("/pending-accounts", async (IExternalVerificationReadService svc) =>
-                Results.Ok(await svc.GetPendingAccountVerificationsAsync()))
+        group.MapGet("/pending-accounts", (IExternalVerificationReadService svc) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                    Results.Ok(await svc.GetPendingAccountVerificationsAsync())))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
-        group.MapGet("/pending-links", async (IExternalVerificationReadService svc) =>
-                Results.Ok(await svc.GetPendingLinkVerificationsAsync()))
+        group.MapGet("/pending-links", (IExternalVerificationReadService svc) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                    Results.Ok(await svc.GetPendingLinkVerificationsAsync())))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // ── Writes — author, account tier ─────────────────────────────────────────

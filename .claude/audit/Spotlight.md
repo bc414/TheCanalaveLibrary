@@ -60,6 +60,18 @@ concrete mechanics. Implementation is first-principles.
 
 ## Feature 55 — Community Spotlight
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** Owner ruling D9's sweep:
+`ServerSpotlightSlotAllocator.GetRemainingMonthlyGrantCapacityAsync` is a moderator-only read, so it now
+gates with the shared `RequireModerator()` like `GetRecentGrantsAsync` already did, and both read
+handlers in `SpotlightSlotAllocatorEndpoints` wrap in `ExecuteAsync`. The allocator's and
+`ServerSiteSettingsWriteService`'s private guard copies are gone; both checked the role first, so an
+anonymous caller now gets 401 instead of 403 (the edge policies answer first anyway). The one recorded
+non-gate: `ISiteSettingsReadService.GetIntAsync` stays ungated in the service, because public Spotlight
+and Fanon flows compose it; only its HTTP route is moderator-only (`identity-and-authorization.md`
+§"Role-Based (Moderator) Gating"). Verified by Integration
+`ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator` (the capacity read) and
+the unchanged `SpotlightServiceTests` / `ModerationEndpointsTests` (site-setting 403).
+
 Built as WU-Spotlight (2026-07-12, `workplan.md`). Conventions:
 `canalave-conventions/layer2-services.md` §"Community Spotlight — Slot Allocator Seam + Block
 Booking" and §"Site Settings (`ISiteSettingsService`)".
@@ -72,7 +84,7 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   90–92; entity migrated out of legacy `Core/Models/`. Migration-verified: generated clean and
   applied cleanly on startup to the standing dev DB (SeedTool-volume). No L6 pass — the composite
   index shipped with L1 by design (low-volume table); L6 stays N/A.
-- **L2 — Stage 5.** Allocator seam + read/write services + go-live worker/sweeper split +
+- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30). Allocator seam + read/write services + go-live worker/sweeper split +
   SiteSettings cluster. Redemption is advisory-lock-serialized under `CreateExecutionStrategy()`.
   Covered by the Integration tier (`SpotlightServiceTests`, 20 tests: grant cap/roles/donation-seam
   NotSupported, every redemption rejection, a two-racers-one-opening concurrency test, sweep

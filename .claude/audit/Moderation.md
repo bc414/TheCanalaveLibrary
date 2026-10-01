@@ -48,8 +48,35 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-09-30, WU-InertFeatures):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5, L6 = 5 — no
-flip. **WU-InertFeatures Stage note (owner rulings D4/D5; tracker B21 closed):** `SubmitReportAsync`'s
+**Stages (updated 2026-09-30, WU-ModerationIntegrity):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5, L6 = 5 — no
+flip (L1 stays 5 with the WU_ModerationIntegrity migration applied; L4.5 stays 5 because
+`ReportDialog`'s markup did not change — a duplicate report's refusal shows through its existing error
+line; the browser check is folded into tracker H19 step 4).
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip (owner rulings D8/D9, service §2.4.4).**
+- **Interface split (D9):** `IReportSubmissionService` (reasons + submit) is its own interface;
+  `ReportDialog` injects it. `ServerModerationWriteService` implements all three moderation interfaces
+  and is registered once with three forwards; `ClientReportSubmissionService` is the WASM twin (its
+  `rateLimitedAction: Report` turns a 429 into `WriteRateLimitExceededException`).
+- **Submission integrity (§2.4.4(b)(c)):** the row is saved before the counter moves (D22 order); one
+  open report per reporter per target — the service checks first, and the partial unique index
+  `ix_reports_open_reporter_target` refuses a race, both as the same 400 ("You've already reported
+  this…"). The allow-set rejection is a `ModerationValidationException` (400), not the old 401.
+- **`ReportedUserId` (D8):** resolved at submit for every target type through
+  `ResolveAnswerableUserIdAsync` (nullable form — authorless content stays reportable).
+- **Schema (L1):** migration `WU_ModerationIntegrity` adds `reports.reported_user_id` (FK SET NULL) and
+  the three indexes; its data steps backfill the column, close zombies and same-reporter duplicates, and
+  recompute every `active_report_count`. Run against a dirtied clone of the dev workbench DB (a duplicate,
+  a zombie, a wrong counter, two anonymous rows): all handled; Down and re-Up both clean. Integration
+  applies it on every run.
+- **Verified:** Integration `ModerationIntegrityTests` (dedup, the index race via
+  `InterleavingCommandInterceptor` with `interceptReaders`, re-file after resolution, anonymous, the raw
+  index, `ReportedUserId` for all six types, authorless, SET NULL); `ModerationEndpointsTests` (400 for the
+  allow-set); `ParentVisibilityContractTests` (now resolves `IReportSubmissionService`). Unit
+  `ModerationIntegrityClientTests` (routes, 400, 429). bUnit: the eight `ReportDialog` hosts register
+  `FakeReportSubmissionService`. The dedup catch and the counter order were mutation-checked.
+
+**Earlier F46 Stage note (WU-InertFeatures, owner rulings D4/D5; tracker B21 closed):** (owner rulings D4/D5; tracker B21 closed):** `SubmitReportAsync`'s
 receipt was never delivered — it passed the reporter as their own source and the create-core's
 drop-self rule deleted it. It now calls `NotifyReportReceivedAsync(reporter, report.ReportId)`, which
 sends `ReportReceived` (80) null-sourced with the report id (id populated by the preceding save), and
@@ -71,6 +98,22 @@ Detail: `audit/Notifications.md` F41's browser note. Band-wide rules: the cluste
   consuming page; wired via `HasDelegate`-gated `OnReport` callbacks.
 - **Open for opusplan:** specific `ReportDialog` state shape (selected reason + notes field); whether the
   reasons dropdown is a radio group or select; StoryCard/UserCard caret integration specifics.
+
+**Settled — report submission (owner rulings D8/D9 + service §2.4.4, answered 2026-08-05/06; recorded
+2026-09-30 at WU-ModerationIntegrity's Doc-Touch moment 1; do not revisit).** Rule text:
+`layer2-services.md` §"Moderation Services" → "Report submission".
+- **`IReportSubmissionService` is its own interface** (`GetReportReasonsAsync` + `SubmitReportAsync`);
+  `ReportDialog` injects it, never a mod interface (D9's type-level split). One concrete class serves
+  all three moderation interfaces, registered once and forwarded (the current layer2 rule; D36 pending).
+- **One open report per reporter per target** — partial unique index
+  `ix_reports_open_reporter_target`; the service refuses a duplicate with a user-facing 400 and also
+  catches the index's race. Anonymous reports are not deduped.
+- **Primary write first, counter second** (D22): the report row commits, then `ActiveReportCount +1`.
+- **`ReportedUserId`** (D8) — the account answerable for the artifact when the report was filed, for
+  every target type; snapshot, never re-resolved; NULL = unknown/anonymized/deleted. Anonymous or
+  deleted-author content stays reportable (the submit path never throws on NULL).
+- **The allow-set rejection is a `ModerationValidationException` (400)**, not the
+  `InvalidOperationException` (401) it was.
 
 **Stage note (WU34 — 2026-06-25):** L1=5, L2=5, L3=5, L3.5=5 (all verified: `dotnet test` green,
 298 integration tests + 417 unit tests). `IModerationReadService`/`IModerationWriteService` implemented in
@@ -102,6 +145,45 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — F47 L4.5 5→1 (UI changed, no browser available);
+every other cell unchanged.** Rules: the cluster Settled note "report lifecycle integrity" above and
+`layer2-services.md` §"Moderation Services".
+- **Resolve paths (§2.1.2):** each runs in one execution-strategy transaction that locks the report row
+  (`FOR UPDATE`) and refuses a non-open one (400) or an unknown id (404 — it was 401). Notifications run
+  after commit, each in its own `try/catch` (one failure used to drop the rest).
+- **D7:** `ResolveWithRemovalAsync` closes every other open report on the same `(type, id)` target as
+  `ResolvedActionTaken` ("Closed with report #N: …"), moves the counter by −(1 + rows closed), and sends
+  81 to every distinct sibling reporter with their own report id. A `User` report cannot be removed.
+- **Account actions (§2.1.3):** the transition table in both entry points (future suspension date;
+  Banned leavable only via Reinstate; no Warn over a live suspension and no second Ban — derived,
+  `roadmap.md` row 20); `SuspendedUntilUtc` cleared on every non-Suspend status; new
+  `ReinstateUserAsync` (+ `POST /api/moderation/users/{id}/reinstate`, client twin,
+  `ModeratorActionType.ReinstateUser`). The report-driven action now sends 81 to the member reporter
+  (§5.21, the routed InertFeatures item) and decrements after the stamp bump (`UserManager` rewrites
+  every user column, so a `User`-target decrement made before it was lost — found building this WU).
+- **D9:** the three moderation reads gate in the service (`RequireModerator()`, the shared extension
+  every moderator guard now uses — the private copies in Moderation, ExternalVerification, SiteSettings,
+  the Spotlight allocator, Fanon, Tags, site posts and site polls are gone, and the six private
+  `RequireAuthenticatedUser` copies became `RequireUserId()`). The read handlers wrap in `ExecuteAsync`.
+- **B18 / D8:** `GetUserModerationHistoryAsync` reads `ReportedUserId` across every target type and
+  keeps rows whose target is gone (`[deleted {type}]`); `SetCanAutoApproveAsync`,
+  `ApplyAccountActionToUserAsync` and Reinstate set `ReportedUserId` on their audit rows.
+- **UI:** `/mod/users/{id}` drops the caveat, adds a Target column and a Reinstate button (non-Active
+  only, through `AccountActionPanel`'s new Reinstate verb — no date field, non-destructive Confirm);
+  `/mod/reports` hides "Hide content" for a User report. **No browser was available**, so L4.5 drops to
+  1 until tracker **H19**'s pass (both render phases).
+- **Verified:** Integration `ModerationIntegrityTests` (D7 soft/hard/no-action/account-action/
+  same-number/claimed/Message; the status guards on all three paths, unknown ids, the `Task.WhenAll`
+  race; the account-status table and Reinstate incl. `CanSignInAsync`; the 81 to the reporter; the D9
+  read gates for a non-moderator and an anonymous caller; the history), `ModerationServiceTests`
+  (history flipped to include content reports; a second reporter where the index requires it),
+  `ModerationEndpointsTests` (404 for an unknown report, 403 for a non-mod reinstate, the history 404
+  inside the wrapper). bUnit `ModUsersPageTests` (no caveat, Target column, Reinstate hidden/shown and
+  submitting), `AccountActionPanelTests` (Reinstate verb), new `ModReportsPageTests`. Unit
+  `ModerationIntegrityClientTests` (`RequireModerator`, the reinstate route). Mutation-checked: sibling
+  closing, the status guard, the race catch, a read gate, the transition table, the reporter's 81, the
+  history predicate, the Hide-content guard — each fails its tests when reverted.
+
 **Review-fixes Stage note (WU-InertFeatures, 2026-09-30) — no flip; L2 stays 5.** D5 null-sourced the
 band and so dropped drop-self's protection: a moderator who filed a report through the ordinary Report
 button and then resolved it received the resolution receipt (81/82), and a moderator removing their own
@@ -126,11 +208,11 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass; WU-InertFeatures review fixes beneath L2,
-no flip):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
-(the review fixes dropped it to 1 because the auto-approve control and trust line on `/mod/users/{id}`
-were undriven; the browser pass drove both on circuit and WASM and returned it to 5 — see F48's
-browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the end of this section).
+**Stages (updated 2026-09-30, WU-ModerationIntegrity):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (the
+WU-ModerationIntegrity UI — the history's Target column, Reinstate, the hidden "Hide content" — is
+undriven in a browser; tracker H19 restores it; the earlier 1→5 by the WU-StoryLifecycle browser pass is
+recorded in F48's browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the top and end of
+this section).
 
 **WU34 settled constraints:**
 - `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
@@ -175,10 +257,44 @@ Doc-Touch moment 1, before implementation, because the plan contradicts settled 
 - **`/mod/users` is a per-user lookup and history view**, not the sole escalation surface;
   `/mod/reports` carries the full Warn/Suspend/Ban set. This is what makes the `{UserId:int?}` route
   parameter live — B13 closes by *wiring* the parameter, not deleting it.
-- **Still open, deliberately excluded:** a user's history shows reports *targeting* them, not reports
-  against content they authored (needs author-resolution across four content tables — its own WU);
+- **Still open, deliberately excluded:** ~~a user's history shows reports *targeting* them, not reports
+  against content they authored (needs author-resolution across four content tables — its own WU)~~
+  **closed by WU-ModerationIntegrity (2026-09-30)** — D8's `ReportedUserId` makes the history one
+  predicate across every target type and the on-screen caveat is deleted (tracker B18);
   BlogPost/Recommendation/PrivateMessage still have no report entry point; there is no role
   grant/revoke capability anywhere.
+
+**Settled — report lifecycle integrity (owner rulings D7/D8/D9 + service §2.1.2/§2.1.3/§2.4.4,
+answered 2026-08-04..06; recorded 2026-09-30 at WU-ModerationIntegrity's Doc-Touch moment 1; do not
+revisit).** Rule text: `layer2-services.md` §"Moderation Services";
+`identity-and-authorization.md` §"Role-Based (Moderator) Gating".
+- **`ActiveReportCount` is a cache of the open-report `COUNT(*)` for the target** (D7) — derived, so
+  recomputable; the reconciler is WU-CounterSymmetry's.
+- **Every resolve path locks and guards** (`FOR UPDATE` on the report row inside an execution-strategy
+  transaction; not Open|UnderReview → `ModerationValidationException`; missing → 404), so nothing
+  decrements twice. Notifications run after commit, each in its own `try/catch`.
+- **Removal closes every sibling report on the same `(type, id)` target** (D7), as
+  `ResolvedActionTaken` with the acting moderator, the same timestamp and "Closed with report #N";
+  the counter moves by −(1 + rows actually closed), never zeroed; every distinct sibling reporter gets
+  81 with their own report id. No-action and account actions never bulk-close. A `User` target cannot
+  be removed (an account action resolves it).
+- **The report-driven account action tells the member reporter the outcome** (81, skipped for the
+  acting moderator) — §5.21; the moderator-initiated path still sends none.
+- **Account-status transition table** (§2.1.3): a suspension needs a future end date; Banned is left
+  only via the new **Reinstate** action (a moderator-filed `Report` row, reason Other, no notification);
+  no Warn over a ban or a live suspension (derived — `roadmap.md` decision row 20); a second Ban is
+  refused (derived, row 20); `SuspendedUntilUtc` is cleared on every non-Suspend status.
+- **Mod-only reads gate in the service** (D9): `RequireModerator()` (the shared extension) opens the
+  three moderation reads, both ExternalVerification queues, both SiteDailyStat reads and the allocator's
+  capacity read. The SiteSettings `GetIntAsync` read is the one recorded non-gate.
+- **The per-user history reads `ReportedUserId`** (D8/B18) across every target type; rows whose target
+  is gone stay, labelled `[deleted {type}]`.
+- **Zombie reports from account deletion are closed at the source** (D7 sub-edge — the WU's recorded
+  pick: at source, not a reconciler) by `ReportLedger.CloseForDestroyedTargetsAsync`, as
+  `ResolvedNoAction` with a NULL moderator and a note, silently. Author self-delete sites are owner-open
+  (tracker F13).
+- **401-instead-of-404/400 is fixed at the throw sites** in the Moderation and ExternalVerification
+  services (the WU's recorded pick); the `EndpointHelpers` table is unchanged.
 
 **Stage note (WU34 — 2026-06-25):** L1=5, L2=5, L3=5, L3.5=5. `ModReportsPage.razor` + `ModUsersPage.razor`
 built at `/mod/reports` + `/mod/users` — server-rendered, mod-gated. Claim/resolve/soft-remove/warn-user
@@ -671,8 +787,19 @@ flip:** a moderator reviewing their own account or their own story's link gets n
 reads the moderator id again for this check only). Integration
 `AModeratorReviewingTheirOwnAccountAndLink_GetsNoOutcomeNotification`.
 
-**Stages (updated 2026-07-25, WU39; re-confirmed 2026-09-30 — WU-InertFeatures and its review fixes
-changed only the outcome notifications beneath L2, no flip):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** Owner ruling D9 and its sub-edge: the two
+queue reads (`GetPendingAccountVerificationsAsync`, `GetPendingLinkVerificationsAsync`) gate in the
+service with the shared `RequireModerator()`, and their handlers wrap in `ExecuteAsync`. Business rules
+throw the new `ExternalVerificationValidationException` (400 — they were `InvalidOperationException` →
+401, so "Verify your X account first" read as an expired session), and unknown identity/link/platform
+ids are `KeyNotFoundException` (404). `ClientExternalVerificationWriteService` reconstructs the new type
+from a 400. The private `RequireModerator` copy is gone. Verified by Integration `ExternalVerificationTests`
+(the two business rules now expect the new type; unknown ids; a non-moderator refused on both queues)
+and Unit `ClientExternalVerificationServiceTests` (400 → the new type). Left open: the author/moderator
+interface split (tracker F15) and status guards on the approve/reject actions (tracker D10).
+
+**Stages (updated 2026-09-30, WU-ModerationIntegrity — service gates and exception types beneath L2, no
+flip; WU39 2026-07-25 before that):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
 (WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).
 L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41
 precedent — functional browser verification is not the same as visual polish). L4.5-Browser —
@@ -759,7 +886,14 @@ Stage 5 (see WU39 Stage note below). L5/L6/L8 — N/A.
 
 ## Feature 62 — SiteDailyStat Worker
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle review fixes):** L1–L3.5 = 5, L4 = 3, L4.5 = 5,
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** D9's sweep: `GetLatestAsync` and
+`GetSeriesAsync` are moderator-only, so `ServerSiteDailyStatReadService` now takes `IActiveUserContext`
+and gates both with `RequireModerator()`; the two handlers wrap in `ExecuteAsync`. Verified by
+Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator`;
+`SiteDailyStatAggregatorTests` is unaffected (it drives the aggregator, not the read).
+
+**Stages (updated 2026-09-30, WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle
+review fixes before that):** L1–L3.5 = 5, L4 = 3, L4.5 = 5,
 L5/L6 = N/A, L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`
 (D2), with one known divergence from `new_stories` left for the owner (`roadmap.md` decision row 16) —
 see the two WU-StoryLifecycle Stage notes at the end of this section.

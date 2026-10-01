@@ -216,8 +216,18 @@ WU: `audit/Discovery.md` §"WU-ApplyFiltersPurity note"; convention: `layer2-ser
 `TagWriteServiceTests`/`TagReadServiceTests`/`TagEndpointsTests` unmodified and green.
 
 ## Feature 11 — Tag Administration
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `ServerTagWriteService` and
+`ServerFanonWriteService` drop their private `RequireMod()` copies for the shared
+`ActiveUser.RequireModerator()` (owner ruling D9 — one guard, one pair of exception semantics): a
+signed-in non-moderator still gets `UnauthorizedAccessException` (403); an anonymous caller now gets
+`InvalidOperationException` (401) where the copies answered 403 (the write routes' `RequireAuthorization()`
+floor already answered 401 first). `ServerTagWriteService`'s context field is renamed `db` → `writeDb`,
+the house name. Verified by the existing Integration tag/fanon suites (the non-moderator 403 cases pass
+unchanged).
+
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
-  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below).** **L3/L3.5 — Stage 5
+  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30).** **L3/L3.5 — Stage 5
   (WU27.5, see Stage note below)** (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
   see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:
   the tag table is tiny and PK/unique-indexed; a trigram index for the leading-wildcard chip
@@ -556,6 +566,12 @@ WU: `audit/Discovery.md` §"WU-ApplyFiltersPurity note"; convention: `layer2-ser
 
 ## Feature 15 — Saved Tag Selections
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green.
+
 **Scope settled (WU43 planning, 2026-07-11, do not revisit):** a Saved Tag Selection's only job is to
 populate the tag include/exclude axis of a discovery filter. It is **not** a saved query — it never
 carries free-text search, sort order, interaction exclusions, or AND/OR include-mode; those are
@@ -603,7 +619,7 @@ Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
 
 **L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`; the
 permalink needed **no** L1 change — see WU-SelectionPermalink below).
-**L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below; extended by WU-SelectionPermalink,
+**L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below; shared auth guard WU-ModerationIntegrity 2026-09-30; extended by WU-SelectionPermalink,
 2026-07-28). **L4-Style / L4.5-Browser — Stage 1**
 (pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; permalink read + its client twin added 2026-07-28)** — endpoints + client impl live (WU-L5Sweep) and the
 site now runs global InteractiveAuto; the saved-selection flyout fetch is interactive-only and was

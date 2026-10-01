@@ -261,12 +261,9 @@ public partial class ServerMessagingReadService(
     // Shared helpers
     // -----------------------------------------------------------------------
 
-    /// <summary>Returns the current viewer's UserId or throws if anonymous.</summary>
-    protected int RequireAuthenticatedUser()
-    {
-        return ActiveUser.UserId
-            ?? throw new InvalidOperationException("Messaging operations require an authenticated user.");
-    }
+    /// <summary>Returns the current viewer's UserId or throws if anonymous — the shared guard
+    /// (<c>ActiveUserContextExtensions.RequireUserId</c>), not a private copy.</summary>
+    protected int RequireAuthenticatedUser() => ActiveUser.RequireUserId();
 
     /// <summary>
     /// Strips HTML tags and entity-decodes to produce a plain-text preview of the message,

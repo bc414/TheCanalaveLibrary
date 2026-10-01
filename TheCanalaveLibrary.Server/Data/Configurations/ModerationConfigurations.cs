@@ -24,6 +24,14 @@ public sealed class ReportConfiguration : IEntityTypeConfiguration<Report>
             .HasForeignKey(r => r.ModeratorUserId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Owner ruling D8: the account answerable for the reported artifact when the report was filed
+        // (snapshot). SetNull for the same reason as the two above — reports outlive the accounts they
+        // name. EF's FK convention index (ix_reports_reported_user_id) serves the per-user history.
+        builder.HasOne(r => r.ReportedUser)
+            .WithMany()
+            .HasForeignKey(r => r.ReportedUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // Moderator queue primary sort: open reports ordered by ActiveReportCount desc.
         builder.HasIndex(e => e.ReportStatusId)
             .HasDatabaseName("ix_reports_report_status_id");
@@ -31,6 +39,30 @@ public sealed class ReportConfiguration : IEntityTypeConfiguration<Report>
         // Polymorphic target lookup: find all reports against a given entity.
         builder.HasIndex(e => new { e.ReportedEntityType, e.ReportedEntityId })
             .HasDatabaseName("ix_reports_reported_entity_type_reported_entity_id");
+
+        // Owner ruling D7: the open reports against one target — sibling closing on removal and the
+        // ActiveReportCount recompute (D21's ground truth). Same columns as the full index above, so the
+        // HasIndex NAME ARGUMENT IS LOAD-BEARING: without it this call would silently replace that index
+        // (layer6-indexes.md §"Multiple indexes on the same columns"). Unmeasured; pre-data by owner
+        // direction. Status values: 0 = Open, 1 = UnderReview (ReportStatusEnum).
+        builder.HasIndex(e => new { e.ReportedEntityType, e.ReportedEntityId }, "ix_reports_open_target")
+            .HasFilter("\"report_status_id\" IN (0, 1)")
+            .HasDatabaseName("ix_reports_open_target");
+
+        // Service §2.4.4(c): one OPEN report per reporter per target — a correctness constraint, not a
+        // speed index. NULL reporters are distinct, so anonymous reports are unconstrained. The name is
+        // matched by ServerModerationWriteService's race catch (OpenReporterTargetIndex).
+        builder.HasIndex(e => new { e.ReporterUserId, e.ReportedEntityType, e.ReportedEntityId },
+                "ix_reports_open_reporter_target")
+            .IsUnique()
+            .HasFilter("\"report_status_id\" IN (0, 1)")
+            .HasDatabaseName("ix_reports_open_reporter_target");
+
+        // The full FK index on reporter_user_id, declared explicitly: EF drops a convention FK index once
+        // another index leads with the FK column, but the unique index above is PARTIAL — it cannot
+        // serve the ON DELETE SET NULL scan on account deletion, which must find resolved reports too.
+        builder.HasIndex(e => e.ReporterUserId, "ix_reports_reporter_user_id")
+            .HasDatabaseName("ix_reports_reporter_user_id");
     }
 }
 

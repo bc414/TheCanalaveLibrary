@@ -33,6 +33,15 @@ policies own affordance (what renders) — but they ARE the server-side enforcem
 §"Authorization Has Two Enforcement Surfaces" below), and they also decide when a query legitimately
 calls `IgnoreQueryFilters`.
 
+**The two shared guards** live in `Core/Identity/ActiveUserContextExtensions.cs`, one copy each, used by
+every service — never re-implemented privately (owner ruling D9; the last private copies were removed
+by WU-ModerationIntegrity, 2026-09-30):
+- `activeUser.RequireUserId()` — anonymous → `InvalidOperationException` (→ 401); returns the id.
+- `activeUser.RequireModerator()` — anonymous → `InvalidOperationException` (→ 401); signed in without
+  the Moderator or Admin role → `UnauthorizedAccessException` (→ 403); returns the id. One pair of
+  exception semantics for every role gate, read or write: before the extraction, three copies answered
+  an anonymous caller 403 and the rest 401.
+
 **What stays out, deliberately:** display name/avatar URL (presentation — comes via `UserCardDto` per
 view); `ReaderDisplaySettings` (already a separate cascading slim bag, a UI-layer concern — see
 `layer3.5-structure.md` "Ambient Viewer Settings via Cascading Slim Bags"); notification/messaging
@@ -144,7 +153,7 @@ activity ping — needs the hot scalar, renders nothing) and `Profiles/SettingsP
 |---|---|---|---|
 | **(a)** | Data filtering / query-shaping ("mature off ⇒ no trace"; sprite theme) | Server: `IActiveUserContext` in read service / EF global query filter | WU12 |
 | **(b)** | Authentication gate ("is anyone logged in?") | UI: `<AuthorizeView>`. Server write: `IsAuthenticated` guard before any mutation | WU1 |
-| **(c)** | Role gate (mod/admin-only surfaces) | UI: `<AuthorizeView Roles="Moderator,Admin">`. Mod pages: `[Authorize(Policy=…)]` | WU28/WU34 |
+| **(c)** | Role gate (mod/admin-only surfaces) | UI: `<AuthorizeView Roles="Moderator,Admin">`. Mod pages: `[Authorize(Policy=…)]`. Server: every mod-only read **and** write calls `ActiveUser.RequireModerator()` in the service; the endpoint's `RequireModerator` policy is the edge half (§"Role-Based (Moderator) Gating") | WU28/WU34; service half on reads D9, WU-ModerationIntegrity |
 | **(d)** | Ownership gate ("is the viewer the owner of *this specific entity*?") | UI: page computes bool, passes down; component uses plain `@if`. Server: service loads entity, compares `entity.OwnerId != activeUser.UserId`, throws | UI: WU13/WU14. Server: WU24+ |
 | **(e)** | Per-viewer state ("has the viewer favorited / liked / started this?") | Server read service projects per-viewer flags via `IActiveUserContext.UserId` into the DTO | WU15/WU19 |
 | **(f)** | Owner-or-staff gate — **does not exist in this codebase.** | Editing is **author-only** (strict identity-equality). Moderation is a **separate code path** (WU34 admin service). Never an `OR` fold. | WU24 |
@@ -436,11 +445,36 @@ options.AddPolicy("RequireModerator", p => p.RequireRole("Moderator", "Admin"));
 uniformly to mod pages and their backing endpoints. **This policy is registered** (Program.cs,
 MA-702 fix 2026-07-18) with its name exposed as the `AuthorizationPolicies.RequireModerator`
 constant (`Server/Identity/AuthorizationPolicies.cs`) — every mod-only endpoint group
-(Moderation writes + queue reads, SiteDailyStat, SpotlightSlotAllocator, SiteSettings) uses it as
-the edge half of the defense-in-depth pair; the service-side `RequireModerator()` remains the
-enforcement point of record. Distinct from `<AuthorizeView Roles="...">`
+(Moderation writes + queue reads, ExternalVerification queues, SiteDailyStat, SpotlightSlotAllocator,
+SiteSettings) uses it as the edge half of the defense-in-depth pair; the service-side
+`RequireModerator()` remains the enforcement point of record. Distinct from `<AuthorizeView Roles="...">`
 (layer3.5-structure.md) — that's for moderator-only controls embedded in an otherwise-public page,
 not for gating the dedicated `/mod/*` routes.
+
+**Mod-only reads gate in the service too (owner ruling D9, 2026-08-06; built WU-ModerationIntegrity
+2026-09-30).** A page attribute does not protect the circuit: on the SSR circuit no endpoint exists, so
+a mod page's in-process read service call had only the page's `[Authorize]` between it and the caller,
+and these are the reads that turn every query filter off (taken-down content, M-rated stories, Private
+profiles, other users' report history). So every mod-only read opens with `ActiveUser.RequireModerator()`
+and **throws** — never returns empty: a mod queue's existence is not a secret, and `[]` would make a
+mis-registered surface look empty rather than broken. The "reads gate at the edge, writes in the
+service" split is not available as a rule (it would contradict P2 and the two read-side gates already in
+`ServerBlogPostReadService`). The recorded sweep:
+
+| Service | Gated reads |
+|---|---|
+| `ServerModerationReadService` | `GetReportQueueAsync`, `GetPendingSubmissionsAsync`, `GetUserModerationHistoryAsync` |
+| `ServerExternalVerificationReadService` | `GetPendingAccountVerificationsAsync`, `GetPendingLinkVerificationsAsync` |
+| `ServerSiteDailyStatReadService` | `GetLatestAsync`, `GetSeriesAsync` |
+| `ServerSpotlightSlotAllocator` | `GetRemainingMonthlyGrantCapacityAsync`, `GetRecentGrantsAsync` |
+| `ServerBlogPostReadService` | `GetSiteAnnouncementForEditAsync` (and `GetSiteAnnouncementsAsync`'s unpublished view, which *downgrades* a forged flag rather than throwing) |
+
+**The one deliberate non-gate:** `ISiteSettingsReadService.GetIntAsync` is not a mod-only read at the
+service layer — Spotlight's read and write services, the allocator and the Fanon services compose it
+server-side for public flows. Only its HTTP route (`GET /api/site-settings/{key}`) is mod-only, and that
+route keeps its edge policy. `IModerationReadService` no longer carries `GetReportReasonsAsync`: report
+submission moved to `IReportSubmissionService` (any signed-in reporter), so the mod interfaces hold only
+gated members.
 
 **Role infrastructure status (updated WU27.5, 2026-06-24):** Role *rows* (`User`, `Moderator`, `Admin`)
 are seeded via `ApplicationRoleConfiguration.HasData` in `IdentityConfigurations.cs` — they exist at

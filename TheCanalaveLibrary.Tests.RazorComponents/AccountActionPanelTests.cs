@@ -99,6 +99,31 @@ public class AccountActionPanelTests : BunitContext
         cut.Markup.Should().Contain("Suspension end date is required.");
     }
 
+    [Fact]
+    public async Task Reinstate_ShowsItsVerb_NoDateField_AndANonDestructiveConfirm()
+    {
+        // WU-ModerationIntegrity (service §2.1.3): Reinstate reuses the panel — reason only, no end
+        // date, and it restores an account, so its Confirm must not wear the sanctions' danger recipe.
+        AccountActionPanel.Submission? submitted = null;
+
+        IRenderedComponent<AccountActionPanel> cut = Render<AccountActionPanel>(p => p
+            .Add(c => c.TargetLabel, "SomeUser")
+            .Add(c => c.Action, ModeratorActionType.ReinstateUser)
+            .Add(c => c.OnConfirm, s => submitted = s));
+
+        cut.Find("h2").TextContent.Should().Contain("Reinstate on SomeUser",
+            "the verb must name the action, not fall through to the enum name");
+        cut.FindAll("input[type=datetime-local]").Should().BeEmpty("only Suspend is time-bounded");
+        FindButton(cut, "Confirm").ClassList.Should().NotContain("bg-danger");
+
+        cut.Find("textarea").Change("Appeal upheld.");
+        await FindButton(cut, "Confirm").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        submitted.Should().NotBeNull();
+        submitted!.Reason.Should().Be("Appeal upheld.");
+        submitted.SuspendedUntilUtc.Should().BeNull();
+    }
+
     // AngleSharp compound-selector fragility (testing.md) — button text isn't a CSS selector;
     // locate by exact TextContent rather than a brittle :contains(), same as
     // GroupFolderManagementPageTests/ConfirmDialogTests.

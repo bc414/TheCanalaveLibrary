@@ -34,8 +34,8 @@ public class BookshelvesPageTests : BunitContext
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         // TagChip and TagSelector inject ISpriteReadService for sprite URL resolution.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
-        // ReportDialog (inside the page) injects IModerationWriteService.
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        // ReportDialog (inside the page) injects IReportSubmissionService (D9 split).
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine —

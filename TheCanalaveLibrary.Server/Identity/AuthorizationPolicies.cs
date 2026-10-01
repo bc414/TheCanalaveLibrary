@@ -5,7 +5,8 @@ namespace TheCanalaveLibrary.Server;
 /// (identity-and-authorization.md §"Role-Based (Moderator) Gating": prefer a named policy over
 /// repeating role lists once more than one or two surfaces need it). Referenced by endpoint groups
 /// via <c>.RequireAuthorization(AuthorizationPolicies.RequireModerator)</c> — the edge half of the
-/// defense-in-depth pair whose service half is <c>RequireModerator()</c> in the mod write services.
+/// defense-in-depth pair whose service half is the shared <c>ActiveUser.RequireModerator()</c> in every
+/// mod-only read and write service (owner ruling D9 extended it to the reads, WU-ModerationIntegrity).
 /// </summary>
 public static class AuthorizationPolicies
 {

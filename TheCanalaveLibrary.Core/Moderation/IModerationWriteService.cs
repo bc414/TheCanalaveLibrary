@@ -3,23 +3,15 @@ using System.ComponentModel.DataAnnotations;
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// Write side of the Moderation feature cluster. Inherits the read interface
-/// (CQRS-lite with write-inherits-read pattern).
+/// Write side of the Moderation feature cluster: the moderator actions. Inherits the read interface
+/// (CQRS-lite with write-inherits-read pattern). Report submission is not here — it is the member-facing
+/// <see cref="IReportSubmissionService"/> (owner ruling D9). Every member requires the Moderator or
+/// Admin role, enforced in the service. Every outcome notification this interface sends is
+/// null-sourced (D5): the acting moderator is never named to the recipient, and never notified of
+/// their own act.
 /// </summary>
 public interface IModerationWriteService : IModerationReadService
 {
-    // ── Report submission (Feature 46) ────────────────────────────────────────────
-
-    /// <summary>
-    /// Submits a report against a content item or user. Validates the target-type allow-set,
-    /// increments the target's <c>ActiveReportCount</c>, and fires a best-effort
-    /// <c>ReportReceived</c> notification to the reporter — null-sourced, carrying the new report's
-    /// id (owner ruling D4; it used to be deleted by drop-self because the reporter was passed as its
-    /// own source). Every outcome notification this interface sends is null-sourced (D5): the acting
-    /// moderator is never named to the recipient.
-    /// </summary>
-    Task SubmitReportAsync(SubmitReportRequest request);
-
     // ── Moderator queue actions (Feature 47) ─────────────────────────────────────
 
     /// <summary>
@@ -29,14 +21,23 @@ public interface IModerationWriteService : IModerationReadService
 
     /// <summary>
     /// Resolves a report with no action taken. Decrements the target's
-    /// <c>ActiveReportCount</c> and notifies the reporter.
+    /// <c>ActiveReportCount</c> and notifies the reporter. Closes no other report (owner ruling D7:
+    /// one moderator's "no" is a ruling on one complaint).
+    /// <para>Every resolve path locks the report row and refuses one that is no longer Open or
+    /// UnderReview: <see cref="ModerationValidationException"/> ("already resolved"); an unknown report
+    /// id is <see cref="KeyNotFoundException"/> (service §2.1.2).</para>
     /// </summary>
     Task ResolveNoActionAsync(long reportId, string? actionNotes);
 
     /// <summary>
     /// Resolves a report with a content-removal action. Soft-hides the target (default) or
     /// hard-deletes it (illegal-content path, <paramref name="hardDelete"/> = true).
-    /// Decrements <c>ActiveReportCount</c>, notifies reporter and content author.
+    /// <para>Owner ruling D7: in the same transaction, closes every other Open/UnderReview report on the
+    /// same <c>(ReportedEntityType, ReportedEntityId)</c> target as <c>ResolvedActionTaken</c>, moves the
+    /// target's <c>ActiveReportCount</c> by −(1 + reports closed), and notifies the reporter, every
+    /// distinct sibling reporter, and the content author. A <c>User</c>-targeted report cannot be
+    /// resolved by removal (<see cref="ModerationValidationException"/> — use an account action). Same
+    /// lock and status guard as <see cref="ResolveNoActionAsync"/>.</para>
     /// </summary>
     Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false);
 
@@ -47,10 +48,16 @@ public interface IModerationWriteService : IModerationReadService
     /// <para><b>Which user is acted on</b> is resolved from the report, not assumed: a
     /// <c>User</c>-targeted report acts on that user; a Story/Comment/BlogPost/Recommendation report
     /// acts on the reported content's author; a Message report acts on its sender. Throws
-    /// <c>CanalaveValidationException</c> when no author can be resolved (anonymous or deleted).
-    /// Supersedes the WU34 rule that required the report target to be a User — see
+    /// <see cref="ModerationValidationException"/> when no author can be resolved (anonymous or
+    /// deleted). Supersedes the WU34 rule that required the report target to be a User — see
     /// <c>layer2-services.md</c> §"Account actions — target resolution and the report-as-audit-record
     /// rule".</para>
+    /// <para>Same lock and status guard as <see cref="ResolveNoActionAsync"/>; enforces the
+    /// account-status transition table (a suspension needs a future end date; nothing but
+    /// <see cref="ReinstateUserAsync"/> leaves Banned; no Warn over a live suspension; no second Ban —
+    /// <see cref="ModerationValidationException"/>); refuses <see cref="ModeratorActionType.ReinstateUser"/>.
+    /// Tells a member reporter the outcome (<c>ReportResolved</c>, report id). Closes no other report
+    /// (D7).</para>
     /// </summary>
     Task ApplyAccountActionAsync(long reportId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null);
@@ -63,10 +70,25 @@ public interface IModerationWriteService : IModerationReadService
     /// moderation-action table). <c>ReporterUserId == ModeratorUserId</c> is what marks the row as
     /// moderator-initiated; <paramref name="reasonId"/> is a real seeded <c>ReportReason</c>, chosen
     /// by the moderator. Because the row opens and resolves together, <c>ActiveReportCount</c> is
-    /// deliberately untouched (no +1/-1 pair).</para>
+    /// deliberately untouched (no +1/-1 pair). Same transition table as
+    /// <see cref="ApplyAccountActionAsync"/>; sends no report receipt (the D4 guardrail).</para>
     /// </summary>
     Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null);
+
+    /// <summary>
+    /// Returns a Warned, Suspended or Banned user to <c>Active</c> and clears
+    /// <c>SuspendedUntilUtc</c> — the only path out of Banned, and the only writer of <c>Active</c>
+    /// (service §2.1.3(b)). Files a moderator-initiated <c>Report</c> as the audit record (reason
+    /// "Other", <c>Notes = ActionTaken = reason</c>), same shape as
+    /// <see cref="ApplyAccountActionToUserAsync"/>; <c>ActiveReportCount</c> is untouched. No security
+    /// stamp bump and no notification (no type exists — tracker F14).
+    /// <para>Throws <see cref="UnauthorizedAccessException"/> for a non-moderator,
+    /// <see cref="KeyNotFoundException"/> for an unknown user, and
+    /// <see cref="ModerationValidationException"/> for a self-target, a blank or over-long reason, or a
+    /// user who is already Active.</para>
+    /// </summary>
+    Task ReinstateUserAsync(int targetUserId, string reason);
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
 

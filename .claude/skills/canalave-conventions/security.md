@@ -212,7 +212,17 @@ the remaining mid-session-responsiveness gap described below.
   specific suspended/banned reason instead of "Invalid login attempt."
 - **Expired suspensions are allowed through as-is** — the predicate is read-only (no lazy status
   restore at the choke point); `AccountStatus` stays `Suspended` in the row until a moderator
-  changes it, but `CanSignInAsync` stops blocking once `SuspendedUntilUtc` has passed.
+  changes it, but `CanSignInAsync` stops blocking once `SuspendedUntilUtc` has passed. The moderator
+  lever that writes `Active` back is **Reinstate** (`IModerationWriteService.ReinstateUserAsync`,
+  WU-ModerationIntegrity 2026-09-30) — the only path out of `Banned`, and the way to clear an expired
+  suspension's status.
+- **A suspension always carries a future end date (WU-ModerationIntegrity, 2026-09-30; service
+  §2.1.3(a)).** Both account-action entry points refuse a Suspend whose `suspendedUntilUtc` is NULL or
+  not after now (`ModerationValidationException`). Before this, such a suspension was written verbatim:
+  the stamp bump ejected the user, and `CanSignInAsync` (which blocks only a *future, non-null* date)
+  let them straight back in. Every non-Suspend action clears `SuspendedUntilUtc` to NULL. The full
+  transition table (Banned leavable only via Reinstate; no Warn over a ban or a live suspension) is in
+  `layer2-services.md` §"Moderation Services".
 - **Active sessions are killed on Suspend/Ban, not on Warn.** `ApplyAccountActionAsync`
   (`ServerModerationWriteService`) calls `UserManager.UpdateSecurityStampAsync` after setting
   `Suspended`/`Banned` — the existing 30-minute stamp revalidation

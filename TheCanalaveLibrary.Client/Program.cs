@@ -95,6 +95,7 @@ builder.Services.AddScoped<IGroupReadService, ClientGroupReadService>();
 builder.Services.AddScoped<IGroupWriteService, ClientGroupWriteService>();
 builder.Services.AddScoped<IModerationReadService, ClientModerationReadService>();
 builder.Services.AddScoped<IModerationWriteService, ClientModerationWriteService>();
+builder.Services.AddScoped<IReportSubmissionService, ClientReportSubmissionService>();
 builder.Services.AddScoped<ISiteDailyStatReadService, ClientSiteDailyStatReadService>();
 builder.Services.AddScoped<IMessagingReadService, ClientMessagingReadService>();
 builder.Services.AddScoped<IMessagingWriteService, ClientMessagingWriteService>();

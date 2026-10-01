@@ -65,7 +65,7 @@ public class ServerNotificationWriteService(
 
     public async Task MarkAsReadAsync(long notificationId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await writeDb.Notifications
             .Where(n => n.NotificationId == notificationId
                         && n.RecipientUserId == userId
@@ -75,7 +75,7 @@ public class ServerNotificationWriteService(
 
     public async Task MarkAllAsReadAsync()
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await writeDb.Notifications
             .Where(n => n.RecipientUserId == userId && !n.IsRead)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
@@ -85,7 +85,7 @@ public class ServerNotificationWriteService(
 
     public async Task SetSettingAsync(NotificationTypeEnum notifType, bool emailEnabled, bool collapsed)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         // The sparse upsert/delete rule itself lives in NotificationSettingUpsert — shared with the
         // one-click unsubscribe endpoint, which writes for a user resolved from a signed token
@@ -529,12 +529,4 @@ public class ServerNotificationWriteService(
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser()
-    {
-        // Uses the base class's CurrentUserId property so the derived class doesn't capture
-        // the activeUser primary constructor parameter (avoids CS9107 double-capture warning).
-        if (CurrentUserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 }

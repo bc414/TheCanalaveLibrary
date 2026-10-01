@@ -9,11 +9,13 @@ namespace TheCanalaveLibrary.Client;
 /// Auth rides the same-origin Identity cookie.
 ///
 /// Delegates the standard status-code mapping to
-/// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 401/403 covers
-/// <c>RequireModerator()</c>'s genuine denial AND the several <see cref="InvalidOperationException"/>
-/// business-rule guards EndpointHelpers also maps to 401 — e.g. "Verify your X account first",
-/// same known mismatch as <c>ClientModerationWriteService</c>; 404 is defensive (this service
-/// raises <c>SingleAsync</c> exceptions rather than 404 for a missing identity/link today).
+/// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 400 →
+/// <see cref="ExternalVerificationValidationException"/> over <c>ProblemDetails.Detail</c> (the
+/// server's business rules — "Verify your X account first", a malformed URL — reach the user
+/// verbatim); 401 → <see cref="SessionExpiredException"/>; 403 → <c>RequireModerator()</c>'s denial;
+/// 404 → an unknown identity, link or platform id (WU-ModerationIntegrity, 2026-09-30: the server
+/// used to throw these as <see cref="InvalidOperationException"/>/<c>SingleAsync</c> failures, which
+/// arrived as 401).
 /// </summary>
 public sealed class ClientExternalVerificationWriteService(HttpClient http)
     : ClientExternalVerificationReadService(http), IExternalVerificationWriteService
@@ -69,5 +71,5 @@ public sealed class ClientExternalVerificationWriteService(HttpClient http)
     }
 
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new InvalidOperationException(detail));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ExternalVerificationValidationException([detail]));
 }

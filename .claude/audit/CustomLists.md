@@ -60,6 +60,12 @@ read-only snapshot; this note is the authoritative record of the resolution.
 
 ## Feature 51 — Custom Lists
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green.
+
 Built as WU-CustomLists (2026-07-13). Verification summary per layer (`dotnet test` green all
 tiers: Unit 712, RazorComponents 632, Integration 680; token check clean — only Import's
 pre-existing in-flight finding):
@@ -68,7 +74,7 @@ pre-existing in-flight finding):
   Sound; migration-verified; unchanged by the settled design (zero migration). Entities moved
   `Core/Models/` → `Core/CustomLists/` (legacy-folder retirement — no model change, verified by
   clean build + green Integration tier against the real migration).
-- **L2 — Stage 5.** `ICustomListReadService`/`ICustomListWriteService` +
+- **L2 — Stage 5** (shared auth guard since WU-ModerationIntegrity, 2026-09-30). `ICustomListReadService`/`ICustomListWriteService` +
   `ServerCustomList{Read,Write}Service` (`Server/CustomLists/`), SavedTagSelections-shaped
   (both-interfaces DI registration). Covered by the **Integration** tier
   (`CustomListServiceTests`, ~28 tests): CRUD + owner-gating, case-insensitive duplicate-name,

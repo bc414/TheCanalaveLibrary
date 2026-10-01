@@ -145,12 +145,18 @@
                         @onclick="() => ResolveNoActionAsync(_activeReport.ReportId)">
                     No action
                 </button>
-                <button type="button"
-                        class="rounded-md bg-(--color-warning)/15 px-3 py-1 text-sm text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
-                        disabled="@_acting"
-                        @onclick="() => SoftRemoveAsync(_activeReport)">
-                    Hide content
-                </button>
+                @* A User-typed report is resolved with an account action, never a removal: the service
+                   refuses it (owner ruling D7 — no bulk-closing a user's reports — and D47(a)'s floor:
+                   removal must be unreachable for a target it cannot act on), so the control is hidden. *@
+                @if (_activeReport.EntityType != ReportedEntityType.User)
+                {
+                    <button type="button"
+                            class="rounded-md bg-(--color-warning)/15 px-3 py-1 text-sm text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
+                            disabled="@_acting"
+                            @onclick="() => SoftRemoveAsync(_activeReport)">
+                        Hide content
+                    </button>
+                }
                 @* Account actions land on the person behind the report — the reported user, or the
                    reported content's author (resolved server-side, WU-UserModeration). *@
                 <button type="button"

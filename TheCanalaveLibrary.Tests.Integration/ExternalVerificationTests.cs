@@ -117,7 +117,7 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
         Func<Task> act = () => svc.SubmitAccountForVerificationAsync(
             new AddExternalAccountRequest(7, "https://example.test/u/x", "x"));
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<ExternalVerificationValidationException>();
     }
 
     [Fact]
@@ -205,6 +205,32 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
+    [Fact]
+    public async Task ModeratorActions_OnAnUnknownId_AreKeyNotFound_NotTheOld401()
+    {
+        // WU-ModerationIntegrity (D9 sub-edge): SingleAsync on a client-supplied id threw
+        // InvalidOperationException, which the endpoint layer maps to 401. Now 404.
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
+        IExternalVerificationWriteService svc = scope.ServiceProvider.GetRequiredService<IExternalVerificationWriteService>();
+
+        await FluentActions.Invoking(() => svc.ApproveAccountVerificationAsync(999_999)).Should().ThrowAsync<KeyNotFoundException>();
+        await FluentActions.Invoking(() => svc.RejectLinkVerificationAsync(999_999, "x")).Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task ModeratorQueues_RefuseANonModerator_InTheService()
+    {
+        // Owner ruling D9: the two queue reads gate in the service, not only at the endpoint — on the SSR
+        // circuit there is no endpoint, only the page's [Authorize].
+        SetActiveUser(_authorId);
+        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
+        IExternalVerificationReadService svc = scope.ServiceProvider.GetRequiredService<IExternalVerificationReadService>();
+
+        await FluentActions.Invoking(() => svc.GetPendingAccountVerificationsAsync()).Should().ThrowAsync<UnauthorizedAccessException>();
+        await FluentActions.Invoking(() => svc.GetPendingLinkVerificationsAsync()).Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
     // ── Per-link tier ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -219,7 +245,7 @@ public class ExternalVerificationTests(PostgresFixture postgres) : IntegrationTe
 
         Func<Task> act = () => svc.RequestLinkVerificationAsync(linkId);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<ExternalVerificationValidationException>()
             .WithMessage("*account first*", "the account tier must be Verified before a per-link request is meaningful");
     }
 

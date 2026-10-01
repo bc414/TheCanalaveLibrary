@@ -8,8 +8,9 @@ namespace TheCanalaveLibrary.Server;
 /// WU39, settled 2026-07-24, audit/Moderation.md F53). The two moderator-queue reads are
 /// elevated work-surface reads — like <c>ServerModerationReadService</c>, they are
 /// M-content-agnostic (a mod sees every pending item regardless of their own content-rating
-/// setting); the actual gate is endpoint/page authorization, not a role check in the read itself
-/// (mirrors the existing moderation read surface).
+/// setting) — and each opens with the shared <c>ActiveUser.RequireModerator()</c> (owner ruling D9,
+/// WU-ModerationIntegrity 2026-09-30): the page's <c>[Authorize]</c> does not protect the circuit, so
+/// the role check lives here, with the endpoint policy as the edge half.
 /// </summary>
 public class ServerExternalVerificationReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -48,10 +49,11 @@ public class ServerExternalVerificationReadService(
 
     public async Task<IReadOnlyList<PendingAccountVerificationDto>> GetPendingAccountVerificationsAsync()
     {
+        ActiveUser.RequireModerator();
+
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        // elevated read: moderator work surface (M-content-agnostic) — endpoint/page
-        // authorization is the actual gate, per content-safety.md "Moderator review surfaces
-        // are work surfaces".
+        // elevated read: moderator work surface (M-content-agnostic), per content-safety.md
+        // "Moderator review surfaces are work surfaces".
         return await readDb.UserExternalIdentities
             .Where(i => i.VerificationStatus == VerificationStatusEnum.Unverified)
             .OrderBy(i => i.DateRequested)
@@ -70,6 +72,8 @@ public class ServerExternalVerificationReadService(
 
     public async Task<IReadOnlyList<PendingLinkVerificationDto>> GetPendingLinkVerificationsAsync()
     {
+        ActiveUser.RequireModerator();
+
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
         // elevated read: moderator work surface — no per-link item exists here until the story

@@ -44,7 +44,7 @@ public class GroupPageTests : BunitContext
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IBlogPostReadService>(_ => new FakeBlogPostReadService());
         Services.AddScoped<ICommentWriteService>(_ => new FakeCommentWriteService());
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         Services.AddScoped<IToastService>(_ => new FakeToastService());
         // SocialMetaTags (inside the page) injects IPublicUrlProvider — pure Core class, no host dependency.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));

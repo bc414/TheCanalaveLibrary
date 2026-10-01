@@ -4,10 +4,17 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// Server-side read implementation of <see cref="IModerationReadService"/>.
-/// Uses <see cref="ReadOnlyApplicationDbContext"/> (no-tracking). All methods require the caller
-/// to enforce moderator/admin role gating at the page or endpoint level — this service does not
-/// re-check roles.
+/// Server-side read implementation of <see cref="IModerationReadService"/> (plus the ungated
+/// <see cref="GetReportReasonsAsync"/>, which the write class exposes as part of
+/// <see cref="IReportSubmissionService"/>). Uses <see cref="ReadOnlyApplicationDbContext"/>
+/// (no-tracking).
+///
+/// <para><b>Role gate (owner ruling D9).</b> Every moderator-only read opens with the shared
+/// <c>ActiveUser.RequireModerator()</c> — anonymous → <see cref="InvalidOperationException"/> (401),
+/// signed in without the role → <see cref="UnauthorizedAccessException"/> (403). It throws rather than
+/// returning empty: a mis-registered surface must look broken, not empty. The page's
+/// <c>[Authorize]</c> and the endpoint policy are affordance and the edge half; on the SSR circuit no
+/// endpoint exists, so this check is the control.</para>
 ///
 /// <para><b>Filter contract (settled 2026-07-18, supersedes 2026-06-26).</b> Review/entity loads
 /// bypass <c>IsTakenDown</c> <em>and</em> ContentRating/GroupAudience — moderation review surfaces
@@ -23,15 +30,19 @@ namespace TheCanalaveLibrary.Server;
 /// distinct <c>ReportedEntityType</c> present on the page, never N+1.</para>
 /// </summary>
 public class ServerModerationReadService(
-    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory) : IModerationReadService
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
+    IActiveUserContext activeUser) : IModerationReadService
 {
-    // ── Expose the read-context factory for the derived write service ─────────────
+    // ── Expose the shared deps for the derived write service ──────────────────────
     // Contexts are created per method (`await using`) — see layer2-services.md
-    // §"Read-context concurrency: factory per method".
+    // §"Read-context concurrency: factory per method". ActiveUser is a property, not the parameter,
+    // so the derived class never captures `activeUser` itself (CS9107 — layer2-services.md).
 
     protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
-    // ── Report reasons ────────────────────────────────────────────────────────────
+    protected IActiveUserContext ActiveUser { get; } = activeUser;
+
+    // ── Report reasons (ungated — IReportSubmissionService, via the write class) ───
 
     public async Task<ReportReasonDto[]> GetReportReasonsAsync()
     {
@@ -46,6 +57,8 @@ public class ServerModerationReadService(
 
     public async Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false)
     {
+        ActiveUser.RequireModerator();
+
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Step 1: materialize all matching reports with reason name + reporter username.
@@ -87,7 +100,10 @@ public class ServerModerationReadService(
             .ToDictionary(g => g.Key, g => g.Select(r => r.ReportedEntityId).Distinct().ToList()));
 
         // Step 3: stitch — drop report rows whose target no longer materializes (e.g. hard-deleted
-        // between report submission and queue load). Not a rating-based drop — see Step 2.
+        // between report submission and queue load). Not a rating-based drop — see Step 2. Such a row
+        // has no decision left in it: removal closes a target's siblings (D7) and account deletion
+        // closes the reports on what it destroys (ReportLedger), so an *open* dropped row is a zombie
+        // from a path that does not close yet (tracker F13). The per-user history keeps these rows.
         return [..rows
             .Where(r =>
                 labelMap.TryGetValue(r.ReportedEntityType, out var dict) &&
@@ -122,6 +138,8 @@ public class ServerModerationReadService(
 
     public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync()
     {
+        ActiveUser.RequireModerator();
+
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         return await (
             from s in readDb.Stories
@@ -156,6 +174,8 @@ public class ServerModerationReadService(
 
     public async Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId)
     {
+        ActiveUser.RequireModerator();
+
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // ProfileVisibility is deliberately not applied — same rationale as
@@ -178,34 +198,66 @@ public class ServerModerationReadService(
         if (user is null) return null;
 
         string label = user.UserName ?? $"User#{user.Id}";
-        string? url = user.UserName is null ? null : $"/user/{user.UserName}";
 
-        // Every row here targets this one user, so the two-pass BatchLoadTargetsAsync enrichment
-        // that GetReportQueueAsync needs would resolve a single already-known label — skipped
-        // deliberately, not overlooked.
-        var reports = await (
+        // One predicate across every target type (owner ruling D8, tracker B18): ReportedUserId is the
+        // account answerable for the artifact when the report was filed — the user for a User report,
+        // the author or sender otherwise, and the target of every moderator-filed row. It replaced a
+        // User-only predicate whose page had to warn that reports on the person's content were missing.
+        var rows = await (
             from r in readDb.Reports
-            where r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == userId
+            where r.ReportedUserId == userId
             join rr in readDb.ReportReasons on r.ReportReasonId equals rr.ReportReasonId
             join reporter in readDb.Users on r.ReporterUserId equals reporter.Id into reporters
             from rep in reporters.DefaultIfEmpty()
-            orderby r.DateReported descending
-            select new ReportQueueItemDto(
+            orderby r.DateReported descending, r.ReportId descending
+            select new
+            {
                 r.ReportId,
                 r.ReportedEntityType,
                 r.ReportedEntityId,
-                label,
-                url,
-                rr.ReasonName,
-                r.Notes,
                 r.ReportStatusId,
-                (string?)rep.UserName,
+                r.Notes,
                 r.ModeratorUserId,
                 r.ActionTaken,
                 r.DateReported,
                 r.DateResolved,
-                user.ActiveReportCount)
+                ReasonName = rr.ReasonName,
+                ReporterUserName = (string?)rep.UserName,
+            }
         ).ToListAsync();
+
+        Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>> labelMap = rows.Count == 0
+            ? new()
+            : await BatchLoadTargetsAsync(readDb,
+                rows.Select(r => r.ReportedEntityType).Distinct().ToList(),
+                rows.GroupBy(r => r.ReportedEntityType)
+                    .ToDictionary(g => g.Key, g => g.Select(r => r.ReportedEntityId).Distinct().ToList()));
+
+        // Unlike the queue, rows are never dropped here: the Report row is the ledger and outlives its
+        // target (D8(b)), so a target that no longer materializes keeps its row, labelled as deleted.
+        List<ReportQueueItemDto> reports = [..rows.Select(r =>
+        {
+            (string targetLabel, string? targetUrl, int count) =
+                labelMap.TryGetValue(r.ReportedEntityType, out var dict) && dict.TryGetValue(r.ReportedEntityId, out var hit)
+                    ? hit
+                    : ($"[deleted {r.ReportedEntityType}]", null, 0);
+
+            return new ReportQueueItemDto(
+                r.ReportId,
+                r.ReportedEntityType,
+                r.ReportedEntityId,
+                targetLabel,
+                targetUrl,
+                r.ReasonName,
+                r.Notes,
+                r.ReportStatusId,
+                r.ReporterUserName,
+                r.ModeratorUserId,
+                r.ActionTaken,
+                r.DateReported,
+                r.DateResolved,
+                count);
+        })];
 
         return new UserModerationHistoryDto(
             user.Id,

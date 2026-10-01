@@ -37,9 +37,9 @@ public class BlogPostPageTests : BunitContext
         Services.AddScoped<IPollReadService>(_ => new FakeEmptyPollReadService());
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
         Services.AddScoped<ICommentWriteService>(_ => new FakeCommentWriteService());
-        // CommentSection nests ReportDialog (moderation write) + toast feedback — same
+        // CommentSection nests ReportDialog (report submission) + toast feedback — same
         // registration set GroupPageTests uses for its comment wall.
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         Services.AddScoped<IToastService>(_ => new FakeToastService());
         // RichTextView uses JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;

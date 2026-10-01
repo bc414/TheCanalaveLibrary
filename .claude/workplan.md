@@ -17,18 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-InertFeatures (2026-09-30, build + review-fixes commits) — owner rulings **D3,
-  D4, D5, D16, D17** plus the new-chapter fan-out. Attribution rides the Read-It-Later bit: a card RIL
-  button in every rec-card host (its saved state is the host's, synced from the panel) and a `?rec=`
-  link persisted at Ch.1 90%, then dropped from the address; Yes/X reminder prompt; `RecordSuccessAsync`
-  requires and consumes the row. Notifications: nullable source, the 70–82 band and type 26
-  de-identified (each call site skips the acting moderator), report-id anchors, dedup-exempt account
-  types, `ReportReceived` restored, `GroupStory` anchors, hidden favoriters in 15, type 10 on a first
-  publish. Migration `WU_InertFeatures`. L4.5 for F16/F30/F33/F41/F55 went to 1 (no browser), then
-  back to 5 after its browser pass the same day (Aspire path, both render phases, no bug — **H14**
-  closed). `dotnet test`: Unit 1,058, RazorComponents 754, Integration 1,261. Decision rows **17–19**;
-  trackers **B20–B22** closed, **B23/B24** opened. **Pointers:** its DONE entry; `layer2-services.md`
-  §"Notification Generation" and §"Attribution (Feature 30)".
+- **Last landed:** WU-ModerationIntegrity (2026-09-30) — owner rulings **D7, D8, D9** plus service
+  audit §2.1.2/§2.1.3/§2.4.4. Resolve paths lock the report row and refuse a resolved one; a removal
+  closes every sibling report on the same `(type, id)` target and notifies each reporter; one open
+  report per reporter per target (partial unique index); `Report.ReportedUserId` (every target type,
+  snapshot) feeds a per-user history that now includes content reports (tracker **B18** closed); the
+  account-status transition table and a new **Reinstate**; account deletion closes the reports on what
+  it destroys; every moderator-only read gates in the service via one shared `RequireModerator()`, and
+  `IReportSubmissionService` is split from the mod interfaces. Migration `WU_ModerationIntegrity`.
+  F47 L4.5 5→1 (no browser — tracker **H19**). `dotnet test`: Unit 1,070, RazorComponents 760,
+  Integration 1,297. Decision row **20**; trackers **F13/F14/F15/D10/H19** opened. **Pointers:** its DONE
+  entry; `layer2-services.md` §"Moderation Services".
+  Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
@@ -231,8 +231,8 @@ references it, does not restate it.
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
-  WU-AccessGateSweep2 (D6) and WU-InertFeatures (D3/D4/D5/D16/D17) have landed, and
-  **WU-ModerationIntegrity** is next in the campaign's build order.
+  WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17) and WU-ModerationIntegrity
+  (D7/D8/D9) have landed, and **WU-TptHardDelete** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -248,22 +248,26 @@ references it, does not restate it.
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
-  WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
+  WU-ThrottleCoverage; D6 was routed to WU-ModerationIntegrity, which left it open (a rejection files
+  no `Report` row, so D8(b) does not cover it); **F10/H13** opened by WU-AccessGateSweep2,
   2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
   2026-09-30, which closed B20–B22 (its browser pass closed H14 the same day); **D9/H15** opened by the WU-StoryLifecycle browser pass,
   2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
-  pass, 2026-09-30, which closed H13), including two **high-priority security items:
+  pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
+  2026-09-30, which closed B18), including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–19** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–20** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
-  WU-InertFeatures had to take — and 19 — type 90's moderator attribution, filed by its review
-  fixes — added 2026-09-30). Separately, not a
+  WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
+  fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
+  2026-09-30). Tracker **H19**'s browser pass (WU-ModerationIntegrity's moderator UI, both render
+  phases) restores F47 L4.5. Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -414,6 +418,92 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-ModerationIntegrity — report lifecycle integrity: lock-and-guard resolves, sibling closing, dedup, `ReportedUserId`, account-status table + Reinstate, zombie closure at the source, service-side mod read gates (worksheet D7/D8/D9; extends `Moderation/`, `Stories/` (ExternalVerification), `Identity/`, `Spotlight/`, `SiteSettings/`, `Tags/`, `BlogPosts/`, and the auth-guard sweep in `CustomLists/`, `Following/`, `Groups/`, `Notifications/`, `Recommendations/`, `Messaging/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** **F47 L4.5 5→1** (the `/mod/users` history Target column, Reinstate and the hidden
+  "Hide content" on `/mod/reports` changed; the WU ran with no browser available — tracker **H19**).
+  Everything else beneath Stage-5 cells: F46/F47 L1/L2/L3/L3.5/L5, F53 L2, F62 L2, F55 L2, F11/F15 L2,
+  F35/F37 L2, F52 L2, and the L2 guard sweep in F18/F27/F38/F42/F49/F51. L1 stays 5 with the migration
+  applied.
+- **Trigger:** three answered, unbuilt owner rulings (D7 sibling closing, D8 `ReportedUserId` +
+  takedown-reversal ratification, D9 read gates + interface split) that the worksheet assigned to this WU
+  jointly with service §2.1.2 (no status guard), §2.1.3 (account-status model) and §2.4.4
+  (`ActiveReportCount` corruption); schema §3.7; tracker B18. Two sub-edges the owner delegated were
+  picked and recorded: zombie reports from account deletion are closed **at the source**, and the
+  401-instead-of-404/400 class is fixed **at the throw sites** (the `EndpointHelpers` table is unchanged).
+- **What landed:**
+  1. **Migration `WU_ModerationIntegrity`** — `reports.reported_user_id` (FK SET NULL) +
+     `ix_reports_open_target` (partial), `ix_reports_open_reporter_target` (partial UNIQUE),
+     `ix_reports_reported_user_id`; the full `ix_reports_reporter_user_id` is now declared explicitly so
+     EF stops dropping it behind the partial unique index. Hand SQL between the FK and the indexes:
+     backfill per type, close zombies, close same-reporter duplicates (keep the oldest), recompute every
+     `active_report_count`. Run against a dirtied clone of the dev workbench DB (duplicate, zombie, wrong
+     counters, anonymous rows): all handled; Down and re-Up clean. DataSeeder sets `ReportedUserId` on
+     its three reports; SeedTool/SeedGraph write none.
+  2. **D9** — shared `ActiveUserContextExtensions.RequireModerator()`; every private moderator-guard copy
+     (Moderation, ExternalVerification, SiteSettings, the Spotlight allocator, Fanon, Tags, site posts,
+     site polls) and the six private `RequireAuthenticatedUser` copies (+ Messaging's, now a wrapper)
+     replaced. Gated reads: the three moderation reads, both EV queues, both SiteDailyStat reads, the
+     allocator's capacity read; the SiteSettings `GetIntAsync` read is the recorded non-gate. The read
+     handlers wrap in `ExecuteAsync`. `IReportSubmissionService` split out (one concrete class, three
+     forwarded registrations; `ClientReportSubmissionService` with `rateLimitedAction: Report`).
+  3. **Exception translation** — unknown report/EV ids → 404; the allow-set and EV business rules →
+     400 (`ModerationValidationException`, new `ExternalVerificationValidationException`); the EV client
+     reconstructs the new type. §2.7.5's moderation client mapping was already built by WU-StoryLifecycle
+     (verified).
+  4. **Submit path** — resolve `ReportedUserId` (nullable resolver whose default arm throws); dedup
+     check + the named-index race catch (first in the codebase); row first, counter second (D22).
+  5. **Resolve paths** — one execution-strategy transaction each, `FOR UPDATE` lock-and-guard; D7 sibling
+     closing on removal (target-keyed, −(1 + N), every sibling reporter notified with their own report
+     id); User reports refuse removal; each notification in its own try. The report-driven account
+     action now sends 81 to the member reporter, and decrements after the stamp bump (`UserManager`
+     rewrites every user column, which silently undid a `User`-target decrement).
+  6. **§2.1.3** — the transition table in both entry points, `SuspendedUntilUtc` cleared off-Suspend,
+     `ReinstateUserAsync` (+ endpoint, client, `ModeratorActionType.ReinstateUser`). Two refusals derived
+     → decision row 20. `SetCanAutoApproveAsync`'s audit row sets `ReportedUserId` (amendment U5).
+  7. **Zombie closure** — `ReportLedger.CloseForDestroyedTargetsAsync`, called by `UserDeletionService`
+     (moved from the legacy `Server/Services/` to `Server/Identity/`) for the user and their profile
+     comments.
+  8. **B18 + UI** — the history reads `ReportedUserId` and keeps deleted targets; `/mod/users` loses the
+     caveat, gains a Target column and Reinstate; `AccountActionPanel` gains the Reinstate verb;
+     `/mod/reports` hides "Hide content" for User reports; `ReportDialog` injects the submission
+     service.
+  9. **Docs, moment 1:** `layer2-services.md` §"Moderation Services" rewritten (split, read gates, the
+     count's meaning, submit order + dedup, `ReportedUserId`, lock-and-guard, D7, zombie closure,
+     transition table + Reinstate, exception translation; two stale claims corrected);
+     `identity-and-authorization.md` (shared guards, kind (c)'s service half, the D9 sweep table and
+     non-gate); `security.md` (suspend dates, Reinstate); `content-safety.md` (reversible-by-design,
+     count rules, transitions); `layer6-indexes.md` + the L6 matrix (the three unmeasured pre-data
+     indexes); audit Settled notes (Moderation cluster/F46/F47; the WU-UserModeration "still open"
+     history bullet closed); roadmap Resolved D7/D8/D9 + row 20; worksheet Built lines; service/schema
+     audit banners; tracker F13/F14/F15/D10/H19 filed, D6/D9 annotated. Moment 2: `layer5-wasm.md`
+     enforcement-point wording, `testing.md` (`interceptReaders`).
+- **Left alone, with the reason:** D47 (Group-typed report actions — pending; no `Group` member added,
+  WU-UserDeletion adds it with its resolver arm); takedown reversal (D8(b) is forward-only); the
+  `ActiveReportCount` reconciler (D21 → WU-CounterSymmetry); zombie closure at author self-delete sites
+  (owner-open → **F13**); a reinstatement notification (no type, a catalogue decision → **F14**); the EV
+  author/mod interface split and EV status guards (unruled → **F15**, **D10**); report queue paging and
+  reason caps (D20 bounds pending); expired suspensions auto-normalizing (unruled; Reinstate is the
+  lever); tracker **D6** (a rejection files no `Report` row, so D8(b)'s premise does not hold — open) and
+  **D9** (moderator reasons in the query string — not in this WU's sources; `/reinstate` follows the
+  existing shape). `ApproveStoryAsync`'s stricter null-date live-author predicate is kept (it fails
+  closed; null-dated suspensions are no longer writable).
+- **Verification:** `dotnet build` 0 errors, no new warnings. `dotnet test`: Unit 1,070 (+12),
+  RazorComponents 760 (+6), Integration 1,297 (+36), all green. New: Integration
+  `ModerationIntegrityTests` (30), plus `ModerationEndpointsTests` (+4), `ExternalVerificationTests` (+2)
+  and a flipped history test; Unit `ModerationIntegrityClientTests` (+11) and one EV client test; bUnit
+  `ModReportsPageTests` (2), `ModUsersPageTests` (+3), `AccountActionPanelTests` (+1). Mutation-checked
+  (each reverted fix fails its tests): sibling closing, the status guard, the race catch, a read gate,
+  the ledger call, the transition table, the reporter's 81, the history predicate, the Hide-content
+  guard. Migration verified on a dirtied DB clone (above). `check-doc-hygiene`, `check-design-tokens`,
+  `check-render-modes` and `check-a11y` pass. **No browser was available** — tracker **H19** carries the
+  pass for F47 L4.5.
+- **Pointers:** `audit/Moderation.md` (cluster Settled note "report lifecycle integrity"; F46, F47, F53,
+  F62 Stage notes); `audit/Identity.md` F52; `audit/Spotlight.md` F55; `audit/Tags.md` F11/F15;
+  `audit/BlogPosts.md` F35/F37; short guard-sweep notes in CustomLists, Following, Groups, Notifications,
+  Recommendations, Messaging; `layer2-services.md` §"Moderation Services"; `roadmap.md` Resolved D7/D8/D9
+  and row 20.
 
 ## WU-InertFeatures — recommendation attribution rebuilt on the RIL bit, notification core (nullable source, de-identified moderation band, one-anchor rule, hidden favoriters), new-chapter fan-out (worksheet D3/D4/D5/D16/D17; extends `Recommendations/`, `UserStoryInteractions/`, `Notifications/`, `Moderation/`, `Groups/`, `Chapters/`, `Tags/`, `Stories/`, `Discovery/`, `Spotlight/`) — DONE ✓ (2026-09-30)
 

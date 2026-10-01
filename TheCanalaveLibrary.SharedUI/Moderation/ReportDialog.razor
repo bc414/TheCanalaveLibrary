@@ -1,12 +1,15 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using Microsoft.Extensions.Logging
-@inject IModerationWriteService ModerationService
+@inject IReportSubmissionService ReportSubmission
 @inject ILogger<ReportDialog> Logger
 
 @* Report dialog (WU34 Feature 46). Cross-cutting leaf — consumed by StoryCard, UserCard,
    CommentItem, BlogPostCard, recommendation cards, and the message thread. Built on the shared
    Modal primitive (extracted WU-A11y, 2026-07-31 — see layer3.5-structure.md "Container
-   Composite"). Reports are submitted without page navigation.
+   Composite"). Reports are submitted without page navigation. Injects the narrow
+   IReportSubmissionService, never a moderator interface (owner ruling D9 — this leaf sits on public
+   pages). A second open report on the same item by the same user is refused server-side with a
+   user-facing message, shown in the dialog like any other refusal.
 
    Usage:
      <ReportDialog @ref="_reportDialog" />
@@ -100,7 +103,7 @@
         _isOpen = true;
 
         if (_reasons is null)
-            _reasons = await ModerationService.GetReportReasonsAsync();
+            _reasons = await ReportSubmission.GetReportReasonsAsync();
 
         StateHasChanged();
     }
@@ -121,7 +124,7 @@
 
         try
         {
-            await ModerationService.SubmitReportAsync(new SubmitReportRequest(
+            await ReportSubmission.SubmitReportAsync(new SubmitReportRequest(
                 _entityType, _entityId, _selectedReasonId, _notes));
             _submitted = true;
         }

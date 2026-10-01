@@ -39,20 +39,22 @@ public record ModeratorActionRequest(
     string? Reason);
 
 /// <summary>
-/// One user's moderation record for <c>/mod/users/{UserId}</c> — current account standing plus the
-/// reports filed <i>against that user</i>.
-/// <para><b>Scope caveat, surfaced on the page itself:</b> <see cref="Reports"/> holds reports whose
-/// target is this user, NOT reports against content they authored. Resolving the latter means
-/// author-lookup across four content tables and is deliberately deferred (see
-/// <c>audit/Moderation.md</c> §"WU-UserModeration settled constraints"). A moderator reading this
-/// view must not treat an empty list as "no complaints about this person."</para>
+/// One user's moderation record for <c>/mod/users/{UserId}</c> — current account standing plus every
+/// report this user was answerable for when it was filed.
+/// <para><see cref="Reports"/> reads <c>Report.ReportedUserId</c> (owner ruling D8, tracker B18): reports
+/// about the account itself <em>and</em> about content they wrote or messages they sent, every target
+/// type, each row carrying its own <see cref="ReportQueueItemDto.EntityType"/>. Moderator-filed actions
+/// (warn/suspend/ban, auto-approve, reinstate) appear too. A row whose target has since been deleted is
+/// kept and labelled <c>[deleted {type}]</c>. (Until WU-ModerationIntegrity, 2026-09-30, this held only
+/// user-targeted reports and the page carried a caveat saying so.)</para>
 /// </summary>
 public record UserModerationHistoryDto(
     int UserId,
     string Username,
     string? AvatarUrl,
     AccountStatusEnum AccountStatus,
-    /// <summary>Set only while <see cref="AccountStatus"/> is <c>Suspended</c>; UTC.</summary>
+    /// <summary>Set only while <see cref="AccountStatus"/> is <c>Suspended</c> — every moderator action
+    /// clears it otherwise (service §2.1.3); UTC.</summary>
     DateTime? SuspendedUntilUtc,
     int ActiveReportCount,
     IReadOnlyList<ReportQueueItemDto> Reports,
@@ -86,4 +88,8 @@ public enum ModeratorActionType
     WarnUser,
     SuspendUser,
     BanUser,
+    /// <summary>Returns a non-Active user to Active (<c>IModerationWriteService.ReinstateUserAsync</c>
+    /// only — the two account-action methods refuse it). Appended last: the enum travels by name in the
+    /// query string, and existing values keep their ordinals.</summary>
+    ReinstateUser,
 }

@@ -664,6 +664,8 @@ with removal → all three `ResolvedActionTaken`, counter exactly 0, three repor
 shape with `hardDelete: true`; and the negative case — resolve-no-action leaves the siblings `Open`
 and the counter at N−1.
 
+**Built:** WU-ModerationIntegrity (2026-09-30) — rule now stated in `layer2-services.md` §"Moderation Services" ("`ActiveReportCount` — what it means", "Resolve paths — lock, guard, then transition", "Sibling closing on removal", and the sub-edge pick in "Zombie reports — closed at the source": at source in `UserDeletionService`, not a reconciler).
+
 ### D8. Report reported-user column + takedown-reversal ratification
 
 *Source: schema §3.7; tracker B18.*
@@ -771,6 +773,8 @@ a content report against that user.
 report is a separate and currently open question — D7's `ResolveWithRemovalAsync` has no Group branch
 and D13 relies on there being no group-deletion path at all. That is **D47**, at the end of this
 block. This amendment covers only what the ledger row records.
+
+**Built:** WU-ModerationIntegrity (2026-09-30) — rule now stated in `layer2-services.md` §"Moderation Services" ("Report submission" → `ReportedUserId`; the entity-carries-current-state paragraph for (b)); the per-user history reads the column and the caveat is gone (tracker B18 closed). The amendment's `Group` arm is WU-UserDeletion's.
 
 ### D9. Mod-only read gating posture
 
@@ -887,6 +891,8 @@ service-level calls with `SetActiveUser(userId)` (authenticated, `IsModerator = 
 `UnauthorizedAccessException` from each of the five reads, plus one anonymous case asserting the 401
 branch — this is the tier that catches a circuit-path regression, and `FakeActiveUserContext`
 already supports it with no new setup.
+
+**Built:** WU-ModerationIntegrity (2026-09-30) — rule now stated in `identity-and-authorization.md` §"Role-Based (Moderator) Gating" (the five reads plus the sweep, and the SiteSettings non-gate) and §"Active-User Context" (the shared `RequireModerator()`); the split is in `layer2-services.md` §"Moderation Services". Sub-edge pick: the throw sites were fixed and the `EndpointHelpers` table left unchanged (§"Exception translation in these files").
 
 ### D47. Moderator actions available for Group-typed reports
 

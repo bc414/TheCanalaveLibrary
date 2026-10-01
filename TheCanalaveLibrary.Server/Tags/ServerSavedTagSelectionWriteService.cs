@@ -17,7 +17,7 @@ public class ServerSavedTagSelectionWriteService(
 {
     public async Task<int> CreateAsync(SavedTagSelectionInput input)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         bool nicknameExists = await NicknameExistsAsync(userId, input.Nickname, excludeId: null);
         List<string> errors = input.CanSave(nicknameExists);
@@ -41,7 +41,7 @@ public class ServerSavedTagSelectionWriteService(
 
     public async Task UpdateAsync(int id, SavedTagSelectionInput input)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         SavedTagSelection? selection = await writeDb.SavedTagSelections
             .Include(s => s.Entries)
@@ -66,7 +66,7 @@ public class ServerSavedTagSelectionWriteService(
 
     public async Task DeleteAsync(int id)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         SavedTagSelection? selection = await writeDb.SavedTagSelections
             .FirstOrDefaultAsync(s => s.SavedTagSelectionId == id);
@@ -80,7 +80,7 @@ public class ServerSavedTagSelectionWriteService(
 
     public async Task<int> CopyPublicSelectionAsync(int sourceId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         SavedTagSelection? source = await writeDb.SavedTagSelections
             .Include(s => s.Entries)
@@ -123,12 +123,6 @@ public class ServerSavedTagSelectionWriteService(
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 
     private static void RequireOwner(SavedTagSelection selection, int userId)
     {

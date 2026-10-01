@@ -84,7 +84,7 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<IToastService>(_ => new ToastService());
         // WU-UserModeration — the page's single ReportDialog moved out of the Stories tab to page
         // level (the banner's "Report user" control is on every tab), so it now renders always.
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         // WU-Seo — ProfilePage now renders <SocialMetaTags>, which needs IPublicUrlProvider.
         // PublicUrlProvider is a pure Core class (no host dependency); a fixed test base is fine.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));

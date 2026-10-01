@@ -784,10 +784,13 @@ public class DataSeeder(
                 IsRead = false, DateCreated = Now.AddDays(-6),
             });
 
-        long commentId = await context.ChapterComments
-            .OrderBy(c2 => c2.CommentId).Select(c2 => c2.CommentId).FirstAsync();
+        ChapterComment reported = await context.ChapterComments
+            .OrderBy(c2 => c2.CommentId).FirstAsync();
+        long commentId = reported.CommentId;
 
-        // Reports: keep target ActiveReportCount in sync by construction.
+        // Reports: keep target ActiveReportCount in sync by construction. ReportedUserId (owner ruling
+        // D8) is the account answerable for each target when it was reported — the story's author, the
+        // comment's author, the reported user — so /mod/users/{id} shows content reports too.
         Story reportedStory = stories[4];
         reportedStory.ActiveReportCount = 1;
         context.Reports.AddRange(
@@ -796,6 +799,7 @@ public class DataSeeder(
                 ReporterUserId = users.ReaderGamma.Id,
                 ReportedEntityType = ReportedEntityType.Story,
                 ReportedEntityId = reportedStory.StoryId,
+                ReportedUserId = reportedStory.AuthorId,
                 ReportReasonId = 2, // Spam (HasData'd report reason)
                 Notes = "Seed report against a story.",
                 ReportStatusId = ReportStatusEnum.Open,
@@ -806,6 +810,7 @@ public class DataSeeder(
                 ReporterUserId = users.AuthorBeta.Id,
                 ReportedEntityType = ReportedEntityType.Comment,
                 ReportedEntityId = commentId,
+                ReportedUserId = reported.UserId,
                 ReportReasonId = 1, // Other
                 Notes = "Seed report against a comment.",
                 ReportStatusId = ReportStatusEnum.Open,
@@ -818,12 +823,12 @@ public class DataSeeder(
                 ReporterUserId = users.AuthorBeta.Id,
                 ReportedEntityType = ReportedEntityType.User,
                 ReportedEntityId = users.ReaderGamma.Id,
+                ReportedUserId = users.ReaderGamma.Id,
                 ReportReasonId = 4, // Harassment (HasData'd report reason)
                 Notes = "Seed report against a user.",
                 ReportStatusId = ReportStatusEnum.Open,
                 DateReported = Now.AddDays(-2),
             });
-        ChapterComment reported = await context.ChapterComments.FirstAsync(c2 => c2.CommentId == commentId);
         reported.ActiveReportCount = 1;
         users.ReaderGamma.ActiveReportCount = 1;
 

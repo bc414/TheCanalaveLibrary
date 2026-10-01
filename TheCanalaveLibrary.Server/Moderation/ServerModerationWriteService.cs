@@ -1,24 +1,27 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// Server-side write implementation of <see cref="IModerationWriteService"/>. Inherits the read
-/// path via primary-constructor chaining (CQRS-lite with write-inherits-read).
+/// Server-side write implementation of <see cref="IModerationWriteService"/>, and of the member-facing
+/// <see cref="IReportSubmissionService"/> (owner ruling D9's split — one concrete class, registered once,
+/// all three interfaces forwarded to it). Inherits the read path via primary-constructor chaining
+/// (CQRS-lite with write-inherits-read). Rules: <c>layer2-services.md</c> §"Moderation Services".
 ///
 /// <para><b>Target-type allow-set.</b> Only Story, User, Comment, BlogPost, Recommendation, and
-/// Message may be reported. Any other type throws <see cref="InvalidOperationException"/>.
+/// Message may be reported. Any other type throws <see cref="ModerationValidationException"/> (400).
 /// Messages have no <c>ActiveReportCount</c> column — <see cref="AdjustActiveReportCountAsync"/>
-/// is a no-op for that type (per cross-cutting.md §"Moderation Model (settled WU34)").</para>
+/// is a no-op for that type (<c>content-safety.md</c> §"Report Targets and ActiveReportCount").</para>
 ///
 /// <para><b>IModeratableContent.</b> Story, Comment, BlogPost, and Recommendation implement
 /// <see cref="IModeratableContent"/>; their soft-remove and hard-delete operations are handled
 /// through shared interface code after a single per-type load. User and Message stay explicitly
-/// special-cased: User uses ApplyAccountActionAsync; Message goes straight to hard-delete with no
-/// takedown columns.</para>
+/// special-cased: a User report is resolved with an account action (removal refuses it); a Message
+/// goes straight to hard-delete with no takedown columns.</para>
 ///
 /// <para><b>Content-rating filter.</b> The write context (<c>writeDb</c>) is never filtered — every
 /// action here already acts on ground truth regardless of rating, and always has. The read side
@@ -28,9 +31,16 @@ namespace TheCanalaveLibrary.Server;
 /// supersedes the 2026-06-26 "mirrors browsing" framing — see <c>content-safety.md</c>
 /// §"Moderator review surfaces are work surfaces").</para>
 ///
-/// <para><b>Notifications are best-effort.</b> All <c>NotifyXxx</c> calls happen <em>after</em>
-/// the primary <c>SaveChangesAsync</c> inside a <c>try/catch</c> that logs and swallows — a
-/// notification failure never rolls back a moderation action.</para>
+/// <para><b>Resolve paths lock, guard, then transition (service §2.1.2).</b> Each runs in one
+/// execution-strategy transaction that opens by locking the report row (<c>FOR UPDATE</c>) and refusing
+/// one that is no longer Open/UnderReview, so a second moderator blocks, then reads the committed
+/// status and is refused — nothing decrements twice. Removal also closes the target's sibling reports
+/// (owner ruling D7).</para>
+///
+/// <para><b>Notifications are best-effort.</b> Every <c>NotifyXxx</c> call happens <em>after</em>
+/// the primary write commits — on the resolve paths, after the execution strategy returns, never
+/// inside the retried delegate — each inside its own <c>try/catch</c> that logs and swallows, so a
+/// notification failure never rolls back a moderation action and never drops the next one.</para>
 ///
 /// <para><b>Notifications never name the moderator (owner rulings D4/D5).</b> Every outcome
 /// notification this service sends (70–82) is null-sourced — the <c>Report</c> row keeps the real
@@ -52,7 +62,7 @@ public class ServerModerationWriteService(
     IWriteRateLimitService rateLimit,
     UserManager<User> userManager,
     ILogger<ServerModerationWriteService> logger)
-    : ServerModerationReadService(readDbFactory), IModerationWriteService
+    : ServerModerationReadService(readDbFactory, activeUser), IModerationWriteService, IReportSubmissionService
 {
     // ── Allowed reportable entity types ──────────────────────────────────────────
 
@@ -66,14 +76,34 @@ public class ServerModerationWriteService(
         ReportedEntityType.Message,
     ];
 
-    // ── Report submission (Feature 46) ────────────────────────────────────────────
+    /// <summary>The partial unique index that enforces one open report per reporter per target —
+    /// matched by name in <see cref="SubmitReportAsync"/>'s race catch.</summary>
+    internal const string OpenReporterTargetIndex = "ix_reports_open_reporter_target";
+
+    /// <summary>The seeded "Other" report reason (<c>ModerationConfigurations</c> HasData) — the reason
+    /// an administrative row carries when no moderator-chosen category applies (Reinstate).</summary>
+    private const short OtherReportReasonId = 1;
+
+    /// <summary><c>Report.ActionTaken</c>'s column cap.</summary>
+    private const int ActionTakenMaxLength = 1024;
+
+    private const string DuplicateReport =
+        "You've already reported this — a moderator will review your open report.";
+
+    private const string AlreadyResolved = "This report has already been resolved.";
+
+    private const string BannedLeavableOnlyByReinstate =
+        "This account is banned. A ban is lifted only by Reinstate — reinstate the account first if a " +
+        "lighter action is what it should carry.";
+
+    // ── Report submission (Feature 46 — IReportSubmissionService) ─────────────────
 
     public async Task SubmitReportAsync(SubmitReportRequest request)
     {
         if (!AllowedReportTargets.Contains(request.EntityType))
-            throw new InvalidOperationException($"Entity type '{request.EntityType}' cannot be reported.");
+            throw new ModerationValidationException([$"Entity type '{request.EntityType}' cannot be reported."]);
 
-        int? reporterId = activeUser.UserId;
+        int? reporterId = ActiveUser.UserId;
         // Reports may be anonymous (nullable reporter) — throttle only the authenticated axis;
         // report-form UI is auth-gated, so this covers every real path (security.md).
         if (reporterId is int throttleUserId)
@@ -87,6 +117,17 @@ public class ServerModerationWriteService(
         // user opens the report form and the moment they submit it.
         await RequireReportableTargetAsync(request.EntityType, request.EntityId);
 
+        // One open report per reporter per target (service §2.4.4(c)): without it one account adds +N
+        // to the triage sort, and D7's "notify every sibling reporter" could address one user twice.
+        // The partial unique index is the backstop; this check gives the common case a clean message.
+        // Anonymous reports are not deduped (a NULL reporter is distinct in the index).
+        if (reporterId is int dedupReporterId && await writeDb.Reports.AnyAsync(r =>
+                r.ReporterUserId == dedupReporterId
+                && r.ReportedEntityType == request.EntityType
+                && r.ReportedEntityId == request.EntityId
+                && (r.ReportStatusId == ReportStatusEnum.Open || r.ReportStatusId == ReportStatusEnum.UnderReview)))
+            throw new ModerationValidationException([DuplicateReport]);
+
         var report = new Report
         {
             ReportedEntityType = request.EntityType,
@@ -96,18 +137,40 @@ public class ServerModerationWriteService(
             ReporterUserId = reporterId,
             ReportStatusId = ReportStatusEnum.Open,
             DateReported = DateTime.UtcNow,
+            // D8: who was answerable when the report was filed — a snapshot, never re-resolved. The
+            // nullable form never throws: anonymous or deleted-author content stays reportable.
+            ReportedUserId = await ResolveAnswerableUserIdAsync(request.EntityType, request.EntityId),
         };
 
+        // Primary write first, counter second (service §2.4.4(b), D22): the old order bumped the counter
+        // in its own committed statement before the row's save, so a failure between left a +1 with no
+        // row. Now a failure between leaves a missing +1 — transient drift the COUNT(*) recompute heals.
         writeDb.Reports.Add(report);
-        await AdjustActiveReportCountAsync(request.EntityType, request.EntityId, +1);
-        await writeDb.SaveChangesAsync();
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        // The first catch of a named unique-index violation in this codebase: the AnyAsync above and a
+        // concurrent submit by the same reporter can both pass, and the index refuses the second insert.
+        // Matching the constraint name keeps any other 23505 a genuine fault. The rejected row is
+        // detached so a circuit-scoped context does not retry it on its next save.
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OpenReporterTargetIndex,
+        })
+        {
+            writeDb.Entry(report).State = EntityState.Detached;
+            throw new ModerationValidationException([DuplicateReport]);
+        }
 
-        if (reporterId.HasValue)
+        await AdjustActiveReportCountAsync(request.EntityType, request.EntityId, +1);
+
+        if (reporterId is int reporter)
         {
             // Null-sourced, carrying the report id (owner ruling D4): at submission no moderator exists, and
             // the old call passed the reporter as their own source, so drop-self deleted every receipt.
-            try { await notifications.NotifyReportReceivedAsync(reporterId.Value, report.ReportId); }
-            catch (Exception ex) { logger.LogWarning(ex, "ReportReceived notification failed for reporter {UserId}", reporterId.Value); }
+            await NotifyBestEffortAsync(() => notifications.NotifyReportReceivedAsync(reporter, report.ReportId),
+                "ReportReceived", report.ReportId);
         }
     }
 
@@ -115,7 +178,7 @@ public class ServerModerationWriteService(
 
     public async Task ClaimReportAsync(long reportId)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
         await writeDb.Reports
             .Where(r => r.ReportId == reportId && r.ReportStatusId == ReportStatusEnum.Open)
             .ExecuteUpdateAsync(s => s
@@ -125,102 +188,183 @@ public class ServerModerationWriteService(
 
     public async Task ResolveNoActionAsync(long reportId, string? actionNotes)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
-        Report report = await writeDb.Reports.SingleAsync(r => r.ReportId == reportId);
-        int? reporterUserId = report.ReporterUserId;
-        var entityType = report.ReportedEntityType;
-        long entityId = report.ReportedEntityId;
-
-        report.ReportStatusId = ReportStatusEnum.ResolvedNoAction;
-        report.ModeratorUserId = modId;
-        report.ActionTaken = actionNotes;
-        report.DateResolved = DateTime.UtcNow;
-
-        await AdjustActiveReportCountAsync(entityType, entityId, -1);
-        await writeDb.SaveChangesAsync();
-
-        try
+        // No sibling closing (owner ruling D7): the target is unchanged and every other report on it is
+        // still genuinely actionable — one moderator's "no" is a ruling on one complaint.
+        int? reporterUserId = await InResolveTransactionAsync(async () =>
         {
-            // A moderator who filed this report through the ordinary Report button and now resolves it
-            // gets no receipt for their own act (the D4 guardrail's general rule).
-            if (reporterUserId is int reporter && reporter != modId)
-                await notifications.NotifyReportResolvedNoActionAsync(reporter, reportId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "ReportResolvedNoAction notification failed for report {ReportId}", reportId);
-        }
+            Report report = await LockResolvableReportAsync(reportId);
+
+            report.ReportStatusId = ReportStatusEnum.ResolvedNoAction;
+            report.ModeratorUserId = modId;
+            report.ActionTaken = actionNotes;
+            report.DateResolved = DateTime.UtcNow;
+            await writeDb.SaveChangesAsync();
+
+            await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
+            return report.ReporterUserId;
+        });
+
+        // A moderator who filed this report through the ordinary Report button and now resolves it
+        // gets no receipt for their own act (the D4 guardrail's general rule).
+        if (reporterUserId is int reporter && reporter != modId)
+            await NotifyBestEffortAsync(() => notifications.NotifyReportResolvedNoActionAsync(reporter, reportId),
+                "ReportResolvedNoAction", reportId);
     }
 
     public async Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
-        Report report = await writeDb.Reports.SingleAsync(r => r.ReportId == reportId);
-        int? reporterUserId = report.ReporterUserId;
-        var entityType = report.ReportedEntityType;
-        long entityId = report.ReportedEntityId;
-
-        int? contentAuthorId = hardDelete
-            ? await ApplyHardDeleteAsync(entityType, entityId)
-            : await ApplyRemovalAsync(entityType, entityId, removalReason);
-
-        report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
-        report.ModeratorUserId = modId;
-        report.ActionTaken = removalReason;
-        report.DateResolved = DateTime.UtcNow;
-
-        await AdjustActiveReportCountAsync(entityType, entityId, -1);
-        await writeDb.SaveChangesAsync();
-
-        try
+        RemovalOutcome outcome = await InResolveTransactionAsync(async () =>
         {
-            // Never the acting moderator (the D4 guardrail's general rule): not as the reporter of a
-            // report they then resolved, nor as the author of content they removed themselves.
-            if (reporterUserId is int reporter && reporter != modId)
-                await notifications.NotifyReportResolvedAsync(reporter, reportId);
-            if (contentAuthorId is int author && author != modId)
-                await notifications.NotifyContentRemovedAsync(author, reportId);
-        }
-        catch (Exception ex)
+            // (1) Lock and guard the primary report.
+            Report report = await LockResolvableReportAsync(reportId);
+            ReportedEntityType type = report.ReportedEntityType;
+            long entityId = report.ReportedEntityId;
+
+            // ApplyRemovalAsync has no User branch, and D7 forbids bulk-closing a user's reports ("neither
+            // account-action path bulk-closes") — a User report is resolved with an account action. This
+            // is also the shape of D47(a)'s floor (removal unreachable for a target it cannot act on).
+            if (type == ReportedEntityType.User)
+                throw new ModerationValidationException(
+                    ["User reports are resolved with an account action, not a removal."]);
+
+            // (2) The removal itself (tracked; committed by the save below).
+            int? contentAuthorId = hardDelete
+                ? await ApplyHardDeleteAsync(type, entityId)
+                : await ApplyRemovalAsync(type, entityId, removalReason);
+
+            // (3) The primary report, tracked as before.
+            DateTime now = DateTime.UtcNow;
+            report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
+            report.ModeratorUserId = modId;
+            report.ActionTaken = removalReason;
+            report.DateResolved = now;
+
+            // (4) Sibling closing (owner ruling D7). Keyed on the (type, id) PAIR — never the id alone
+            // (story 5 and comment 5 are different targets) and never the target's author. Rows are
+            // locked first so the closing set is exactly the set notified below; a sibling claimed
+            // UnderReview by another moderator closes too (a claim is triage bookkeeping, not a lock).
+            // The primary is excluded, so the tracked row and the set-based update never collide.
+            short typeValue = (short)type;
+            short open = (short)ReportStatusEnum.Open, underReview = (short)ReportStatusEnum.UnderReview;
+            List<Report> siblings = await writeDb.Reports
+                .FromSql($"""
+                    SELECT * FROM reports
+                    WHERE reported_entity_type = {typeValue} AND reported_entity_id = {entityId}
+                      AND report_status_id IN ({open}, {underReview}) AND report_id <> {reportId}
+                    FOR UPDATE
+                    """)
+                .AsNoTracking()
+                .ToListAsync();
+
+            List<long> siblingIds = [..siblings.Select(s => s.ReportId)];
+            string siblingNote = Truncate($"Closed with report #{reportId}: {removalReason}", ActionTakenMaxLength);
+            int closed = siblingIds.Count == 0 ? 0 : await writeDb.Reports
+                .Where(r => siblingIds.Contains(r.ReportId)
+                            && (r.ReportStatusId == ReportStatusEnum.Open
+                                || r.ReportStatusId == ReportStatusEnum.UnderReview))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.ReportStatusId, ReportStatusEnum.ResolvedActionTaken)
+                    .SetProperty(r => r.ModeratorUserId, modId)
+                    .SetProperty(r => r.DateResolved, now)
+                    .SetProperty(r => r.ActionTaken, siblingNote));
+
+            // (5) The counter moves by the rows actually transitioned — never zeroed, so a report filed
+            // concurrently keeps its own +1. Vacuous on hard delete (the row dies in the save below);
+            // a no-op for Message, which still gets the sibling half.
+            await AdjustActiveReportCountAsync(type, entityId, -(1 + closed));
+
+            // (6) Save the removal and the primary report; the caller commits.
+            await writeDb.SaveChangesAsync();
+
+            return new RemovalOutcome(
+                report.ReporterUserId,
+                contentAuthorId,
+                [..siblings
+                    .Where(s => s.ReporterUserId is not null)
+                    .GroupBy(s => s.ReporterUserId!.Value)
+                    .Select(g => (g.First().ReportId, g.Key))]);
+        });
+
+        // Each notification in its own best-effort try, so one failure cannot drop the rest. Never the
+        // acting moderator (the D4 guardrail's general rule): not as the reporter of a report they then
+        // resolved, nor as the author of content they removed themselves.
+        if (outcome.ReporterUserId is int reporter && reporter != modId)
+            await NotifyBestEffortAsync(() => notifications.NotifyReportResolvedAsync(reporter, reportId),
+                "ReportResolved", reportId);
+
+        // D7: "reporters always learn the outcome" (spec §5.21) — every distinct sibling reporter, each
+        // with their OWN report id, so D4's dedup never collapses two reporters' rows (and the unique
+        // index makes it exactly-once per reporter).
+        foreach ((long siblingReportId, int siblingReporter) in outcome.SiblingReporters)
         {
-            logger.LogWarning(ex, "Post-removal notifications failed for report {ReportId}", reportId);
+            if (siblingReporter == modId || siblingReporter == outcome.ReporterUserId) continue;
+            await NotifyBestEffortAsync(() => notifications.NotifyReportResolvedAsync(siblingReporter, siblingReportId),
+                "ReportResolved (sibling)", siblingReportId);
         }
+
+        if (outcome.ContentAuthorId is int author && author != modId)
+            await NotifyBestEffortAsync(() => notifications.NotifyContentRemovedAsync(author, reportId),
+                "ContentRemoved", reportId);
     }
 
     public async Task ApplyAccountActionAsync(long reportId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
         AccountStatusEnum newStatus = ToAccountStatus(action);
 
-        Report report = await writeDb.Reports.SingleAsync(r => r.ReportId == reportId);
+        // No sibling closing (owner ruling D7): the account changes, the reported artifact does not, and
+        // every other report still asks a live question.
+        (int targetUserId, int? reporterUserId) = await InResolveTransactionAsync(async () =>
+        {
+            Report report = await LockResolvableReportAsync(reportId);
 
-        // The user acted on is RESOLVED from the report, not assumed to be its target: warning over
-        // a reported story means warning that story's author. The WU34 rule this replaces
-        // (User-targeted reports only) threw for every report the app can actually produce, since
-        // only Story and Comment have report entry points — see layer2-services.md §"Account
-        // actions — target resolution and the report-as-audit-record rule".
-        int targetUserId = await ResolveActionTargetUserIdAsync(report);
-        User targetUser = await writeDb.Users.SingleAsync(u => u.Id == targetUserId);
+            // The user acted on is RESOLVED from the report, not assumed to be its target: warning over
+            // a reported story means warning that story's author — see layer2-services.md §"Account
+            // actions — target resolution and the report-as-audit-record rule".
+            int targetId = await ResolveActionTargetUserIdAsync(report.ReportedEntityType, report.ReportedEntityId);
+            User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetId)
+                ?? throw new ModerationValidationException([NoAccountToActOn]);
 
-        report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
-        report.ModeratorUserId = modId;
-        report.ActionTaken = reason;
-        report.DateResolved = DateTime.UtcNow;
+            DateTime now = DateTime.UtcNow;
+            EnsureLegalAccountTransition(targetUser, action, suspendedUntilUtc, now);
 
-        // This IS a resolve path, so it decrements like its two siblings do. Omitting it leaked the
-        // counter upward forever — and that counter is what the mod-triage sort orders on.
-        await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
+            report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
+            report.ModeratorUserId = modId;
+            report.ActionTaken = reason;
+            report.DateResolved = now;
+            ApplyStatus(targetUser, newStatus, suspendedUntilUtc);
+            await writeDb.SaveChangesAsync();
 
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc, modId);
+            // UserManager shares the scoped ApplicationDbContext, so the stamp change rides this
+            // transaction. Kill live sessions for Suspend/Ban, not Warn (WU38a).
+            await BumpSecurityStampIfEjectingAsync(targetUser, newStatus);
+
+            // This IS a resolve path, so it decrements like its two siblings do. It runs after the stamp
+            // bump on purpose: UserManager writes every column of the tracked user, so a User-target
+            // decrement made before it would be overwritten with the loaded value.
+            await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
+
+            return (targetId, report.ReporterUserId);
+        });
+
+        await NotifyAccountActionAsync(targetUserId, action, modId);
+
+        // Spec §5.21 "reporters always learn the outcome": the member who filed the report hears it was
+        // resolved with action taken (81, report id) — never the acting moderator (D4 guardrail).
+        if (reporterUserId is int reporter && reporter != modId)
+            await NotifyBestEffortAsync(() => notifications.NotifyReportResolvedAsync(reporter, reportId),
+                "ReportResolved", reportId);
     }
 
     public async Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
         ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
         AccountStatusEnum newStatus = ToAccountStatus(action);
 
         if (targetUserId == modId)
@@ -232,14 +376,17 @@ public class ServerModerationWriteService(
         if (!await writeDb.ReportReasons.AnyAsync(rr => rr.ReportReasonId == reasonId))
             throw new ModerationValidationException(["Choose a reason for this action."]);
 
+        DateTime now = DateTime.UtcNow;
+        EnsureLegalAccountTransition(targetUser, action, suspendedUntilUtc, now);
+
         // The Report row IS the audit record — there is no separate moderation-action table. A
         // moderator acting without a member report files one, and ReporterUserId == ModeratorUserId
         // is what marks it moderator-initiated.
-        DateTime now = DateTime.UtcNow;
         writeDb.Reports.Add(new Report
         {
             ReportedEntityType = ReportedEntityType.User,
             ReportedEntityId = targetUserId,
+            ReportedUserId = targetUserId,
             ReportReasonId = reasonId,
             Notes = reason,
             ReporterUserId = modId,
@@ -252,12 +399,59 @@ public class ServerModerationWriteService(
 
         // No AdjustActiveReportCountAsync call: the row opens and resolves in one step, so the
         // +1/-1 pair every other path makes would cancel out.
-        //
+        ApplyStatus(targetUser, newStatus, suspendedUntilUtc);
+        await writeDb.SaveChangesAsync();
+        await BumpSecurityStampIfEjectingAsync(targetUser, newStatus);
+
         // Guardrail (owner ruling D4): this report is moderator-filed (ReporterUserId == modId), so it
         // must NOT send ReportReceived (80) or ReportResolved (81). Those are null-sourced now, so
         // drop-self no longer protects this path — wiring them here would mail the moderator receipts
         // for their own action. Only the target's account notification (72/73/74) is sent.
-        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, suspendedUntilUtc, modId);
+        await NotifyAccountActionAsync(targetUser.Id, action, modId);
+    }
+
+    public async Task ReinstateUserAsync(int targetUserId, string reason)
+    {
+        int modId = ActiveUser.RequireModerator();
+
+        if (targetUserId == modId)
+            throw new ModerationValidationException(["You can't apply an account action to yourself."]);
+
+        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+            ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ModerationValidationException(["A reason is required."]);
+        string trimmed = reason.Trim();
+        // Report.ActionTaken's existing column cap — refused as a 400 rather than a 500. Picks no new number.
+        if (trimmed.Length > ActionTakenMaxLength)
+            throw new ModerationValidationException(["That reason is too long."]);
+
+        if (targetUser.AccountStatus == AccountStatusEnum.Active)
+            throw new ModerationValidationException(["This account is already active."]);
+
+        // Service §2.1.3(b): the only writer of Active, and the only way out of Banned. The audit row is
+        // the moderator-initiated shape (layer2-services.md §"Account actions"), reason "Other" — the
+        // administrative-row precedent — and opened and resolved together, so ActiveReportCount is
+        // untouched. No stamp bump (nothing to eject) and no notification (no type exists — tracker F14).
+        DateTime now = DateTime.UtcNow;
+        ApplyStatus(targetUser, AccountStatusEnum.Active, suspendedUntilUtc: null);
+        writeDb.Reports.Add(new Report
+        {
+            ReportedEntityType = ReportedEntityType.User,
+            ReportedEntityId = targetUserId,
+            ReportedUserId = targetUserId,
+            ReportReasonId = OtherReportReasonId,
+            Notes = trimmed,
+            ReporterUserId = modId,
+            ReportStatusId = ReportStatusEnum.ResolvedActionTaken,
+            ModeratorUserId = modId,
+            ActionTaken = trimmed,
+            DateReported = now,
+            DateResolved = now,
+        });
+
+        await writeDb.SaveChangesAsync();
     }
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
@@ -273,7 +467,7 @@ public class ServerModerationWriteService(
     {
         // The moderator is not recorded on the story, and the outcome notification is null-sourced
         // (D5); the id only keeps a moderator approving their own story from notifying themselves.
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -308,7 +502,8 @@ public class ServerModerationWriteService(
 
         // Live-author guard (D1 sub-edge, owner-stated). Null AuthorId = deleted (D13 hard delete
         // leaves the FK SetNull). A null-dated suspension counts as live-suspended — deliberately
-        // stricter than CanalaveSignInManager; WU-ModerationIntegrity makes null dates impossible.
+        // stricter than CanalaveSignInManager (it fails closed). WU-ModerationIntegrity's transition
+        // table made a null-dated suspension unwritable, so that arm only matters for an older row.
         int authorId = story.AuthorId ?? throw new ModerationValidationException(
             ["This story's author has deleted their account, so it can't be approved — reject it instead."]);
         bool suspendedNow = story.AuthorStatus == AccountStatusEnum.Suspended
@@ -345,20 +540,14 @@ public class ServerModerationWriteService(
             await tx.CommitAsync();
         });
 
-        try
-        {
-            if (authorId != modId) // no receipt for the moderator's own act (D4 guardrail)
-                await notifications.NotifyStoryApprovedAsync(authorId, storyId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "StoryApproved notification failed for story {StoryId}", storyId);
-        }
+        if (authorId != modId) // no receipt for the moderator's own act (D4 guardrail)
+            await NotifyBestEffortAsync(() => notifications.NotifyStoryApprovedAsync(authorId, storyId),
+                "StoryApproved", storyId);
     }
 
     public async Task RejectStoryAsync(int storyId, string reason)
     {
-        int modId = RequireModerator(); // see ApproveStoryAsync
+        int modId = ActiveUser.RequireModerator(); // see ApproveStoryAsync
 
         var story = await writeDb.Stories
             .Where(s => s.StoryId == storyId)
@@ -388,24 +577,16 @@ public class ServerModerationWriteService(
         if (affected == 0)
             throw new ModerationValidationException([SubmissionAlreadyHandled]);
 
-        int? authorId = story.AuthorId;
-
-        try
-        {
-            if (authorId is int author && author != modId) // never the acting moderator (D4 guardrail)
-                await notifications.NotifyStoryRejectedAsync(author, storyId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "StoryRejected notification failed for story {StoryId}", storyId);
-        }
+        if (story.AuthorId is int author && author != modId) // never the acting moderator (D4 guardrail)
+            await NotifyBestEffortAsync(() => notifications.NotifyStoryRejectedAsync(author, storyId),
+                "StoryRejected", storyId);
     }
 
     // ── Story-approval trust (WU-StoryLifecycle, D1) ──────────────────────────────
 
     public async Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
         if (targetUserId == modId)
             throw new ModerationValidationException(["You can't change your own auto-approve standing."]);
@@ -425,7 +606,7 @@ public class ServerModerationWriteService(
         // Report.ActionTaken's existing column cap (1024) — refused as a 400 rather than letting
         // the insert fail as a 500. Picks no new number.
         string actionTaken = $"Auto-approve {(canAutoApprove ? "restored" : "revoked")}: {reason.Trim()}";
-        if (actionTaken.Length > 1024)
+        if (actionTaken.Length > ActionTakenMaxLength)
             throw new ModerationValidationException(["That reason is too long."]);
 
         targetUser.CanAutoApprove = canAutoApprove;
@@ -438,6 +619,7 @@ public class ServerModerationWriteService(
         {
             ReportedEntityType = ReportedEntityType.User,
             ReportedEntityId = targetUserId,
+            ReportedUserId = targetUserId,
             ReportReasonId = reasonId,
             Notes = reason,
             ReporterUserId = modId,
@@ -453,101 +635,210 @@ public class ServerModerationWriteService(
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
+    private const string NoAccountToActOn =
+        "There's no account to act on for this report — the content is anonymous, or its " +
+        "author's account has been deleted. Remove the content instead.";
+
+    /// <summary>What a removal's transaction hands to the post-commit notifications.</summary>
+    private sealed record RemovalOutcome(
+        int? ReporterUserId,
+        int? ContentAuthorId,
+        List<(long ReportId, int ReporterUserId)> SiblingReporters);
+
+    /// <summary>
+    /// Runs one resolve path in a single transaction under the execution strategy (the Spotlight
+    /// template — a bare <c>BeginTransactionAsync</c> throws under <c>EnableRetryOnFailure</c>). The
+    /// tracker is cleared first because a transient-failure retry re-runs the whole delegate. Callers
+    /// notify only after this returns, never inside the delegate, so a retry cannot double-notify.
+    /// </summary>
+    private async Task<T> InResolveTransactionAsync<T>(Func<Task<T>> body)
+    {
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            writeDb.ChangeTracker.Clear();
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+            T result = await body();
+            await tx.CommitAsync();
+            return result;
+        });
+    }
+
+    /// <summary>
+    /// Service §2.1.2's guard: locks the report row (<c>FOR UPDATE</c>, inside the caller's transaction)
+    /// and returns it tracked. Missing → <see cref="KeyNotFoundException"/> (404); not Open/UnderReview →
+    /// <see cref="ModerationValidationException"/> (400). The lock serializes a second moderator, who
+    /// blocks, then reads the committed status and is refused — so the counter moves only on the actual
+    /// transition, with no concurrency token (D30 is pending). Materialized with <c>ToListAsync</c>, never
+    /// composed further: EF would wrap the locking query as a subquery.
+    /// </summary>
+    private async Task<Report> LockResolvableReportAsync(long reportId)
+    {
+        List<Report> locked = await writeDb.Reports
+            .FromSql($"SELECT * FROM reports WHERE report_id = {reportId} FOR UPDATE")
+            .ToListAsync();
+
+        Report report = locked.SingleOrDefault()
+            ?? throw new KeyNotFoundException($"Report {reportId} was not found.");
+
+        if (report.ReportStatusId is not (ReportStatusEnum.Open or ReportStatusEnum.UnderReview))
+            throw new ModerationValidationException([AlreadyResolved]);
+
+        return report;
+    }
+
     /// <summary>
     /// Maps the three account actions onto their resulting <see cref="AccountStatusEnum"/>. Called
     /// at the top of both public entry points so an invalid action throws before anything mutates.
+    /// Reinstate is its own method (<see cref="ReinstateUserAsync"/>), never an account action.
     /// </summary>
     private static AccountStatusEnum ToAccountStatus(ModeratorActionType action) => action switch
     {
         ModeratorActionType.WarnUser => AccountStatusEnum.Warned,
         ModeratorActionType.SuspendUser => AccountStatusEnum.Suspended,
         ModeratorActionType.BanUser => AccountStatusEnum.Banned,
-        _ => throw new InvalidOperationException($"Action '{action}' is not an account action.")
+        ModeratorActionType.ReinstateUser => throw new ModerationValidationException(
+            ["Reinstating an account is its own action — use Reinstate."]),
+        _ => throw new ModerationValidationException([$"'{action}' is not an account action."])
     };
 
     /// <summary>
-    /// Which user an account action lands on, derived from the report: a User report acts on that
-    /// user; a content report acts on the content's author; a Message report acts on its sender.
-    /// <para>Throws <see cref="ModerationValidationException"/> — a user-facing type — when no
-    /// account can be resolved, so the moderator is told why instead of getting the generic
-    /// error.</para>
+    /// The account-status transition table (service §2.1.3; <c>layer2-services.md</c> §"Moderation
+    /// Services"), checked before any mutation. A <em>live</em> suspension is <c>Suspended</c> with an end
+    /// date still in the future. Banned is left only via Reinstate (literal §2.1.3). Two refusals are
+    /// derived, not owner text (<c>roadmap.md</c> decision row 20): Warn on a live suspension (the same
+    /// silent lowering §2.1.3 names for a ban) and Ban on Banned (a duplicate type-74 row, since D4
+    /// exempts 74 from dedup).
     /// </summary>
-    private async Task<int> ResolveActionTargetUserIdAsync(Report report)
+    private static void EnsureLegalAccountTransition(User target, ModeratorActionType action,
+        DateTime? suspendedUntilUtc, DateTime now)
     {
-        int? targetUserId = report.ReportedEntityType switch
+        bool banned = target.AccountStatus == AccountStatusEnum.Banned;
+        bool liveSuspension = target.AccountStatus == AccountStatusEnum.Suspended
+                              && target.SuspendedUntilUtc > now;
+
+        switch (action)
         {
-            ReportedEntityType.User => (int)report.ReportedEntityId,
+            case ModeratorActionType.WarnUser:
+                if (banned)
+                    throw new ModerationValidationException([BannedLeavableOnlyByReinstate]);
+                if (liveSuspension)
+                    throw new ModerationValidationException(
+                    [
+                        $"This account is suspended until {target.SuspendedUntilUtc:yyyy-MM-dd HH:mm} UTC. A " +
+                        "warning would lift the suspension — change its end date with Suspend, or Reinstate first."
+                    ]);
+                break;
 
-            // PrivateMessage.SenderUserId is SetNull on account deletion, hence nullable here.
-            ReportedEntityType.Message => (await writeDb.PrivateMessages
-                .SingleOrDefaultAsync(m => m.MessageId == report.ReportedEntityId))?.SenderUserId,
+            case ModeratorActionType.SuspendUser:
+                if (suspendedUntilUtc is not DateTime until || until <= now)
+                    throw new ModerationValidationException(["Choose a suspension end date in the future."]);
+                if (banned)
+                    throw new ModerationValidationException([BannedLeavableOnlyByReinstate]);
+                break;
 
-            // Story / Comment / BlogPost / Recommendation — all IModeratableContent.
-            _ => (await LoadModeratableAsync(report.ReportedEntityType, report.ReportedEntityId))
-                ?.AuthorUserId,
-        };
-
-        return targetUserId ?? throw new ModerationValidationException(
-        [
-            "There's no account to act on for this report — the content is anonymous, or its " +
-            "author's account has been deleted. Remove the content instead."
-        ]);
+            case ModeratorActionType.BanUser:
+                if (banned)
+                    throw new ModerationValidationException(["This account is already banned."]);
+                break;
+        }
     }
 
     /// <summary>
-    /// The shared tail of both account-action entry points: set the status, persist, kill live
-    /// sessions where the action warrants it, then notify best-effort. Extracted at
-    /// WU-UserModeration so the report-driven and moderator-initiated paths cannot drift apart.
+    /// Writes the status. <c>SuspendedUntilUtc</c> is set only when the resulting status is
+    /// <c>Suspended</c> and cleared otherwise, so "set only while Suspended" holds for every row a
+    /// moderator action writes (service §2.1.3(c)).
     /// </summary>
-    private async Task ApplyStatusAndNotifyAsync(User targetUser, ModeratorActionType action,
-        AccountStatusEnum newStatus, DateTime? suspendedUntilUtc, int actingModeratorId)
+    private static void ApplyStatus(User target, AccountStatusEnum newStatus, DateTime? suspendedUntilUtc)
     {
-        targetUser.AccountStatus = newStatus;
-        if (newStatus == AccountStatusEnum.Suspended)
-            targetUser.SuspendedUntilUtc = suspendedUntilUtc;
+        target.AccountStatus = newStatus;
+        target.SuspendedUntilUtc = newStatus == AccountStatusEnum.Suspended ? suspendedUntilUtc : null;
+    }
 
-        await writeDb.SaveChangesAsync();
+    /// <summary>
+    /// Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the user out) —
+    /// WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the security stamp every 30
+    /// minutes; a mismatch ends the live circuit, and the next sign-in attempt is blocked by
+    /// CanalaveSignInManager.CanSignInAsync.
+    /// </summary>
+    private async Task BumpSecurityStampIfEjectingAsync(User targetUser, AccountStatusEnum newStatus)
+    {
+        if (newStatus is not (AccountStatusEnum.Suspended or AccountStatusEnum.Banned)) return;
 
-        // Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the
-        // user out) — WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the
-        // security stamp every 30 minutes; a mismatch ends the live circuit, and the next sign-in
-        // attempt is blocked by CanalaveSignInManager.CanSignInAsync.
-        if (newStatus is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
-            await userManager.UpdateSecurityStampAsync(targetUser);
+        IdentityResult result = await userManager.UpdateSecurityStampAsync(targetUser);
+        if (!result.Succeeded)
+            logger.LogWarning("Security stamp bump failed for user {UserId}: {Errors}", targetUser.Id,
+                string.Join("; ", result.Errors.Select(e => e.Code)));
+    }
 
-        // A report-driven action can land on the acting moderator (a report against their own
-        // story); like every band call site, they get no notification about their own act (the D4
-        // guardrail's general rule). The moderator-initiated path already refuses a self-target.
-        if (targetUser.Id == actingModeratorId) return;
+    /// <summary>
+    /// The post-commit half of both account-action entry points: the target's 72/73/74. A
+    /// report-driven action can land on the acting moderator (a report against their own story); like
+    /// every band call site, they get no notification about their own act (the D4 guardrail's general
+    /// rule). The moderator-initiated path already refuses a self-target.
+    /// </summary>
+    private async Task NotifyAccountActionAsync(int targetUserId, ModeratorActionType action, int actingModeratorId)
+    {
+        if (targetUserId == actingModeratorId) return;
 
-        try
+        await NotifyBestEffortAsync(() => action switch
         {
-            Task notifyTask = action switch
-            {
-                ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUser.Id),
-                ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUser.Id),
-                ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUser.Id),
-                _ => Task.CompletedTask
-            };
-            await notifyTask;
-        }
+            ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUserId),
+            ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUserId),
+            ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUserId),
+            _ => Task.CompletedTask
+        }, $"Account action ({action})", targetUserId);
+    }
+
+    /// <summary>One best-effort notification: failures are logged and swallowed, never rethrown, and
+    /// each call gets its own try so one failure cannot drop the next.</summary>
+    private async Task NotifyBestEffortAsync(Func<Task> notify, string what, long subjectId)
+    {
+        try { await notify(); }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Account action notification failed for user {UserId}", targetUser.Id);
+            logger.LogWarning(ex, "{Notification} notification failed for {SubjectId}", what, subjectId);
         }
     }
 
-    private int RequireModerator()
+    /// <summary>
+    /// The account answerable for a reported artifact (owner ruling D8): <c>User</c> → that user if the
+    /// row exists; <c>Message</c> → its sender; Story/Comment/BlogPost/Recommendation → the author. NULL =
+    /// no row, or an anonymous/deleted author. Read on the unfiltered write context with projections (no
+    /// entity load). The default arm THROWS, so a new <see cref="ReportedEntityType"/> member fails loudly
+    /// until it gets its arm (WU-UserDeletion adds <c>Group</c> → <c>groups.creator_id</c>).
+    /// </summary>
+    private async Task<int?> ResolveAnswerableUserIdAsync(ReportedEntityType type, long id) => type switch
     {
-        if (activeUser.UserId is not int id)
-            throw new InvalidOperationException("Moderator action requires an authenticated user.");
-        // UnauthorizedAccessException, not InvalidOperationException: a signed-in non-mod is
-        // authenticated-but-forbidden → 403 via EndpointHelpers, matching Spotlight/SiteSettings/
-        // Poll's identical role gates (MA-123/MA-701 — this side was the wrong one).
-        if (!activeUser.IsModerator && !activeUser.IsAdmin)
-            throw new UnauthorizedAccessException("Moderator action requires the Moderator or Admin role.");
-        return id;
-    }
+        ReportedEntityType.User =>
+            await writeDb.Users.AnyAsync(u => u.Id == (int)id) ? (int?)id : null,
+        // PrivateMessage.SenderUserId is SetNull on account deletion, hence nullable.
+        ReportedEntityType.Message => (await writeDb.PrivateMessages
+            .Where(m => m.MessageId == id).Select(m => new { m.SenderUserId }).SingleOrDefaultAsync())?.SenderUserId,
+        ReportedEntityType.Story => (await writeDb.Stories
+            .Where(s => s.StoryId == (int)id).Select(s => new { s.AuthorId }).SingleOrDefaultAsync())?.AuthorId,
+        ReportedEntityType.Comment => (await writeDb.BaseComments
+            .Where(c => c.CommentId == id).Select(c => new { c.UserId }).SingleOrDefaultAsync())?.UserId,
+        ReportedEntityType.BlogPost => (await writeDb.BlogPosts
+            .Where(b => b.BlogPostId == (int)id).Select(b => new { b.AuthorId }).SingleOrDefaultAsync())?.AuthorId,
+        ReportedEntityType.Recommendation => (await writeDb.Recommendations
+            .Where(r => r.RecommendationId == (int)id).Select(r => new { r.RecommenderId }).SingleOrDefaultAsync())?.RecommenderId,
+        _ => throw new InvalidOperationException($"No answerable-account rule for {type}"),
+    };
+
+    /// <summary>
+    /// Which user an account action lands on, derived from the report: the throwing form of
+    /// <see cref="ResolveAnswerableUserIdAsync"/>. Throws <see cref="ModerationValidationException"/> — a
+    /// user-facing type — when no account can be resolved, so the moderator is told why instead of
+    /// getting the generic error. Submission never uses this form: anonymous or deleted-author content
+    /// stays reportable.
+    /// </summary>
+    private async Task<int> ResolveActionTargetUserIdAsync(ReportedEntityType type, long id) =>
+        await ResolveAnswerableUserIdAsync(type, id)
+        ?? throw new ModerationValidationException([NoAccountToActOn]);
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength];
 
     /// <summary>
     /// Loads the <see cref="IModeratableContent"/> entity for the given type and id from the
@@ -582,13 +873,6 @@ public class ServerModerationWriteService(
         }
     }
 
-    /// <summary>
-    /// Atomically increments (positive delta) or decrements (negative delta) the
-    /// <c>ActiveReportCount</c> column on the target entity. No-op for <c>Message</c>
-    /// (PrivateMessage has no counter column).
-    /// Uses ExecuteUpdateAsync (set-based, no load) — does not go through IModeratableContent.
-    /// Write context is unfiltered — taken-down content gets its counter adjusted correctly.
-    /// </summary>
     /// <summary>
     /// Kind (g) for report submission (settled 2026-07-26). Two rules, deliberately different:
     /// <list type="bullet">
@@ -643,11 +927,11 @@ public class ServerModerationWriteService(
         bool visible = type switch
         {
             ReportedEntityType.Story =>
-                await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, activeUser, (int)id),
+                await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, (int)id),
             ReportedEntityType.BlogPost =>
-                await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, activeUser, (int)id),
+                await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, (int)id),
             ReportedEntityType.User =>
-                await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, (int)id),
+                await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, (int)id),
             ReportedEntityType.Comment => await readDb.BaseComments.AnyAsync(c => c.CommentId == id),
             ReportedEntityType.Recommendation =>
                 await readDb.Recommendations.AnyAsync(r => r.RecommendationId == (int)id),
@@ -659,6 +943,13 @@ public class ServerModerationWriteService(
         if (!visible) throw NotFound();
     }
 
+    /// <summary>
+    /// Atomically increments (positive delta) or decrements (negative delta) the
+    /// <c>ActiveReportCount</c> column on the target entity — the single authority on mutating it.
+    /// The column is a cache of the target's open-report <c>COUNT(*)</c> (owner ruling D7). No-op for
+    /// <c>Message</c> (PrivateMessage has no counter column). Uses ExecuteUpdateAsync (set-based, no
+    /// load) on the unfiltered write context, so taken-down content gets its counter adjusted correctly.
+    /// </summary>
     private async Task AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)
     {
         switch (type)
@@ -696,10 +987,11 @@ public class ServerModerationWriteService(
 
     /// <summary>
     /// Soft-removes the target by setting <c>IsTakenDown = true</c> and recording removal metadata
-    /// via <see cref="IModeratableContent"/>. Returns the content author's user id, or <c>null</c>
-    /// when the entity doesn't exist or the moderator's rating filter excludes it.
+    /// via <see cref="IModeratableContent"/>. Returns the content author's user id, or <c>null</c> when
+    /// the entity doesn't exist.
     /// Messages have no takedown columns — falls through to <see cref="ApplyHardDeleteAsync"/>.
-    /// User removal is handled via <see cref="ApplyAccountActionAsync"/> (account status change).
+    /// User targets never reach here: <see cref="ResolveWithRemovalAsync"/> refuses them (an account
+    /// action resolves a User report).
     /// </summary>
     private async Task<int?> ApplyRemovalAsync(ReportedEntityType type, long id, string reason)
     {
@@ -707,7 +999,7 @@ public class ServerModerationWriteService(
             return await ApplyHardDeleteAsync(type, id);
 
         if (type == ReportedEntityType.User)
-            return null; // User removal is handled via ApplyAccountActionAsync
+            return null; // Unreachable from ResolveWithRemovalAsync (it refuses User targets).
 
         IModeratableContent? entity = await LoadModeratableAsync(type, id);
         if (entity is null) return null;
@@ -727,7 +1019,8 @@ public class ServerModerationWriteService(
 
     /// <summary>
     /// Hard-deletes the target entity (illegal content path — CSAM, piracy). Returns the author's
-    /// user id before deletion when possible, or <c>null</c>.
+    /// user id before deletion when possible, or <c>null</c>. The <c>reports</c> rows survive it (they
+    /// carry no FK to their target) and are closed by the caller (D7).
     /// </summary>
     private async Task<int?> ApplyHardDeleteAsync(ReportedEntityType type, long id)
     {

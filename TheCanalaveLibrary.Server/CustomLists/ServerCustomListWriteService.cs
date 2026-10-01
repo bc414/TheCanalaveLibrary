@@ -21,7 +21,7 @@ public class ServerCustomListWriteService(
 {
     public async Task<int> CreateListAsync(string listName, bool isPublic)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         bool nameExists = await ListNameExistsAsync(userId, listName, excludeListId: null);
         int listCount = await writeDb.CustomLists.CountAsync(l => l.UserId == userId);
@@ -44,7 +44,7 @@ public class ServerCustomListWriteService(
 
     public async Task RenameListAsync(int listId, string newListName)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         CustomList list = await RequireOwnedListAsync(listId, userId);
 
         bool nameExists = await ListNameExistsAsync(userId, newListName, excludeListId: listId);
@@ -57,7 +57,7 @@ public class ServerCustomListWriteService(
 
     public async Task SetListVisibilityAsync(int listId, bool isPublic)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         CustomList list = await RequireOwnedListAsync(listId, userId);
 
         list.IsPublic = isPublic;
@@ -66,7 +66,7 @@ public class ServerCustomListWriteService(
 
     public async Task DeleteListAsync(int listId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         CustomList list = await RequireOwnedListAsync(listId, userId);
 
         // Entries cascade (CustomListConfiguration).
@@ -76,7 +76,7 @@ public class ServerCustomListWriteService(
 
     public async Task AddStoryAsync(int listId, int storyId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await RequireOwnedListAsync(listId, userId);
 
         // CORRECTION (WU-ParentVisibility): this used to justify skipping any check with "a user adds
@@ -114,7 +114,7 @@ public class ServerCustomListWriteService(
 
     public async Task RemoveStoryAsync(int listId, int storyId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await RequireOwnedListAsync(listId, userId);
 
         CustomListEntry? entry = await writeDb.CustomListEntries
@@ -127,7 +127,7 @@ public class ServerCustomListWriteService(
 
     public async Task<int> CloneListAsync(int sourceListId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         var source = await writeDb.CustomLists
             .Where(l => l.CustomListId == sourceListId)
@@ -188,12 +188,6 @@ public class ServerCustomListWriteService(
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 
     /// <summary>Loads a list by id or throws: <see cref="KeyNotFoundException"/> when it doesn't
     /// exist, <see cref="UnauthorizedAccessException"/> when it isn't the caller's.</summary>

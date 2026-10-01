@@ -507,11 +507,15 @@ builder.Services.AddHostedService<NotificationCleanupWorker>();
 // See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
 builder.Services.AddScoped<IMessagingReadService, ServerMessagingReadService>();
 builder.Services.AddScoped<IMessagingWriteService, ServerMessagingWriteService>();
-// Moderation (WU34) — Features 46/47/48. Mod pages are server-rendered, no dispatcher/WASM.
-// Write service inherits read (CQRS-lite). Forwarding delegate ensures one instance per scope
-// when either interface is injected.
-builder.Services.AddScoped<IModerationWriteService, ServerModerationWriteService>();
-builder.Services.AddScoped<IModerationReadService>(sp => sp.GetRequiredService<IModerationWriteService>());
+// Moderation (WU34) — Features 46/47/48. The /mod/* pages are InteractiveAuto like every page (server
+// prerender, then the Client* twins over HTTP on WASM). One concrete class serves three interfaces —
+// the mod read/write pair and the member-facing IReportSubmissionService split out by owner ruling D9 —
+// so the class is registered once and all three forward to it (layer2-services.md §"Registering an
+// inherited pair", the SavedTagSelection shape; D36, the canonical DI shape, is pending).
+builder.Services.AddScoped<ServerModerationWriteService>();
+builder.Services.AddScoped<IModerationWriteService>(sp => sp.GetRequiredService<ServerModerationWriteService>());
+builder.Services.AddScoped<IModerationReadService>(sp => sp.GetRequiredService<ServerModerationWriteService>());
+builder.Services.AddScoped<IReportSubmissionService>(sp => sp.GetRequiredService<ServerModerationWriteService>());
 // Profiles + Theme Selection (WU30) — L2 services (Features 20/21/22/3).
 // IUserSettingsService: self-edit exception (spec §3.5) — no userId param; resolves from IActiveUserContext.
 // IUserProfileReadService: public display (includePrivate bool, not a source switch).

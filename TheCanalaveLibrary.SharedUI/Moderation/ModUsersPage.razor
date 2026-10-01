@@ -7,6 +7,7 @@
 @inject NavigationManager Nav
 @inject IModerationReadService ModerationService
 @inject IModerationWriteService ModerationWriteService
+@inject IReportSubmissionService ReportSubmission
 
 @* Moderator user lookup + per-user moderation history (WU34 Feature 47; route parameter wired at
    WU-UserModeration, 2026-08-01 — until then it was declared and never read, tracker item B13).
@@ -167,6 +168,16 @@
                         @onclick="() => OpenAccountAction(ModeratorActionType.BanUser)">
                     Ban
                 </button>
+                @* Reinstate (service §2.1.3, WU-ModerationIntegrity): the only way back to Active, and the
+                   only way out of a ban — offered only when there is something to reinstate. *@
+                @if (_history.AccountStatus != AccountStatusEnum.Active)
+                {
+                    <button type="button"
+                            class="rounded-md bg-(--color-success)/15 px-2 py-0.5 text-xs text-(--color-success) ring-1 ring-(--color-success)/30 transition-colors hover:bg-(--color-success)/25"
+                            @onclick="() => OpenAccountAction(ModeratorActionType.ReinstateUser)">
+                        Reinstate
+                    </button>
+                }
                 @* Revoke/restore the story-approval trust waiver (WU-StoryLifecycle, D1). Reuses the
                    reason category above; the reason text is asked for in the confirm row below. *@
                 <button type="button"
@@ -218,14 +229,14 @@
         }
 
         @* ── Report history ───────────────────────────────────────────────────── *@
+        @* Every report this user was answerable for when it was filed — about the account itself and
+           about content they wrote or messages they sent (owner ruling D8's ReportedUserId, tracker
+           B18). Until WU-ModerationIntegrity this listed user-targeted reports only, under a caveat. *@
         <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Report history</h2>
-        <p class="-mt-2 text-xs text-(--color-text-muted)">
-            Reports filed against this user. Reports against content they wrote are not listed here.
-        </p>
 
         @if (_history.Reports.Count == 0)
         {
-            <p class="text-sm text-(--color-text-muted)">No reports have been filed against this user.</p>
+            <p class="text-sm text-(--color-text-muted)">No reports have been filed about this user or their content.</p>
         }
         else
         {
@@ -234,6 +245,7 @@
                     <thead>
                         <tr class="border-b border-(--color-border) text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
                             <th class="py-2 pr-4">Reported</th>
+                            <th class="py-2 pr-4">Target</th>
                             <th class="py-2 pr-4">Reason</th>
                             <th class="py-2 pr-4">Reporter</th>
                             <th class="py-2 pr-4">Status</th>
@@ -245,6 +257,17 @@
                         {
                             <tr class="border-b border-(--color-border) align-top hover:bg-(--color-surface-hover)">
                                 <td class="py-2 pr-4 text-xs text-(--color-text-muted)">@r.DateReported.ToString("yyyy-MM-dd")</td>
+                                <td class="py-2 pr-4" data-testid="history-target">
+                                    <span class="block text-xs text-(--color-text-muted)">@r.EntityType</span>
+                                    @if (r.TargetUrl is not null)
+                                    {
+                                        <a href="@r.TargetUrl" class="text-(--color-action-ink) hover:underline">@r.TargetLabel</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@r.TargetLabel</span>
+                                    }
+                                </td>
                                 <td class="py-2 pr-4">
                                     @r.ReasonName
                                     @if (!string.IsNullOrWhiteSpace(r.Notes))
@@ -356,7 +379,7 @@
 
         if (_history is not null && _reasons.Count == 0)
         {
-            _reasons = await ModerationService.GetReportReasonsAsync();
+            _reasons = await ReportSubmission.GetReportReasonsAsync();
             if (_reasons.Count > 0) _reasonId = _reasons[0].ReasonId;
         }
     }
@@ -389,12 +412,16 @@
 
         try
         {
-            await ModerationWriteService.ApplyAccountActionToUserAsync(
-                _history.UserId,
-                _reasonId,
-                action,
-                submission.Reason,
-                submission.SuspendedUntilUtc);
+            // Reinstate has its own method (no reason category — the audit row carries "Other").
+            if (action == ModeratorActionType.ReinstateUser)
+                await ModerationWriteService.ReinstateUserAsync(_history.UserId, submission.Reason);
+            else
+                await ModerationWriteService.ApplyAccountActionToUserAsync(
+                    _history.UserId,
+                    _reasonId,
+                    action,
+                    submission.Reason,
+                    submission.SuspendedUntilUtc);
 
             CancelAccountAction();
             // Post-action refetch — plain assignments (persistence only reads at hydration).

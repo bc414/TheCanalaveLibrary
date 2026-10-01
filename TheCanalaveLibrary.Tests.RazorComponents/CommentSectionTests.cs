@@ -30,8 +30,8 @@ public class CommentSectionTests : BunitContext
     public CommentSectionTests()
     {
         Services.AddScoped<ICommentWriteService>(_ => _fakeService);
-        // ReportDialog (inside CommentSection) injects IModerationWriteService.
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        // ReportDialog (inside CommentSection) injects IReportSubmissionService (D9 split).
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

@@ -26,7 +26,7 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — every
 /// <see cref="IFollowingWriteService"/> method requires an authenticated user
-/// (<c>ServerFollowingWriteService.RequireAuthenticatedUser</c>). No <c>RequireRateLimiting(...)</c> —
+/// (the shared <c>ActiveUser.RequireUserId()</c> guard). No <c>RequireRateLimiting(...)</c> —
 /// unlike Tags, <c>ServerFollowingWriteService</c> doesn't call an <c>IWriteRateLimitService</c> token
 /// bucket.
 /// </para>
@@ -36,7 +36,7 @@ namespace TheCanalaveLibrary.Server;
 /// genuine business-rule rejections, not auth failures — they now throw
 /// <see cref="FollowingValidationException"/> (a <c>CanalaveValidationException</c>), which the shared
 /// <see cref="EndpointHelpers.ExecuteAsync"/> maps to <b>400</b>, the accurate status. Only the
-/// <c>RequireAuthenticatedUser</c> guard's <see cref="InvalidOperationException"/> still maps to 401.
+/// <c>RequireUserId()</c> guard's <see cref="InvalidOperationException"/> still maps to 401.
 /// The <see cref="FollowingConstants.MaxVouchesPerUser"/> limit keeps its own
 /// <see cref="VouchLimitException"/> (also 400). <c>ClientFollowingWriteService</c> reconstructs
 /// <see cref="FollowingValidationException"/> from the 400 body.

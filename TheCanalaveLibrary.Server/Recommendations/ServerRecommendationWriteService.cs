@@ -43,9 +43,6 @@ public class ServerRecommendationWriteService(
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser(string action) =>
-        ActiveUser.UserId ?? throw new InvalidOperationException($"{action} requires an authenticated user.");
-
     /// <summary>
     /// Kind (g): refuses a write whose parent story the caller cannot see. <c>writeDb</c> carries no
     /// visibility filters, so every "story loads" check in this file proves existence only — the guard
@@ -91,9 +88,9 @@ public class ServerRecommendationWriteService(
     /// SetHighlightedByAuthorAsync ownership pattern). Co-authors deliberately excluded until the
     /// dormant CoAuthor feature is built.
     /// </summary>
-    private async Task<(Recommendation rec, int userId)> RequireStoryAuthorAsync(int recommendationId, string action)
+    private async Task<(Recommendation rec, int userId)> RequireStoryAuthorAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser(action);
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
@@ -125,7 +122,7 @@ public class ServerRecommendationWriteService(
 
     public async Task<int> SubmitAsync(RecommendationSubmitDto dto)
     {
-        int userId = RequireAuthenticatedUser("Submitting a recommendation");
+        int userId = ActiveUser.RequireUserId();
         rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         // Write context is unfiltered — story loads regardless of ContentRating, so a reader with
@@ -199,7 +196,7 @@ public class ServerRecommendationWriteService(
 
     public async Task EditAsync(UpdateRecommendationDto dto)
     {
-        int userId = RequireAuthenticatedUser("Editing a recommendation");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .Include(r => r.RecommendationDetail)
@@ -250,7 +247,7 @@ public class ServerRecommendationWriteService(
 
     public async Task DeleteAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser("Deleting a recommendation");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
@@ -274,7 +271,7 @@ public class ServerRecommendationWriteService(
 
     public async Task<RecommendationLikeResultDto> ToggleLikeAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser("Liking a recommendation");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .Include(r => r.Likes.Where(l => l.UserId == userId))
@@ -337,7 +334,7 @@ public class ServerRecommendationWriteService(
 
     public async Task SetHiddenGemAsync(int recommendationId, bool isHiddenGem)
     {
-        int userId = RequireAuthenticatedUser("Setting a Hidden Gem");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
@@ -392,7 +389,7 @@ public class ServerRecommendationWriteService(
 
     public async Task SetHighlightedByAuthorAsync(int recommendationId, bool isHighlighted)
     {
-        int userId = RequireAuthenticatedUser("Spotlighting a recommendation");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
@@ -429,7 +426,7 @@ public class ServerRecommendationWriteService(
 
     public async Task RequestRevisionAsync(int recommendationId, string note)
     {
-        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId, "Requesting a revision");
+        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId);
 
         // "Correct" path — inapplicable to a removed rec (use Unblock first if reconsidering).
         if (rec.StatusId == RejectedStatusId)
@@ -459,7 +456,7 @@ public class ServerRecommendationWriteService(
 
     public async Task RemoveAsync(int recommendationId)
     {
-        (Recommendation rec, _) = await RequireStoryAuthorAsync(recommendationId, "Removing a recommendation");
+        (Recommendation rec, _) = await RequireStoryAuthorAsync(recommendationId);
 
         if (rec.StatusId == RejectedStatusId) return; // already removed — idempotent
 
@@ -478,7 +475,7 @@ public class ServerRecommendationWriteService(
 
     public async Task UnblockAsync(int recommendationId)
     {
-        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId, "Unblocking a recommendation");
+        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId);
 
         if (rec.StatusId != RejectedStatusId)
             throw new InvalidOperationException("Only a removed recommendation can be unblocked.");
@@ -496,7 +493,7 @@ public class ServerRecommendationWriteService(
 
     public async Task RecordSuccessAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser("Recording recommendation success");
+        int userId = ActiveUser.RequireUserId();
 
         Recommendation? rec = await writeDb.Recommendations
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
@@ -587,7 +584,7 @@ public class ServerRecommendationWriteService(
 
     public async Task DismissHelpfulPromptAsync(int recommendationId)
     {
-        int userId = RequireAuthenticatedUser("Dismissing the helpful prompt");
+        int userId = ActiveUser.RequireUserId();
 
         // The X control: a clear of the caller's own row (D6 — never guarded), idempotent. Keyed by the
         // recommendation rather than the story so a stale prompt can't delete a newer attribution.

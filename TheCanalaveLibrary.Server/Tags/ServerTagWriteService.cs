@@ -4,7 +4,7 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 public class ServerTagWriteService(
-    ApplicationDbContext db,
+    ApplicationDbContext writeDb,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     ISpriteAssetProbe spriteProbe,
@@ -13,14 +13,14 @@ public class ServerTagWriteService(
 {
     public async Task<TagSaveResult> CreateTagAsync(CreateTagDto dto)
     {
-        RequireMod();
+        activeUser.RequireModerator();
 
-        bool nameExists = await db.Tags
+        bool nameExists = await writeDb.Tags
             .AnyAsync(t => t.TagName.ToLower() == dto.TagName.ToLower() && t.TagTypeId == dto.TagTypeId);
 
         Tag? parentTag = dto.ParentTagId is null
             ? null
-            : await db.Tags.FindAsync(dto.ParentTagId.Value);
+            : await writeDb.Tags.FindAsync(dto.ParentTagId.Value);
 
         TagValidations.ValidateCreate(dto, nameExists, parentTag);
 
@@ -36,8 +36,8 @@ public class ServerTagWriteService(
             ParentTagId = dto.ParentTagId
         };
 
-        db.Tags.Add(tag);
-        await db.SaveChangesAsync();
+        writeDb.Tags.Add(tag);
+        await writeDb.SaveChangesAsync();
         // Broad invalidation — ANY tag write, not just ParentTagId changes. Tag writes are rare
         // moderator actions, so the narrow trigger's only reward is a subtle way to be wrong
         // (hidden-deferrals-tracker B12's own framing). After commit, never before: pre-commit
@@ -50,19 +50,19 @@ public class ServerTagWriteService(
 
     public async Task<string?> UpdateTagAsync(UpdateTagDto dto)
     {
-        RequireMod();
+        activeUser.RequireModerator();
 
-        var tag = await db.Tags.FindAsync(dto.TagId)
+        var tag = await writeDb.Tags.FindAsync(dto.TagId)
             ?? throw new KeyNotFoundException($"Tag {dto.TagId} not found.");
 
-        bool nameExists = await db.Tags
+        bool nameExists = await writeDb.Tags
             .AnyAsync(t => t.TagId != dto.TagId
                            && t.TagName.ToLower() == dto.TagName.ToLower()
                            && t.TagTypeId == dto.TagTypeId);
 
         Tag? parentTag = dto.ParentTagId is null
             ? null
-            : await db.Tags.FindAsync(dto.ParentTagId.Value);
+            : await writeDb.Tags.FindAsync(dto.ParentTagId.Value);
 
         TagValidations.ValidateUpdate(dto, nameExists, parentTag);
 
@@ -75,7 +75,7 @@ public class ServerTagWriteService(
         tag.AllowCustomName = dto.AllowCustomName;
         tag.ParentTagId = dto.ParentTagId;
 
-        await db.SaveChangesAsync();
+        await writeDb.SaveChangesAsync();
         tagHierarchyCache.Invalidate();
 
         return await BuildSpriteWarningAsync(dto.SpriteIdentifier?.Trim());
@@ -83,18 +83,18 @@ public class ServerTagWriteService(
 
     public async Task DeleteTagAsync(int tagId)
     {
-        RequireMod();
+        activeUser.RequireModerator();
 
-        var tag = await db.Tags.FindAsync(tagId)
+        var tag = await writeDb.Tags.FindAsync(tagId)
             ?? throw new KeyNotFoundException($"Tag {tagId} not found.");
 
         // Block deletion if the tag is referenced anywhere — prevents Restrict FK violations.
         // StoryCharacters included (WU-TagFanon fix): a Character tag used only as an OC base
         // previously passed this pre-check and hit the Restrict FK as a raw DbUpdateException.
-        int storyTagCount = await db.StoryTags.CountAsync(st => st.TagId == tagId);
-        int storyCharacterCount = await db.StoryCharacters.CountAsync(sc => sc.CharacterTagId == tagId);
-        int selectionEntryCount = await db.SavedTagSelectionEntries.CountAsync(e => e.TagId == tagId);
-        int childCount = await db.Tags.CountAsync(t => t.ParentTagId == tagId);
+        int storyTagCount = await writeDb.StoryTags.CountAsync(st => st.TagId == tagId);
+        int storyCharacterCount = await writeDb.StoryCharacters.CountAsync(sc => sc.CharacterTagId == tagId);
+        int selectionEntryCount = await writeDb.SavedTagSelectionEntries.CountAsync(e => e.TagId == tagId);
+        int childCount = await writeDb.Tags.CountAsync(t => t.ParentTagId == tagId);
 
         int totalReferences = storyTagCount + storyCharacterCount + selectionEntryCount + childCount;
         if (totalReferences > 0)
@@ -108,18 +108,12 @@ public class ServerTagWriteService(
                 $"Cannot delete \"{tag.TagName}\" — it is referenced by {string.Join(", ", parts)}.");
         }
 
-        db.Tags.Remove(tag);
-        await db.SaveChangesAsync();
+        writeDb.Tags.Remove(tag);
+        await writeDb.SaveChangesAsync();
         tagHierarchyCache.Invalidate();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private void RequireMod()
-    {
-        if (!activeUser.IsModerator && !activeUser.IsAdmin)
-            throw new UnauthorizedAccessException("Tag administration requires moderator or admin role.");
-    }
 
     /// <summary>
     /// Probes for the sprite asset and returns an advisory warning string if it doesn't exist.

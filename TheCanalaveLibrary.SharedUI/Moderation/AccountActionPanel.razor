@@ -1,7 +1,9 @@
 @namespace TheCanalaveLibrary.SharedUI
 
-@* Warn / Suspend / Ban confirmation panel, shared by ModUsersPage (moderator-initiated) and
-   ModReportsPage (report-driven). Extracted at WU-UserModeration when the second host appeared.
+@* Warn / Suspend / Ban / Reinstate confirmation panel, shared by ModUsersPage (moderator-initiated,
+   and the only host that offers Reinstate) and ModReportsPage (report-driven). Extracted at
+   WU-UserModeration when the second host appeared; Reinstate added at WU-ModerationIntegrity
+   (2026-09-30) — the same reason field, no date field, and a non-destructive Confirm.
 
    The extraction is load-bearing, not tidiness: this panel owns the DateTime.SpecifyKind re-tag
    for the datetime-local input (found live 2026-07-30 — Npgsql refuses Kind=Unspecified into a
@@ -44,7 +46,7 @@
 
     <div class="flex gap-2">
         <button type="button"
-                class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                class="@ConfirmClass"
                 disabled="@Busy"
                 @onclick="ConfirmAsync">
             Confirm
@@ -63,7 +65,7 @@
 
     [Parameter, EditorRequired] public string TargetLabel { get; set; } = "";
 
-    /// <summary>Warn / Suspend / Ban. Only Suspend renders the end-date field.</summary>
+    /// <summary>Warn / Suspend / Ban / Reinstate. Only Suspend renders the end-date field.</summary>
     [Parameter, EditorRequired] public ModeratorActionType Action { get; set; }
 
     [Parameter, EditorRequired] public EventCallback<Submission> OnConfirm { get; set; }
@@ -93,8 +95,15 @@
         ModeratorActionType.WarnUser => "Warn",
         ModeratorActionType.SuspendUser => "Suspend",
         ModeratorActionType.BanUser => "Ban",
+        ModeratorActionType.ReinstateUser => "Reinstate",
         _ => Action.ToString()
     };
+
+    // Reinstate restores an account, so its Confirm is not the destructive (danger) recipe the three
+    // sanctions share — it borrows the success-tinted recipe ModReportsPage's "Act" button uses.
+    private string ConfirmClass => Action == ModeratorActionType.ReinstateUser
+        ? "rounded-md bg-(--color-success)/15 px-3 py-1 text-sm text-(--color-success) ring-1 ring-(--color-success)/30 transition-colors hover:bg-(--color-success)/25 disabled:opacity-50"
+        : "rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50";
 
     private async Task ConfirmAsync()
     {

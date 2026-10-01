@@ -3,19 +3,15 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// No-op stand-in for <see cref="IModerationWriteService"/> used by any test that renders a
-/// component tree containing <c>ReportDialog</c> (which injects this service).
-/// <c>ReportDialog</c> is only interactive when the user clicks the trigger button; bUnit tests
-/// that don't exercise the dialog just need it in the DI container so the component can be
-/// instantiated. Methods that are called throw <see cref="NotImplementedException"/> so any
-/// unexpected invocation is surfaced immediately.
+/// No-op stand-in for <see cref="IModerationWriteService"/> for tests that render a moderator page
+/// but do not exercise its actions. (Component trees containing <c>ReportDialog</c> register
+/// <see cref="FakeReportSubmissionService"/> instead — the dialog injects the narrow
+/// <see cref="IReportSubmissionService"/> since owner ruling D9's split.) Reads return empty; writes
+/// throw <see cref="NotImplementedException"/> so any unexpected invocation is surfaced immediately.
 /// </summary>
 public class FakeModerationWriteService : IModerationWriteService
 {
     // ── Read ─────────────────────────────────────────────────────────────────────────────────────
-
-    public Task<ReportReasonDto[]> GetReportReasonsAsync() =>
-        Task.FromResult(Array.Empty<ReportReasonDto>());
 
     public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) =>
         Task.FromResult(Array.Empty<ReportQueueItemDto>());
@@ -27,9 +23,6 @@ public class FakeModerationWriteService : IModerationWriteService
         Task.FromResult<UserModerationHistoryDto?>(null);
 
     // ── Write ────────────────────────────────────────────────────────────────────────────────────
-
-    public Task SubmitReportAsync(SubmitReportRequest request) =>
-        throw new NotImplementedException("FakeModerationWriteService.SubmitReportAsync not expected in this test.");
 
     public Task ClaimReportAsync(long reportId) =>
         throw new NotImplementedException("FakeModerationWriteService.ClaimReportAsync not expected in this test.");
@@ -56,4 +49,7 @@ public class FakeModerationWriteService : IModerationWriteService
 
     public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason) =>
         throw new NotImplementedException("FakeModerationWriteService.SetCanAutoApproveAsync not expected in this test.");
+
+    public Task ReinstateUserAsync(int targetUserId, string reason) =>
+        throw new NotImplementedException("FakeModerationWriteService.ReinstateUserAsync not expected in this test.");
 }

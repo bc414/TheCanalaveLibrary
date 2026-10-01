@@ -125,7 +125,8 @@ Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved. Rows 
 the same rule; F9's other two items already sit on the worksheet as pending D20 and D30. Rows 17–18
 were added 2026-09-30 by WU-InertFeatures: two unruled edges its build had to take a default on.
 Row 19 was added the same day by its review fixes (a third such edge, previously only labelled
-"unruled" in the conventions).
+"unruled" in the conventions). Row 20 was added 2026-09-30 by WU-ModerationIntegrity: two account-status
+transitions its spec derived rather than took from owner text.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -139,6 +140,7 @@ Row 19 was added the same day by its review fixes (a third such edge, previously
 | 17 | **Should a new chapter notify its story's followers when the story itself isn't live?** The new-chapter fan-out (type 10) fires once, when the chapter's `FirstPublishedDate` is stamped. | As built (a default, not a ruling): suppress it when the story is not publicly published at that moment (Draft / PendingApproval / Rejected, or taken down). Consequence: a chapter first published while its story was unpublished never notifies, because its anchor is already stamped when the story later goes live; a story that is unpublished and republished does not re-announce its chapters. | Who gets told about what, and when, is reader-facing policy; it is tied to row 16 (whether such a chapter has "gone live" at all). Rule text: `layer2-services.md` §"Notification Generation" → "New-chapter fan-out". |
 | 18 | **May a recommender earn a "helpful" credit from their own recommendation?** A recommender who saves a story for later from their own recommendation card (or follows its "Read now" link) gets an attribution row, and answering the prompt adds +1 to that recommendation's `SuccessfulRecCount`. | As built (status quo): allowed. Only the recommender badge counter skips the reader-is-recommender case; D3's author gate covers the *story's* author, not the recommender. | It decides what the public "N helpful" count means; D3 did not address it. Rule text: `layer2-services.md` §"Attribution (Feature 30)". |
 | 19 | **Should a Spotlight slot grant name the moderator who granted it?** `SpotlightSlotGranted` (90) carries the granting moderator as its source, so the awardee's notification shows that moderator's name (and ships their id in `NotificationDto`). | As built (status quo): the source is kept. D4's dedup exemption already applies to 90. | D5 de-identifies the 70–82 moderation band "including the good news" so a name's presence cannot leak an outcome, but D5 scopes itself to 70–82 and 90 sits outside it; whether a reward from a moderator is a moderation act is policy. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". Filed WU-InertFeatures review fixes, 2026-09-30. |
+| 20 | **Two account-status refusals the build derived (service §2.1.3).** May a moderator *warn* someone who is serving a live suspension, and may they *ban* someone already banned? | As built (derived, not owner text): both refused with a `ModerationValidationException`. A warning would lower a live suspension to Warned — the same "silent lowering" §2.1.3 names for warning a banned user — and a second ban would write a second `AccountBanned` (74) notification, since D4 exempts 74 from dedup. Everything else in the table is literal §2.1.3 (Banned leavable only via Reinstate; a suspension needs a future date). | Escalation policy is yours; "allowed" is a one-line change per row. Rule text: `layer2-services.md` §"Moderation Services" → "The account-status transition table".
 
 ## Recommended next work units (2026-07-27)
 
@@ -199,6 +201,34 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Sibling-report auto-resolution (worksheet D7), the report reported-user column + takedown-reversal
+  ratification (worksheet D8, with its 2026-08-08 seventh-type amendment) and mod-only read gating
+  (worksheet D9) — answered 2026-08-04/05/06, built WU-ModerationIntegrity 2026-09-30.** No decision
+  rows: they came out of the service-layer audit's §3.8/§3.9/§2.4.4 and the schema audit's §3.7.
+  - D7: `ResolveWithRemovalAsync` closes every other open report on the same `(type, id)` target in
+    the same transaction, as `ResolvedActionTaken`, notifying every distinct sibling reporter; the
+    counter moves by −(1 + rows closed); removal only. `ActiveReportCount` is defined as a cache of
+    the open-report `COUNT(*)`. Landed with service §2.1.2's status guards (lock and guard) and
+    §2.4.4's per-(reporter, target) partial unique index. **Delegated pick:** reports orphaned by
+    account deletion are closed **at the source** (`UserDeletionService`, via
+    `ReportLedger.CloseForDestroyedTargetsAsync`), not handed to a reconciler — D13's
+    "clean up at the source" principle; the reconciler recomputes counts, not statuses. Author
+    self-delete sites stay open (tracker F13).
+  - D8: `Report.ReportedUserId` — the answerable account at filing time, every target type, snapshot,
+    SET NULL; the per-user history reads it (tracker B18 closed, caveat deleted). D8(b): the entity
+    carries current state, the report carries history; no takedown-history table; reversal (not yet
+    built) nulls the metadata and reopens nothing. The `Group` arm is WU-UserDeletion's (D13).
+  - D9: every mod-only read gates in the service with the shared `RequireModerator()` extension (all
+    private guard copies removed); `IReportSubmissionService` split from the mod interfaces. **Delegated
+    pick:** the 401-instead-of-404/400 class is fixed at the throw sites (`KeyNotFoundException`,
+    `ModerationValidationException`, new `ExternalVerificationValidationException`); the
+    `EndpointHelpers` table is unchanged (`InvalidOperationException → 401` stays the auth safety net).
+  - Also built from service §2.1.3: suspend-date validation, the transition table, and **Reinstate**.
+    Two derived refusals are decision row 20.
+  Rule: `layer2-services.md` §"Moderation Services"; `identity-and-authorization.md` §"Role-Based
+  (Moderator) Gating"; `security.md` §"Account-Status Enforcement". Narrative: `audit/Moderation.md`
+  F46/F47 (Settled notes and Stage notes). Still open: D47 (Group-typed report actions).
 
 - **Recommendation provenance home (worksheet D3) — answered 2026-08-04, built WU-InertFeatures
   2026-09-30.** Had no decision row: it came out of the 2026-08-03 service-layer audit's §3.2, which

@@ -11,9 +11,17 @@ live on this entity — see Feature 19 below; it was promoted to its own `Vouch`
 services, no components built.
 
 ## Feature 18 — User Following
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green. `ServerFollowingReadService` drops the now-unused
+`CurrentUserId` property.
+
 - **L1 — Stage 5.** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
   asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
-- **L2 — Stage 5 (WU21, 2026-06-22; alerts-on raise guarded + clear conformance WU-AccessGateSweep2, 2026-09-30 — see its Stage note).** `IFollowingReadService` / `IFollowingWriteService` (inherits
+- **L2 — Stage 5 (WU21, 2026-06-22; alerts-on raise guarded + clear conformance WU-AccessGateSweep2, 2026-09-30 — see its Stage note; shared auth guard WU-ModerationIntegrity, 2026-09-30).** `IFollowingReadService` / `IFollowingWriteService` (inherits
   read) built in `Core/Following/`. `ServerFollowingReadService` (`ReadOnlyApplicationDbContext` +
   `IActiveUserContext`) and `ServerFollowingWriteService` (adds `ApplicationDbContext` +
   `IHtmlSanitizationService`) in `Server/Following/`; both DI-registered in `Program.cs`. Idempotent

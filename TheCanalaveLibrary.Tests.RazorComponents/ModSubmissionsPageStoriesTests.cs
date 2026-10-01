@@ -151,16 +151,15 @@ public class ModSubmissionsPageStoriesTests : BunitContext
             return Task.CompletedTask;
         }
 
-        public Task<ReportReasonDto[]> GetReportReasonsAsync() => throw new NotImplementedException();
         public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) => throw new NotImplementedException();
         public Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId) => throw new NotImplementedException();
-        public Task SubmitReportAsync(SubmitReportRequest request) => throw new NotImplementedException();
         public Task ClaimReportAsync(long reportId) => throw new NotImplementedException();
         public Task ResolveNoActionAsync(long reportId, string? actionNotes) => throw new NotImplementedException();
         public Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false) => throw new NotImplementedException();
         public Task ApplyAccountActionAsync(long reportId, ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) => throw new NotImplementedException();
         public Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) => throw new NotImplementedException();
         public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason) => throw new NotImplementedException();
+        public Task ReinstateUserAsync(int targetUserId, string reason) => throw new NotImplementedException();
     }
 
     private sealed class EmptyExternalVerificationWriteService : IExternalVerificationWriteService

@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Layer-5 API surface for <see cref="ISiteSettingsReadService"/> / <see cref="ISiteSettingsWriteService"/>
 /// (WU-Spotlight's cross-cutting settings cluster). Thin pass-through: no business logic here — the
-/// mod gate for writes lives in <c>ServerSiteSettingsWriteService.RequireModerator</c> (single
+/// mod gate for writes lives in <c>ServerSiteSettingsWriteService</c>'s shared <c>RequireModerator()</c> call (single
 /// enforcement point). The write handler wraps in the shared
 /// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
@@ -25,9 +25,13 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// <b>Write auth.</b> Edge <see cref="AuthorizationPolicies.RequireModerator"/> policy (MA-702,
 /// 2026-07-18 — the write previously carried only the plain floor while this file's own read was
-/// role-gated) on top of the service's own <c>RequireModerator()</c>, which throws
-/// <see cref="UnauthorizedAccessException"/> for a non-mod caller →
-/// <see cref="EndpointHelpers.ExecuteAsync"/> maps to 403.
+/// role-gated) on top of the service's own <c>RequireModerator()</c> (the shared extension since
+/// WU-ModerationIntegrity, 2026-09-30), which throws <see cref="UnauthorizedAccessException"/> for a
+/// signed-in non-mod caller (→ 403) and <see cref="InvalidOperationException"/> for an anonymous one
+/// (→ 401; the private copy it replaced answered 403) via <see cref="EndpointHelpers.ExecuteAsync"/>.
+/// <b>Read auth</b> above stays edge-only by design: the service's <c>GetIntAsync</c> is composed
+/// server-side by public Spotlight/Fanon flows, so it cannot gate on the role (the one recorded
+/// non-gate of the D9 sweep — identity-and-authorization.md §"Role-Based (Moderator) Gating").
 /// </para>
 /// </summary>
 public static class SiteSettingsEndpoints

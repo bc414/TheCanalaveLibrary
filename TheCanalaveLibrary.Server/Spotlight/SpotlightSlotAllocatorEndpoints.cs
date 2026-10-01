@@ -6,8 +6,10 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 surface for <see cref="ISpotlightSlotAllocator"/> (Global Flip — surfaced by the flip
 /// checklist's client-registration sweep: <c>ModSpotlightPage</c> injects the allocator directly,
 /// so it needs an HTTP body-swap like any other component-injected service). Thin pass-throughs;
-/// <c>ServerSpotlightSlotAllocator.RequireModerator()</c> is the enforcement point
-/// (<c>UnauthorizedAccessException</c> → 403 via the shared helper). The whole group additionally
+/// the allocator's shared <c>RequireModerator()</c> calls are the enforcement point
+/// (<c>UnauthorizedAccessException</c> → 403, anonymous <c>InvalidOperationException</c> → 401 via
+/// the shared helper) — on both reads too since WU-ModerationIntegrity (2026-09-30, owner ruling D9),
+/// so every handler wraps in <see cref="EndpointHelpers.ExecuteAsync"/>. The whole group additionally
 /// carries the Moderator/Admin role gate via the named
 /// <see cref="AuthorizationPolicies.RequireModerator"/> policy (registered in <c>Program.cs</c>;
 /// MA-702 fix, 2026-07-18 — replaces the earlier inline <c>AuthorizeAttribute</c>), mirroring
@@ -34,11 +36,13 @@ public static class SpotlightSlotAllocatorEndpoints
                 return Results.NoContent();
             }));
 
-        group.MapGet("/remaining-capacity", async (ISpotlightSlotAllocator allocator) =>
-            Results.Ok(await allocator.GetRemainingMonthlyGrantCapacityAsync()));
+        group.MapGet("/remaining-capacity", (ISpotlightSlotAllocator allocator) =>
+            EndpointHelpers.ExecuteAsync(async () =>
+                Results.Ok(await allocator.GetRemainingMonthlyGrantCapacityAsync())));
 
-        group.MapGet("/recent-grants", async (ISpotlightSlotAllocator allocator, int take) =>
-            Results.Ok(await allocator.GetRecentGrantsAsync(take)));
+        group.MapGet("/recent-grants", (ISpotlightSlotAllocator allocator, int take) =>
+            EndpointHelpers.ExecuteAsync(async () =>
+                Results.Ok(await allocator.GetRecentGrantsAsync(take))));
 
         return app;
     }

@@ -11,7 +11,8 @@ namespace TheCanalaveLibrary.Server;
 /// verbatim — it is user-facing), UnauthorizedAccessException → 403,
 /// KeyNotFoundException → 404. The write routes carry a <c>RequireAuthorization()</c> floor
 /// (endpoint-authz sweep 2026-07-18) so unauthenticated callers get 401 without reaching the
-/// service; the service's RequireMod remains the enforcement point (403 for signed-in non-mods).
+/// service; the service's shared <c>RequireModerator()</c> guard remains the enforcement point (403 for
+/// signed-in non-mods).
 /// </summary>
 public static class TagEndpoints
 {
@@ -37,7 +38,7 @@ public static class TagEndpoints
         group.MapGet("/chips/by-ids", async (ITagReadService tags, int[] ids) =>
             Results.Ok(await tags.GetTagChipsByIdsAsync(ids)));
 
-        // ── Writes (mod/admin — enforced by the service's RequireMod, translated here) ──
+        // ── Writes (mod/admin — enforced by the service's RequireModerator(), translated here) ──
         // RequireRateLimiting("TagWrites"): per-user (IP fallback) HTTP edge limit — the tag API
         // is the one write surface that is plain HTTP today (security.md "HTTP Edge Rate Limiting").
 

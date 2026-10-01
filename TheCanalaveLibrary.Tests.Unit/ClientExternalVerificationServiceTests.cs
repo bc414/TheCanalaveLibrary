@@ -179,6 +179,22 @@ public class ClientExternalVerificationServiceTests
     }
 
     [Fact]
+    public async Task RequestLinkVerificationAsync_BadRequest_ThrowsExternalVerificationValidationException_WithTheServerText()
+    {
+        // WU-ModerationIntegrity (2026-09-30): the server's business rules now answer 400 (they were
+        // InvalidOperationException → 401, a "session expired" for an unverified account), and the
+        // client reconstructs the feature's own user-facing type — not the InvalidOperationException
+        // ExceptionPresenter treats as unexpected.
+        var handler = new CannedHandler(HttpStatusCode.BadRequest, """{"detail":"Verify your AO3 account first."}""");
+        ClientExternalVerificationWriteService svc = new(NewClient(handler));
+
+        Func<Task> act = () => svc.RequestLinkVerificationAsync(42);
+
+        (await act.Should().ThrowAsync<ExternalVerificationValidationException>())
+            .Which.Errors.Should().Equal("Verify your AO3 account first.");
+    }
+
+    [Fact]
     public async Task RequestLinkVerificationAsync_NotFound_ThrowsKeyNotFoundException()
     {
         var handler = new CannedHandler(HttpStatusCode.NotFound, "");

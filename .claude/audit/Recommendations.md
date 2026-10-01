@@ -107,10 +107,19 @@ Verification data cleaned up afterward (throwaway rec + comment removed, rec 1's
 the four generated notifications restored/deleted — workbench left at seed state).
 
 ## Feature 27 — Recommendation Submission
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green. The per-action messages ("Submitting a recommendation
+requires an authenticated user.") became the shared text; no test asserted them, and
+`RequireStoryAuthorAsync` lost its now-unused `action` parameter.
+
 - **L1 — Stage 5.** Hot/cold vertical partition + status lifecycle; no `IsSpoiler` (correct).
   Unique `(RecommenderId, StoryId)` index added by WU29 migration; NULL `RecommenderId` (anonymized
   recs) are each distinct under Postgres NULL semantics — correct.
-- **L2 — Stage 5 (WU29, 2026-06-23).** `SubmitAsync` enforces: (a) `RequireAuthenticatedUser()`;
+- **L2 — Stage 5 (WU29, 2026-06-23; shared auth guard WU-ModerationIntegrity, 2026-09-30).** `SubmitAsync` enforces: (a) the authenticated-user guard (the shared `RequireUserId()` since WU-ModerationIntegrity);
   (b) **minimum 500 characters** on stripped text (strip helper mirrors `ChapterText.CountWords`,
   `RecommendationConstants.MinLength`; value settled WU29 — no prior spec value, see
   `forward_plan.md` Resolved); (c) sanitize-once-on-save; (d) writes hot+cold partition via `Add`

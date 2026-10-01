@@ -38,10 +38,11 @@ public class ServerNotificationReadService(
     protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
     /// <summary>
-    /// Exposed so the derived write service can access the current user's id without
-    /// re-capturing the <c>activeUser</c> primary constructor parameter (avoids CS9107).
+    /// Exposed so the derived write service can use the active user (the shared
+    /// <c>RequireUserId()</c> guard) without re-capturing the <c>activeUser</c> primary constructor
+    /// parameter (avoids CS9107).
     /// </summary>
-    protected int? CurrentUserId => activeUser.UserId;
+    protected IActiveUserContext ActiveUser => activeUser;
 
     // ── Interface implementation ───────────────────────────────────────────────────
 

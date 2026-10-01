@@ -137,8 +137,8 @@ app.MapTagEndpoints();
 ```
 
 - **Endpoints are thin pass-throughs.** No business logic, no auth logic — the service is the
-  single enforcement point (`RequireMod()` etc.). The endpoint's only added job is the
-  exception→status translation below.
+  single enforcement point (the shared `RequireUserId()`/`RequireModerator()` guards, ownership
+  checks). The endpoint's only added job is the exception→status translation below.
 - **Read endpoints:** public where the page is public; return the same DTOs the service returns.
 - **Nullable-returning methods (`Task<T?>`) produce an EMPTY 200 body when null — the client
   must tolerate it.** ASP.NET's `HttpResultsHelper` skips serialization entirely for a null result

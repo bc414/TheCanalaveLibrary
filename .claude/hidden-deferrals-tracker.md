@@ -257,7 +257,7 @@ decision work that has no row at all.
     wired to their page's `ReportDialog` — mechanically the same pass WU-UserModeration did for
     `UserCard`, on three surfaces instead of one.
 
-- [ ] **B18 — A user's moderation history omits reports against content they authored** `[scope-cut · med · anytime]` — *Deliberately excluded from WU-UserModeration, 2026-08-01.*
+- [x] **B18 — A user's moderation history omits reports against content they authored — DONE (WU-ModerationIntegrity, 2026-09-30)** `[scope-cut · med · anytime]` — *Deliberately excluded from WU-UserModeration, 2026-08-01.* `Report.ReportedUserId` landed (D8, every target type, snapshot); `GetUserModerationHistoryAsync` reads it and keeps rows whose target is gone; `/mod/users/{id}` deleted the caveat and gained a Target column. Narrative: `audit/Moderation.md` F47.
   - Grid: F47 cells unaffected — the page exists and is sound; this is a scope boundary inside it.
   - Source: `UserModerationHistoryDto.Reports` (user-targeted rows only); `ModUsersPage` states the
     caveat on screen ("Reports against content they wrote are not listed here") rather than letting
@@ -723,6 +723,10 @@ unless noted. All sit under Stage-5 cells.
     resubmitted and approved, the columns still hold the old reason and date — harmless today because
     nothing reads them outside `Rejected`, but it is the same "one column, two meanings" shape D8
     exists to settle. Owner: **WU-ModerationIntegrity** (D8). Left as-is by WU-StoryLifecycle.
+  - WU-ModerationIntegrity (2026-09-30) left it open: D8(b)'s "the entity carries current state"
+    rule rests on the `Report` row being the history, and a rejection files no `Report` row — so
+    nulling the columns on approval would destroy the only record of the reason. Whether rejections
+    get their own column (or a ledger row) is a schema question with no ruling.
 
 - [ ] **D7 — Publishing a chapter doesn't bump `Story.LastUpdatedDate`** `[latent-risk · low · anytime]` — *Observed during WU-StoryLifecycle, 2026-09-30; not in any audit source.*
   - Grid: F6 L2=5 (unchanged).
@@ -761,6 +765,19 @@ unless noted. All sit under Stage-5 cells.
     the app sends free text in a JSON body. The shape predates WU-StoryLifecycle, and its new
     auto-approve endpoint followed it. Candidate owner: WU-ModerationIntegrity. The fix is a small
     request record per endpoint, with the client and the `ModerationEndpointsTests` updated together.
+  - WU-ModerationIntegrity (2026-09-30) did not take it (not in its sources) and its new
+    `POST /api/moderation/users/{id}/reinstate?reason=` follows the existing shape, so the fix now
+    sweeps five endpoints.
+
+- [ ] **D10 — ExternalVerification moderator actions have no status guard** `[latent-risk · low · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X7); unruled.*
+  - Grid: F53 L2=5 (unchanged).
+  - Source: `ServerExternalVerificationWriteService.Approve/RejectAccountVerificationAsync` and
+    `Approve/RejectLinkVerificationAsync` overwrite the status unconditionally.
+  - Context: the same defect class service §2.1.2 fixed for reports. A double-click (or two
+    moderators) re-approves an already-verified identity and sends a second 76/78; since D4 exempts 76
+    and 77 from dedup, the author gets two rows. Rejecting an already-verified account silently
+    un-verifies it (worksheet D44 is the related pending question). The guard shape is ready
+    (WU-ModerationIntegrity's lock-and-guard), but no source cites these methods, so it is not built.
 
 ---
 
@@ -1033,6 +1050,43 @@ built rows at 5 and no signal these exist.
     - (b) honor publish-on-create, running the publish fan-out at create time as the edit path does.
   - The group-post create form shares the properties form, so it needs the same check.
 
+- [ ] **F13 — Reports against content an author deletes themselves stay Open and invisible** `[decision · med · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X4); owner-open, not decided in the build.*
+  - Grid: F46/F47 L2=5 (unchanged).
+  - Source: worksheet D7's sub-edge scoped the closure to **user deletion** (built:
+    `UserDeletionService` → `ReportLedger.CloseForDestroyedTargetsAsync`). The other sites that destroy
+    a reportable target leave its open reports as zombies — Open, dropped from the queue because the
+    target no longer materializes, never resolvable:
+    1. `ServerCommentWriteService.DeleteCommentAsync` (author deletes a comment);
+    2. `ServerRecommendationWriteService.DeleteAsync` (author deletes a recommendation);
+    3. `ServerBlogPostWriteService.DeleteBlogPostAsync` and `DeleteSiteBlogPostAsync`;
+    4. `ServerChapterWriteService.DeleteChapterAsync` (its chapter comments);
+    5. the D15 author story delete (WU-AuthorStoryDelete), and the TPT child comments a moderation
+       hard delete destroys (WU-TptHardDelete).
+  - The question: what status should an author's own deletion give a report against that content?
+    WU-AuthorStoryDelete's spec (its X2) treats it as owner-open. `ResolvedNoAction` with a NULL
+    moderator (the user-deletion choice) is the obvious candidate, but an author deleting content
+    *because* it was reported is arguably an outcome a reporter should hear about.
+  - Once ruled, each site is a one-line `ReportLedger.CloseForDestroyedTargetsAsync` call inside its
+    own transaction.
+
+- [ ] **F14 — Reinstating an account sends the user no notification** `[decision · low · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X6).*
+  - Grid: F47 L2=5 (unchanged).
+  - Source: `ServerModerationWriteService.ReinstateUserAsync` (new). Warn/Suspend/Ban each notify
+    (72/73/74), and §13 says the user is always told why; Reinstate tells them nothing, because no
+    notification type exists for it.
+  - Adding one is a catalogue decision (a `notification_types` seed row, its category and email
+    default, presenter text, and whether it joins D5's de-identified band and D4's dedup exemption),
+    with no ruling. The `AccountStatusBanner` already reflects the restored status on the user's next
+    navigation.
+
+- [ ] **F15 — ExternalVerification: the author and moderator halves share one interface** `[decision · low · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X7).*
+  - Grid: F53 L2=5 (unchanged).
+  - Source: `IExternalVerificationWriteService` mixes author operations (`SubmitAccountForVerificationAsync`,
+    `RequestLinkVerificationAsync`, `EnsureMyVerificationCodeAsync`) with moderator approve/reject.
+  - D9 split report submission from the mod queue (`IReportSubmissionService`) but names only
+    report submission; whether the verification cluster gets the same split is unruled. Both mod
+    reads now gate in the service (D9), so this is type-level least privilege only, not a hole.
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1250,6 +1304,21 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - The class doc promises "`UserStat` counters matching the content". The browser pass avoided the
     unfollow for this reason.
   - Fix: correct the two numbers and add the missing row; `reset-dev-db.ps1` afterwards.
+
+- [ ] **H19 — Browser pass owed for WU-ModerationIntegrity's moderator UI** `[test-gap · med · beta]` — *Filed 2026-09-30; WU-ModerationIntegrity ran with no browser available.*
+  - Grid: F47 L4.5 (lowered 5→1 by that WU; this pass restores it).
+  - Drive on both render phases (circuit and WASM), with psql after every write:
+    1. `/mod/users/{id}`: the caveat is gone; the history lists content reports with a Target column
+       (type + label/link) and a `[deleted …]` row for a removed target; Reinstate shows only for a
+       non-Active user, opens the panel with no date field, and returns the user to Active (one
+       `reports` row, reason Other, `reported_user_id` set).
+    2. Suspend with a past date and Warn on a live suspension are refused inline; Ban on a banned user
+       is refused.
+    3. `/mod/reports`: no "Hide content" on a User report; removing a story with three reports from
+       three users closes all three (one 81 each); resolving an already-resolved report from a stale
+       tab shows "This report has already been resolved."
+    4. The report dialog: a second report on the same item by the same user shows the duplicate
+       message; a different user can still report it.
 
 ---
 

@@ -76,10 +76,18 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
 
 ## Feature 49 — Private Messaging
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green. Messaging keeps its `RequireAuthenticatedUser()` name as a
+one-line wrapper over the shared guard (the Lineage/Acknowledgment shape); its message text is now the
+shared one.
+
 - **L1 — Stage 5.** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`. No further L1 work needed.
-- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (4 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`) and
   `IMessagingWriteService : IMessagingReadService` (4 mutations: `StartConversationAsync` [gated],

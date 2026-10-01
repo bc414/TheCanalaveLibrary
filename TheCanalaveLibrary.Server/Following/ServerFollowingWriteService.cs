@@ -48,7 +48,7 @@ public class ServerFollowingWriteService(
 
     public async Task FollowAsync(int targetUserId)
     {
-        int actorId = RequireAuthenticatedUser();
+        int actorId = ActiveUser.RequireUserId();
 
         if (actorId == targetUserId)
             throw new FollowingValidationException(["A user cannot follow themselves."]);
@@ -88,7 +88,7 @@ public class ServerFollowingWriteService(
 
     public async Task UnfollowAsync(int targetUserId)
     {
-        int actorId = RequireAuthenticatedUser();
+        int actorId = ActiveUser.RequireUserId();
 
         FollowedUser? row = await writeDb.FollowedUsers
             .FirstOrDefaultAsync(f => f.UserId == actorId && f.FollowedUserId == targetUserId);
@@ -107,7 +107,7 @@ public class ServerFollowingWriteService(
 
     public async Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts)
     {
-        int actorId = RequireAuthenticatedUser();
+        int actorId = ActiveUser.RequireUserId();
 
         FollowedUser? row = await writeDb.FollowedUsers
             .FirstOrDefaultAsync(f => f.UserId == actorId && f.FollowedUserId == targetUserId);
@@ -127,7 +127,7 @@ public class ServerFollowingWriteService(
 
     public async Task VouchAsync(int targetUserId, string? vouchText)
     {
-        int actorId = RequireAuthenticatedUser();
+        int actorId = ActiveUser.RequireUserId();
 
         if (actorId == targetUserId)
             throw new FollowingValidationException(["A user cannot vouch for themselves."]);
@@ -169,7 +169,7 @@ public class ServerFollowingWriteService(
 
     public async Task RemoveVouchAsync(int targetUserId)
     {
-        int actorId = RequireAuthenticatedUser();
+        int actorId = ActiveUser.RequireUserId();
 
         Vouch? row = await writeDb.Vouches
             .FirstOrDefaultAsync(v => v.VouchingUserId == actorId && v.VouchedUserId == targetUserId);
@@ -182,12 +182,4 @@ public class ServerFollowingWriteService(
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser()
-    {
-        // Uses the base class's CurrentUserId property so the derived class doesn't capture the
-        // activeUser primary constructor parameter (avoids CS9107 double-capture warning).
-        if (CurrentUserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 }

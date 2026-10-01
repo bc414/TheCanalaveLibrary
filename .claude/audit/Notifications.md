@@ -423,7 +423,14 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
 
 ## Feature 42 — Notification Display
 
-- **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; the two-pass enrichment moved out to
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green. `ServerNotificationReadService` exposes `ActiveUser` to the
+write class in place of `CurrentUserId` (CS9107 shape).
+
+- **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; shared auth guard WU-ModerationIntegrity 2026-09-30; the two-pass enrichment moved out to
   `NotificationEnricher` at WU-NotifEmail 2026-07-31 so email shares it — stage unchanged; `long` ids,
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below).**

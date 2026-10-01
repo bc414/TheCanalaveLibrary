@@ -365,6 +365,10 @@ incident has a defined answer ("recount is truth") instead of a data-archaeology
 
 ### 3.7 Moderation audit trail — ratify report-as-audit-record, decide the author column now
 
+> **Ruled and built:** worksheet D8 (2026-08-05 — `reported_user_id`, every target type, snapshot;
+> (b) ratified), built WU-ModerationIntegrity (2026-09-30) with D7's two partial indexes on the same
+> migration; rule in `layer2-services.md` §"Moderation Services". Reversal is still unbuilt.
+
 The settled rule (`layer2-services.md` §"Account actions") is that `Report` rows ARE the
 moderation ledger (self-reported rows for ad-hoc actions). First-principles check: this holds —
 reports survive user deletion (both FKs SET NULL, comment says "must survive for audit"), takedown

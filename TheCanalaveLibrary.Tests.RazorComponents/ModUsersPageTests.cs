@@ -50,6 +50,11 @@ public class ModUsersPageTests : BunitContext
         RecordingModerationWriteService writeService = new();
         Services.AddSingleton<IModerationReadService>(new StaticModerationReadService(history, UserReport));
         Services.AddSingleton<IModerationWriteService>(writeService);
+        // The reason picker reads the member-facing submission service since D9's split.
+        Services.AddSingleton<IReportSubmissionService>(new FakeReportSubmissionService
+        {
+            Reasons = [new ReportReasonDto(4, "Harassment", null)],
+        });
         Services.AddSingleton<IUserProfileReadService>(new FakeUserProfileReadService());
         this.AddAuthorization().SetAuthorized("mod-user").SetRoles("Moderator");
         return writeService;
@@ -92,9 +97,73 @@ public class ModUsersPageTests : BunitContext
         cut.Markup.Should().Contain("3 active report(s)");
         cut.Markup.Should().Contain("Harassment");
 
-        // The scope caveat must be visible, not just documented on the DTO: an empty history here
-        // does NOT mean nobody has complained about this person's content.
-        cut.Markup.Should().Contain("Reports against content they wrote are not listed here.");
+        // D8/B18 (WU-ModerationIntegrity): the history now reads ReportedUserId across every target
+        // type, so the scope caveat it used to carry is deleted, not narrowed.
+        cut.Markup.Should().NotContain("not listed here");
+    }
+
+    [Fact]
+    public void WithUserId_HistoryShowsATargetColumn_ForContentReports_AndDeletedTargets()
+    {
+        ReportQueueItemDto storyReport = UserReport with
+        {
+            ReportId = 2, EntityType = ReportedEntityType.Story, EntityId = 7,
+            TargetLabel = "The Reported Story", TargetUrl = "/story/7/the-reported-story",
+        };
+        ReportQueueItemDto deletedComment = UserReport with
+        {
+            ReportId = 3, EntityType = ReportedEntityType.Comment, EntityId = 99,
+            TargetLabel = "[deleted Comment]", TargetUrl = null,
+        };
+        Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Active,
+            SuspendedUntilUtc: null, ActiveReportCount: 1, Reports: [storyReport, deletedComment, UserReport]));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Report history"));
+
+        var targets = cut.FindAll("[data-testid=history-target]");
+        targets.Should().HaveCount(3);
+        targets[0].TextContent.Should().Contain("Story").And.Contain("The Reported Story");
+        targets[0].QuerySelector("a")!.GetAttribute("href").Should().Be("/story/7/the-reported-story",
+            "a report about the user's content links to that content");
+        targets[1].TextContent.Should().Contain("[deleted Comment]");
+        targets[1].QuerySelector("a").Should().BeNull("a deleted target has nothing to link to");
+        targets[2].TextContent.Should().Contain("User");
+    }
+
+    [Fact]
+    public void WithUserId_Active_OffersNoReinstate()
+    {
+        Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Active,
+            SuspendedUntilUtc: null, ActiveReportCount: 0, Reports: []));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Account action"));
+
+        cut.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Reinstate",
+            "an Active account has nothing to reinstate");
+    }
+
+    [Fact]
+    public async Task WithUserId_Banned_ReinstateSubmitsReinstateUserAsync()
+    {
+        RecordingModerationWriteService writeService = Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Banned,
+            SuspendedUntilUtc: null, ActiveReportCount: 0, Reports: []));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Account action"));
+
+        FindButton(cut, "Reinstate").Click();
+        cut.FindAll("input[type=datetime-local]").Should().BeEmpty("Reinstate has no end date");
+        cut.Find("textarea").Change("Appeal upheld.");
+        await FindButton(cut, "Confirm").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        writeService.LastReinstate.Should().Be((42, "Appeal upheld."),
+            "Reinstate has its own method — the only path out of a ban (service §2.1.3)");
+        writeService.LastUserAction.Should().BeNull("Reinstate never goes through the account-action overload");
     }
 
     [Fact]
@@ -197,8 +266,6 @@ public class ModUsersPageTests : BunitContext
         UserModerationHistoryDto? history,
         params ReportQueueItemDto[] reports) : IModerationReadService
     {
-        public Task<ReportReasonDto[]> GetReportReasonsAsync() =>
-            Task.FromResult<ReportReasonDto[]>([new ReportReasonDto(4, "Harassment", null)]);
         public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) => Task.FromResult(reports);
         public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() => Task.FromResult(Array.Empty<StorySubmissionQueueItemDto>());
         public Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId) => Task.FromResult(history);
@@ -208,6 +275,13 @@ public class ModUsersPageTests : BunitContext
     {
         public (int TargetUserId, short ReasonId, ModeratorActionType Action, string Reason, DateTime? Until)? LastUserAction { get; private set; }
         public (int TargetUserId, bool CanAutoApprove, short ReasonId, string Reason)? LastAutoApprove { get; private set; }
+        public (int TargetUserId, string Reason)? LastReinstate { get; private set; }
+
+        public Task ReinstateUserAsync(int targetUserId, string reason)
+        {
+            LastReinstate = (targetUserId, reason);
+            return Task.CompletedTask;
+        }
 
         public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason)
         {
@@ -215,12 +289,10 @@ public class ModUsersPageTests : BunitContext
             return Task.CompletedTask;
         }
 
-        public Task<ReportReasonDto[]> GetReportReasonsAsync() => throw new NotImplementedException();
         public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) => throw new NotImplementedException();
         public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() => throw new NotImplementedException();
         public Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId) => throw new NotImplementedException();
 
-        public Task SubmitReportAsync(SubmitReportRequest request) => throw new NotImplementedException();
         public Task ClaimReportAsync(long reportId) => throw new NotImplementedException();
         public Task ResolveNoActionAsync(long reportId, string? actionNotes) => throw new NotImplementedException();
         public Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false) => throw new NotImplementedException();

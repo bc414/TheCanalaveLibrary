@@ -287,7 +287,11 @@ other dependency resolves from the shared host, so it's the production service �
 `interceptor.Fired`, so a marker that stops matching fails loudly instead of passing vacuously.
 Precedent: `ModerationServiceTests.ApproveStoryAsync_StatusChangesBetweenReadAndWrite_*`,
 `…_TrustRecordWriteFails_RollsBackTheStatusFlip`, `StoryLifecycleTests.Transition_*BetweenReadAndWrite_*`
-(WU-StoryLifecycle review fixes, 2026-09-30). The `Task.WhenAll` racing shape stays right for
+(WU-StoryLifecycle review fixes, 2026-09-30). By default it watches only non-query commands
+(`ExecuteUpdate`/`ExecuteDelete`); pass `interceptReaders: true` to also watch reader commands — a
+`SaveChangesAsync` INSERT runs as one (`INSERT … RETURNING`), so a unique-index race needs it
+(`ModerationIntegrityTests.ADuplicateLandingBetweenTheCheckAndTheInsert_*`, WU-ModerationIntegrity
+2026-09-30). The `Task.WhenAll` racing shape stays right for
 contention a lock serializes (e.g. `SpotlightServiceTests.Redeem_TwoRacersOneOpening_ExactlyOneWins`),
 where "exactly one wins" is the whole claim.
 

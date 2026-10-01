@@ -142,6 +142,8 @@ and confidence. File:line references are as-of 2026-08-03.
 ### 2.1 Lifecycle state machines without transition guards
 
 > **§2.1.1 built:** WU-StoryLifecycle (2026-09-30), per worksheet D1 — see `layer2-services.md` §"Story Lifecycle". §2.1.1 below is history; §2.1.2+ are untouched by it.
+>
+> **§2.1.2 and §2.1.3 built:** WU-ModerationIntegrity (2026-09-30) — resolve paths lock the report row and refuse a non-open one; suspend-date validation, the transition table and `ReinstateUserAsync`. See `layer2-services.md` §"Moderation Services". §2.1.4 is WU-CounterSymmetry's.
 
 **2.1.1 No server-side story status-transition enforcement — authors can self-publish and
 self-un-reject. CRITICAL, CONFIRMED.** `StoryMappers.UpdateStoryEditableProperties`
@@ -271,6 +273,11 @@ it in both places.
 at draft creation; `SetPublishedAsync` never touches counts. Public listings overstate; authors
 earn credit for words never published; contradicts the cluster's own "readable words" principle
 and the counter map. Fix: filter published; move the delta to the publish transition.
+
+> **2.4.4 built (a)–(c):** WU-ModerationIntegrity (2026-09-30) — status guards, submit reorder
+> (row first, counter second, per D22), the per-(reporter, target) partial unique index, and D7's
+> sibling closing; the migration recomputed every counter once. The standing reconciler is
+> WU-CounterSymmetry's (D21).
 
 **2.4.4 `ActiveReportCount` has three independent corruption paths and no reconciler. MEDIUM,
 CONFIRMED.** (a) §2.1.2's double-resolution; (b) submit increments the counter in a separate
@@ -535,9 +542,14 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
    service" split in `identity-and-authorization.md`. Related: consider splitting user-facing
    report submission from the mod-queue interface (least-privilege at the type level), and the
    ExternalVerification mod-read posture is the same question.
+   > **Ruled and built:** worksheet D9 (2026-08-06 — option A, five reads, plus the split), built
+   > WU-ModerationIntegrity (2026-09-30); rule in `identity-and-authorization.md` §"Role-Based
+   > (Moderator) Gating"
 9. **Sibling-report auto-resolution**: does resolve-with-removal close all other open reports on
    the same target? (Recommended yes, same UoW — defines what `ActiveReportCount` *means* and
    removes the zombie class.)
+   > **Ruled and built:** worksheet D7 (2026-08-04 — yes, removal only, keyed on the target), built
+   > WU-ModerationIntegrity (2026-09-30); rule in `layer2-services.md` §"Moderation Services"
 10. **One gate rule for all selection-by-id paths** (permalink, detail, copy): identical gate set,
     one indistinguishable failure (§2.6).
 11. **Series: independent public artifact or profile-tab data?** By-id detail currently ignores

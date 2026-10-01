@@ -138,11 +138,26 @@ tree and nothing else. The closure is computed rather than listed so a chrome co
 from now is caught without anyone remembering the rule.
 
 ## Feature 52 — User Account Deletion
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `UserDeletionService` moved from the
+legacy `Server/Services/` folder to `Server/Identity/` (the code-organization rule: a WU that touches a
+legacy-folder file moves it; the namespace is flat, so no reference changed; `Server/Services/` is now
+empty). It now closes the reports on what it destroys — owner ruling D7's sub-edge, picked at the source
+by this WU: inside the existing transaction it materializes the deleted user's profile comments and calls
+`ReportLedger.CloseForDestroyedTargetsAsync` for those comments and for the user, closing their open
+reports as `ResolvedNoAction` with a NULL moderator and a note, silently (`layer2-services.md`
+§"Moderation Services" → "Zombie reports"). Reports on content that survives the deletion (stories,
+posts, recommendations — SET NULL) stay open, and the new `reports.reported_user_id` FK nulls on
+deletion. Verified by Integration
+`ModerationIntegrityTests.DeletingAUser_ClosesReportsOnTheAccountAndItsProfileComments_ButNotOnSurvivingContent`
+and `…DeletingTheAnswerableAccount_NullsReportedUser_AndKeepsTheRow` (the closure was mutation-checked);
+`UserDeletionServiceTests` pass unchanged. Author self-delete sites are owner-open (tracker F13).
+
 - **L1 — Stage 5.** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to

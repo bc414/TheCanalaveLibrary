@@ -66,8 +66,14 @@ conventions. **Do not revisit these.** Pointers:
 
 ## Feature 38 — Group Management
 
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
+guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
+`RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
+2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
+tests for the anonymous refusal stay green.
+
 - **L1 — Stage 5.** `Group` + `GroupMember` with role/audience model.
-- **L2 — Stage 5 (2026-06-24, WU32).** `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
+- **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30).** `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
   `ServerGroupReadService` / `ServerGroupWriteService` in `Server/Groups/`; CQRS-lite inheritance.
   `CreateGroupAsync` stamps creator as Admin in a second `SaveChangesAsync`. `JoinAsync` / `LeaveAsync`
   idempotent. DI registered in `Program.cs`. Migration `WU32_Groups` applied (data-preserving column

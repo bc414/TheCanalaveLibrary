@@ -668,7 +668,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         SetActiveUser(_strangerId);
         using IServiceScope scope = Factory.Services.CreateScope();
 
-        Func<Task> act = () => Resolve<IModerationWriteService>(scope)
+        Func<Task> act = () => Resolve<IReportSubmissionService>(scope)
             .SubmitReportAsync(new SubmitReportRequest(
                 ReportedEntityType.Story, 999_999, 1, null));
 
@@ -684,7 +684,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         SetActiveUser(_strangerId);
         using IServiceScope scope = Factory.Services.CreateScope();
 
-        Func<Task> act = () => Resolve<IModerationWriteService>(scope)
+        Func<Task> act = () => Resolve<IReportSubmissionService>(scope)
             .SubmitReportAsync(new SubmitReportRequest(
                 ReportedEntityType.Story, storyId, 1, null));
 
@@ -708,7 +708,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         SetActiveUser(_strangerId);
         using IServiceScope scope = Factory.Services.CreateScope();
 
-        Func<Task> act = () => Resolve<IModerationWriteService>(scope)
+        Func<Task> act = () => Resolve<IReportSubmissionService>(scope)
             .SubmitReportAsync(new SubmitReportRequest(
                 ReportedEntityType.Story, storyId, 1, null));
 

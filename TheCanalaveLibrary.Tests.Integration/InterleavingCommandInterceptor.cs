@@ -29,7 +29,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// </summary>
 public sealed class InterleavingCommandInterceptor(
     string connectionString, string commandMarker,
-    string? interleavedSql = null, Exception? failWith = null) : DbCommandInterceptor
+    string? interleavedSql = null, Exception? failWith = null,
+    bool interceptReaders = false) : DbCommandInterceptor
 {
     private int _fired;
 
@@ -50,6 +51,28 @@ public sealed class InterleavingCommandInterceptor(
         DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
+        await InterleaveIfMarkedAsync(command, cancellationToken);
+        return result;
+    }
+
+    /// <summary>
+    /// Reader commands too, only when the constructor's <c>interceptReaders</c> is set: a
+    /// <c>SaveChangesAsync</c> INSERT runs as a reader (<c>INSERT … RETURNING</c> the generated key), so a
+    /// test that needs a competing row to land just before an insert — e.g. a unique-index race — opts in
+    /// (WU-ModerationIntegrity). Off by default so existing markers keep matching only the non-query
+    /// <c>ExecuteUpdate</c>/<c>ExecuteDelete</c> commands they were written for.
+    /// </summary>
+    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (interceptReaders)
+            await InterleaveIfMarkedAsync(command, cancellationToken);
+        return result;
+    }
+
+    private async Task InterleaveIfMarkedAsync(DbCommand command, CancellationToken cancellationToken)
+    {
         if (command.CommandText.Contains(CommandMarker, StringComparison.Ordinal)
             && Interlocked.Exchange(ref _fired, 1) == 0)
         {
@@ -64,8 +87,6 @@ public sealed class InterleavingCommandInterceptor(
                 await competingWrite.ExecuteNonQueryAsync(cancellationToken);
             }
         }
-
-        return result;
     }
 
     /// <summary>

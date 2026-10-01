@@ -17,14 +17,9 @@ public class ServerFollowingReadService(
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
 
     /// <summary>
-    /// Exposed so the derived write service can call RequireAuthenticatedUser() without re-capturing
-    /// the activeUser primary constructor parameter (avoids CS9107 double-capture warning).
-    /// </summary>
-    protected int? CurrentUserId => activeUser.UserId;
-
-    /// <summary>
-    /// Exposed for the derived write service's kind-(g) profile guard, which needs the whole context
-    /// and a read connection — same no-re-capture reason as <see cref="CurrentUserId"/>.
+    /// Exposed so the derived write service can use the active user (the shared
+    /// <c>RequireUserId()</c> guard, and its kind-(g) profile guard) without re-capturing the
+    /// <c>activeUser</c> primary constructor parameter (avoids the CS9107 double-capture warning).
     /// </summary>
     protected IActiveUserContext ActiveUser => activeUser;
 

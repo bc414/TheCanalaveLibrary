@@ -8,8 +8,8 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side write implementation for Polls (Feature 37; requirements settled 2026-07-12 —
 /// <c>audit/BlogPosts.md</c> F37).
 /// <para>
-/// <b>Security model:</b> site polls are gated on <c>IsModerator || IsAdmin</c> (listed
-/// explicitly — Admin does not inherit Moderator); blog-post polls on
+/// <b>Security model:</b> site polls are gated on the shared <c>ActiveUser.RequireModerator()</c>
+/// (Moderator or Admin — Admin does not inherit Moderator); blog-post polls on
 /// <c>ownerId == ActiveUser.UserId</c>. UI affordances are convenience only; these service gates
 /// are the control.
 /// </para>
@@ -33,10 +33,7 @@ public class ServerPollWriteService(
 {
     public async Task<int> CreateSitePollAsync(PollEditDto dto)
     {
-        if (ActiveUser.UserId is not int userId)
-            throw new InvalidOperationException("Creating a poll requires an authenticated user.");
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can create site polls.");
+        int userId = ActiveUser.RequireModerator();
         rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         ValidateOrThrow(dto);
@@ -201,8 +198,7 @@ public class ServerPollWriteService(
 
     public async Task SetSitePollArchivedAsync(int pollId, bool archived)
     {
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can archive site polls.");
+        ActiveUser.RequireModerator();
 
         SitePoll? poll = await writeDb.Polls.OfType<SitePoll>()
             .FirstOrDefaultAsync(p => p.PollId == pollId);
@@ -340,8 +336,7 @@ public class ServerPollWriteService(
 
         if (poll is SitePoll)
         {
-            if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-                throw new UnauthorizedAccessException("Only moderators can manage site polls.");
+            ActiveUser.RequireModerator();
         }
         else
         {

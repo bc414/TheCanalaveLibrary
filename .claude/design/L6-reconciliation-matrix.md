@@ -220,6 +220,21 @@ is needed before this cell's Stage-5 status is fully earned under the locked dec
 
 ---
 
+## Moderation / reports (Features 46/47 — added 2026-09-30, WU-ModerationIntegrity)
+
+Not part of the original pass. Owner rulings D7/D8 directed three pre-data indexes onto `reports`;
+they are declared and named, but **unmeasured** (no report-volume generator exists). Detail:
+`layer6-indexes.md` §"Owner-directed pre-data indexes — `reports`".
+
+| Query | Index | Verdict |
+|---|---|---|
+| Duplicate-report guard (one open report per reporter per target) | `ix_reports_open_reporter_target` (UNIQUE, partial on status 0/1) | **HAVE** — a correctness constraint; speed unmeasured. |
+| Sibling closing on removal; `ActiveReportCount` recompute | `ix_reports_open_target` (partial on status 0/1) | **HAVE**, unmeasured. |
+| Queue batch enrichment / "all reports against an entity" | `ix_reports_reported_entity_type_reported_entity_id` (full) | **HAVE** — possibly redundant with the partial above; measure before dropping either. |
+| Per-user moderation history (`reported_user_id = uid`) | `ix_reports_reported_user_id` | **HAVE**, unmeasured. |
+
+---
+
 ## Low-volume / config tables — confirmed no index needed
 
 Cross-checked and found correctly seq-scan-appropriate (no gap): `report_reasons`, `themes`,

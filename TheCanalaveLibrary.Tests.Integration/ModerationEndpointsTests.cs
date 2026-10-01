@@ -90,4 +90,60 @@ public class ModerationEndpointsTests(PostgresFixture postgres) : IntegrationTes
             "site-setting writes carry the same edge RequireModerator policy — a non-mod must not " +
             "reach the write service (MA-702, endpoint-authz sweep 2026-07-18)");
     }
+
+    // ── WU-ModerationIntegrity (D9 sub-edge: statuses fixed at the throw sites) ────────
+
+    [Fact]
+    public async Task ResolveNoAction_UnknownReport_Returns404_NotTheOld401()
+    {
+        // The resolve paths loaded the report with SingleAsync, whose InvalidOperationException the
+        // shared EndpointHelpers maps to 401 — a moderator's WASM session saw "session expired".
+        int modId = await SeedUserAsync("mod");
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync("/api/moderation/reports/999999/resolve-no-action", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task SubmitReport_DisallowedTargetType_Returns400_WithTheMessage()
+    {
+        int userId = await SeedUserAsync("reporter");
+        SetActiveUser(userId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/moderation/reports",
+            new SubmitReportRequest((ReportedEntityType)99, 1, 1, null));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "a business rule, not an authentication failure — it was InvalidOperationException → 401");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("cannot be reported");
+    }
+
+    [Fact]
+    public async Task Reinstate_AuthenticatedNonModerator_Returns403()
+    {
+        int userId = await SeedUserAsync("non-mod");
+        SetActiveUser(userId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync("/api/moderation/users/123/reinstate?reason=x", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, "the new route carries the edge RequireModerator policy");
+    }
+
+    [Fact]
+    public async Task UserHistory_UnknownUser_StillReturns404_InsideTheWrapper()
+    {
+        int modId = await SeedUserAsync("mod");
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/moderation/users/999999/history");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "the history read now runs inside ExecuteAsync (its service can throw) and keeps its 404");
+    }
 }

@@ -189,6 +189,26 @@ custom-named characters of one species per story, at most one unnamed),
 `ix_fanon_links_normalized_name_base_tag_id` (UNIQUE — one link per group),
 `ix_fanon_links_target_tag_id` (adoption pages resolve links by target).
 
+## Owner-directed pre-data indexes — `reports` (WU-ModerationIntegrity, 2026-09-30; UNMEASURED)
+
+Owner rulings D7 and D8 directed three `reports` indexes onto the same migration while the table is
+empty ("free at zero rows and none of them are afterwards"). They shipped on correctness and
+query-shape grounds, **not** on a measurement — there is no report-volume generator, so none has a
+number yet. Listed on `.claude/design/L6-reconciliation-matrix.md` §"Moderation / reports" as
+measurement items.
+
+| Index | Shape | Why |
+|---|---|---|
+| `ix_reports_open_reporter_target` | UNIQUE `(reporter_user_id, reported_entity_type, reported_entity_id) WHERE report_status_id IN (0, 1)` | Correctness, not speed: one open report per reporter per target (service §2.4.4(c)); also what makes D7's sibling notifications exactly-once. NULL reporters are distinct, so anonymous reports are unconstrained. |
+| `ix_reports_open_target` | `(reported_entity_type, reported_entity_id) WHERE report_status_id IN (0, 1)` | D7's sibling-closing query and the `ActiveReportCount` recompute (D21's ground truth). |
+| `ix_reports_reported_user_id` | `(reported_user_id)` (EF FK convention) | D8's per-user moderation history (`Reports.Where(r => r.ReportedUserId == uid)`). |
+
+**Same-columns trap applies.** `ix_reports_open_target` covers the same columns as the pre-existing
+full `ix_reports_reported_entity_type_reported_entity_id` (R4: "find all reports against an entity",
+the queue's batch enrichment), so it carries the `HasIndex` name argument (rule 1 above) — without it,
+it would silently replace the full index. The two may be redundant once measured; that is a
+measurement question, so the full index was **not** dropped blind.
+
 ## Rejected — no matching query (R4), reconfirmed against the 2026-07-07 codebase survey
 
 | Candidate | Why rejected |

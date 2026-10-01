@@ -276,7 +276,7 @@ engagement-maximization — none of which apply here.
 
 | Industry driver | Industry pattern | This site's inversion |
 |---|---|---|
-| Ad-safety/brand pressure | Fast automated removal; err toward takedown | Soft-hide default (reversible); author told why |
+| Ad-safety/brand pressure | Fast automated removal; err toward takedown | Soft-hide default (reversible by design; the reversal path is not built yet — D8(b), `layer2-services.md` §"Moderation Services"); author told why |
 | Engagement maximization | Lax on borderline-toxic but engaging content | Deliberately anti-engagement design |
 | Adversarial spam scale | Auto-hide on threshold | Human-in-the-loop (affordable at this volume) |
 | Hard-delete for storage/legal finality | Opaque permanent takedowns | Soft-hide default; hard-delete only for illegal content |
@@ -373,6 +373,12 @@ surfaces.
 (`NotifyAccountWarningAsync` / `Suspended` / `Banned`). The user is always told why — transparency is
 non-negotiable per §13.
 
+**Transitions are guarded, and a ban is reversible (service §2.1.3, built WU-ModerationIntegrity
+2026-09-30).** A suspension needs a future end date; Banned is left only through **Reinstate**, the one
+action that writes `Active` back (it files its own audit `Report` row like every action); a warning can
+no longer silently lift a ban or a live suspension. The table: `layer2-services.md` §"Moderation
+Services" → "The account-status transition table".
+
 **Shadowban is permanently rejected.** Deception-as-moderation directly contradicts the site's §13
 philosophy ("close the loop on ALL reports — the user is entitled to know they were heard"). A community
 that shadowbans lies to its members. This is a design axiom, not a deferred decision.
@@ -408,6 +414,15 @@ per-message report count.
 
 **Uniform `AdjustActiveReportCount(type, id, delta)`** private switch in `ServerModerationWriteService`
 increments on report submit, decrements on resolve. The switch skips `Message` targets (no counter).
+
+**What the count means, and the rules that keep it true (owner rulings D7/D8, built
+WU-ModerationIntegrity 2026-09-30).** `ActiveReportCount` is a cache of the open-report `COUNT(*)`
+for the target. One reporter holds at most one open report per target; a removal closes every other
+open report on the same target (sibling closing — removal only, never "no action" or an account
+action); resolve paths are status-guarded so nothing decrements twice; reports orphaned by account
+deletion are closed where the deletion happens. Each `Report` also records `ReportedUserId`, the
+account answerable for the artifact when it was filed, which makes a user's moderation history one
+predicate across every target type. Rules and mechanism: `layer2-services.md` §"Moderation Services".
 
 ### Notification Loop (§13 Transparency)
 

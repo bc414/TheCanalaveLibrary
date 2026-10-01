@@ -29,7 +29,7 @@ public class ServerFanonWriteService(
 {
     public async Task<int> LinkGroupAsync(FanonLinkCreateDto dto)
     {
-        RequireMod();
+        ActiveUser.RequireModerator();
 
         string normalized = Normalize(dto.Name);
         if (normalized.Length == 0)
@@ -63,7 +63,7 @@ public class ServerFanonWriteService(
 
     public async Task<int> NotifyNewAuthorsAsync(string name, int baseTagId)
     {
-        RequireMod();
+        ActiveUser.RequireModerator();
 
         string normalized = Normalize(name);
         FanonLink link = await writeDb.FanonLinks
@@ -104,12 +104,6 @@ public class ServerFanonWriteService(
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────────
-
-    private void RequireMod()
-    {
-        if (!ActiveUser.IsModerator && !ActiveUser.IsAdmin)
-            throw new UnauthorizedAccessException("Fanonization requires moderator or admin role.");
-    }
 
     /// <summary>
     /// Invite every author of the group's matching rows who has never been told about the target

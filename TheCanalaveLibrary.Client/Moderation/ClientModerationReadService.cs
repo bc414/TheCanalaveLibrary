@@ -13,9 +13,6 @@ public class ClientModerationReadService(HttpClient http) : IModerationReadServi
     /// <summary>Exposed to the write subclass — primary-ctor params can't be shared directly.</summary>
     protected HttpClient Http { get; } = http;
 
-    public async Task<ReportReasonDto[]> GetReportReasonsAsync() =>
-        await Http.GetFromJsonAsync<ReportReasonDto[]>("api/moderation/report-reasons") ?? [];
-
     public async Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) =>
         await Http.GetFromJsonAsync<ReportQueueItemDto[]>(
             $"api/moderation/reports?includeResolved={includeResolved}") ?? [];

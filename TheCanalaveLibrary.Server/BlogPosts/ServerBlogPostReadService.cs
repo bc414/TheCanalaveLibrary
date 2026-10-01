@@ -395,8 +395,7 @@ public class ServerBlogPostReadService(
         // RequireAuthorization(), so without this gate any authenticated user could read a
         // DRAFT announcement's full content. Role, not authorship — any moderator manages any
         // site post (SitePoll's rule).
-        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
-            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
+        ActiveUser.RequireModerator();
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         var row = await readDb.SiteBlogPosts

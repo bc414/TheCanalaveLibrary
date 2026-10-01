@@ -67,7 +67,7 @@ public class ServerGroupWriteService(
 
     public async Task UpdateGroupAsync(UpdateGroupDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await RequireAdminAsync(dto.GroupId, userId);
 
         List<string> errors = dto.CanSave();
@@ -90,7 +90,7 @@ public class ServerGroupWriteService(
 
     public async Task JoinAsync(int groupId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         // CORRECTION (WU-ParentVisibility): this check used to carry a comment claiming "the audience
         // filter is active on writeDb too." It is not — GroupAudience is declared on
@@ -130,7 +130,7 @@ public class ServerGroupWriteService(
 
     public async Task LeaveAsync(int groupId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         // Idempotent — no-op if not a member.
         GroupMember? member = await writeDb.GroupMembers
@@ -149,7 +149,7 @@ public class ServerGroupWriteService(
 
     public async Task AddStoryAsync(AddGroupStoryDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await RequireMemberAsync(dto.GroupId, userId);
 
         // Write context is unfiltered — loads the group and story regardless of audience rating or
@@ -224,7 +224,7 @@ public class ServerGroupWriteService(
 
     public async Task RemoveStoryAsync(int groupStoryId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupStory? gs = await writeDb.GroupStories
             .Include(gs => gs.GroupFolders)
@@ -240,7 +240,7 @@ public class ServerGroupWriteService(
 
     public async Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupStory? gs = await writeDb.GroupStories
             .Include(gs => gs.Story)
@@ -255,7 +255,7 @@ public class ServerGroupWriteService(
 
     public async Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupStory? gs = await writeDb.GroupStories
             .Include(gs => gs.GroupFolders.Where(f => f.GroupFolderId == groupFolderId))
@@ -275,7 +275,7 @@ public class ServerGroupWriteService(
 
     public async Task<int> CreateFolderAsync(CreateFolderDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         await RequireAdminAsync(dto.GroupId, userId);
 
         // Validate MaxRating ≤ group cap.
@@ -304,7 +304,7 @@ public class ServerGroupWriteService(
 
     public async Task RenameFolderAsync(int groupFolderId, string newName)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupFolder? folder = await writeDb.GroupFolders
             .FirstOrDefaultAsync(f => f.GroupFolderId == groupFolderId);
@@ -318,7 +318,7 @@ public class ServerGroupWriteService(
 
     public async Task DeleteFolderAsync(int groupFolderId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupFolder? folder = await writeDb.GroupFolders
             .FirstOrDefaultAsync(f => f.GroupFolderId == groupFolderId);
@@ -335,7 +335,7 @@ public class ServerGroupWriteService(
 
     public async Task ReorderFolderAsync(int groupFolderId, int newSortOrder)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         GroupFolder? folder = await writeDb.GroupFolders
             .FirstOrDefaultAsync(f => f.GroupFolderId == groupFolderId);
@@ -349,12 +349,6 @@ public class ServerGroupWriteService(
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 
     private async Task RequireMemberAsync(int groupId, int userId)
     {

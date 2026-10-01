@@ -40,8 +40,7 @@ public class ServerExternalVerificationWriteService(
 
     public async Task<string> EnsureMyVerificationCodeAsync()
     {
-        if (ActiveUser.UserId is not int userId)
-            throw new InvalidOperationException("Requires an authenticated user.");
+        int userId = ActiveUser.RequireUserId();
 
         User user = await writeDb.Users.SingleAsync(u => u.Id == userId);
         if (user.VerificationCode is not null)
@@ -64,22 +63,22 @@ public class ServerExternalVerificationWriteService(
 
     public async Task SubmitAccountForVerificationAsync(AddExternalAccountRequest request)
     {
-        if (ActiveUser.UserId is not int userId)
-            throw new InvalidOperationException("Requires an authenticated user.");
+        int userId = ActiveUser.RequireUserId();
 
         rateLimit.EnsureAllowed(WriteActionKind.VerificationRequest, userId);
 
         if (!Uri.TryCreate(request.ProfileUrl, UriKind.Absolute, out Uri? uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-            throw new InvalidOperationException("Profile URL must be an absolute http or https URL.");
+            throw new ExternalVerificationValidationException(["Profile URL must be an absolute http or https URL."]);
 
         if (string.IsNullOrWhiteSpace(request.Handle))
-            throw new InvalidOperationException("Handle is required.");
+            throw new ExternalVerificationValidationException(["Handle is required."]);
 
         ExternalPlatform platform = await writeDb.ExternalPlatforms
-            .SingleAsync(p => p.ExternalPlatformId == request.ExternalPlatformId);
+            .SingleOrDefaultAsync(p => p.ExternalPlatformId == request.ExternalPlatformId)
+            ?? throw new KeyNotFoundException($"External platform {request.ExternalPlatformId} was not found.");
         if (!platform.SupportsVerification)
-            throw new InvalidOperationException($"{platform.Name} does not support verification.");
+            throw new ExternalVerificationValidationException([$"{platform.Name} does not support verification."]);
 
         // The code must exist before the author is told to go place it.
         await EnsureMyVerificationCodeAsync();
@@ -110,12 +109,12 @@ public class ServerExternalVerificationWriteService(
 
     public async Task RequestLinkVerificationAsync(int storyExternalLinkId)
     {
-        if (ActiveUser.UserId is not int userId)
-            throw new InvalidOperationException("Requires an authenticated user.");
+        int userId = ActiveUser.RequireUserId();
 
         StoryExternalLink link = await writeDb.StoryExternalLinks
             .Include(l => l.Story)
-            .SingleAsync(l => l.StoryExternalLinkId == storyExternalLinkId);
+            .SingleOrDefaultAsync(l => l.StoryExternalLinkId == storyExternalLinkId)
+            ?? throw new KeyNotFoundException($"Story link {storyExternalLinkId} was not found.");
 
         if (link.Story.AuthorId != userId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
@@ -130,7 +129,7 @@ public class ServerExternalVerificationWriteService(
                 .Where(p => p.ExternalPlatformId == link.ExternalPlatformId)
                 .Select(p => p.Name)
                 .SingleAsync();
-            throw new InvalidOperationException($"Verify your {platformName} account first.");
+            throw new ExternalVerificationValidationException([$"Verify your {platformName} account first."]);
         }
 
         rateLimit.EnsureAllowed(WriteActionKind.VerificationRequest, userId);
@@ -144,10 +143,11 @@ public class ServerExternalVerificationWriteService(
 
     public async Task ApproveAccountVerificationAsync(int userExternalIdentityId)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
         UserExternalIdentity identity = await writeDb.UserExternalIdentities
-            .SingleAsync(i => i.UserExternalIdentityId == userExternalIdentityId);
+            .SingleOrDefaultAsync(i => i.UserExternalIdentityId == userExternalIdentityId)
+            ?? throw new KeyNotFoundException($"Verification request {userExternalIdentityId} was not found.");
 
         identity.VerificationStatus = VerificationStatusEnum.Verified;
         identity.DateReviewed = DateTime.UtcNow;
@@ -164,10 +164,11 @@ public class ServerExternalVerificationWriteService(
 
     public async Task RejectAccountVerificationAsync(int userExternalIdentityId, string reason)
     {
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
         UserExternalIdentity identity = await writeDb.UserExternalIdentities
-            .SingleAsync(i => i.UserExternalIdentityId == userExternalIdentityId);
+            .SingleOrDefaultAsync(i => i.UserExternalIdentityId == userExternalIdentityId)
+            ?? throw new KeyNotFoundException($"Verification request {userExternalIdentityId} was not found.");
 
         identity.VerificationStatus = VerificationStatusEnum.Rejected;
         identity.DateReviewed = DateTime.UtcNow;
@@ -187,11 +188,12 @@ public class ServerExternalVerificationWriteService(
         // The per-link tier records no reviewer, and the outcome notification is null-sourced (D5 — the
         // moderator is never named to the author); the id only keeps a moderator reviewing their own
         // story's link from notifying themselves.
-        int modId = RequireModerator();
+        int modId = ActiveUser.RequireModerator();
 
         StoryExternalLink link = await writeDb.StoryExternalLinks
             .Include(l => l.Story)
-            .SingleAsync(l => l.StoryExternalLinkId == storyExternalLinkId);
+            .SingleOrDefaultAsync(l => l.StoryExternalLinkId == storyExternalLinkId)
+            ?? throw new KeyNotFoundException($"Story link {storyExternalLinkId} was not found.");
 
         link.VerificationStatus = VerificationStatusEnum.Verified;
         link.RejectionReason = null;
@@ -208,11 +210,12 @@ public class ServerExternalVerificationWriteService(
 
     public async Task RejectLinkVerificationAsync(int storyExternalLinkId, string reason)
     {
-        int modId = RequireModerator(); // see ApproveLinkVerificationAsync
+        int modId = ActiveUser.RequireModerator(); // see ApproveLinkVerificationAsync
 
         StoryExternalLink link = await writeDb.StoryExternalLinks
             .Include(l => l.Story)
-            .SingleAsync(l => l.StoryExternalLinkId == storyExternalLinkId);
+            .SingleOrDefaultAsync(l => l.StoryExternalLinkId == storyExternalLinkId)
+            ?? throw new KeyNotFoundException($"Story link {storyExternalLinkId} was not found.");
 
         link.VerificationStatus = VerificationStatusEnum.Rejected;
         link.RejectionReason = reason;
@@ -225,17 +228,5 @@ public class ServerExternalVerificationWriteService(
                 await notifications.NotifyExternalLinkRejectedAsync(authorId, link.StoryId);
         }
         catch (Exception ex) { logger.LogWarning(ex, "ExternalLinkRejected notification failed for link {Id}", storyExternalLinkId); }
-    }
-
-    // ── Private helpers ───────────────────────────────────────────────────────────
-
-    /// <summary>Mirrors <c>ServerModerationWriteService.RequireModerator</c> exactly.</summary>
-    private int RequireModerator()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("Moderator action requires an authenticated user.");
-        if (!ActiveUser.IsModerator && !ActiveUser.IsAdmin)
-            throw new UnauthorizedAccessException("Moderator action requires the Moderator or Admin role.");
-        return id;
     }
 }

@@ -13,8 +13,13 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///
 /// <para><b>What's tested:</b>
 /// <list type="bullet">
-///   <item><c>SubmitReportAsync</c>: creates Report row, increments <c>ActiveReportCount</c>.</item>
-///   <item>Invalid target type throws immediately (allow-set gate).</item>
+///   <item><c>SubmitReportAsync</c> (now on <see cref="IReportSubmissionService"/>, owner ruling D9):
+///   creates Report row, increments <c>ActiveReportCount</c>.</item>
+///   <item>Invalid target type throws immediately (allow-set gate) — a
+///   <c>ModerationValidationException</c> since WU-ModerationIntegrity.</item>
+///   <item>The report-lifecycle integrity rules WU-ModerationIntegrity built (D7 sibling closing,
+///   status guards, dedup, <c>ReportedUserId</c>, the account-status table, the read gates) are in
+///   <see cref="ModerationIntegrityTests"/>.</item>
 ///   <item><c>ResolveNoActionAsync</c>: status → ResolvedNoAction, count decremented, notification sent.</item>
 ///   <item><c>ResolveWithRemovalAsync</c> (soft takedown): sets <c>IsTakenDown=true</c>, drops from
 ///   public reads, remains visible with <c>IgnoreQueryFilters(["IsTakenDown"])</c>.</item>
@@ -71,7 +76,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         short reasonId = await GetFirstReasonIdAsync();
 
         SetActiveUser(_reporterId);
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(
             ReportedEntityType.Story, storyId, reasonId, "test notes"));
 
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -96,10 +101,12 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         SetActiveUser(_reporterId);
         short reasonId = await GetFirstReasonIdAsync();
 
-        Func<Task> act = () => GetMod().SubmitReportAsync(new SubmitReportRequest(
+        Func<Task> act = () => GetSubmission().SubmitReportAsync(new SubmitReportRequest(
             (ReportedEntityType)99, 1, reasonId, null));
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        // A business rule, so a 400 (ModerationValidationException) — it was an
+        // InvalidOperationException, which the endpoint layer maps to 401 (WU-ModerationIntegrity).
+        await act.Should().ThrowAsync<ModerationValidationException>()
             .WithMessage("*cannot be reported*");
     }
 
@@ -226,7 +233,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         short reasonId = await GetFirstReasonIdAsync();
 
         SetActiveUser(_reporterId);
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(
             ReportedEntityType.Story, storyId, reasonId, null));
 
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -250,8 +257,8 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         short reasonId = await GetFirstReasonIdAsync();
 
         SetActiveUser(_reporterId);
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyA, reasonId, null));
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyB, reasonId, null));
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyA, reasonId, null));
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, storyB, reasonId, null));
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -410,7 +417,9 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         int removedStory = await SeedStoryAsync(authorId);
         long reportA = await SeedReportAsync(ReportedEntityType.Story, reportedStory, _reporterId);
         long reportB = await SeedReportAsync(ReportedEntityType.Story, removedStory, _reporterId);
-        long reportC = await SeedReportAsync(ReportedEntityType.Story, reportedStory, _reporterId);
+        // A second reporter: one reporter holds at most one open report per target (the partial unique
+        // index, service §2.4.4(c)).
+        long reportC = await SeedReportAsync(ReportedEntityType.Story, reportedStory, await SeedUserAsync("SecondReporter"));
         int approveMe = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
         int rejectMe = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
         short reasonId = await GetFirstReasonIdAsync();
@@ -456,8 +465,8 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
 
         // The moderator files both through the ordinary Report button, then resolves them.
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, keptStory, reasonId, null));
-        await GetMod().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, removedStory, reasonId, null));
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, keptStory, reasonId, null));
+        await GetSubmission().SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, removedStory, reasonId, null));
         long noActionReport, removalReport;
         using (IServiceScope lookup = Factory.Services.CreateScope())
         {
@@ -741,21 +750,23 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         int targetId = await SeedUserAsync("NeverReported");
         short reasonId = await GetFirstReasonIdAsync();
 
+        // Relative to now: a suspension's end date must be in the future (service §2.1.3(a)).
+        DateTime until = DateTime.UtcNow.Date.AddDays(60);
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
         await GetMod().ApplyAccountActionToUserAsync(
-            targetId, reasonId, ModeratorActionType.SuspendUser, "Ban evasion.",
-            new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+            targetId, reasonId, ModeratorActionType.SuspendUser, "Ban evasion.", until);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         User target = await db.Users.SingleAsync(u => u.Id == targetId);
         target.AccountStatus.Should().Be(AccountStatusEnum.Suspended);
-        target.SuspendedUntilUtc.Should().Be(new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+        target.SuspendedUntilUtc.Should().Be(until);
 
         Report report = await db.Reports.SingleAsync(r =>
             r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == targetId);
         report.ReporterUserId.Should().Be(_modId);
+        report.ReportedUserId.Should().Be(targetId, "D8: every producer records who the report is about");
         report.ModeratorUserId.Should().Be(_modId,
             "ReporterUserId == ModeratorUserId is what marks a report as moderator-initiated — " +
             "there is no separate moderation-action table");
@@ -795,15 +806,19 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     // ── GetUserModerationHistoryAsync (WU-UserModeration) ─────────────────────────
 
     [Fact]
-    public async Task GetUserModerationHistoryAsync_ReturnsStandingAndUserTargetedReports()
+    public async Task GetUserModerationHistoryAsync_ReturnsStanding_AndReportsAboutTheUserAndTheirContent()
     {
         int targetId = await SeedUserAsync("HistorySubject");
-        await SeedReportAsync(ReportedEntityType.User, targetId, _reporterId);
+        await SeedReportAsync(ReportedEntityType.User, targetId, _reporterId, reportedUserId: targetId);
 
-        // A report against a story this user wrote must NOT appear — the view is user-targeted
-        // reports only, a scope the page states on screen.
+        // A report against a story this user wrote NOW appears (owner ruling D8, tracker B18): the
+        // history reads ReportedUserId across every target type. It used to be user-targeted only.
         int storyId = await SeedStoryAsync(targetId);
-        await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId);
+        await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId, reportedUserId: targetId);
+        string storyTitle;
+        using (IServiceScope lookup = Factory.Services.CreateScope())
+            storyTitle = await lookup.ServiceProvider.GetRequiredService<ApplicationDbContext>().StoryListings
+                .Where(l => l.StoryId == storyId).Select(l => l.StoryTitle).SingleAsync();
 
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
         UserModerationHistoryDto? history = await GetMod().GetUserModerationHistoryAsync(targetId);
@@ -813,8 +828,11 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         // SeedUserAsync appends a per-run GUID suffix to the label — match the prefix, not the whole.
         history.Username.Should().StartWith("HistorySubject");
         history.AccountStatus.Should().Be(AccountStatusEnum.Active);
-        history.Reports.Should().HaveCount(1);
-        history.Reports[0].EntityType.Should().Be(ReportedEntityType.User);
+        history.Reports.Should().HaveCount(2);
+        history.Reports.Should().ContainSingle(r => r.EntityType == ReportedEntityType.User);
+        history.Reports.Should().ContainSingle(r => r.EntityType == ReportedEntityType.Story
+                                                    && r.TargetLabel == storyTitle,
+            "a content report is labelled with its target, like the queue's rows");
     }
 
     [Fact]
@@ -1020,6 +1038,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         Report report = await db.Reports.SingleAsync(r =>
             r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == targetId);
         report.ReporterUserId.Should().Be(_modId);
+        report.ReportedUserId.Should().Be(targetId, "D8: every producer records who the report is about");
         report.ModeratorUserId.Should().Be(_modId, "ReporterUserId == ModeratorUserId marks it moderator-initiated");
         report.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedActionTaken);
         report.ActionTaken.Should().Be("Auto-approve revoked: Spam after approval.");
@@ -1276,6 +1295,14 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         return scope.ServiceProvider.GetRequiredService<IModerationWriteService>();
     }
 
+    /// <summary>The member-facing submission interface (owner ruling D9's split).</summary>
+    private IReportSubmissionService GetSubmission()
+    {
+        IServiceScope scope = Factory.Services.CreateScope();
+        _serviceScopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IReportSubmissionService>();
+    }
+
     /// <summary>
     /// Runs <paramref name="act"/> against a <see cref="ServerModerationWriteService"/> whose write
     /// context carries <paramref name="interceptor"/>; disposes both afterwards.
@@ -1336,7 +1363,8 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     /// Increments the target's <c>ActiveReportCount</c> inline so the report queue
     /// returns a meaningful count.
     /// </summary>
-    private async Task<long> SeedReportAsync(ReportedEntityType type, long entityId, int reporterId)
+    private async Task<long> SeedReportAsync(ReportedEntityType type, long entityId, int reporterId,
+        int? reportedUserId = null)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -1350,6 +1378,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             ReportedEntityId = entityId,
             ReportReasonId = reasonId,
             ReporterUserId = reporterId,
+            ReportedUserId = reportedUserId,
             ReportStatusId = ReportStatusEnum.Open,
             DateReported = DateTime.UtcNow,
         };

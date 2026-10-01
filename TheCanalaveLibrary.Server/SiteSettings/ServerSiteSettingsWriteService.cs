@@ -4,8 +4,8 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// Server write implementation for the SiteSettings cluster. Mod-gating is enforced here (the
-/// <c>RequireModerator</c> pattern from <c>ServerModerationWriteService</c>) — mod-page
+/// Server write implementation for the SiteSettings cluster. Mod-gating is enforced here with the
+/// shared <c>ActiveUser.RequireModerator()</c> guard (anonymous → 401, non-moderator → 403) — mod-page
 /// <c>[Authorize]</c> attributes are affordance, not the gate.
 /// </summary>
 public class ServerSiteSettingsWriteService(
@@ -16,7 +16,7 @@ public class ServerSiteSettingsWriteService(
 {
     public async Task SetIntAsync(string settingKey, int value)
     {
-        RequireModerator();
+        activeUser.RequireModerator();
 
         SiteSetting? existing = await writeDb.SiteSettings
             .FirstOrDefaultAsync(s => s.SettingKey == settingKey);
@@ -27,12 +27,5 @@ public class ServerSiteSettingsWriteService(
             existing.Value = value.ToString();
 
         await writeDb.SaveChangesAsync();
-    }
-
-    private void RequireModerator()
-    {
-        // IsInRole is literal — Admin does NOT inherit Moderator; accept both (IActiveUserContext doc).
-        if (!activeUser.IsModerator && !activeUser.IsAdmin)
-            throw new UnauthorizedAccessException("This operation requires a moderator.");
     }
 }

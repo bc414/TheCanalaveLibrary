@@ -14,19 +14,15 @@ namespace TheCanalaveLibrary.Client;
 /// guards, account-action and auto-approve validation — WU-StoryLifecycle, 2026-09-30, pulled
 /// forward from service audit §2.7.5) reaches the moderator verbatim on WASM instead of collapsing
 /// to the generic error. 401/403/404 are the shared helper's standard arms (WU-ErrorHandling2,
-/// 2026-07-30; see ModerationEndpoints' class doc's "Known EndpointHelpers mismatch" note for the
-/// one remaining guard that still arrives as 401).
+/// 2026-07-30). Since WU-ModerationIntegrity (2026-09-30) every server guard here answers with its
+/// real status — 400 for a business rule (an already-resolved report, the account-status transition
+/// table), 404 for an unknown id — so no guard still arrives as 401. Report submission is not here:
+/// it is <see cref="ClientReportSubmissionService"/> (owner ruling D9's split).
 /// </para>
 /// </summary>
 public sealed class ClientModerationWriteService(HttpClient http)
     : ClientModerationReadService(http), IModerationWriteService
 {
-    public async Task SubmitReportAsync(SubmitReportRequest request)
-    {
-        HttpResponseMessage response = await Http.PostAsJsonAsync("api/moderation/reports", request);
-        await ThrowIfWriteFailedAsync(response);
-    }
-
     public async Task ClaimReportAsync(long reportId)
     {
         HttpResponseMessage response =
@@ -71,6 +67,14 @@ public sealed class ClientModerationWriteService(HttpClient http)
                 : "");
         HttpResponseMessage response = await Http.PostAsync(
             $"api/moderation/users/{targetUserId}/account-action{query}", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
+    public async Task ReinstateUserAsync(int targetUserId, string reason)
+    {
+        string query = $"?reason={Uri.EscapeDataString(reason)}";
+        HttpResponseMessage response = await Http.PostAsync(
+            $"api/moderation/users/{targetUserId}/reinstate{query}", content: null);
         await ThrowIfWriteFailedAsync(response);
     }
 

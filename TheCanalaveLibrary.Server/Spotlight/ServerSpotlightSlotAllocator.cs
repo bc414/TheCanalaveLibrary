@@ -28,7 +28,7 @@ public class ServerSpotlightSlotAllocator(
             throw new NotSupportedException(
                 "Donation-sourced slots are the deferred payment-pipeline seam — no grant path produces them yet.");
 
-        int modId = RequireModerator();
+        int modId = activeUser.RequireModerator();
 
         bool userExists = await writeDb.Users.AnyAsync(u => u.Id == toUserId);
         if (!userExists)
@@ -71,7 +71,7 @@ public class ServerSpotlightSlotAllocator(
 
     public async Task RevokeSlotAsync(int slotId)
     {
-        RequireModerator();
+        activeUser.RequireModerator();
 
         SpotlightSlot? slot = await writeDb.SpotlightSlots.FirstOrDefaultAsync(s => s.SlotId == slotId);
         if (slot is null)
@@ -85,6 +85,10 @@ public class ServerSpotlightSlotAllocator(
 
     public async Task<int> GetRemainingMonthlyGrantCapacityAsync()
     {
+        // Mod-only read, gated in the service like every write here (owner ruling D9): the page's
+        // [Authorize] does not protect the circuit.
+        activeUser.RequireModerator();
+
         int cap = await siteSettings.GetIntAsync(
             SiteSettingKeys.SpotlightMonthlyGrantCap, SiteSettingKeys.SpotlightMonthlyGrantCapDefault);
 
@@ -95,7 +99,7 @@ public class ServerSpotlightSlotAllocator(
 
     public async Task<IReadOnlyList<SpotlightSlotAdminDto>> GetRecentGrantsAsync(int take = 50)
     {
-        RequireModerator();
+        activeUser.RequireModerator();
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.SpotlightSlots
@@ -119,14 +123,5 @@ public class ServerSpotlightSlotAllocator(
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         return context.Set<SpotlightSlot>()
             .CountAsync(s => s.GrantedUtc >= monthStart && s.Status != SpotlightSlotStatus.Revoked);
-    }
-
-    private int RequireModerator()
-    {
-        // IsInRole is literal — Admin does NOT inherit Moderator; accept both (IActiveUserContext doc).
-        if (!activeUser.IsModerator && !activeUser.IsAdmin)
-            throw new UnauthorizedAccessException("This operation requires a moderator.");
-        return activeUser.UserId
-               ?? throw new InvalidOperationException("Moderator context has no user id.");
     }
 }

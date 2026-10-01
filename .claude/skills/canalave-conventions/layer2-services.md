@@ -1807,7 +1807,7 @@ public interface IUserSettingsService
 **Rules that make this exception safe:**
 1. **No `userId` parameter on any method.** The service resolves the target entirely from
    `IActiveUserContext` — it is, by contract, "the currently authenticated user's settings."
-2. **Authentication guard is mandatory.** Every method must call `RequireAuthenticatedUser()` (or
+2. **Authentication guard is mandatory.** Every method must call the shared `ActiveUser.RequireUserId()` (or
    equivalent) before doing anything — there is no unauthenticated path.
 3. **Self-only scope is the invariant.** The moment a method takes a `userId` it's no longer
    self-referential and must become a pair of `I{Feature}ReadService` + `I{Feature}WriteService`.
@@ -1938,15 +1938,39 @@ The trust counter itself is a record of a decision, not a derived counter — se
 
 ## Moderation Services
 
-`IModerationReadService` / `IModerationWriteService` live in `Core/Moderation/`. Server impls live in
-`Server/Moderation/`. The write service inherits the read service (CQRS-lite inheritance pattern).
+Three interfaces in `Core/Moderation/`, server impls in `Server/Moderation/`:
+- **`IReportSubmissionService`** — `GetReportReasonsAsync` + `SubmitReportAsync`, the only two
+  operations a member performs. `ReportDialog` (a cross-cutting leaf on public pages) injects this,
+  never a mod interface.
+- **`IModerationReadService`** — the moderator queues and the per-user history.
+- **`IModerationWriteService : IModerationReadService`** — the moderator actions.
 
-**DAG position.** `ServerModerationWriteService` injects:
-- `INotificationWriteService` (notifications — already the standard cross-feature dep).
-- Feature *read* services for target/author resolution per `ReportedEntityType` — e.g.
-  `IStoryReadService` to look up a story's title and author when notifying `ContentRemoved`. Never feature
-  *write* services (DAG rule: moderation is a peer of features, not above them in the write graph).
-- `IActiveUserContext` for moderator ID.
+The split is owner ruling **D9** (2026-08-06, built WU-ModerationIntegrity 2026-09-30): P1's "inject
+the narrowest interface" applied at the type level, so a public page never compiles against the
+hard-delete/ban surface. It is a compile-time discipline, **not** a runtime control — the read gates
+below are the control. One concrete class, `ServerModerationWriteService`, implements all three; it is
+registered once and all three interfaces forward to it (§"Registering an inherited pair" — the
+`ISavedTagSelectionWriteService` shape). This follows the current registration rule; D36 (canonical DI
+shape) is pending and may revisit it. On WASM the twins are `ClientReportSubmissionService` (its
+`rateLimitedAction: WriteActionKind.Report` makes a 429 a `WriteRateLimitExceededException`) and
+`ClientModerationRead/WriteService`.
+
+**DAG position.** `ServerModerationWriteService` injects `INotificationWriteService` (the standard
+cross-feature dep), `IWriteRateLimitService`, `UserManager<User>` (the security-stamp bump) and
+`IActiveUserContext`. It injects **no** feature service, read or write: target and author resolution
+read the unfiltered write context directly (`LoadModeratableAsync`, `ResolveAnswerableUserIdAsync`).
+(Corrected WU-ModerationIntegrity, 2026-09-30: this paragraph used to say it composes feature read
+services such as `IStoryReadService`; no version of the service ever did.)
+
+**Every moderator-only operation gates in the service — reads included (D9).** The read service takes
+`IActiveUserContext` and exposes it as `protected ActiveUser` (§"CS9107/CS9124"); `GetReportQueueAsync`,
+`GetPendingSubmissionsAsync` and `GetUserModerationHistoryAsync` open with `ActiveUser.RequireModerator()`,
+the shared guard in `Core/Identity/ActiveUserContextExtensions.cs` (anonymous →
+`InvalidOperationException` → 401; signed in without the Moderator or Admin role →
+`UnauthorizedAccessException` → 403; returns the moderator's id). Every write uses the same guard.
+`GetReportReasonsAsync` stays ungated: it feeds `ReportDialog` for any reporter. The full mod-only
+surface and the one deliberate non-gate are listed in `identity-and-authorization.md` §"Role-Based
+(Moderator) Gating".
 
 **Soft-delete (takedown) visibility filter `"IsTakenDown"`.** Each removable entity registers
 `HasQueryFilter("IsTakenDown", e => !e.IsTakenDown)` in `OnModelCreating`. Public reads go through the
@@ -1961,20 +1985,128 @@ this interface exposing `IsTakenDown`, `TakedownDate`, `TakedownReason`, `Active
 `AuthorUserId`. `ServerModerationWriteService` loads via a single per-type switch (`LoadModeratableAsync`)
 then mutates through the interface — no repeated switch per operation.
 
-**`AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)` private switch.** Lives in
-`ServerModerationWriteService`. Called on report submit (+1) and report resolve (-1). Uses per-DbSet
-`ExecuteUpdateAsync` (set-based, no load) with `IgnoreQueryFilters(["IsTakenDown"])`. Skips `Message`
-(no counter on `PrivateMessage`). This is the single authority on counter mutation — do not
-increment/decrement at call-sites.
+**The entity carries current state; the `Report` row carries history (owner ruling D8(b)).** No
+takedown-history table, ever. When takedown reversal is built (it does not exist yet — nothing writes
+`IsTakenDown = false`), it nulls `TakedownDate` and `TakedownReason` along with the flag rather than
+leaving stale metadata behind as a pseudo-history, and it does **not** reopen the sibling reports the
+removal closed. Content that is again problematic is reported again.
 
-**`ApplyRemovalAsync` / `ApplyHardDeleteAsync` — collapsed to interface.** Both call `LoadModeratableAsync`
-once, then mutate via `IModeratableContent`. `ApplyRemovalAsync` sets `IsTakenDown = true`, `TakedownDate`,
-`TakedownReason`. A parallel `ApplyHardDeleteAsync` calls `writeDb.Remove((object)entity)` for illegal
-content — a distinct action, not a flag.
+### `ActiveReportCount` — what it means (owner ruling D7)
 
-**Notification dedup key.** `CreateCoreAsync` dedups on `(NotificationTypeId, SourceUserId, RelatedEntityId,
-!IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two
-moderation notifications about *different* targets both reach the recipient.
+`ActiveReportCount` on `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation` and `User` is **a cache
+of `COUNT(*) FROM reports WHERE (reported_entity_type, reported_entity_id) = target AND
+report_status_id IN (Open, UnderReview)`** — how many unanswered questions stand against the target,
+which is what the queue's triage sort claims to rank. It is a *derived* counter in D21's sense: that
+`COUNT(*)` is its ground truth, so it is recomputable (the WU_ModerationIntegrity migration ran the
+recompute once; the standing reconciler belongs to WU-CounterSymmetry, on the partial index
+`ix_reports_open_target`). `PrivateMessage` has no column.
+
+**`AdjustActiveReportCountAsync(type, id, delta)`** is the single authority on mutating it: a
+per-DbSet `ExecuteUpdateAsync` on the unfiltered write context (no `IgnoreQueryFilters` needed — the
+write context has no filters), a no-op for `Message`. Never increment or decrement at a call site.
+(Corrected WU-ModerationIntegrity, 2026-09-30: this paragraph used to say the switch calls
+`IgnoreQueryFilters`.)
+
+### Report submission (`SubmitReportAsync`)
+
+In order: the target-type allow-set (`ModerationValidationException`, 400) → the authenticated-axis
+throttle → kind (g) target existence and visibility (`KeyNotFoundException`; `identity-and-authorization.md`)
+→ the duplicate check → resolve `ReportedUserId` → `Reports.Add` → `SaveChangesAsync` → **then**
+`AdjustActiveReportCountAsync(+1)` → the `ReportReceived` receipt.
+- **Primary write first, counter second (D22).** The row commits, then the counter moves. No
+  transaction wraps the pair: a missing `+1` after a crash is transient drift the recompute heals,
+  whereas the old order (counter first) could leave a `+1` with no row and nothing to recompute from.
+- **One open report per reporter per target (service §2.4.4(c)).** The partial unique index
+  `ix_reports_open_reporter_target` on `(reporter_user_id, reported_entity_type, reported_entity_id)
+  WHERE report_status_id IN (0, 1)` enforces it; the service checks first and also catches the
+  index's `23505` on save (the race), answering both with `ModerationValidationException("You've already
+  reported this — a moderator will review your open report.")`. Once that report is resolved the
+  reporter may file again. Anonymous reports are not deduped: a NULL reporter is distinct in the index.
+  The index is also what makes D7's "notify every sibling reporter" exactly-once by construction.
+
+**`ReportedUserId` (owner ruling D8) — the account answerable for the reported artifact at the moment
+the report was filed.** Nullable FK → `AspNetUsers`, `ON DELETE SET NULL` (reports outlive the accounts
+they name). Populated at write time **for every target type**: `User` → that user; `Message` → the
+sender; `Story`/`Comment`/`BlogPost`/`Recommendation` → the author. It is a **snapshot, never
+re-resolved** — nothing that reassigns ownership rewrites report history, and a later session must not
+"correct" it as drift. NULL means unknown, anonymized or deleted, never "has no owner" (a founderless
+`Group`, once D13 adds that target, is the one designed NULL — WU-UserDeletion adds its resolver arm).
+Every producer sets it: submission (resolved), and the moderator-filed rows (`ApplyAccountActionToUserAsync`,
+`SetCanAutoApproveAsync`, `ReinstateUserAsync`), which set it to their target.
+- **One resolver, two forms.** `ResolveAnswerableUserIdAsync(type, id)` returns `int?`; its default arm
+  **throws**, so a new `ReportedEntityType` member fails loudly until it gets its arm. Submission uses the
+  nullable form and never throws on NULL (anonymous or deleted-author content stays reportable). The
+  account-action path wraps it — `ResolveActionTargetUserIdAsync` — and throws
+  `ModerationValidationException` on NULL ("there's no account to act on").
+- **The per-user history is one predicate.** `GetUserModerationHistoryAsync` reads
+  `Reports.Where(r => r.ReportedUserId == userId)` — every target type, newest first, each row labelled
+  through the queue's batch enrichment. The ledger outlives its targets, so a row whose target no longer
+  materializes is kept and labelled `[deleted {type}]` with no link.
+
+### Resolve paths — lock, guard, then transition (service §2.1.2)
+
+`ResolveNoActionAsync`, `ResolveWithRemovalAsync` and `ApplyAccountActionAsync` each run inside one
+execution-strategy transaction (the Spotlight template: `CreateExecutionStrategy().ExecuteAsync`,
+`ChangeTracker.Clear()` first, `BeginTransactionAsync` inside) and open with
+`LockResolvableReportAsync`: `SELECT * FROM reports WHERE report_id = … FOR UPDATE` via `FromSql`
+(materialized with `ToListAsync`, never composed further — EF would wrap the locking query as a
+subquery). Missing → `KeyNotFoundException` (404); status not `Open`/`UnderReview` →
+`ModerationValidationException("This report has already been resolved.")` (400). The row lock
+serializes a second moderator: they block, then read the committed status and are refused — so the
+counter is decremented only on the actual transition, without a concurrency token (D30 pending). The
+counter adjustment runs **inside** the transaction (the row lock needs one anyway; compatible with
+D22). **Notifications run after the strategy call returns, never inside the retried delegate**, each in
+its own best-effort `try/catch`. A `ClaimReportAsync` claim is triage bookkeeping, not a lock.
+
+### Sibling closing on removal (owner ruling D7)
+
+**`ResolveWithRemovalAsync` closes every other Open|UnderReview report on the same target, in the same
+transaction — soft takedown and hard delete alike.** The target is the pair `(ReportedEntityType,
+ReportedEntityId)`: never the id alone (story 5 and comment 5 are different targets) and never the
+target's author.
+- **Removal only — the criterion is answerability.** After a removal a sibling has no decision left in
+  it. `ResolveNoActionAsync` does not close siblings (one moderator's "no" is a ruling on one complaint);
+  neither account-action path bulk-closes (the content stays live and each report still asks a live
+  question). A sibling claimed `UnderReview` by another moderator closes anyway.
+- **Mechanism, in order:** lock and guard the primary → refuse a `User` target
+  (`ModerationValidationException`: "User reports are resolved with an account action, not a removal" —
+  `ApplyRemovalAsync` has no `User` branch, and D7 forbids bulk-closing a user's reports) → apply the
+  removal or hard delete → set the primary report's fields (tracked) → lock the siblings
+  (`FOR UPDATE`, capturing `(ReportId, ReporterUserId)`) → one `ExecuteUpdateAsync` over those ids that
+  are still Open|UnderReview, setting `ResolvedActionTaken`, the acting moderator, the **same**
+  `DateResolved`, and `ActionTaken = "Closed with report #{id}: {reason}"` (truncated to the column's
+  1024) → **N = rows affected** → `AdjustActiveReportCountAsync(target, −(1 + N))` → `SaveChangesAsync`
+  → commit. The primary row is tracked and excluded from the bulk update (no tracked-versus-set
+  collision). Nothing is deleted from `reports`.
+- **Derive the delta from rows transitioned; never zero the column.** A report filed concurrently keeps
+  its own `+1` and stays open. Hard delete's counter step is vacuous (the row dies in the same save);
+  `Message` gets the sibling half and the no-op counter half.
+- **Siblings resolve as `ResolvedActionTaken`** — action was taken on their target; "no action" would
+  be false. **Every distinct non-null sibling reporter is notified** with `ReportResolved` (81) carrying
+  *their own* report id (D4's dedup never collapses it), and the content author gets `ContentRemoved`
+  (70); the acting moderator is skipped everywhere (§"Notification Generation" → guardrail).
+- **Accepted consequences, not to be re-litigated:** a takedown reversal does not reopen the closed
+  siblings (D8(b)); a reporter whose report was closed by another report's resolution is told
+  "resolved, action taken" without being told which report drove it (D5's posture).
+
+### Zombie reports — closed at the source (D7 sub-edge, WU-ModerationIntegrity's pick)
+
+Reports carry no FK to their polymorphic target, so a report outlives a target destroyed outside
+moderation — and the queue silently drops rows whose target no longer materializes, leaving them Open,
+invisible and unresolvable. **Close them where the target is destroyed, in that transaction, never by
+a later reconciler** (D13's "clean up at the source where the source is knowable and transactional";
+the counter reconciler recomputes counts, not statuses). The helper is
+`ReportLedger.CloseForDestroyedTargetsAsync(db, type, ids, note)` (`Server/Moderation/ReportLedger.cs`):
+one `ExecuteUpdateAsync` setting `ResolvedNoAction`, a NULL moderator, `DateResolved = now` and the note.
+**No notification and no counter call** — the counters die with their rows, and both outcome texts
+(81, 82) would claim a moderator review that never happened. `ResolvedNoAction` with a NULL moderator is
+the honest ledger entry: `ResolvedActionTaken` would read as a prior sanction in D8's history (the ban
+signal), and the NULL moderator plus the note distinguish it from a moderator's "no".
+- **Wired at:** `UserDeletionService.DeleteUserAsync` — the comments on the deleted user's profile and
+  the `User` target itself.
+- **Not wired (owner-open, tracker F13):** the author self-delete sites (comment, recommendation, blog
+  post, site post, chapter, the D15 story delete) and the TPT child comments a hard delete destroys.
+  Each is a one-line call once the owner rules on author-delete report status.
 
 ### Account actions — target resolution and the report-as-audit-record rule (WU-UserModeration)
 
@@ -1984,7 +2116,8 @@ consequences bind all new work:
 
 1. **A moderator acting without a member report creates one.** `ApplyAccountActionToUserAsync` opens a
    `Report` and resolves it in the same unit of work — `ReportedEntityType.User`, `ReporterUserId = modId`,
-   `ReportStatusId = ResolvedActionTaken`. **`ReporterUserId == ModeratorUserId` is what marks a report as
+   `ReportedUserId = target`, `ReportStatusId = ResolvedActionTaken`. **`ReporterUserId ==
+   ModeratorUserId` is what marks a report as
    moderator-initiated** — do not add a flag column or a synthetic "Moderator-initiated" `ReportReason`
    seed row; the moderator picks a real reason from the existing seeded set, which is more useful in the
    audit trail than a generic one. Because the row is opened and resolved together, `ActiveReportCount`
@@ -1999,8 +2132,8 @@ consequences bind all new work:
    the "irreversible in-app" defect class. See §"Story Lifecycle" for what the flag gates.
 2. **The action's target user is resolved from the report, not assumed to be the report's target.**
    `ResolveActionTargetUserIdAsync` maps `User` → the reported user; `Story`/`Comment`/`BlogPost`/
-   `Recommendation` → the reported content's `AuthorUserId` via the existing `LoadModeratableAsync`
-   switch; `Message` → the message's sender. This is what a moderator means when warning or suspending
+   `Recommendation` → the reported content's author; `Message` → the message's sender (the throwing form
+   of `ResolveAnswerableUserIdAsync`, above). This is what a moderator means when warning or suspending
    over a reported story. An unresolvable author (anonymous or deleted) throws a
    `CanalaveValidationException` — a user-facing type, so the moderator sees the real reason rather than
    `ExceptionPresenter`'s generic message.
@@ -2008,11 +2141,49 @@ consequences bind all new work:
    *(Supersedes the WU34 rule "account actions require the report target to be a User." Under that rule
    the Warn control on `/mod/reports` threw for every report the app could actually produce.)*
 
-**Account actions decrement `ActiveReportCount` like every other resolve path.** `ApplyAccountActionAsync`
-is a resolve path — it sets `ResolvedActionTaken` — so it calls `AdjustActiveReportCountAsync(..., -1)`
-alongside `ResolveNoActionAsync` and `ResolveWithRemovalAsync`, per the "single authority on counter
-mutation" rule above. Omitting it leaks the counter upward permanently, and that counter is what the
-mod-triage sort orders on.
+**The report-driven account action is a resolve path.** `ApplyAccountActionAsync` takes the lock and
+guard above, decrements `ActiveReportCount` by 1, and — like the other two resolve paths — tells a
+member reporter the outcome: `ReportResolved` (81) with the report id, after commit, skipped when the
+reporter is the acting moderator (spec §5.21 "reporters always learn the outcome"; built
+WU-ModerationIntegrity). It closes no siblings (D7). Inside the transaction the counter step runs after
+the security-stamp bump: `UserManager` writes every column of the tracked user, so a `User`-target
+decrement made before it would be overwritten with the loaded value.
+
+**The account-status transition table (service §2.1.3; built WU-ModerationIntegrity).** Enforced in
+both `ApplyAccountAction*` entry points before any mutation; a violation is
+`ModerationValidationException`. A *live* suspension is `Suspended` with `SuspendedUntilUtc > now`.
+
+| Action | Allowed from | Refused |
+|---|---|---|
+| Warn | Active, Warned, an expired suspension | a live suspension *(derived — decision row 20)*; Banned |
+| Suspend | any status except Banned; re-dating a live suspension is allowed | Banned; a missing or past end date ("Choose a suspension end date in the future.") |
+| Ban | any status except Banned | Banned ("already banned" — *derived, decision row 20*: a second type-74 row, since D4 exempts 74 from dedup) |
+| Reinstate | Warned, Suspended (live or expired), Banned | Active ("already active") |
+
+- **Banned is leavable only via Reinstate** (literal §2.1.3). A warning can no longer silently unban
+  anyone.
+- **`SuspendedUntilUtc` is set only when the resulting status is `Suspended`, and cleared to NULL
+  otherwise** — so "set only while Suspended" (`UserModerationHistoryDto`) is true of every row a
+  moderator action writes. A suspension with a NULL or past date can no longer be written.
+- **`ReinstateUserAsync(targetUserId, reason)`** — the only path that writes `Active` back. Guards:
+  moderator; not self; unknown user → `KeyNotFoundException`; a non-blank reason within the 1024-character
+  `ActionTaken` column. Effect: `Active`, `SuspendedUntilUtc = NULL`, plus one opened-and-resolved
+  moderator-filed `Report` (`User` target, reason **Other** — seeded id 1, the administrative-row
+  precedent; `Notes = ActionTaken = reason`; `ReportedUserId = target`). `ActiveReportCount` is
+  untouched; no security-stamp bump; **no notification** (no type exists — tracker F14). Both
+  `ApplyAccountAction*` paths refuse `ModeratorActionType.ReinstateUser` ("use Reinstate").
+- Expired suspensions do **not** normalize to `Active` on their own (`security.md`, "no lazy restore") —
+  Reinstate is the lever.
+
+### Exception translation in these files (D9 sub-edge, WU-ModerationIntegrity's pick)
+
+The 401-instead-of-404/400 class (service §2.12) is fixed **at the throw sites**, not in the shared
+`EndpointHelpers` table: a client-supplied id that does not exist is `SingleOrDefaultAsync(...) ??
+throw new KeyNotFoundException(...)` (404), and a business rule is the feature's validation exception —
+`ModerationValidationException`, or `ExternalVerificationValidationException` for Feature 53 (400).
+`InvalidOperationException → 401` stays the auth safety net (`ActiveUserContextExtensions` says "do not
+change it"; `layer5-wasm.md` §"The Error-Translation Contract"); precedent
+`modernization-audit/deferred-work.md` §4 (MA-505/MA-611, the typed `*ValidationException` route).
 
 ## Synchronous Inline Badge Awards (WU36; no-tiers model WU-StatBadgeProducers)
 
