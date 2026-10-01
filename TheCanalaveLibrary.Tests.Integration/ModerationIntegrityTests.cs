@@ -28,8 +28,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   (not deleted) when the account goes; the history reads it and keeps deleted targets.</item>
 ///   <item><b>Zombie closure at the source</b> (D7 sub-edge): account deletion closes the reports on
 ///   what it destroys, silently, and leaves reports on surviving content open.</item>
-///   <item><b>§2.1.3 account-status table</b> and Reinstate; the report-driven action tells the member
-///   reporter (81).</item>
+///   <item><b>§2.1.3 account-status table</b> (on both entry points) and Reinstate; the report-driven
+///   action tells the member reporter (81), keeps its decrement past the stamp bump, and resolves a
+///   report about an already-banned account against the standing ban (review fixes).</item>
 ///   <item><b>D9 read gates</b>: every moderator-only read refuses a signed-in non-moderator (403 type)
 ///   and an anonymous caller (401 type) on the service itself — the tier that catches a circuit-path
 ///   regression.</item>
@@ -109,11 +110,15 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
     }
 
     [Fact]
-    public async Task HardDelete_ClosesTheSiblings_AndTheReportRowsOutliveTheTarget()
+    public async Task HardDelete_ClosesTheSiblings_AndTheReportRowsOutliveTheTarget_EveryReporterHearsIt()
     {
+        // The owner's D7 test list asks for "the same shape with hardDelete: true" — three reporters, all
+        // three closed, three reporters notified. The counter is vacuous here: it dies with the row.
         int storyId = await SeedStoryAsync(await SeedUserAsync("Author"));
-        long primary = await SubmitAsAsync(await SeedUserAsync("R1"), ReportedEntityType.Story, storyId);
-        await SubmitAsAsync(await SeedUserAsync("R2"), ReportedEntityType.Story, storyId);
+        (int r1, int r2, int r3) = (await SeedUserAsync("R1"), await SeedUserAsync("R2"), await SeedUserAsync("R3"));
+        long primary = await SubmitAsAsync(r1, ReportedEntityType.Story, storyId);
+        long sibling2 = await SubmitAsAsync(r2, ReportedEntityType.Story, storyId);
+        long sibling3 = await SubmitAsAsync(r3, ReportedEntityType.Story, storyId);
 
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
         await Mod().ResolveWithRemovalAsync(primary, "Illegal content.", hardDelete: true);
@@ -123,8 +128,14 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
         (await db.Stories.AnyAsync(s => s.StoryId == storyId)).Should().BeFalse();
         List<Report> rows = await db.Reports.Where(r => r.ReportedEntityType == ReportedEntityType.Story
             && r.ReportedEntityId == storyId).ToListAsync();
-        rows.Should().HaveCount(2).And.OnlyContain(r => r.ReportStatusId == ReportStatusEnum.ResolvedActionTaken,
+        rows.Should().HaveCount(3).And.OnlyContain(r => r.ReportStatusId == ReportStatusEnum.ResolvedActionTaken,
             "hard delete is where an unclosed sibling would be an unreachable zombie (D7)");
+
+        foreach ((int reporter, long reportId) in new[] { (r1, primary), (r2, sibling2), (r3, sibling3) })
+            (await db.Notifications.CountAsync(n => n.RecipientUserId == reporter
+                    && n.NotificationTypeId == NotificationTypeEnum.ReportResolved
+                    && n.RelatedEntityId == reportId))
+                .Should().Be(1, $"reporter {reporter} learns the outcome of their own report #{reportId} (spec §5.21)");
     }
 
     [Fact]
@@ -469,6 +480,11 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
             row.ActionTaken.Should().StartWith("Closed automatically");
             row.DateResolved.Should().NotBeNull();
         }
+        // The comment's author is the commenter, whose account survives and whose history shows this row
+        // (ReportedUserId) — so the note names the deleted profile, never "its owner's account".
+        Report commentRow = await db.Reports.SingleAsync(r => r.ReportId == commentReport);
+        commentRow.ReportedUserId.Should().Be(commenter);
+        commentRow.ActionTaken.Should().Contain("on a profile whose account was deleted");
         (await db.Reports.SingleAsync(r => r.ReportId == storyReport)).ReportStatusId
             .Should().Be(ReportStatusEnum.Open, "the story survives (SET NULL), so its report stays actionable");
         (await db.Notifications.AnyAsync(n => n.NotificationTypeId == NotificationTypeEnum.ReportResolvedNoAction
@@ -624,6 +640,137 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
             && n.NotificationTypeId == NotificationTypeEnum.ReportResolved);
         resolved.RelatedEntityId.Should().Be(report, "spec §5.21: reporters always learn the outcome");
         resolved.SourceUserId.Should().BeNull("D5: the moderator is never named");
+    }
+
+    [Theory]
+    [InlineData(ModeratorActionType.SuspendUser)]
+    [InlineData(ModeratorActionType.BanUser)]
+    public async Task AReportDrivenEjection_OfAReportedUser_KeepsTheDecrement_PastTheStampBump(ModeratorActionType action)
+    {
+        // UserManager.UpdateSecurityStampAsync writes every column of the tracked user, so a decrement of
+        // the user's own ActiveReportCount made before the bump was overwritten with the loaded value.
+        int target = await SeedUserAsync("Target");
+        long report = await SubmitAsAsync(await SeedUserAsync("R1"), ReportedEntityType.User, target);
+        await SubmitAsAsync(await SeedUserAsync("R2"), ReportedEntityType.User, target);
+        User before = await LoadUserAsync(target);
+        before.ActiveReportCount.Should().Be(2);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await Mod().ApplyAccountActionAsync(report, action, "Ejected.",
+            action == ModeratorActionType.SuspendUser ? DateTime.UtcNow.AddDays(7) : null);
+
+        User after = await LoadUserAsync(target);
+        after.SecurityStamp.Should().NotBe(before.SecurityStamp, "Suspend/Ban end live sessions (WU38a)");
+        after.ActiveReportCount.Should().Be(1,
+            "the resolved report leaves the count; the other report still asks a live question (D7)");
+    }
+
+    [Fact]
+    public async Task AReportDrivenActionTheTableRefuses_LeavesTheReportOpen_AndChangesNothing()
+    {
+        // The transition table runs inside the report-driven path's transaction, after the lock — a
+        // refusal there must roll back cleanly: report Open, counter and status untouched.
+        int target = await SeedUserAsync("Target");
+        long report = await SubmitAsAsync(await SeedUserAsync("R1"), ReportedEntityType.User, target);
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+
+        foreach (DateTime? until in new DateTime?[] { null, DateTime.UtcNow.AddMinutes(-1) })
+            await FluentActions.Invoking(() => Mod().ApplyAccountActionAsync(
+                    report, ModeratorActionType.SuspendUser, "x", until))
+                .Should().ThrowAsync<ModerationValidationException>().WithMessage("*suspension end date in the future*");
+        await AssertUntouchedAsync(AccountStatusEnum.Active);
+
+        await Mod().ApplyAccountActionToUserAsync(target, _reasonId, ModeratorActionType.BanUser, "Banned.");
+        await FluentActions.Invoking(() => Mod().ApplyAccountActionAsync(report, ModeratorActionType.WarnUser, "x"))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*lifted only by Reinstate*");
+        await FluentActions.Invoking(() => Mod().ApplyAccountActionAsync(
+                report, ModeratorActionType.SuspendUser, "x", DateTime.UtcNow.AddDays(3)))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*lifted only by Reinstate*");
+        await AssertUntouchedAsync(AccountStatusEnum.Banned);
+
+        async Task AssertUntouchedAsync(AccountStatusEnum status)
+        {
+            using IServiceScope scope = Factory.Services.CreateScope();
+            (await Db(scope).Reports.SingleAsync(r => r.ReportId == report)).ReportStatusId
+                .Should().Be(ReportStatusEnum.Open);
+            User user = await LoadUserAsync(target);
+            user.ActiveReportCount.Should().Be(1);
+            user.AccountStatus.Should().Be(status);
+        }
+    }
+
+    [Fact]
+    public async Task AReportDrivenBan_OnABannedAccount_ResolvesTheReportAgainstTheStandingBan()
+    {
+        // Derived (roadmap.md decision row 20, refined by the review fixes). Without this, a banned
+        // account's other reports could close only as "no action" — Warn/Suspend are refused on Banned,
+        // a User report cannot be removed, and account actions close no siblings (D7).
+        int target = await SeedUserAsync("Target");
+        int reporter = await SeedUserAsync("R1");
+        long report = await SubmitAsAsync(reporter, ReportedEntityType.User, target);
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await Mod().ApplyAccountActionToUserAsync(target, _reasonId, ModeratorActionType.BanUser, "Banned.");
+        string stampAfterTheBan = (await LoadUserAsync(target)).SecurityStamp!;
+
+        await Mod().ApplyAccountActionAsync(report, ModeratorActionType.BanUser, "Covered by the standing ban.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(scope);
+        Report row = await db.Reports.SingleAsync(r => r.ReportId == report);
+        row.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedActionTaken, "the account IS banned — 'no action' would be false");
+        row.ActionTaken.Should().Be("Covered by the standing ban.");
+        User user = await LoadUserAsync(target);
+        user.AccountStatus.Should().Be(AccountStatusEnum.Banned);
+        user.ActiveReportCount.Should().Be(0);
+        user.SecurityStamp.Should().Be(stampAfterTheBan, "the ban's sessions were ended when it was imposed");
+        (await db.Notifications.CountAsync(n => n.RecipientUserId == target
+            && n.NotificationTypeId == NotificationTypeEnum.AccountBanned)).Should().Be(1,
+            "no second 74 — the reason the moderator-initiated path refuses a second ban");
+        (await db.Notifications.CountAsync(n => n.RecipientUserId == reporter
+            && n.NotificationTypeId == NotificationTypeEnum.ReportResolved && n.RelatedEntityId == report))
+            .Should().Be(1, "spec §5.21: reporters always learn the outcome");
+    }
+
+    [Fact]
+    public async Task ARemoval_NeverSendsTheActingModeratorAReceiptForTheirOwnSiblingReport()
+    {
+        // The moderator filed a sibling through the ordinary Report button; a member's report is the primary.
+        int storyId = await SeedStoryAsync(await SeedUserAsync("Author"));
+        int member = await SeedUserAsync("R1");
+        long primary = await SubmitAsAsync(member, ReportedEntityType.Story, storyId);
+        long modSibling = await SubmitAsAsync(_modId, ReportedEntityType.Story, storyId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await Mod().ResolveWithRemovalAsync(primary, "Removed.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(scope);
+        (await db.Reports.SingleAsync(r => r.ReportId == modSibling)).ReportStatusId
+            .Should().Be(ReportStatusEnum.ResolvedActionTaken, "the moderator's own sibling still closes");
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId
+            && n.NotificationTypeId == NotificationTypeEnum.ReportResolved)).Should().BeFalse(
+            "a receipt for their own act (the D4 guardrail's general rule)");
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == member
+            && n.NotificationTypeId == NotificationTypeEnum.ReportResolved && n.RelatedEntityId == primary))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AReportDrivenAccountAction_OnAReportTheModeratorFiled_SendsThemNoReceipt()
+    {
+        int author = await SeedUserAsync("Author");
+        long report = await SubmitAsAsync(_modId, ReportedEntityType.Story, await SeedStoryAsync(author));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await Mod().ApplyAccountActionAsync(report, ModeratorActionType.WarnUser, "Warned.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(scope);
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == _modId
+            && n.NotificationTypeId == NotificationTypeEnum.ReportResolved)).Should().BeFalse(
+            "the moderator filed and resolved it — a receipt would mail them their own act");
+        (await db.Notifications.AnyAsync(n => n.RecipientUserId == author
+            && n.NotificationTypeId == NotificationTypeEnum.AccountWarning)).Should().BeTrue("the action itself lands");
     }
 
     // ── D9: moderator-only reads gate in the service ─────────────────────────────

@@ -152,6 +152,11 @@ deletion. Verified by Integration
 `ModerationIntegrityTests.DeletingAUser_ClosesReportsOnTheAccountAndItsProfileComments_ButNotOnSurvivingContent`
 and `…DeletingTheAnswerableAccount_NullsReportedUser_AndKeepsTheRow` (the closure was mutation-checked);
 `UserDeletionServiceTests` pass unchanged. Author self-delete sites are owner-open (tracker F13).
+**Review fixes (2026-09-30), no flip:** the note on a closed profile-comment report said the comment
+"was deleted with its owner's account", but its author is the commenter — a surviving account whose
+history (`ReportedUserId`) is where a moderator reads it. It now reads "the reported comment was on a
+profile whose account was deleted"; the same Integration test asserts the wording and the commenter as
+`ReportedUserId`. The move also closed the `UserDeletionService` part of tracker H8's org-move bundle.
 
 - **L1 — Stage 5.** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#

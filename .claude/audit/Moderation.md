@@ -48,12 +48,19 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5, L6 = 5 — no
-flip (L1 stays 5 with the WU_ModerationIntegrity migration applied; L4.5 stays 5 because
-`ReportDialog`'s markup did not change — a duplicate report's refusal shows through its existing error
-line; the browser check is folded into tracker H19 step 4).
+**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**,
+L5 = 5, L6 = 5. L1 stays 5 with the WU_ModerationIntegrity migration applied. L4.5 went 5→1 at the
+review fixes: `ReportDialog`'s markup did not change, but what a member sees did — a second report on
+the same item is refused with the duplicate message, and on WASM a throttled submit now arrives as the
+rate-limit message — and none of it was driven in a browser. Tracker **H19** step 4 restores it.
 
-**WU-ModerationIntegrity Stage note (2026-09-30) — no flip (owner rulings D8/D9, service §2.4.4).**
+**WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — F46 L4.5 5→1.** The build kept L4.5 at
+5 on the grounds that the dialog's markup was unchanged; the review pointed out that its behavior
+changed undriven, which is what L4.5 records (`grid_axes.md`: "driven in a real browser and behaves as
+its audit file intends"). Lowered until H19's pass; nothing else in F46 changed.
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip at the build (owner rulings D8/D9, service
+§2.4.4); L4.5 lowered by the review fixes (note above).**
 - **Interface split (D9):** `IReportSubmissionService` (reasons + submit) is its own interface;
   `ReportDialog` injects it. `ServerModerationWriteService` implements all three moderation interfaces
   and is registered once with three forwards; `ClientReportSubmissionService` is the WASM twin (its
@@ -76,7 +83,7 @@ line; the browser check is folded into tracker H19 step 4).
   `ModerationIntegrityClientTests` (routes, 400, 429). bUnit: the eight `ReportDialog` hosts register
   `FakeReportSubmissionService`. The dedup catch and the counter order were mutation-checked.
 
-**Earlier F46 Stage note (WU-InertFeatures, owner rulings D4/D5; tracker B21 closed):** (owner rulings D4/D5; tracker B21 closed):** `SubmitReportAsync`'s
+**Earlier F46 Stage note (WU-InertFeatures, owner rulings D4/D5; tracker B21 closed):** `SubmitReportAsync`'s
 receipt was never delivered — it passed the reporter as their own source and the create-core's
 drop-self rule deleted it. It now calls `NotifyReportReceivedAsync(reporter, report.ReportId)`, which
 sends `ReportReceived` (80) null-sourced with the report id (id populated by the preceding save), and
@@ -145,8 +152,36 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — no further flip; L4.5 stays 1, L2 stays
+5.** Three reviews of the build; the F47 fixes:
+- **A standing ban answers a report** (derived — `roadmap.md` decision row 20, refined). The build's
+  "no second Ban" refusal also applied to the report-driven path, so once an account was banned, every
+  other report about it could close only as "no action" (82): account actions close no siblings (D7),
+  Warn/Suspend are refused on Banned (literal §2.1.3), and a `User` report cannot be removed. The
+  reporter was told no action was taken against a banned account, and D8's history recorded
+  `ResolvedNoAction`. `ApplyAccountActionAsync(report, BanUser)` on a banned account now resolves the
+  report against the standing ban (`ResolvedActionTaken`, −1, 81 to the reporter) with no status write,
+  stamp bump or second 74; the moderator-initiated path keeps the refusal (no report to answer).
+- **Tests the build owed:** the report-driven decrement surviving the stamp bump (Suspend and Ban on a
+  `User` report — the counter fix the build made had no test); the transition table refusing on the
+  report-driven path (report stays Open, counter and status untouched — the rollback); the moderator
+  never receiving 81 for a sibling report they filed, nor for a report they filed and resolved with an
+  account action; the D7 hard-delete case in the owner's shape (three reporters, three 81s); the
+  `/reinstate` route for a moderator (204, the query-bound reason) and its 400.
+- **Verified:** Integration `ModerationIntegrityTests`
+  (`AReportDrivenEjection_OfAReportedUser_KeepsTheDecrement_PastTheStampBump` ×2,
+  `AReportDrivenActionTheTableRefuses_LeavesTheReportOpen_AndChangesNothing`,
+  `AReportDrivenBan_OnABannedAccount_ResolvesTheReportAgainstTheStandingBan`,
+  `ARemoval_NeverSendsTheActingModeratorAReceiptForTheirOwnSiblingReport`,
+  `AReportDrivenAccountAction_OnAReportTheModeratorFiled_SendsThemNoReceipt`, the widened hard-delete
+  test) and `ModerationEndpointsTests` (`Reinstate_Moderator_BannedUser_Returns204_AndTheUserIsActive`,
+  `Reinstate_ActiveUser_Returns400_WithTheMessage`). Mutation-checked: the decrement moved back above the
+  bump, both moderator skips, the report-driven table call, the standing-ban branch and the sibling 81s
+  each fail their tests when reverted. No browser was available — tracker H19 gains the standing-ban
+  step.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — F47 L4.5 5→1 (UI changed, no browser available);
-every other cell unchanged.** Rules: the cluster Settled note "report lifecycle integrity" above and
+every other cell unchanged.** Rules: the F47 Settled note "report lifecycle integrity" below and
 `layer2-services.md` §"Moderation Services".
 - **Resolve paths (§2.1.2):** each runs in one execution-strategy transaction that locks the report row
   (`FOR UPDATE`) and refuses a non-open one (400) or an unknown id (404 — it was 401). Notifications run
@@ -156,7 +191,8 @@ every other cell unchanged.** Rules: the cluster Settled note "report lifecycle 
   81 to every distinct sibling reporter with their own report id. A `User` report cannot be removed.
 - **Account actions (§2.1.3):** the transition table in both entry points (future suspension date;
   Banned leavable only via Reinstate; no Warn over a live suspension and no second Ban — derived,
-  `roadmap.md` row 20); `SuspendedUntilUtc` cleared on every non-Suspend status; new
+  `roadmap.md` row 20; the second-Ban refusal narrowed to the moderator-initiated path by the review
+  fixes, note above); `SuspendedUntilUtc` cleared on every non-Suspend status; new
   `ReinstateUserAsync` (+ `POST /api/moderation/users/{id}/reinstate`, client twin,
   `ModeratorActionType.ReinstateUser`). The report-driven action now sends 81 to the member reporter
   (§5.21, the routed InertFeatures item) and decrements after the stamp bump (`UserManager` rewrites
@@ -208,17 +244,24 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (the
-WU-ModerationIntegrity UI — the history's Target column, Reinstate, the hidden "Hide content" — is
-undriven in a browser; tracker H19 restores it; the earlier 1→5 by the WU-StoryLifecycle browser pass is
+**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes — no further flip):** L1–L3.5 = 5,
+L4 = 3, **L4.5 = 1** (the WU-ModerationIntegrity UI — the history's Target column, Reinstate, the hidden
+"Hide content" — and the review fixes' standing-ban resolve are undriven in a browser; tracker H19
+restores it; the earlier 1→5 by the WU-StoryLifecycle browser pass is
 recorded in F48's browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the top and end of
 this section).
 
 **WU34 settled constraints:**
-- `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
+- ~~`/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.~~
+  *Corrected 2026-09-30 (WU-ModerationIntegrity review fixes): false since the Global Flip (2026-07-13)
+  — both pages are `InteractiveAuto` with client twins (`ClientModerationRead/WriteService`). They stay
+  mod-gated at the page and the endpoint, and the service now gates every moderator read itself (owner
+  ruling D9 — the circuit has no endpoint to stop a caller).*
 - Report queue ordered by `ActiveReportCount` desc (most-reported first) — triage sort only, never an
   automation trigger. Report counts are mod-only (no public-facing badge).
-- Content removal: soft-takedown default (`IsTakenDown = true`, reversible, author notified with `TakedownReason`);
+- Content removal: soft-takedown default (`IsTakenDown = true`, ~~reversible~~ *reversible by design, but no
+  reversal path is built yet — owner ruling D8(b) rules only how a future reversal behaves; corrected
+  2026-09-30, WU-ModerationIntegrity review fixes*, author notified with `TakedownReason`);
   separate explicit hard-delete for illegal content (CSAM/piracy). `LoadModeratableAsync` single loader switch
   + interface mutation via `IModeratableContent` in `ServerModerationWriteService` (pre-integration cleanup
   2026-06-26 collapsed the prior triple switch).
@@ -283,7 +326,10 @@ revisit).** Rule text: `layer2-services.md` §"Moderation Services";
 - **Account-status transition table** (§2.1.3): a suspension needs a future end date; Banned is left
   only via the new **Reinstate** action (a moderator-filed `Report` row, reason Other, no notification);
   no Warn over a ban or a live suspension (derived — `roadmap.md` decision row 20); a second Ban is
-  refused (derived, row 20); `SuspendedUntilUtc` is cleared on every non-Suspend status.
+  refused on the moderator-initiated path (derived, row 20), while a report-driven Ban on a banned
+  account resolves that report against the standing ban — 81 to the reporter, no status write, stamp
+  bump or second 74 (row 20 as refined by the review fixes); `SuspendedUntilUtc` is cleared on every
+  non-Suspend status.
 - **Mod-only reads gate in the service** (D9): `RequireModerator()` (the shared extension) opens the
   three moderation reads, both ExternalVerification queues, both SiteDailyStat reads and the allocator's
   capacity read. The SiteSettings `GetIntAsync` read is the one recorded non-gate.
@@ -453,10 +499,13 @@ author of a revoke/restore is `roadmap.md` decision row 15.
 
 ## Feature 48 — Story Approval Workflow
 
-**Stages (updated 2026-09-30, WU-StoryLifecycle browser pass):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
+**Stages (updated 2026-09-30, WU-ModerationIntegrity — L2 changes beneath the cell, no flip; the
+WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
 (the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed
 undriven; the browser pass drove them on circuit and WASM and returned it to 5 — browser-verification
-Stage note at the end of this section), L5 = 5, L6/L8 = N/A. The D1 guards, trust
+Stage note at the end of this section), L5 = 5, L6/L8 = N/A. WU-ModerationIntegrity's two F48 changes
+(the queue read's service gate, `ReportedUserId` on the trust-waiver audit row) are in its Stage note,
+the last note of this section. The D1 guards, trust
 waiver, `SubmittedDate` and the takedown freeze landed beneath the other cells (Stage notes at the end
 of this section). **WU-InertFeatures (2026-09-30), no flip:** `StoryApproved` (75) and
 `StoryRejected` (71) are null-sourced — `NotifyStoryApprovedAsync`/`NotifyStoryRejectedAsync` lost
@@ -696,6 +745,20 @@ pages. Observed but not fixed, filed as tracker items:
 - The reject and auto-approve reasons travel in the query string (tracker **D9**). Every moderation
   write endpoint that takes free text has this shape; the new auto-approve endpoint followed it.
 
+**WU-ModerationIntegrity Stage note (2026-09-30; recorded by its review fixes) — no flip; L2 stays 5.**
+Two F48 changes landed beneath L2 and the build recorded neither here:
+- **The queue read gates in the service** (owner ruling D9): `GetPendingSubmissionsAsync` opens with
+  `ActiveUser.RequireModerator()` — a signed-in non-moderator gets `UnauthorizedAccessException` (403),
+  an anonymous caller `InvalidOperationException` (401) — and its handler runs inside `ExecuteAsync`.
+  `/mod/submissions`' page `[Authorize]` no longer stands alone on the circuit.
+- **The trust-waiver audit row carries `ReportedUserId`** (D8; amendment U5): `SetCanAutoApproveAsync`'s
+  moderator-filed `Report` sets it to the target user, so the revoke/restore rows stay in that user's
+  `/mod/users` history now that the history reads `ReportedUserId` (B18).
+Verified by Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator`
+(the queue read among the eight) and `ModerationServiceTests.SetCanAutoApproveAsync_Revoke_WritesFlagAndAModeratorInitiatedReport`
+(asserts `ReportedUserId`). Nothing a moderator sees on `/mod/submissions` changed (a moderator passes
+the gate), so L4.5 stays 5.
+
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
 **Reframe (settled 2026-07-11, WU38d plan — supersedes the "Story Import & Verification" scope
@@ -787,7 +850,15 @@ flip:** a moderator reviewing their own account or their own story's link gets n
 reads the moderator id again for this check only). Integration
 `AModeratorReviewingTheirOwnAccountAndLink_GetsNoOutcomeNotification`.
 
-**WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** Owner ruling D9 and its sub-edge: the two
+**WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — F53 L4.5 5→1.** The build changed what
+an author sees when a verification request breaks a business rule ("Verify your X account first", a
+profile URL that is not absolute http(s), a blank handle, a platform without verification): it was `InvalidOperationException`, which the endpoint maps to 401, so WASM
+showed the session-expired path and the circuit the generic error; it is now
+`ExternalVerificationValidationException`, shown inline on both phases. Nobody drove that in a browser,
+so L4.5 drops to 1 until tracker **H19**'s EV step (both render phases). No code changed in this note.
+
+**WU-ModerationIntegrity Stage note (2026-09-30) — no flip at the build; L4.5 lowered by the review
+fixes (note above).** Owner ruling D9 and its sub-edge: the two
 queue reads (`GetPendingAccountVerificationsAsync`, `GetPendingLinkVerificationsAsync`) gate in the
 service with the shared `RequireModerator()`, and their handlers wrap in `ExecuteAsync`. Business rules
 throw the new `ExternalVerificationValidationException` (400 — they were `InvalidOperationException` →
@@ -798,12 +869,14 @@ from a 400. The private `RequireModerator` copy is gone. Verified by Integration
 and Unit `ClientExternalVerificationServiceTests` (400 → the new type). Left open: the author/moderator
 interface split (tracker F15) and status guards on the approve/reject actions (tracker D10).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity — service gates and exception types beneath L2, no
-flip; WU39 2026-07-25 before that):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
+**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes — L4.5 5→1; the build's service gates
+and exception types sit beneath L2; WU39 2026-07-25 before that):** L1 — Stage 5.
+L2/L3-Logic/L3.5-Structure — Stage 5
 (WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).
 L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41
 precedent — functional browser verification is not the same as visual polish). L4.5-Browser —
-Stage 5 (see WU39 Stage note below). L5/L6/L8 — N/A.
+**Stage 1** (WU39 drove it to 5; the business-rule refusals now show inline instead of as an expired
+session, undriven — tracker H19 restores it; review-fixes Stage note above). L5/L6/L8 — N/A.
 
 **WU38d Stage note (2026-07-11) — author-facing half shipped:**
 - **L1:** migration `WU38d_StoryExternalLinks` (drop `story_imports`, create

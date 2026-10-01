@@ -232,6 +232,7 @@ they are declared and named, but **unmeasured** (no report-volume generator exis
 | Sibling closing on removal; `ActiveReportCount` recompute | `ix_reports_open_target` (partial on status 0/1) | **HAVE**, unmeasured. |
 | Queue batch enrichment / "all reports against an entity" | `ix_reports_reported_entity_type_reported_entity_id` (full) | **HAVE** — possibly redundant with the partial above; measure before dropping either. |
 | Per-user moderation history (`reported_user_id = uid`) | `ix_reports_reported_user_id` | **HAVE**, unmeasured. |
+| `ON DELETE SET NULL` scan of `reporter_user_id` on account deletion (all statuses) | `ix_reports_reporter_user_id` (full FK index, **declared explicitly**) | **HAVE** — pre-existing; EF would have dropped it behind the partial unique index above, which leads with the same column (`layer6-indexes.md` trap rule 3). |
 
 ---
 

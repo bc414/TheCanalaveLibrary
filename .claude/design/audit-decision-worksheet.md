@@ -1152,7 +1152,7 @@ admin deletes (app-layer, tracker-class).
 **Answer (2026-08-06):** **Schema §3.8's three lists are ratified as the erasure policy, with one
 correction: poll votes move from the destroyed list to the survives-anonymized list.** The two
 unratified edges are ruled below. Deletion stays a **hard delete of the `User` row**
-([UserDeletionService.cs:76](TheCanalaveLibrary.Server/Services/UserDeletionService.cs#L76)) — not a
+([UserDeletionService.cs:97](TheCanalaveLibrary.Server/Identity/UserDeletionService.cs#L97) *(link re-pointed 2026-09-30: WU-ModerationIntegrity moved the file from `Server/Services/`)*) — not a
 soft-anonymize-in-place — and that is load-bearing, not incidental (see the GDPR note).
 
 *Correction to the list: `poll_votes` survives anonymized.* The audit filed votes under "destroyed
@@ -1373,7 +1373,7 @@ blob delete fails, the sweeper collects it. That ordering is what makes the two 
 instead of overlap.
 - **`UserDeletionService`** — collect the avatar path and the cover paths of every story the user
   authored **before** `_context.Users.Remove(user)`
-  ([UserDeletionService.cs:76](TheCanalaveLibrary.Server/Services/UserDeletionService.cs#L76)), since
+  ([UserDeletionService.cs:97](TheCanalaveLibrary.Server/Identity/UserDeletionService.cs#L97) *(link re-pointed 2026-09-30: WU-ModerationIntegrity moved the file from `Server/Services/`)*), since
   the cascade removes the rows that name them; delete the blobs after
   `transaction.CommitAsync()` returns, outside the execution-strategy retry (a retried delegate must
   not re-delete). Rides D13's transaction work in the same method.

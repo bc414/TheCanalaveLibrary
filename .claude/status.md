@@ -122,14 +122,14 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | 5 | N/A | N/A |
 | 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
+| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 1 | 5 | 5 | N/A |
 | 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 1 | 5 | 5 | N/A |
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
 | 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 53 | External Story Links & Verification | Stories | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
+| 53 | External Story Links & Verification | Stories | 5 | 5 | 5 | 5 | 1 | 1 | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |
 | 55 | Community Spotlight | Spotlight | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
 | 57 | Notification Cleanup Worker | Notifications | N/A | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |

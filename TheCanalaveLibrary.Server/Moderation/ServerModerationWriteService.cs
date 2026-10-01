@@ -319,7 +319,7 @@ public class ServerModerationWriteService(
 
         // No sibling closing (owner ruling D7): the account changes, the reported artifact does not, and
         // every other report still asks a live question.
-        (int targetUserId, int? reporterUserId) = await InResolveTransactionAsync(async () =>
+        (int targetUserId, int? reporterUserId, bool standingBan) = await InResolveTransactionAsync(async () =>
         {
             Report report = await LockResolvableReportAsync(reportId);
 
@@ -330,29 +330,42 @@ public class ServerModerationWriteService(
             User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetId)
                 ?? throw new ModerationValidationException([NoAccountToActOn]);
 
+            // A standing ban answers this report (derived — roadmap.md decision row 20, refined by the
+            // WU-ModerationIntegrity review fixes): the report resolves against the ban already in place,
+            // with no status write, no stamp bump and no second 74. Refusing it, as the moderator-
+            // initiated path does, would leave every other report about a banned account closable only
+            // as "no action" — Warn/Suspend are refused on Banned and a User report cannot be removed.
+            bool alreadyBanned = action == ModeratorActionType.BanUser
+                                 && targetUser.AccountStatus == AccountStatusEnum.Banned;
+
             DateTime now = DateTime.UtcNow;
-            EnsureLegalAccountTransition(targetUser, action, suspendedUntilUtc, now);
+            if (!alreadyBanned)
+                EnsureLegalAccountTransition(targetUser, action, suspendedUntilUtc, now);
 
             report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
             report.ModeratorUserId = modId;
             report.ActionTaken = reason;
             report.DateResolved = now;
-            ApplyStatus(targetUser, newStatus, suspendedUntilUtc);
+            if (!alreadyBanned)
+                ApplyStatus(targetUser, newStatus, suspendedUntilUtc);
             await writeDb.SaveChangesAsync();
 
             // UserManager shares the scoped ApplicationDbContext, so the stamp change rides this
-            // transaction. Kill live sessions for Suspend/Ban, not Warn (WU38a).
-            await BumpSecurityStampIfEjectingAsync(targetUser, newStatus);
+            // transaction. Kill live sessions for Suspend/Ban, not Warn (WU38a) — and not for a standing
+            // ban, whose sessions were ended when it was imposed.
+            if (!alreadyBanned)
+                await BumpSecurityStampIfEjectingAsync(targetUser, newStatus);
 
             // This IS a resolve path, so it decrements like its two siblings do. It runs after the stamp
             // bump on purpose: UserManager writes every column of the tracked user, so a User-target
             // decrement made before it would be overwritten with the loaded value.
             await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
 
-            return (targetId, report.ReporterUserId);
+            return (targetId, report.ReporterUserId, alreadyBanned);
         });
 
-        await NotifyAccountActionAsync(targetUserId, action, modId);
+        if (!standingBan)
+            await NotifyAccountActionAsync(targetUserId, action, modId);
 
         // Spec §5.21 "reporters always learn the outcome": the member who filed the report hears it was
         // resolved with action taken (81, report id) — never the acting moderator (D4 guardrail).
@@ -708,7 +721,8 @@ public class ServerModerationWriteService(
     /// date still in the future. Banned is left only via Reinstate (literal §2.1.3). Two refusals are
     /// derived, not owner text (<c>roadmap.md</c> decision row 20): Warn on a live suspension (the same
     /// silent lowering §2.1.3 names for a ban) and Ban on Banned (a duplicate type-74 row, since D4
-    /// exempts 74 from dedup).
+    /// exempts 74 from dedup). The report-driven path never reaches the Ban-on-Banned arm: there, a
+    /// standing ban answers the report instead (see <see cref="ApplyAccountActionAsync"/>).
     /// </summary>
     private static void EnsureLegalAccountTransition(User target, ModeratorActionType action,
         DateTime? suspendedUntilUtc, DateTime now)

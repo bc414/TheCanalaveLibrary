@@ -43,8 +43,11 @@ builder.Services.AddScoped<IStoryArcReadService, ServerStoryArcWriteService>();
 builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
 ```
 
-Where the write interface does *not* inherit the read one (`ISavedTagSelectionWriteService` is the
-one such cluster), register the concrete class and forward **both** interfaces to it — the same shape
+Where the concrete class serves an interface it does *not* inherit through the read/write pair —
+`ISavedTagSelectionWriteService` (whose write interface does not inherit the read one) and Moderation
+(`ServerModerationWriteService` also serves the member-facing `IReportSubmissionService`, owner ruling
+D9's split, WU-ModerationIntegrity) are the two such clusters — register the concrete class once and
+forward **every** interface to it (Moderation forwards three) — the same shape
 `ServerTagHierarchyCache` uses. Two separate classes (Story, Chapter, Comment, …) keep the plain
 two-line registration: there is no shared instance to preserve.
 
@@ -2157,11 +2160,19 @@ both `ApplyAccountAction*` entry points before any mutation; a violation is
 |---|---|---|
 | Warn | Active, Warned, an expired suspension | a live suspension *(derived — decision row 20)*; Banned |
 | Suspend | any status except Banned; re-dating a live suspension is allowed | Banned; a missing or past end date ("Choose a suspension end date in the future.") |
-| Ban | any status except Banned | Banned ("already banned" — *derived, decision row 20*: a second type-74 row, since D4 exempts 74 from dedup) |
+| Ban | any status except Banned | Banned, on the moderator-initiated path ("already banned" — *derived, decision row 20*: a second type-74 row, since D4 exempts 74 from dedup). On the report-driven path a Ban on a banned account is **not** refused — see "A standing ban answers a report" below. |
 | Reinstate | Warned, Suspended (live or expired), Banned | Active ("already active") |
 
 - **Banned is leavable only via Reinstate** (literal §2.1.3). A warning can no longer silently unban
   anyone.
+- **A standing ban answers a report** (*derived, decision row 20*; WU-ModerationIntegrity review fixes,
+  2026-09-30). `ApplyAccountActionAsync(report, BanUser)` on an account that is already banned resolves
+  the report against the ban in place: `ResolvedActionTaken`, the moderator's reason, −1 on the count,
+  and 81 to the member reporter — but no status write, no security-stamp bump and no second 74. Without
+  it, account actions closing no siblings (D7) plus Warn/Suspend refused on Banned (literal) plus
+  removal refused for a `User` target would leave every other report about a banned account closable
+  only as "no action" (82) — a false outcome for the reporter, and a `ResolvedNoAction` row in D8's
+  per-user history. The moderator-initiated path keeps the refusal: it has no report to answer.
 - **`SuspendedUntilUtc` is set only when the resulting status is `Suspended`, and cleared to NULL
   otherwise** — so "set only while Suspended" (`UserModerationHistoryDto`) is true of every row a
   moderator action writes. A suspension with a NULL or past date can no longer be written.

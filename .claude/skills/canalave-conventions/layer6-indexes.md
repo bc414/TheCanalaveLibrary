@@ -53,6 +53,18 @@ audited the *config file*, not the database. Two rules fall out:
 2. **Index claims are verified against the migration snapshot or `pg_indexes`, never against
    the configuration file.** `SELECT indexname FROM pg_indexes WHERE tablename = '…'` is the
    ground truth; a config file states intent.
+3. **A *partial* index that leads with an FK column still makes EF drop that FK's convention
+   index — declare the full FK index explicitly, by name.** EF treats any index whose leading
+   column is the FK as covering it and silently removes `ix_{table}_{fk}`; it does not look at
+   the filter. A full index that leads with the FK really does cover it (the comment golden
+   indexes below rely on exactly that), but a filtered one cannot serve every-row lookups — most
+   importantly the scan `ON DELETE SET NULL`/`CASCADE` runs on the child table when the parent row
+   is deleted, which must also find rows outside the filter. Precedent: `reports`'
+   `ix_reports_open_reporter_target` (partial UNIQUE, leads with `reporter_user_id`) would have
+   dropped `ix_reports_reporter_user_id`, so `ModerationConfigurations.cs` declares
+   `HasIndex(e => e.ReporterUserId, "ix_reports_reporter_user_id")` explicitly
+   (WU-ModerationIntegrity, 2026-09-30). Check the generated migration for a `DropIndex` you did not
+   ask for.
 
 Other syntax notes that survive from the original design:
 - Filters use snake_case column names and PostgreSQL `true`/`false` (not `1`/`0`).
@@ -93,7 +105,8 @@ bitmap-scan → sort → **Gather Merge with parallel worker launch (~20 ms of p
 p50 24.32 ms, p95 136.82 ms. The composite index turns it into
 `Index Scan Backward … streaming into the LIMIT`: **p50 0.29 ms, p95 0.38 ms (−98.8%)**;
 the roots COUNT fell 21.0→0.61 ms. Each supersedes its plain FK index (prefix-covered — EF
-drops the convention index automatically).
+drops the convention index automatically; safe here because these are full indexes — a partial one
+is rule 3's trap).
 
 TPT note: `parent_comment_id`/`is_taken_down` live on `base_comments`, so one covering index
 across the TPT boundary is impossible — the child-side composite + per-row PK probe into the
@@ -202,6 +215,7 @@ measurement items.
 | `ix_reports_open_reporter_target` | UNIQUE `(reporter_user_id, reported_entity_type, reported_entity_id) WHERE report_status_id IN (0, 1)` | Correctness, not speed: one open report per reporter per target (service §2.4.4(c)); also what makes D7's sibling notifications exactly-once. NULL reporters are distinct, so anonymous reports are unconstrained. |
 | `ix_reports_open_target` | `(reported_entity_type, reported_entity_id) WHERE report_status_id IN (0, 1)` | D7's sibling-closing query and the `ActiveReportCount` recompute (D21's ground truth). |
 | `ix_reports_reported_user_id` | `(reported_user_id)` (EF FK convention) | D8's per-user moderation history (`Reports.Where(r => r.ReportedUserId == uid)`). |
+| `ix_reports_reporter_user_id` | `(reporter_user_id)` — **declared explicitly** (pre-existing as the EF FK convention index) | Not new: kept. The partial unique index above leads with `reporter_user_id`, so EF would otherwise drop this full FK index (rule 3 of the trap section) — and the partial one cannot serve the `ON DELETE SET NULL` scan on account deletion, which must find resolved reports too. |
 
 **Same-columns trap applies.** `ix_reports_open_target` covers the same columns as the pre-existing
 full `ix_reports_reported_entity_type_reported_entity_id` (R4: "find all reports against an entity",

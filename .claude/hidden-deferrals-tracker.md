@@ -1171,10 +1171,12 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     has ever been driven end-to-end, so "keep" rests on the code looking intact, not on verified
     behavior.
   - **Still open, NOT closed by this decision:** the MA-112/608/012 just-in-time org moves bundled
-    into this entry (`UserDeletionService`, `MainLayout.razor` still under
+    into this entry (~~`UserDeletionService`~~, `MainLayout.razor` still under
     `Server/Components/Layout/`, `Core/Models` scaffold, `NotFound.razor`) are a distinct
     organizational question, deferred by the "empty folders just-in-time" convention — this WU
-    touched `Errors/`/`Seo/`, not those clusters, so they stay open here.
+    touched `Errors/`/`Seo/`, not those clusters, so they stay open here. **`UserDeletionService`
+    done 2026-09-30 (WU-ModerationIntegrity):** moved to `Server/Identity/` when that WU touched it,
+    leaving `Server/Services/` empty; the other three stay open.
 
 - [ ] **H9 — Identity alternate-login flows never verified end-to-end** `[test-gap · low · pre-launch]`
   - Grid: F1 mostly 5 (L4=1); no cell captures this specifically.
@@ -1305,20 +1307,25 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     unfollow for this reason.
   - Fix: correct the two numbers and add the missing row; `reset-dev-db.ps1` afterwards.
 
-- [ ] **H19 — Browser pass owed for WU-ModerationIntegrity's moderator UI** `[test-gap · med · beta]` — *Filed 2026-09-30; WU-ModerationIntegrity ran with no browser available.*
-  - Grid: F47 L4.5 (lowered 5→1 by that WU; this pass restores it).
+- [ ] **H19 — Browser pass owed for WU-ModerationIntegrity's moderator UI** `[test-gap · med · beta]` — *Filed 2026-09-30; WU-ModerationIntegrity ran with no browser available. Extended 2026-09-30 by its review fixes (F46/F53 lowered; steps 2, 4 and 5).*
+  - Grid: F47 L4.5 (lowered 5→1 by that WU), F46 L4.5 and F53 L4.5 (lowered 5→1 by its review fixes —
+    behavior changed undriven, markup did not); this pass restores all three.
   - Drive on both render phases (circuit and WASM), with psql after every write:
     1. `/mod/users/{id}`: the caveat is gone; the history lists content reports with a Target column
        (type + label/link) and a `[deleted …]` row for a removed target; Reinstate shows only for a
        non-Active user, opens the panel with no date field, and returns the user to Active (one
        `reports` row, reason Other, `reported_user_id` set).
     2. Suspend with a past date and Warn on a live suspension are refused inline; Ban on a banned user
-       is refused.
+       is refused from `/mod/users`. From `/mod/reports`, Ban on a report about an already-banned
+       account resolves the report (the reporter gets one 81; no second 74; `security_stamp` unchanged).
     3. `/mod/reports`: no "Hide content" on a User report; removing a story with three reports from
        three users closes all three (one 81 each); resolving an already-resolved report from a stale
        tab shows "This report has already been resolved."
-    4. The report dialog: a second report on the same item by the same user shows the duplicate
+    4. The report dialog (F46): a second report on the same item by the same user shows the duplicate
        message; a different user can still report it.
+    5. External verification (F53), author side: request per-link verification before the platform
+       account is verified — "Verify your {platform} account first." shows inline, with no
+       session-expired redirect on WASM and no generic error on the circuit.
 
 ---
 

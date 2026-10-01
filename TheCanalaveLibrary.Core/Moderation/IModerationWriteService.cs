@@ -54,8 +54,10 @@ public interface IModerationWriteService : IModerationReadService
     /// rule".</para>
     /// <para>Same lock and status guard as <see cref="ResolveNoActionAsync"/>; enforces the
     /// account-status transition table (a suspension needs a future end date; nothing but
-    /// <see cref="ReinstateUserAsync"/> leaves Banned; no Warn over a live suspension; no second Ban —
+    /// <see cref="ReinstateUserAsync"/> leaves Banned; no Warn over a live suspension —
     /// <see cref="ModerationValidationException"/>); refuses <see cref="ModeratorActionType.ReinstateUser"/>.
+    /// A Ban on an already-banned account is not refused here: the standing ban answers the report
+    /// (resolved with action taken; no status write, stamp bump or second ban notification).
     /// Tells a member reporter the outcome (<c>ReportResolved</c>, report id). Closes no other report
     /// (D7).</para>
     /// </summary>
@@ -71,7 +73,8 @@ public interface IModerationWriteService : IModerationReadService
     /// moderator-initiated; <paramref name="reasonId"/> is a real seeded <c>ReportReason</c>, chosen
     /// by the moderator. Because the row opens and resolves together, <c>ActiveReportCount</c> is
     /// deliberately untouched (no +1/-1 pair). Same transition table as
-    /// <see cref="ApplyAccountActionAsync"/>; sends no report receipt (the D4 guardrail).</para>
+    /// <see cref="ApplyAccountActionAsync"/>, and a second Ban is refused here (there is no report for a
+    /// standing ban to answer); sends no report receipt (the D4 guardrail).</para>
     /// </summary>
     Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null);

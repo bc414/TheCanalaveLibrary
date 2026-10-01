@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -135,6 +137,43 @@ public class ModerationEndpointsTests(PostgresFixture postgres) : IntegrationTes
     }
 
     [Fact]
+    public async Task Reinstate_Moderator_BannedUser_Returns204_AndTheUserIsActive()
+    {
+        // L5: routing, the query-bound reason, and the handler reaching ReinstateUserAsync.
+        int modId = await SeedUserAsync("mod");
+        int target = await SeedUserAsync("banned");
+        await SetAccountStatusAsync(target, AccountStatusEnum.Banned);
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync(
+            $"/api/moderation/users/{target}/reinstate?reason={Uri.EscapeDataString("Appeal upheld.")}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Users.Where(u => u.Id == target).Select(u => u.AccountStatus).SingleAsync())
+            .Should().Be(AccountStatusEnum.Active);
+        (await db.Reports.Where(r => r.ReportedUserId == target).Select(r => r.ActionTaken).SingleAsync())
+            .Should().Be("Appeal upheld.", "the reason binds from the query string");
+    }
+
+    [Fact]
+    public async Task Reinstate_ActiveUser_Returns400_WithTheMessage()
+    {
+        int modId = await SeedUserAsync("mod");
+        int target = await SeedUserAsync("active");
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync($"/api/moderation/users/{target}/reinstate?reason=x", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "a business rule is a 400 — never the 401 an InvalidOperationException would map to");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("already active");
+    }
+
+    [Fact]
     public async Task UserHistory_UnknownUser_StillReturns404_InsideTheWrapper()
     {
         int modId = await SeedUserAsync("mod");
@@ -145,5 +184,13 @@ public class ModerationEndpointsTests(PostgresFixture postgres) : IntegrationTes
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound,
             "the history read now runs inside ExecuteAsync (its service can throw) and keeps its 404");
+    }
+
+    private async Task SetAccountStatusAsync(int userId, AccountStatusEnum status)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.AccountStatus, status));
     }
 }

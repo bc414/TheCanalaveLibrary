@@ -63,7 +63,9 @@ public class UserDeletionService
             // reports on them stay open — those targets still exist and can still be acted on.
             await ReportLedger.CloseForDestroyedTargetsAsync(_context, ReportedEntityType.Comment,
                 [..commentsOnProfile.Select(c => c.CommentId)],
-                "Closed automatically: the reported comment was deleted with its owner's account.");
+                // Not "its owner's": the comment's author is the commenter, whose account survives — and
+                // whose per-user history (ReportedUserId) is where a moderator reads this note.
+                "Closed automatically: the reported comment was on a profile whose account was deleted.");
             await ReportLedger.CloseForDestroyedTargetsAsync(_context, ReportedEntityType.User,
                 [userId],
                 "Closed automatically: the reported account was deleted.");

@@ -24,10 +24,11 @@ references it, does not restate it.
   snapshot) feeds a per-user history that now includes content reports (tracker **B18** closed); the
   account-status transition table and a new **Reinstate**; account deletion closes the reports on what
   it destroys; every moderator-only read gates in the service via one shared `RequireModerator()`, and
-  `IReportSubmissionService` is split from the mod interfaces. Migration `WU_ModerationIntegrity`.
-  F47 L4.5 5→1 (no browser — tracker **H19**). `dotnet test`: Unit 1,070, RazorComponents 760,
-  Integration 1,297. Decision row **20**; trackers **F13/F14/F15/D10/H19** opened. **Pointers:** its DONE
-  entry; `layer2-services.md` §"Moderation Services".
+  `IReportSubmissionService` is split from the mod interfaces. Migration `WU_ModerationIntegrity`. Review
+  fixes (same day): a report-driven Ban on a banned account resolves the report against the standing
+  ban (decision row **20**, refined), plus the owed tests. F46/F47/F53 L4.5 5→1 (no browser — tracker
+  **H19**); trackers **F13/F14/F15/D10/H19** opened. `dotnet test`: Unit 1,070, RazorComponents 760,
+  Integration 1,305. **Pointers:** its DONE entry; `layer2-services.md` §"Moderation Services".
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
@@ -266,8 +267,8 @@ references it, does not restate it.
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
   fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
-  2026-09-30). Tracker **H19**'s browser pass (WU-ModerationIntegrity's moderator UI, both render
-  phases) restores F47 L4.5. Separately, not a
+  2026-09-30). Tracker **H19**'s browser pass (WU-ModerationIntegrity's moderator UI, the report
+  dialog and the EV refusals, both render phases) restores F46, F47 and F53 L4.5. Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -422,10 +423,11 @@ is pending except where a bullet says so.
 ## WU-ModerationIntegrity — report lifecycle integrity: lock-and-guard resolves, sibling closing, dedup, `ReportedUserId`, account-status table + Reinstate, zombie closure at the source, service-side mod read gates (worksheet D7/D8/D9; extends `Moderation/`, `Stories/` (ExternalVerification), `Identity/`, `Spotlight/`, `SiteSettings/`, `Tags/`, `BlogPosts/`, and the auth-guard sweep in `CustomLists/`, `Following/`, `Groups/`, `Notifications/`, `Recommendations/`, `Messaging/`) — DONE ✓ (2026-09-30)
 
 - **Cells:** **F47 L4.5 5→1** (the `/mod/users` history Target column, Reinstate and the hidden
-  "Hide content" on `/mod/reports` changed; the WU ran with no browser available — tracker **H19**).
-  Everything else beneath Stage-5 cells: F46/F47 L1/L2/L3/L3.5/L5, F53 L2, F62 L2, F55 L2, F11/F15 L2,
-  F35/F37 L2, F52 L2, and the L2 guard sweep in F18/F27/F38/F42/F49/F51. L1 stays 5 with the migration
-  applied.
+  "Hide content" on `/mod/reports` changed; the WU ran with no browser available — tracker **H19**);
+  **F46 and F53 L4.5 5→1** at the review fixes (the duplicate-report refusal and the inline EV
+  business-rule messages changed what users see, undriven — H19). Everything else beneath Stage-5
+  cells: F46/F47 L1/L2/L3/L3.5/L5, F48 L2, F53 L2, F62 L2, F55 L2, F11/F15 L2, F35/F37 L2, F52 L2, and
+  the L2 guard sweep in F18/F27/F38/F42/F49/F51. L1 stays 5 with the migration applied.
 - **Trigger:** three answered, unbuilt owner rulings (D7 sibling closing, D8 `ReportedUserId` +
   takedown-reversal ratification, D9 read gates + interface split) that the worksheet assigned to this WU
   jointly with service §2.1.2 (no status guard), §2.1.3 (account-status model) and §2.4.4
@@ -499,8 +501,31 @@ is pending except where a bullet says so.
   guard. Migration verified on a dirtied DB clone (above). `check-doc-hygiene`, `check-design-tokens`,
   `check-render-modes` and `check-a11y` pass. **No browser was available** — tracker **H19** carries the
   pass for F47 L4.5.
-- **Pointers:** `audit/Moderation.md` (cluster Settled note "report lifecycle integrity"; F46, F47, F53,
-  F62 Stage notes); `audit/Identity.md` F52; `audit/Spotlight.md` F55; `audit/Tags.md` F11/F15;
+- **Review fixes (second commit, 2026-09-30).** Three reviews; 21 findings (17 distinct), each checked
+  against the code and the worksheet. All were real; none needed an owner ruling:
+  1. **A standing ban answers a report.** The derived second-Ban refusal also bound the report-driven
+     path, so once an account was banned its other reports could close only as "no action" (82) — a
+     false outcome, and `ResolvedNoAction` in D8's history. A report-driven Ban on a banned account now
+     resolves the report against the ban (81; no status write, stamp bump or second 74); the
+     moderator-initiated path keeps the refusal. Recorded as a refinement on decision row 20.
+  2. **Tests the build owed:** the decrement surviving the stamp bump (the counter fix had none), the
+     report-driven table refusal rolling back, both new moderator self-skips, the D7 hard-delete case in
+     the owner's three-reporter shape, the `/reinstate` route's 204 and 400.
+  3. **Wording:** the profile-comment closure note named the wrong account ("its owner's"); it now
+     names the deleted profile.
+  4. **Docs:** F46 and F53 L4.5 5→1 and H19 extended (steps 2, 4, 5); an F48 Stage note (the queue
+     read's gate, `ReportedUserId` on the waiver row); the F47 WU34 settled bullets annotated
+     (InteractiveAuto, reversal unbuilt); `identity-and-authorization.md` no longer claims every
+     authentication check uses the shared guard (inline checks remain — service §4 residue,
+     WU-DocCorrections); `layer2-services.md`'s forwarding rule names Moderation; `layer6-indexes.md`
+     gains trap rule 3 (a partial index leading with an FK column drops the full FK index) and the
+     explicit `ix_reports_reporter_user_id`, also on the L6 matrix; tracker H8's `UserDeletionService`
+     move ticked and the worksheet's two links re-pointed; a garbled F46 heading and two pointers fixed.
+  5. **Verification:** Unit 1,070, RazorComponents 760, Integration 1,305 (+8), all green; each new
+     test failed against a targeted revert of what it covers. Build 0 errors; the four gates pass. No
+     browser was available — H19.
+- **Pointers:** `audit/Moderation.md` (the F47 Settled note "report lifecycle integrity"; F46, F47, F48,
+  F53, F62 Stage notes); `audit/Identity.md` F52; `audit/Spotlight.md` F55; `audit/Tags.md` F11/F15;
   `audit/BlogPosts.md` F35/F37; short guard-sweep notes in CustomLists, Following, Groups, Notifications,
   Recommendations, Messaging; `layer2-services.md` §"Moderation Services"; `roadmap.md` Resolved D7/D8/D9
   and row 20.

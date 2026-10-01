@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <c>ResolveWithRemovalAsync</c> for it (owner ruling D7 forbids bulk-closing a user's reports, and
 /// D47(a)'s floor says removal must be unreachable for a target it cannot act on) — so "Hide content"
 /// is not offered for one. The service refusal itself is Integration-covered
-/// (<c>ModerationServiceTests</c>).
+/// (<c>ModerationIntegrityTests.RemovalOfAUserReport_IsRefused_AndTheReportStaysOpen</c>).
 /// Tier: RazorComponents (bUnit).
 /// </summary>
 public class ModReportsPageTests : BunitContext
