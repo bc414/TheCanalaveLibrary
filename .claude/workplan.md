@@ -25,9 +25,11 @@ references it, does not restate it.
   **`AnonPrefs`' one shared mutable default (one cookieless visitor's consent leaked to every later
   one)**. Its review fixes closed a reveal existence oracle (the target check is now the viewer's
   confidentiality predicate), completed the enumeration, proved the lineage placement and flipped
-  **F8/F9/F10/F37/F50/F51/F66 L4.5 5→1** (browser pass **H33**). Not built: D20's caps half and §2.11
-  (tracker D14). Filed: decision row 26, D16/D17/F23; E7 closed. `dotnet test`: Unit 1,259,
-  RazorComponents 813, Integration 1,561. **Pointer:** its DONE entry.
+  **F8/F9/F10/F37/F50/F51/F66 L4.5 5→1**; its browser pass the same day returned all seven to 5 (H33
+  closed) and fixed `SeriesCreateEditPage`'s create/edit dispatcher (the four other create/edit pages
+  with the same symptom are **D18**). Not built: D20's caps half and §2.11 (tracker D14). Filed:
+  decision row 26, D16/D17/D18/F23; E7 closed. `dotnet test`: Unit 1,259, RazorComponents 815,
+  Integration 1,561. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-BlobCleanup — worksheet D14 (inline post-commit blob deletes plus a daily orphan sweep, cover upload persists its own reference; F22/row 25 filed, H31/H3 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
@@ -272,7 +274,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too)),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -303,10 +305,10 @@ references it, does not restate it.
   blog-post page and delete paths, ran 2026-09-30 too, returned F36 L4.5 to 5 and closed — see
   WU-TptHardDelete's DONE entry. Tracker **H23**'s pass, WU-CounterSymmetry's badge display, ran
   2026-09-30 too and returned F50 L4.5 to 5; H23 stays open only for Brian's keep-or-revert call on
-  the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry. Tracker **H33**, WU-ThrottleCoverage's
-  browser pass — the throttle messages on both render phases, the reveal paths and the two-profile
-  check of the consent leak fix — is owed; no browser was available to that WU, and its review fixes
-  flipped F8/F9/F10/F37/F50/F51/F66 L4.5 5→1 for the pass to return.)
+  the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry. Tracker **H33**'s pass, WU-ThrottleCoverage's
+  throttle messages on both render phases, the reveal paths and the consent leak fix, ran 2026-10-13,
+  returned F8/F9/F10/F37/F50/F51/F66 L4.5 to 5 and closed; it fixed one runtime bug and filed **D18**
+  — see WU-ThrottleCoverage's DONE entry.)
 
 ---
 
@@ -462,8 +464,9 @@ is pending except where a bullet says so.
 - **Cells:** the build flipped none. Built beneath Stage-5 cells: F8 L2, F9 L2/L3-Logic, F10 L2, F37 L2,
   F50 L2, F51 L2, F54 L2, F63 L2, F66 (all), plus the cross-cutting client 429 arm (every Client* write
   service's L5 leg). The review fixes flipped **F8, F9, F10, F37, F50, F51 and F66 L4.5 5→1** (each
-  now meets a refusal or a page no browser has seen; tracker **H33**). F54 stays 5. Dated 2026-10-13,
-  the session's `currentDate`, as the WUs before it.
+  now meets a refusal or a page no browser has seen; tracker **H33**). F54 stays 5. The browser pass
+  the same day returned all seven to 5 (H33 closed). Dated 2026-10-13, the session's `currentDate`, as
+  the WUs before it.
 - **Trigger:** worksheet D20's throttle-coverage half (answered 2026-08-07) and its spec
   `wu-specs/WU-ThrottleCoverage.md`, with the amendment (a third `rateLimitedAction` caller,
   `ClientReportSubmissionService`). Routed here by earlier WUs: tracker **E7** (story status moves),
@@ -562,8 +565,40 @@ is pending except where a bullet says so.
   call at method entry, the call after the mutation, and charging authorless targets. **Unit 1,259**
   (+1), **RazorComponents 813**, **Integration 1,561** (+4), all green; build 0 errors, no new
   warnings in touched files; the four gates pass. No browser: **H33**.
-- **Pointers:** `security.md` §"Write Throttling"; decision row 26; tracker D14, D16, D17, E6, E7, F23,
-  H33; the Stage notes above.
+- **Browser pass (2026-10-13). F8, F9, F10, F37, F50, F51 and F66 L4.5 1→5; H33 closed; D18 opened.**
+  Steps 1–8 of H33 ran on the server-only path, standing workbench (not reset), `psql` after every
+  write. The throttle steps ran on the circuit (`_blazor/negotiate`, no `/api` call; the Auto hash
+  removed before each full load), then on WASM after a server restart had emptied the in-memory
+  buckets (the action's `/api` request and its 429, whose body carried `writeActionKind`). Actors:
+  TestUser, AuthorAlpha, AuthorBeta, ReaderGamma, ModUser, anonymous. GIF:
+  `e2e-WU-ThrottleCoverage (1).gif` (WASM series creates, the sixth refused; the first export of
+  that name holds a single frame).
+  - Every refusal read "You're doing that a little too fast — please wait N seconds and try again.":
+    lists and a clone (120 s), series (120 s), arcs (120 s), lineage requests (180 s, self-owned links
+    still free), credit requests (180 s, no Pending row left), poll votes (the eleventh, 6 s). The
+    reveal flows, the 429's `text/plain; charset=utf-8` and `Retry-After`, and the consent leak fix
+    (browser A against a cookieless client B) all held; exports answered 200 in all six formats,
+    anonymous and signed in. Narrative: the Stage notes in `audit/Stories.md`, `BlogPosts.md` F37,
+    `Badges.md`, `CustomLists.md`, `AccessGate.md`, `Export.md`.
+  - **One runtime bug, fixed** (commit "browser-pass fixes"): `SeriesCreateEditPage` kept a create
+    flag and an edit id that nothing cleared, so Write → New Series from an edit page showed the
+    edited series' name in the create form. One nullable route key now (`layer3-logic.md`'s new
+    create/edit rule). **RazorComponents** `SeriesCreateEditPageTests` +2, both failing before the
+    fix; re-verified on both phases. After it: Unit 1,259, **RazorComponents 815**, Integration 1,561,
+    all green; the four gates pass.
+  - **Filed D18:** story, blog post, site announcement and group create/edit pages have no dispatcher
+    at all and show the same symptom (three reproduced in the browser).
+  - **Dev-DB state left (server-only).** Custom lists 1–5 and 7–11 (TestUser, private, "E2E Throttle
+    Circuit/WASM List 1–5") and 6 (ModUser, public, "E2E Public List By ModUser"). Series 1–11
+    (AuthorAlpha: "E2E Throttle Circuit Series 1–5", "E2E Throttle WASM Series 1–5", "E2E
+    Browser-Pass Fix Series"). Arcs 1–9 on story 6 (AuthorBeta, chapters 1–9). Lineage rows from
+    story 1 (→6 types 1–4 and →5 type 1 Pending; →3 types 1–2 and →7 type 1 Approved) and story 3 (→6
+    types 1–4 and →12 type 1 Pending; →7 type 2 Approved). No acknowledgment rows (all revoked). Poll 3:
+    ReaderGamma and TestUser both on Johto. `user_content_reveals` (6, Story, 4). Notifications
+    40033–40036. The test browser's `canalave.prefs` cookie was cleared, then reset by the anonymous
+    consent steps.
+- **Pointers:** `security.md` §"Write Throttling"; decision row 26; tracker D14, D16, D17, D18, E6, E7,
+  F23, H33; the Stage notes above.
 
 ## WU-BlobCleanup — blob cleanup owned twice (an inline post-commit delete at every terminal deletion path, a daily orphan sweep as the backstop) and cover upload persisting its own reference (worksheet D14, both halves; service audit §3.16 and §2.12; extends `Images/`, `Stories/`, `Moderation/`, `Identity/`) — DONE ✓ (2026-10-13)
 

@@ -973,6 +973,31 @@ unless noted. All sit under Stage-5 cells.
     missing count cap is the gap that ruling does not reach.
   - Fix shape: when D20's caps half is answered, the WU that builds it (WU-BoundsAndCaps) adds the
     entry cap and either a per-user selection-count cap or a `ContentCreate` call — the owner's call.
+- [ ] **D18 — Four create/edit pages keep the edited item in the "New" form when the router reuses the instance** `[latent-risk · med · beta]` — *Filed 2026-10-13 by the WU-ThrottleCoverage browser pass, which fixed the one page on its own surface (`SeriesCreateEditPage`).*
+  - Grid: no cell moves; each page sits under a Stage-5 L3-Logic cell (F4 story editor, F35 blog post
+    and site announcement editors, F38 group create/edit).
+  - **The rule:** `layer3-logic.md` §"Route-Parameter Dispatchers": a component with a create route
+    and an edit route keys its load on the one nullable route value, in `OnParametersSetAsync`. The
+    router reuses the instance between `/x/new` and `/x/{id}/edit`, so `OnInitializedAsync` does not
+    re-run.
+  - **No dispatcher at all:** `StoryEditorPage`, `BlogPostEditorPage`, `SiteAnnouncementEditorPage`,
+    `GroupCreateEditPage` load only in `OnInitializedAsync`. The header's Write menu links to
+    `story/new`, `blog/new`, `group/new` and `series/new`, and `NewsPage` links to `/news/new`, so an
+    author on an edit page reaches the create route on the same instance.
+  - **Reproduced 2026-10-13 (browser, client-side navigation from the edit route):** `/story/11/edit` →
+    `/story/new` showed "New Story" with story 11's title and description; `/group/6/edit` →
+    `/group/new` showed "Create a New Group" with group 6's name and description; `/blog/2/edit` →
+    `/blog/new` showed "New Post" with post 2's title and body. The save branches key on the route id,
+    so a save there creates a duplicate rather than overwriting the original. `SiteAnnouncementEditorPage`
+    has the same shape (found by reading). The reverse direction (create → edit of another id, edit A →
+    edit B) is unchecked.
+  - **Not swept here** (the audit-before-cross-cutting-build rule): each editor holds Quill state, a
+    `DraftAutosave` keyed by route and `[PersistentState]` sources, so a reload in place has to reset
+    all of it. One WU should take all four, with a bUnit test per page in `SeriesCreateEditPageTests`'
+    shape (render, re-render with the other route's parameters, assert the fields).
+  - **Fix shape:** per page, either the dispatcher (`SeriesCreateEditPage` is the pattern) or a thin
+    route shell rendering the editor body with `@key` on the route id, so a route change builds a
+    fresh body.
 
 ---
 
@@ -2129,7 +2154,16 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. **A status change leaves an old cover refusal on screen.** "Moved back to draft." showed beside
        the earlier "This file isn't…" alert, because a transition does not clear the form's error
        list. Cosmetic.
-- [ ] **H33 — WU-ThrottleCoverage browser pass: the throttle messages on both render phases, the reveal paths, and the consent leak fix** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage; no browser was available to it.*
+- [x] **H33 — WU-ThrottleCoverage browser pass: the throttle messages on both render phases, the reveal paths, and the consent leak fix: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage; no browser was available to it. Closed 2026-10-13 by its browser pass.*
+  - **Result:** steps 1–8 ran and passed; F8, F9, F10, F37, F50, F51 and F66 L4.5 1→5 (`status.md`).
+    Steps 1–4 ran on the circuit, then on WASM after a server restart had emptied the in-memory
+    buckets. The phase was read from the network log: `_blazor/negotiate` and no `/api` call, against
+    the action's `/api` request and its 429. Step 6's profile B was a cookieless HTTP client, which is
+    what the defect needed. Step 9 (D16) was not run; D16 stays open on its own. One runtime bug was
+    found on step 2's page and fixed in the pass: `SeriesCreateEditPage`'s create/edit dispatcher. The
+    same symptom in four other create/edit pages is **D18**. Narrative: the Stage notes in
+    `audit/Stories.md` (F8–F10), `BlogPosts.md` F37, `Badges.md`, `CustomLists.md`, `AccessGate.md`
+    and `Export.md`; `workplan.md` WU-ThrottleCoverage.
   - Grid: the build moved no cell; its review fixes (2026-10-13) flipped **F8, F9, F10, F37, F50, F51
     and F66 L4.5 5→1**. Each now meets a refusal or a page that no browser has seen. This pass returns
     them to 5. F54 stays 5: its limiter refuses only under server-wide overload, and step 5 is a

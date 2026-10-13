@@ -377,6 +377,13 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
   - **Transient busy states** (an "Uploading…" that lasts 100 ms on localhost) are too quick to
     sample. Attach a `MutationObserver` to `document.body` before the action and record each distinct
     state. To keep the record across a `forceLoad` reload, write it to `sessionStorage`.
+  - **Throttle bursts** (verified 2026-10-13, WU-ThrottleCoverage browser pass). The write buckets
+    are in-memory per (user, kind), so restart the server between the circuit pass and the WASM pass,
+    or use another user. A hidden tab clamps `setTimeout` to one second, which lets a 10-per-minute
+    bucket refill mid-burst: yield through a `MessageChannel` round trip instead. Each
+    `javascript_tool` call times out at 45 s, so split long loops; a timed-out script keeps running
+    in the page. The tool's output filter can blank some header values; return them transformed
+    (say, upper-cased with punctuation replaced).
 - **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
   progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
   one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.

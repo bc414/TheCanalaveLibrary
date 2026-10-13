@@ -93,6 +93,11 @@ same assertion for the three `ImportParse` routes and `/resplit`'s absence (an u
 until now). A behavioural concurrency test is timing-dependent and deliberately not attempted. The
 existing endpoint tests (200 with attachment, 404s) pass through the limiter unchanged. No UI changed;
 L4.5 stays 5. Service audit §2.5's export row is closed.
+**Browser smoke (2026-10-13, tracker H33 step 5; L4.5 stays 5):** behind the limiter, all six formats
+(EPUB, PDF, HTML, TXT, Markdown, DOCX), whole-story and chapter 1, answered 200 with their content types:
+anonymously over `curl` (story 1) and signed in as TestUser through the page's own `fetch` (stories 1,
+4 (M, mature on) and 11). Forty concurrent anonymous PDF requests all answered 200: on localhost a
+seed story renders faster than the queue fills, so the limiter's refusal is not reachable by hand.
 
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under

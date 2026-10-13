@@ -775,7 +775,7 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
   `StoryEditorPage` edit mode.
 - **L4 — Stage 1.** All design tokens (`check-design-tokens.ps1` clean for these files); visual
   sign-off pending human review (WU13/WU14/WU24 precedent).
-- **L4.5 — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: an arc create can now be refused with a wait message, undriven in a browser — tracker H33; see its Stage note under Feature 10. Was Stage 5 from WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the WU45
+- **L4.5 — Stage 5 (1→5, WU-ThrottleCoverage browser pass, 2026-10-13: the sixth arc create in a burst reads "please wait 120 seconds" in the arc panel on the circuit and on WASM, and `psql` holds only the saved arcs — tracker H33 closed; see its Stage note under Feature 10. Lowered 5→1 by that WU's review fixes the same day; Stage 5 from WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the WU45
   deferral — see Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; arcs data loading verified in a real WASM runtime during the
@@ -890,10 +890,10 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
    test — `StoryPage` has no bUnit suite of its own even for its original F1 fix (WU-ComponentSoundness);
    covered by this L4.5 pass instead, consistent with that precedent.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5 (re-verified WU-ThrottleCoverage, 2026-10-13 — L2: `CreateSeriesAsync` spends a `ContentCreate` token, owner ruling D20, Integration `WriteThrottleTests`; L3-Logic: the create/edit page shows a throttle or session refusal through `ExceptionPresenter` instead of a fixed "unexpected error", RazorComponents `SeriesCreateEditPageTests`; see its Stage note under Feature 10).** See test tiers below.
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (re-verified WU-ThrottleCoverage, 2026-10-13 — L2: `CreateSeriesAsync` spends a `ContentCreate` token, owner ruling D20, Integration `WriteThrottleTests`; L3-Logic: the create/edit page shows a throttle or session refusal through `ExceptionPresenter` instead of a fixed "unexpected error", RazorComponents `SeriesCreateEditPageTests`; and since that WU's browser pass the create/edit dispatcher keys on one route value, so create → edit → create no longer keeps the edited series' name, RazorComponents `SeriesCreateEditPageTests` +2; see its Stage note under Feature 10).** See test tiers below.
 - **L4-Style — Stage 1** (visual sign-off pending, per WU8/WU13/WU23/WU28/WU37/WU42/WU43 precedent —
   functionally verified live, below, but no dedicated visual/token polish pass).
-- **L4.5-Browser — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: the create/edit page's error output changed and a series create can be refused with a wait message, undriven in a browser — tracker H33; see its Stage note under Feature 10. Was Stage 5 from 2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
+- **L4.5-Browser — Stage 5 (1→5, WU-ThrottleCoverage browser pass, 2026-10-13: the sixth series create in a burst reads "please wait 120 seconds" on `/series/new` on both render phases, and Write → New Series from an edit page opens a blank form after the pass's fix — tracker H33 closed; see its Stage note under Feature 10. Lowered 5→1 by that WU's review fixes the same day; Stage 5 from 2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
   against the dev server (`AuthorAlpha`/`TestUser` fixtures): My Series (empty state, owner-scoped) →
   Create Series → post-create redirect into edit mode (bug 1 above, found + fixed here) → add two
   stories via the picker → reorder via ↑ (persisted) → public SeriesPage (`StoryDeck` in reordered
@@ -975,7 +975,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
 
 - **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30, and L3-Logic's page reloads its list after a stale approve since that WU's browser pass — see its Stage note; a request that notifies spends a `RepeatRequest` token and the reject comment no longer claims a spam guard, WU-ThrottleCoverage, 2026-10-13 — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
-  close this gate). **L4.5-Browser — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: a notifying request can now be refused with a wait message, undriven in a browser — tracker H33; see its Stage note. Was Stage 5 from 2026-07-12, real-circuit verification, see below).**
+  close this gate). **L4.5-Browser — Stage 5 (1→5, WU-ThrottleCoverage browser pass, 2026-10-13: the sixth notifying request in a burst reads "please wait 180 seconds" on `/story-lineages` on both render phases and writes no row, and self-owned links still save with the bucket empty — tracker H33 closed; see its Stage note. Lowered 5→1 by that WU's review fixes the same day; Stage 5 from 2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; lineage page + `StoryTitlePicker` verified in a real WASM
   runtime during the flip's browser wave (picker rebuilt on the new in-house `CanalaveTypeahead`).
@@ -1141,7 +1141,7 @@ read from the network log. AuthorBeta requested three Inspired-By links into Aut
     `StoryLineageApproved`, because an unread one for the same target story (7) already existed: the
     notification service's existing dedup. The console was clean.
 
-### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — F8/F9/F10 L4.5 5→1 at its review fixes (tracker H33); every other cell stays 5
+### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — F8/F9/F10 L4.5 5→1 at its review fixes and 1→5 at its browser pass the same day (tracker H33 closed); every other cell stays 5
 
 D20 (answered 2026-08-07) ruled that every user-reachable write either spends a bucket or is
 enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
@@ -1193,6 +1193,35 @@ enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
     third.
   - **The respondent side is now in `security.md`'s enumeration:** `RejectLineageAsync` (silent,
     target-owner-scoped, bounded by the requester's `RepeatRequest`) was named nowhere.
+- **Browser verification (2026-10-13) — F8, F9 and F10 L4.5 1→5; tracker H33 closed.** Server-only
+  path, standing workbench (not reset), `psql` after every write. Each flow ran on the circuit
+  (`_blazor/negotiate` and no `/api` call; the Auto hash removed before each full load), then on WASM
+  after a server restart had emptied the in-memory buckets (the action's `/api` request and its 429).
+  - **F8 (AuthorBeta, story 6's arc panel):** the sixth create call in a burst read "You're doing that
+    a little too fast — please wait 120 seconds and try again." on both phases (`POST /api/story-arcs`
+    429 on WASM); `story_arcs` held only the saved rows. The circuit saved five first. On WASM one of
+    the five calls failed the overlap rule (a timing slip in the driving script) and still spent a
+    token, so four saved: `CreateArcAsync` charges at method entry, where `security.md` places
+    `ContentCreate`.
+  - **F9 (AuthorAlpha, `/series/new`):** five series saved and the sixth showed the wait message, not
+    "An unexpected error occurred", on both phases (`POST /api/series` 429 on WASM); `series` gained
+    five rows per phase.
+  - **F10 (AuthorAlpha, `/story-lineages`):** five requests to AuthorBeta's stories saved Pending and
+    the sixth read "please wait 180 seconds" on both phases (`POST /api/story-lineage` 429 on WASM),
+    leaving no row for the refused link. With the bucket empty, self-owned links still saved Approved
+    (three on the circuit, one on WASM).
+  - **Runtime bug, fixed (commit "browser-pass fixes"), F9 L3-Logic:** `SeriesCreateEditPage` kept a
+    create flag and an edit id that nothing cleared, so on the router-reused instance a route already
+    visited was skipped. Write → New Series from `/series/10/edit` opened "Create a New Series" with
+    "E2E Throttle WASM Series 5" still in the name field; saving would have created a second series
+    under that name. The dispatcher now keys on the one nullable route value, recorded at the start of
+    every load (`layer3-logic.md` §"Route-Parameter Dispatchers" states the create/edit rule).
+    RazorComponents `SeriesCreateEditPageTests` +2 (`CreateEditCreate_OnSameInstance_ShowsABlankCreateForm`,
+    `EditCreateEdit_SameSeries_OnSameInstance_ReloadsTheSeries`), both failing before the fix.
+    Re-verified in the browser on both phases. Four other create/edit pages have no dispatcher at all
+    and show the same symptom (story, blog post, group: reproduced); outside this WU's surface, tracker
+    **D18**.
+  - Server log: no `fail:`/`crit:` from these flows. Browser console: no errors on a WASM refusal.
 
 ## Feature 45 — View Count Tracking
 

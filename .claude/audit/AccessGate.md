@@ -341,7 +341,7 @@ Mature-off is a cookie claim refreshed by the settings save (`RefreshSignInAsync
 leaves the claim stale; a raise during that window succeeded, which is by design and was a test
 artifact.
 
-### Stage note — WU-ThrottleCoverage: consent-endpoint throttling (owner ruling D20) + a shared-default consent leak fixed (2026-10-13) — L4.5 5→1 at its review fixes (tracker H33); every other F66 cell stays 5
+### Stage note — WU-ThrottleCoverage: consent-endpoint throttling (owner ruling D20) + a shared-default consent leak fixed (2026-10-13) — L4.5 5→1 at its review fixes, 1→5 at its browser pass the same day (tracker H33 closed); every other F66 cell stays 5
 
 **Cells:** the build flipped nothing; its review fixes (2026-10-13) flipped **L4.5 5→1**. The
 cookieless consent behaviour, the reveal's 429 page and the anonymous enum guard all changed what a
@@ -409,3 +409,27 @@ list holds no "(deleted …)" row). Unit `WriteThrottleWireContractTests.RevealT
 Mutation-checked: restoring the ground-truth check fails the first; dropping the charset fails the
 second. The existing `WriteThrottleTests` reveal tests now set the active user. No browser was
 available: tracker H33 gains the hidden-target and 429-text steps.
+
+**Browser verification (2026-10-13): L4.5 1→5, tracker H33 closed.** Server-only path, standing
+workbench, `psql` after every write. The consent endpoints are full-document form posts, so no render
+phase applies to them; the `/settings` reveal list was read on both phases.
+- **Signed-in reveal (ReaderGamma, mature off per `/dev/wu12/whoami`):** "View this story" on story 4
+  (M) landed on the story and wrote one `user_content_reveals` row `(6, 0, 4)`. Hand-posted with the
+  interstitial's antiforgery token: `entityType=9`, a missing story id (99999), AuthorAlpha's draft
+  (10), the taken-down story (16) and AuthorBeta's pending M story (9). Each answered the normal
+  redirect and wrote no row. `/settings` listed only "Seed Story: Mature (M)", with no "(deleted …)"
+  row, on the circuit and on WASM (`GET /api/content-gate/reveals`).
+- **The 429:** ten quick posts, then the real form submitted as the eleventh: 429, and the page read
+  "You're doing that a little too fast — please wait 6 seconds and try again." with the em dash intact
+  (`document.characterSet` UTF-8). A fetch burst read the headers: `Content-Type: text/plain;
+  charset=utf-8`, `Retry-After: 6`. The row count stayed one (idempotent).
+- **The consent leak fix:** browser A signed out with its `canalave.prefs` cookie cleared; B was a
+  cookieless HTTP client. A pressed "Always show mature content" on story 4: A's cookie read `m:true`
+  and A's `/discover` listed the M story. B still got the interstitial on `/story/4`, and B's
+  `/discover` listed eight stories with no M. A then cleared its cookie and pressed "View this story":
+  A's cookie read `rs:[4]` and A read the story, while B still got the interstitial. Before the fix
+  either press would have changed B's view until restart.
+- **Not a defect of this WU:** a hand-post with no `entityId` field answers 500 in Development, where
+  minimal APIs throw `BadHttpRequestException` for a missing required form value; production answers
+  400. Unchanged by this WU and unreachable from the interstitial.
+- Server log: no `fail:`/`crit:` apart from that Development-only line.
