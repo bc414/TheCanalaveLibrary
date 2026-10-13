@@ -251,9 +251,15 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   coverage at both the service (`GroupServiceTests`) and HTTP (`GroupEndpointsTests`) layers —
   previously zero tests existed for `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` at
   all.
-- **L3-Logic — Stage 5 (2026-06-24, WU32).** `CreateFolderDto` with `MaxRating ≤ group cap` constraint.
+- **L3-Logic — Stage 5 (2026-06-24, WU32; folder-name validation in Core `GroupFolderValidations` and
+  the folder page's refusal-and-reload handlers since WU-SchemaHardening, 2026-10-13 — stays Stage 5,
+  Stage note at the end of this feature).** `CreateFolderDto` with `MaxRating ≤ group cap` constraint.
   `AddGroupStoryDto` carries optional `GroupFolderId`. `ContentRatingExceededException` is a Core domain
-  exception. Test tier: Unit — no pure-logic unit test (validation is simple enough; Integration covers).
+  exception. `GroupFolderValidations.NameErrors` (tier 2) trims a folder name, requires it and caps it
+  for create and rename. `GroupFolderManagementPage`'s write handlers keep each "no longer exists"
+  refusal and reload the tree; a refused rename also closes its editor. Test tiers: Unit
+  `GroupFolderValidationsTests` (the name rules); RazorComponents `GroupFolderManagementPageTests` (the
+  handlers); Integration `GroupServiceTests` and `GroupFolderIntegrityTests` (the server-side checks).
 - **L3.5-Structure — Stage 5 (2026-06-24, WU32; folder-management page built WU-GroupsL5,
   2026-07-24; delete copy and the new refusals handled WU-SchemaHardening, 2026-10-13 — stays Stage 5,
   but L4.5 went 5→1 pending tracker H28's browser pass; Stage note at the end of this feature).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
@@ -273,11 +279,12 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   deliberately **not** on this page — it landed on `GroupPage` instead (WU-GroupsL5b, 2026-07-25;
   see Stage note below) since that's where stories actually render with titles/cards and the
   viewer's role already loads; this page owns folder CRUD/reorder only.
-  Test tier: RazorComponents (`GroupFolderManagementPageTests`, 11 tests — admin gate (member and
+  Test tier: RazorComponents (`GroupFolderManagementPageTests`, 17 tests since the WU-SchemaHardening
+  review fixes, 2026-10-13 — admin gate (member and
   non-member both denied), create dispatch incl. nested `ParentFolderId`, rename dispatch, the
   two-step delete guard, the reorder value-swap + boundary-disabled buttons, validation-error
-  surfacing via `InlineAlert`); Integration/Unit tiers for the transport layer are noted on F38's
-  new Stage note above.
+  surfacing via `InlineAlert`, and WU-SchemaHardening's delete copy and refusals); Integration/Unit
+  tiers for the transport layer are noted on F38's new Stage note above.
 
 ### WU-GroupsL5b Stage note (2026-07-25) — closes hidden-deferrals B6 + D3.1
 
@@ -366,7 +373,7 @@ cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-trac
 
 ### WU-SchemaHardening Stage note (2026-10-13) — Feature 39: folder integrity, `group_stories` as a set
 
-**No L1/L2/L3.5 flip; F39 L4.5 5→1.** Schema audit §2.4 and service audit §2.10 found the folder model
+**No L1/L2/L3-Logic/L3.5 flip; F39 L4.5 5→1.** Schema audit §2.4 and service audit §2.10 found the folder model
 sound in shape but unguarded. These defects sat beneath Stage-5 cells:
 - `parent_folder_id` had no FK: a deleted folder's sub-folders kept a dangling parent id and vanished
   from the tree, while `DeleteFolderAsync`'s comment claimed a SET NULL configured nowhere.
@@ -385,7 +392,7 @@ What changed:
   a dev-DB clone dirtied with each case (all fixed, a duplicate's folder assignment cascaded), then
   Down and Up again; the migration is applied to the server-only dev DB.
 - **L2** (`ServerGroupWriteService`; rule `layer2-services.md` §"Group Folder Integrity"): the new
-  Core helper `GroupFolderValidations.NameErrors` on create and rename; byte-wise sibling pre-checks;
+  Core helper `GroupFolderValidations.NameErrors` (an L3-Logic tier-2 validator) on create and rename; byte-wise sibling pre-checks;
   renaming a folder to its own name is a no-op; a parent must be in the same group (`KeyNotFoundException`,
   the D3.1 non-disclosure shape). Delete refuses, naming each clash, when a sub-folder would duplicate a
   top-level name (a default: roadmap decision row 22). Otherwise it appends the sub-folders after the
@@ -396,11 +403,13 @@ What changed:
   and `AddStoryAsync` (the `group_stories` index; the add counts as already done, with no folder
   assignment and no notification). The phantom SET-NULL comment is gone (service §4's false-comment
   inventory: WU-DocCorrections can skip it), and `IGroupWriteService`'s docs now state the rules.
-- **L3.5** (`GroupFolderManagementPage`): the delete confirmation says sub-folders move to the top level;
-  a delete refusal shows the service's message instead of the generic error; a gone parent on create
-  shows "That parent folder no longer exists."; and every "no longer exists" refusal reloads the tree,
-  keeping the message (`error-handling.md`'s moved-under-the-page rule; it was missing on rename,
-  delete and reorder too).
+- **L3.5** (`GroupFolderManagementPage` markup): the delete confirmation says sub-folders move to the
+  top level.
+- **L3-Logic** (the same page's `@code` handlers): a delete refusal shows the service's message instead
+  of the generic error; a gone parent on create shows "That parent folder no longer exists."; and every
+  "no longer exists" refusal reloads the tree, keeping the message (`error-handling.md`'s
+  moved-under-the-page rule; it was missing on rename, delete and reorder too). A refused rename also
+  closes its editor.
 
 Tests:
 - **Integration** `GroupFolderIntegrityTests` (24). It covers name, parent, delete and set semantics,
@@ -415,7 +424,22 @@ Tests:
 - **Unit** `GroupFolderValidationsTests` (8).
 - Mutation-checked, each failing its tests when reverted: a tracked EF delete instead of the set-based
   one (the parent-named sub-folder trips the index), the sort-order append, the same-group parent
-  check, the name validation, the `AddStoryAsync` catch, and the page's catches and copy.
+  check, the name validation, the `AddStoryAsync` catch, and the page's create and delete catches and
+  its copy. The rename and reorder catches had no test at the WU (see the review fixes below).
+
+**Review fixes (2026-10-13) — no flip.** Three paths the WU changed had no test, so reverting them left
+the suite green:
+- **RazorComponents** `GroupFolderManagementPageTests` +2 (17 in all). The fake service gained
+  `RenameFolderException` and `ReorderFolderException`. A rename whose folder is gone keeps the
+  message, reloads the tree and closes the editor; a move whose folder is gone keeps the message and
+  reloads. Mutation-checked: removing either catch's reload, or the rename catch's
+  `_editingFolderId = null`, fails its test.
+- **Integration** `GroupFolderIntegrityTests` +1 (25, six interleaved races):
+  `DeleteFolder_DeletedByAnotherCallBeforeTheDelete_ThrowsKeyNotFound`. A competing delete lands just
+  before this call's `DELETE`, which then affects no row and throws `KeyNotFoundException` (before the
+  WU, a lost delete-delete race was a concurrency exception and a 500). Mutation-checked: without the
+  0-row check the delete returns silently and the test fails.
+- The L6 intent ledger's `GroupStory` row now names the UNIQUE `ix_group_stories_group_id_story_id`.
 
 **Browser:** this WU ran with no browser available, so F39 L4.5 went 5→1 (the campaign's no-browser
 precedent: the page's delete behaves differently and has new refusals). Tracker **H28** lists the

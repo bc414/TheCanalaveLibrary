@@ -545,6 +545,10 @@ dirtied dev-DB clone).
 - Tests: **Integration** `PollServiceTests` +2 (both paths refuse and write nothing; mutation-checked
   against the check removed) and `SchemaConstraintTests` (the raw refusal by SQLSTATE 23514 and name).
   No UI changed: the poll editor surfaces `PollValidationException` as before, so F37 L4.5 stays 5.
+- **Review fixes (2026-10-13).** The create test went through `CreateSitePollAsync` only, so the
+  blog-post create path's own copy of the check could be reverted with the suite green. **Integration**
+  `PollServiceTests.CreateBlogPostPoll_CloseDateInThePast_WithNoOpenDate_ThrowsValidation` (+1) covers
+  it; mutation-checked against that copy removed.
 
 **WU-TptHardDelete browser verification Stage note (2026-09-30) — no flip; L4.5 stays 5.** Owner
 ruling D11 end to end, `psql` after every write.

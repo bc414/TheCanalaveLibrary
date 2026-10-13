@@ -295,6 +295,57 @@ public class GroupFolderManagementPageTests : BunitContext
         cut.Markup.Should().Contain("No folders yet.", "the stale row is gone after the reload");
     }
 
+    [Fact]
+    public void Rename_FolderGone_KeepsTheMessage_ClosesTheEditor_AndReloadsTheTree()
+    {
+        // The reload still returns the folder (a read that lags the write, or a failed reload leaving
+        // the old tree up), so the closed editor is observable on its own, apart from the reload.
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([NewFolder(1, "Old Name", 0)]);
+        _fakeService.RenameFolderException = new KeyNotFoundException("Folder 1 not found.");
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+        int loadsBefore = _fakeService.GetByIdCalls;
+
+        FindButton(cut, "Rename").Click();
+        cut.Find("input[aria-label='Rename Old Name']").Input("New Name");
+        FindButton(cut, "Save").Click();
+
+        cut.WaitForState(() => cut.FindAll("[role='alert']").Count > 0, TimeSpan.FromSeconds(2));
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("That folder no longer exists.");
+        _fakeService.GetByIdCalls.Should().BeGreaterThan(loadsBefore,
+            "the refusal means the tree moved under the page, so it reloads (error-handling.md)");
+        cut.FindAll("input[aria-label='Rename Old Name']").Should().BeEmpty(
+            "the editor for a folder that no longer exists closes");
+    }
+
+    [Fact]
+    public void Move_FolderGone_KeepsTheMessage_AndReloadsTheTree()
+    {
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([
+            NewFolder(1, "First", 0),
+            NewFolder(2, "Second", 1),
+        ]);
+        _fakeService.ReorderFolderException = new KeyNotFoundException("Folder 1 not found.");
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+        int loadsBefore = _fakeService.GetByIdCalls;
+
+        _fakeService.GroupDetail = NewGroupDetail([NewFolder(2, "Second", 1)]); // another admin deleted "First"
+        cut.Find("[aria-label='Move First down']").Click();
+
+        cut.WaitForState(() => cut.FindAll("[role='alert']").Count > 0, TimeSpan.FromSeconds(2));
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("That folder no longer exists.");
+        _fakeService.GetByIdCalls.Should().BeGreaterThan(loadsBefore,
+            "the refusal means the tree moved under the page, so it reloads (error-handling.md)");
+        cut.FindAll("[aria-label='Move First down']").Should().BeEmpty("the stale row is gone after the reload");
+    }
+
     // ── Reorder ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -346,7 +397,9 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public GroupDetailDto? GroupDetail { get; set; }
     public GroupRole? Role { get; set; }
     public Exception? CreateFolderException { get; set; }
+    public Exception? RenameFolderException { get; set; }
     public Exception? DeleteFolderException { get; set; }
+    public Exception? ReorderFolderException { get; set; }
     public int GetByIdCalls { get; private set; }
 
     public List<CreateFolderDto> CreateFolderCalls { get; } = [];
@@ -412,6 +465,7 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
 
     public Task RenameFolderAsync(int groupFolderId, string newName)
     {
+        if (RenameFolderException is not null) throw RenameFolderException;
         RenameFolderCalls.Add((groupFolderId, newName));
         return Task.CompletedTask;
     }
@@ -425,6 +479,7 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
 
     public Task ReorderFolderAsync(int groupFolderId, int newSortOrder)
     {
+        if (ReorderFolderException is not null) throw ReorderFolderException;
         ReorderFolderCalls.Add((groupFolderId, newSortOrder));
         return Task.CompletedTask;
     }

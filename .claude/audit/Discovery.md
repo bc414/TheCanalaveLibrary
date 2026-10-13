@@ -233,7 +233,10 @@ re-seed guard from the start.
   2026-10-13, is a Shared Context entity change with no L1 cell — Stage note at the end of this feature).
   **L2 — Stage 5** (WU23 built the Source=All query;
   WU28 closed random preload / "give me more" — see the WU28 Stage note below; WU-SelectionPermalink
-  added the permalink read, 2026-07-28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
+  added the permalink read, 2026-07-28; the override write `SetOverrideAsync` is one
+  `INSERT … ON CONFLICT` since the WU-SchemaHardening review fixes, 2026-10-13 — stays Stage 5,
+  Integration `DiscoveryFilterSettingsServiceTests`, Stage note at the end of this feature).
+  **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
   **L4 — Stage 1.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
@@ -495,13 +498,28 @@ sibling `default_user_story_interaction_filter_settings` uses the natural compos
 had no reader. Migration `WU_SchemaHardening` drops it and makes the triple the primary key
 (`pk_user_story_interaction_filter_settings`), same column order. `user_id` still leads, so the
 per-user reads in `ServerDiscoveryFilterSettingsService` and `ServerDiscoveryDefaultsReadService`
-use the key's prefix. No service, DTO or UI changed (the service upserts by the triple already). Up
-kept existing rows. Down re-adds an identity column, which numbers them. Both directions were
-rehearsed on a dev-DB clone holding three override rows.
+use the key's prefix. No DTO or UI changed. The WU left the service unchanged; the key change needed a
+service change after all (the review fixes below). Up kept existing rows. Down re-adds an identity column, which numbers them.
+Both directions were rehearsed on a dev-DB clone holding three override rows.
 
 Tests: **Integration** `SchemaConstraintTests` (a duplicate triple refused by SQLSTATE 23505 on
 `pk_user_story_interaction_filter_settings`); `DiscoveryFilterSettingsServiceTests` and
 `DiscoveryDefaultsReadServiceTests` pass unchanged.
+
+**Review fixes (2026-10-13) — F31 L2 stays Stage 5.** The natural key broke `SetOverrideAsync` on a
+circuit. Its divergent-value branch did a tracked `Add`, and its return-to-default branch an
+`ExecuteDeleteAsync`, which leaves the earlier `Add`'s entity tracked in the circuit-scoped write
+context. Toggling one setting on, off and on again therefore threw "another instance with the same key
+value … is already being tracked" on the third toggle, and every later attempt failed until the
+circuit ended. The surrogate key had hidden this: a new entity got a temporary key and could not
+collide. The divergent branch is now one `INSERT … ON CONFLICT (user_id, search_mode_key,
+user_story_interaction_filter_key) DO UPDATE`, the `NotificationSettingUpsert` shape, and nothing
+tracks the entity. The general rule is in `layer2-services.md` §"Read-Context Concurrency: Factory Per
+Method" ("Set-based writes leave the circuit's tracked copies stale"). A pre-existing site of the same
+class (`ToggleLikeAsync` on blog posts) and the unswept rest are tracker **D15**. Test:
+**Integration** `DiscoveryFilterSettingsServiceTests.SetOverrideAsync_OnOffOn_ThroughOneScope_LeavesOneRowWithTheFinalValue`
+runs the three toggles through one scope, which models the circuit. It failed with that exception
+before the fix. The other tests open a scope per call, so they could not see it.
 
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',

@@ -836,7 +836,8 @@ unless noted. All sit under Stage-5 cells.
     - `LeaveAsync`, `UnfollowAsync` and `RemoveVouchAsync`.
     - The comment and recommendation unlike.
     - The USI sparse cleanup.
-    - The blog-post unlike is already an `ExecuteDeleteAsync`, so it is immune.
+    - The blog-post unlike is already an `ExecuteDeleteAsync`, so it is immune. (Its re-like on the
+      same circuit is D15's stale-tracking crash, a different class.)
   - **Update-vs-delete (USI)**, added by the WU-CounterSymmetry review fixes (2026-09-30). A USI write
     loads (or ensures) the row while the same user's concurrent all-false panel write sparse-deletes it.
     The loser's `SaveChangesAsync` updates a row that no longer exists and gets a 500
@@ -898,6 +899,26 @@ unless noted. All sit under Stage-5 cells.
     `RecordProgressAsync`, plus the buffer contract) adds the CHECK in the same migration, declared in
     the model (`layer1-data-model.md` §"CHECK constraints", which lists it under "Considered and not
     added"), and a row in `SchemaConstraintTests`' inventory.
+- [ ] **D15 — A natural-keyed row deleted set-based and then re-created on one circuit throws "already being tracked"** `[latent-risk · low · beta]` — *Filed 2026-10-13 by the WU-SchemaHardening review fixes, which fixed the site that WU made reachable.*
+  - Grid: no cell moves; each site sits under a Stage-5 L2 cell.
+  - **The rule:** `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" → "Set-based
+    writes leave the circuit's tracked copies stale". `ExecuteDeleteAsync` leaves an earlier call's
+    tracked entity in the circuit-scoped write context, and an `Add` of the same natural key then
+    throws `InvalidOperationException`. The viewer gets the generic error until the circuit ends.
+  - **Fixed:** `ServerDiscoveryFilterSettingsService.SetOverrideAsync`. WU-SchemaHardening gave
+    `user_story_interaction_filter_settings` its natural composite PK, so toggling one discovery
+    setting on, off and on again on a circuit threw on the third toggle. It is now one
+    `INSERT … ON CONFLICT … DO UPDATE`. Integration `DiscoveryFilterSettingsServiceTests` runs the
+    sequence through one scope.
+  - **Found by reading, not reproduced:** `ServerBlogPostWriteService.ToggleLikeAsync`. A like `Add`s
+    and tracks a `BlogPostLike`; the unlike `ExecuteDeleteAsync`s it; a re-like on the same circuit
+    `Add`s the same `(BlogPostId, UserId)`.
+  - **Not swept** (the audit-before-cross-cutting-build rule): every other natural-keyed entity (the
+    composite `HasKey` calls in `Data/Configurations/`) whose service mixes a tracked `Add` with a
+    set-based delete of the same row. D11's insert fix shape (`INSERT … ON CONFLICT DO NOTHING`) closes
+    this at the sites it shares, so the two belong in one WU.
+  - **Fix shape:** per site, an `ON CONFLICT` insert or a delete through the tracker, plus an
+    Integration test that runs the sequence through one scope.
 
 ---
 

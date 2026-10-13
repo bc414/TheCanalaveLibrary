@@ -1127,7 +1127,8 @@ nullable flow columns had "accidental nullability semantics" in an append-only g
   `SiteDailyStatAggregator.IsActiveUsersMeasurable(statDate, nowUtc)` (the previous completed UTC day
   or today) drives `CASE WHEN @measure_active THEN … END`. The upsert writes
   `COALESCE(EXCLUDED.active_users, site_daily_stats.active_users)`, so a later re-upsert of an old day
-  (gap-fill, the dev probe) never erases a measured value. `UpsertDayAsync`'s signature is unchanged.
+  (gap-fill, the dev probe) never erases a measured value. `UpsertDayAsync(statDate, ct)` kept its
+  signature; the review fixes added an overload that takes the clock reading (below).
 - **Left alone:** `/mod/stats` draws a NULL day as 0 (`ActiveUsers ?? 0`), an L4 chart question filed as
   tracker **H27**.
 - Tests:
@@ -1135,6 +1136,13 @@ nullable flow columns had "accidental nullability semantics" in an append-only g
   - **Integration** `SiteDailyStatAggregatorTests`. `_day` is now the previous completed UTC day (the old
     `UtcNow − 3` would read NULL). +2: an older day is written NULL while the rest still count, and a
     re-upsert keeps a measured value. Mutation-checked: dropping the `CASE` or the `COALESCE` fails them.
+- **Review fixes (2026-10-13) — no flip.** The test class chose its day from one clock reading and the
+  aggregator decided measurability from a second, so a run crossing UTC midnight made the day
+  unmeasurable and `UpsertDayAsync_ComputesEveryCounter` would fail on `ActiveUsers`. A new overload
+  `UpsertDayAsync(statDate, nowUtc, ct)` decides against the caller's reading. The test class holds one
+  `_now` (its day is now the `Day` property derived from it) and passes it, and the worker's daily run
+  and gap-fill each pass the reading they chose their days from. Tier: Integration
+  `SiteDailyStatAggregatorTests` (unchanged assertions; a midnight flake has no deterministic test).
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** D9's sweep: `GetLatestAsync` and
 `GetSeriesAsync` are moderator-only, so `ServerSiteDailyStatReadService` now takes `IActiveUserContext`
@@ -1146,7 +1154,8 @@ and `/api/site-daily-stats/latest` and `/series` answer 200 to a moderator, 403 
 anonymous (F47's browser-verification note).
 
 **Stages (updated 2026-10-13, WU-SchemaHardening — `new_users` NOT NULL beneath L1 and `active_users`
-written only for a measurable day beneath L8, no flip, Stage note at the top of this section;
+written only for a measurable day beneath L8, no flip, Stage note at the top of this section; its
+review fixes pass one clock reading through, no flip;
 2026-09-30, WU-CounterSymmetry `total_words` predicate beneath L8, no flip;
 WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle review fixes before that):**
 L1–L3.5 = 5, L4 = 3, L4.5 = 5,

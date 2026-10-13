@@ -426,6 +426,24 @@ public class PollServiceTests(PostgresFixture postgres) : IntegrationTestBase(po
     }
 
     [Fact]
+    public async Task CreateBlogPostPoll_CloseDateInThePast_WithNoOpenDate_ThrowsValidation()
+    {
+        // The blog-post create path carries its own copy of the check (WU-SchemaHardening review fixes,
+        // 2026-10-13: only the site-poll path was tested).
+        int blogPostId = await SeedBlogPostAsync(_authorId);
+
+        Func<Task> act = () => CreateBlogPollAsync(blogPostId, NewDto(closed: DateTime.UtcNow.AddDays(-1)));
+
+        await act.Should().ThrowAsync<PollValidationException>()
+            .Where(e => e.Errors.Contains(PollEditDto.CloseBeforeOpenMessage),
+                "the open date defaults to now, and the close date is before it");
+
+        using IServiceScope scope = NewScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Polls.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task UpdatePoll_CloseDateBeforeTheStoredOpenDate_ThrowsValidation()
     {
         // A scheduled poll (opens in two days) is still editable; "keep the open date" (null) plus a

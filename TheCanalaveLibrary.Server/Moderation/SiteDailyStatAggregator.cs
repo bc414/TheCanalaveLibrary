@@ -130,12 +130,22 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
         statDate >= SiteDailyStatWorker.PreviousCompletedUtcDay(nowUtc);
 
     /// <summary>
+    /// Upserts the row for <paramref name="statDate"/> (a completed UTC day), deciding whether
+    /// <c>active_users</c> is counted against the current UTC time. See the overload that takes the
+    /// clock reading.
+    /// </summary>
+    public Task UpsertDayAsync(DateOnly statDate, CancellationToken ct = default) =>
+        UpsertDayAsync(statDate, DateTime.UtcNow, ct);
+
+    /// <summary>
     /// Upserts the row for <paramref name="statDate"/> (a completed UTC day). Idempotent — safe to
     /// call more than once for the same day (e.g. a retry, or the worker's bounded gap-fill). Whether
-    /// <c>active_users</c> is counted is decided against the current UTC time
-    /// (<see cref="IsActiveUsersMeasurable"/>).
+    /// <c>active_users</c> is counted is decided against <paramref name="nowUtc"/>
+    /// (<see cref="IsActiveUsersMeasurable"/>): pass the same reading the caller chose the day from, so
+    /// a call that crosses UTC midnight cannot turn a measurable day into an unmeasurable one between
+    /// the two (WU-SchemaHardening review fixes, 2026-10-13).
     /// </summary>
-    public async Task UpsertDayAsync(DateOnly statDate, CancellationToken ct = default)
+    public async Task UpsertDayAsync(DateOnly statDate, DateTime nowUtc, CancellationToken ct = default)
     {
         using Activity? activity = CanalaveTelemetry.Marts.Source.StartActivity("Marts.SiteDailyStatUpsert");
         activity?.SetTag("canalave.mart.name", "site_daily_stats");
@@ -156,7 +166,7 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
                     new NpgsqlParameter("range_start", NpgsqlDbType.TimestampTz) { Value = rangeStart },
                     new NpgsqlParameter("range_end", NpgsqlDbType.TimestampTz) { Value = rangeEnd },
                     new NpgsqlParameter("measure_active", NpgsqlDbType.Boolean)
-                        { Value = IsActiveUsersMeasurable(statDate, DateTime.UtcNow) },
+                        { Value = IsActiveUsersMeasurable(statDate, nowUtc) },
                 ],
                 ct);
 

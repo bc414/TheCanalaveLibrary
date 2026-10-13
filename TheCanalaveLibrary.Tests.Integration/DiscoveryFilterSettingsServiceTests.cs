@@ -141,6 +141,36 @@ public class DiscoveryFilterSettingsServiceTests(PostgresFixture postgres) : Int
     }
 
     [Fact]
+    public async Task SetOverrideAsync_OnOffOn_ThroughOneScope_LeavesOneRowWithTheFinalValue()
+    {
+        // One scope models one Blazor Server circuit: every toggle shares the scoped write context.
+        // The key is the natural triple since WU-SchemaHardening, so a tracked Add after the
+        // set-based delete collided with the instance the first Add left tracked, and the third toggle
+        // threw "already being tracked" (WU-SchemaHardening review fixes, 2026-10-13). The other tests
+        // open a scope per call and could not see it.
+        int userId = await SeedUserAsync();
+        SetActiveUser(userId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IDiscoveryFilterSettingsService svc =
+                scope.ServiceProvider.GetRequiredService<IDiscoveryFilterSettingsService>();
+            await svc.SetOverrideAsync(SiteSearchModes.SearchPage, UserStoryInteractionFilters.Favorited, isEnabled: true);
+            await svc.SetOverrideAsync(SiteSearchModes.SearchPage, UserStoryInteractionFilters.Favorited, isEnabled: false);
+            await svc.SetOverrideAsync(SiteSearchModes.SearchPage, UserStoryInteractionFilters.Favorited, isEnabled: true);
+        }
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        List<UserStoryInteractionFilterSetting> rows = await db.UserStoryInteractionFilterSettings.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .ToListAsync();
+        rows.Should().ContainSingle("on, off, on leaves exactly the one divergent override");
+        rows[0].UserStoryInteractionFilterKey.Should().Be(UserStoryInteractionFilters.Favorited);
+        rows[0].IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SetOverrideAsync_Unauthenticated_Throws()
     {
         SetActiveUser(FakeActiveUserContext.Anonymous());

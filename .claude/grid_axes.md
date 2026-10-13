@@ -75,8 +75,10 @@ EF Core POCOs in the **Core** project, Fluent API configuration in `OnModelCreat
 **Stage-2 planning covers:** table/column/relationship shape, TPT `.ToTable()` calls, vertical-partition
 splits (hot/warm/cold), enum vs lookup-table vs hybrid classification, delete behaviors
 (`.OnDelete(DeleteBehavior.X)` on every relationship), column types (`timestamp(2) with time zone`,
-`string` with `[MaxLength]`), `HasDefaultValueSql` for creation timestamps, CHECK constraints and
-triggers (manual migration edits), and composite-key/unique-constraint definitions.
+`string` with `[MaxLength]`), `HasDefaultValueSql` for creation timestamps, CHECK constraints
+(declared in the model with `HasCheckConstraint` since WU-SchemaHardening, 2026-10-13 —
+`layer1-data-model.md` §"CHECK constraints"), triggers (manual migration edits), and
+composite-key/unique-constraint definitions.
 
 **Stage-5 means:** POCOs compile, migration applies cleanly, column/table names match spec §7's
 deliberated names after `EFCore.NamingConventions` conversion, delete behaviors are explicit on every

@@ -27,8 +27,10 @@ references it, does not restate it.
     model (the new rule in `layer1-data-model.md`), guarded by a catalog inventory test.
   - **Smaller:** the poll close date is checked against the effective open date; `new_users` NOT NULL
     and `active_users` written only for a measurable day; the filter overrides' natural key.
-  - **Tracker:** **D14**, **H27** and **H28** filed. `dotnet test`: Unit 1,182, RazorComponents 774,
-    Integration 1,456. **Pointer:** its DONE entry.
+  - **Review fixes (2026-10-13):** a re-toggled discovery setting threw on a circuit (now one
+    `ON CONFLICT` upsert; a new `layer2-services.md` rule; tracker **D15** for the rest of the class).
+  - **Tracker:** **D14**, **H27**, **H28**, **D15**. `dotnet test`: Unit 1,182, RazorComponents 776,
+    Integration 1,459. **Pointer:** its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
@@ -268,7 +270,7 @@ references it, does not restate it.
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
-  WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**),
+  WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15**),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -449,9 +451,9 @@ is pending except where a bullet says so.
 ## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)
 
 - **Cells:** F39 L4.5 **5→1** (the folder page's delete and refusals changed; no browser was
-  available; tracker **H28**). Every other touched cell stays 5: F4/F6/F8/F10/F18/F19/F37/F39/F47/F62
-  L1, F37/F39 L2, F39 L3.5, F62 L8. Dated 2026-10-13 (the session's `currentDate`, as the two WUs
-  before it), not the template's 2026-09-30.
+  available; tracker **H28**). Every other touched cell stays 5: F4/F6/F8/F10/F11/F18/F19/F37/F39/F47/F62
+  L1, F31/F37/F39 L2, F39 L3-Logic and L3.5, F62 L8 (F31 L2 by the review fixes). Dated 2026-10-13 (the
+  session's `currentDate`, as the two WUs before it), not the template's 2026-09-30.
 - **Trigger:** the WU spec plus orchestrator amendment (WU-StoryLifecycle's two CHECKs, and fixing every
   test that seeds a published chapter or story without its date).
 - **What landed:**
@@ -499,6 +501,23 @@ is pending except where a bullet says so.
     through an all-NULL row and no reader depends on it) and counter non-negativity (schema §2.6).
   - `/mod/stats` drawing a NULL day as 0 (tracker **H27**, L4).
   - Service §4's phantom SET-NULL comment is fixed here: WU-DocCorrections skips it.
+- **Review fixes (2026-10-13).** Three reviews raised 11 findings, 9 distinct after merging duplicates.
+  Each was checked against the code; all 9 were real and none needed an owner ruling.
+  1. **A re-toggled discovery setting threw on a circuit (high).** With the natural key,
+     `SetOverrideAsync`'s tracked `Add` after its set-based delete collided with the instance the
+     first `Add` left tracked in the circuit-scoped write context ("already being tracked"). It is now
+     one `INSERT … ON CONFLICT … DO UPDATE`. The general rule is new in `layer2-services.md`
+     §"Read-Context Concurrency: Factory Per Method"; tracker **D15** records a pre-existing site of
+     the same class (the blog-post like toggle) and the unswept rest.
+  2. **Untested paths:** the folder page's rename and reorder "no longer exists" catches, the
+     delete-delete race (0 rows → `KeyNotFoundException`) and the blog-post poll create's close-date
+     check. Each now has a test that fails with its code reverted.
+  3. **A midnight flake:** `SiteDailyStatAggregatorTests` chose its day and the aggregator its
+     measurability from two clock readings. `UpsertDayAsync` gained an overload that takes the
+     caller's reading; the tests and the worker pass one.
+  4. **Records:** the F39 L3-Logic headline and Stage note (the validator and page handlers), this
+     entry's Cells line (F11, F39 L3-Logic), `grid_axes.md`'s L1 CHECK clause, the L6 intent ledger's
+     `GroupStory` row, and `UserStoryInteractionFilterSettingId` in the retired-term registry.
 - **Verification:**
   - `dotnet build`: 0 errors, 33 warnings, none new (baseline diff).
   - `dotnet test`: **Unit 1,182** (+13), **RazorComponents 774** (+4), **Integration 1,456** (+48),
@@ -507,10 +526,17 @@ is pending except where a bullet says so.
     tests in 12 classes inserted published chapters without `FirstPublishedDate`.
   - Mutation-checked, each failing its tests: a tracked EF delete, the sort-order append, the
     same-group parent check, name validation, the `AddStoryAsync` catch, the poll check, the
-    `active_users` `CASE` and `COALESCE`, the page's catches and copy.
+    `active_users` `CASE` and `COALESCE`, the page's create and delete catches and its copy (rename
+    and reorder: the review fixes).
   - The four gates pass. **No browser was available** — tracker **H28**.
-- **Pointers:** `layer2-services.md` §"Group Folder Integrity"; `layer1-data-model.md` §"CHECK
-  constraints"; `audit/Groups.md` F39 Stage note; `roadmap.md` §Resolved and row 22.
+  - After the review fixes: build 0 errors, 33 warnings (none in touched files); **Unit 1,182**,
+    **RazorComponents 776** (+2), **Integration 1,459** (+3), all green; the four gates pass. Each fix
+    was reverted in turn and its tests failed: the `ON CONFLICT` upsert (the old code threw the
+    tracking exception), the rename catch's reload and its editor close, the reorder catch's reload,
+    the 0-row delete check and the blog-post poll check. No UI behavior changed, so H28's steps stand.
+- **Pointers:** `layer2-services.md` §"Group Folder Integrity" and §"Read-Context Concurrency: Factory
+  Per Method"; `layer1-data-model.md` §"CHECK constraints"; `audit/Groups.md` F39 Stage note;
+  `audit/Discovery.md` F31's WU-SchemaHardening note; `roadmap.md` §Resolved and row 22; tracker D15.
 
 ---
 

@@ -20,11 +20,16 @@ namespace TheCanalaveLibrary.Tests.Integration;
 [Collection("Postgres")]
 public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
+    // One clock reading for the whole test, passed to the aggregator too: the day is chosen from it
+    // and its active_users measurability is decided against it, so a run that crosses UTC midnight
+    // cannot make the day unmeasurable between the two (WU-SchemaHardening review fixes, 2026-10-13).
+    private readonly DateTime _now = DateTime.UtcNow;
+
     // The previous completed UTC day — the worker's daily target, and the only completed day whose
     // active_users is still measurable (WU-SchemaHardening; an older day is written NULL).
-    private readonly DateOnly _day = SiteDailyStatWorker.PreviousCompletedUtcDay(DateTime.UtcNow);
-    private DateTime InDay => _day.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
-    private DateTime BeforeDay => _day.AddDays(-1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
+    private DateOnly Day => SiteDailyStatWorker.PreviousCompletedUtcDay(_now);
+    private DateTime InDay => Day.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
+    private DateTime BeforeDay => Day.AddDays(-1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
     private int _userAId;
     private int _storyS1Id;
@@ -42,7 +47,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
 
         // --- new_users / total_users: A is "new" today, B predates the window (total only) ---
         await db.Database.ExecuteSqlAsync($"UPDATE \"AspNetUsers\" SET created_utc = {InDay} WHERE id = {_userAId}");
-        await db.Database.ExecuteSqlAsync($"UPDATE \"AspNetUsers\" SET created_utc = {_day.AddDays(-30).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)} WHERE id = {userBId}");
+        await db.Database.ExecuteSqlAsync($"UPDATE \"AspNetUsers\" SET created_utc = {Day.AddDays(-30).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)} WHERE id = {userBId}");
         // --- active_users: A pinged today; B never did ---
         await db.Database.ExecuteSqlAsync($"UPDATE \"AspNetUsers\" SET last_active_utc = {InDay} WHERE id = {_userAId}");
 
@@ -51,7 +56,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         _storyS1Id = await SeedStoryAsync(_userAId);
         int storyS2Id = await SeedStoryAsync(_userAId);
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {InDay}, word_count = 500 WHERE story_id = {_storyS1Id}");
-        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, word_count = 300 WHERE story_id = {storyS2Id}");
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {Day.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, word_count = 300 WHERE story_id = {storyS2Id}");
 
         // --- total_stories / total_words exclusions (WU-CounterSymmetry, service audit §2.4.6):
         // total_words uses total_stories' own predicate, so none of these three may count. A Draft
@@ -61,8 +66,8 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         int takenDownId = await SeedStoryAsync(_userAId);
         int laterId = await SeedStoryAsync(_userAId);
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET word_count = 1000 WHERE story_id = {draftId}");
-        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, is_taken_down = true, word_count = 2000 WHERE story_id = {takenDownId}");
-        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc)}, word_count = 4000 WHERE story_id = {laterId}");
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {Day.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, is_taken_down = true, word_count = 2000 WHERE story_id = {takenDownId}");
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {Day.AddDays(1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc)}, word_count = 4000 WHERE story_id = {laterId}");
 
         // --- new_chapters / new_words: one published chapter on S1 today, 500 words. Counted on the
         // chapter-level anchor Chapter.FirstPublishedDate (D2, WU-StoryLifecycle), not the version's
@@ -162,7 +167,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
 
         // --- story_views: daily_story_stats has no EF model — raw SQL, matching the R2 pattern ---
         await db.Database.ExecuteSqlAsync(
-            $"INSERT INTO daily_story_stats (story_id, stat_date, view_count) VALUES ({_storyS1Id}, {_day}, 42)");
+            $"INSERT INTO daily_story_stats (story_id, stat_date, view_count) VALUES ({_storyS1Id}, {Day}, 42)");
     }
 
     [Fact]
@@ -233,7 +238,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         using (IServiceScope scope = Factory.Services.CreateScope())
         {
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            DateTime longAgo = _day.AddDays(-10).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
+            DateTime longAgo = Day.AddDays(-10).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
             Chapter old = new()
             {
                 StoryId = _storyS1Id, ChapterNumber = 2, Title = "Ch2", IsPublished = true,
@@ -267,7 +272,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         // A gap-filled day three days back: last_active_utc only holds each user's latest ping, so the
         // day's activity cannot be reconstructed. Before the WU this stored a silent undercount (0 here,
         // although user A may well have been active that day) into an append-only table.
-        DateOnly older = _day.AddDays(-2);
+        DateOnly older = Day.AddDays(-2);
 
         await UpsertAsync(older);
 
@@ -281,7 +286,7 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
     {
         // The day was measured while it was recent (7); a later gap-fill or dev-probe re-upsert of the
         // same, now-old day must not erase it with NULL.
-        DateOnly older = _day.AddDays(-2);
+        DateOnly older = Day.AddDays(-2);
         await UpsertAsync(older);
         using (IServiceScope scope = Factory.Services.CreateScope())
         {
@@ -300,12 +305,12 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         SiteDailyStatAggregator aggregator = scope.ServiceProvider.GetRequiredService<SiteDailyStatAggregator>();
-        await aggregator.UpsertDayAsync(day ?? _day);
+        await aggregator.UpsertDayAsync(day ?? Day, _now);
     }
 
     private async Task<SiteDailyStat?> LoadRowAsync(DateOnly? day = null)
     {
-        DateOnly target = day ?? _day;
+        DateOnly target = day ?? Day;
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.SiteDailyStats.SingleOrDefaultAsync(s => s.StatDate == target);
@@ -315,6 +320,6 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.SiteDailyStats.CountAsync(s => s.StatDate == _day);
+        return await db.SiteDailyStats.CountAsync(s => s.StatDate == Day);
     }
 }

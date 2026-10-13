@@ -116,7 +116,7 @@ on the same entity — later entries in the conversation history reflect closer-
 | index / access pattern | stated rationale | era-tech | naive-or-stale? | source |
 |---|---|---|---|---|
 | unique index on `GroupName` | enforce group name uniqueness (scaffold artifact) | SQLServer (attribute-based) | N — matches shipped `ix_groups_group_name` unique | #1630 |
-| `GroupStory` unique `(GroupId, StoryId)` + missing reverse index on `StoryId` ("phone book problem") | group→stories fast; story→groups needed a second index | SQLServer | N — matches shipped `ix_group_stories_group_id` + `ix_group_stories_story_id` (both directions present) | #1119 |
+| `GroupStory` unique `(GroupId, StoryId)` + missing reverse index on `StoryId` ("phone book problem") | group→stories fast; story→groups needed a second index | SQLServer | N — matches shipped UNIQUE `ix_group_stories_group_id_story_id` + `ix_group_stories_story_id` (both directions present, and the uniqueness this row asked for). The UNIQUE index superseded the plain `ix_group_stories_group_id` on 2026-10-13 (WU-SchemaHardening, worksheet D23) | #1119 |
 | merged folder table vs separate `GroupFolders` join — "all stories in a group" should be a fast seek on GroupId, not a forced join through folders | avoid a join tax on the group's most common query | SQLServer | N — the reconciliation confirms the shipped design still forces this join (`BuildFolderTreeAsync`) for the folder-tree view specifically, though a direct group→story index exists for the flat case | #1118 |
 
 ## Following / Vouches

@@ -424,6 +424,31 @@ public class GroupFolderIntegrityTests(PostgresFixture postgres) : IntegrationTe
         stillChild.SortOrder.Should().Be(4, "the sort-order move rolled back with the delete");
     }
 
+    [Fact]
+    public async Task DeleteFolder_DeletedByAnotherCallBeforeTheDelete_ThrowsKeyNotFound()
+    {
+        // Delete-delete: the competing delete lands after this call's checks, so its own DELETE affects
+        // no row. That is answered as the missing folder it now is, never a silent success or a 500
+        // (WU-SchemaHardening review fixes, 2026-10-13). No sub-folders, so the competing delete takes
+        // no lock this call's transaction holds.
+        int groupId = await CreateGroupAsync();
+        int folderId = await CreateFolderAsync(groupId, "Twice");
+
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "DELETE FROM group_folders",
+            interleavedSql: $"DELETE FROM group_folders WHERE group_folder_id = {folderId};");
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerGroupWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerGroupWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            (await FluentActions.Awaiting(() => svc.DeleteFolderAsync(folderId))
+                    .Should().ThrowAsync<KeyNotFoundException>("the folder is gone, as for any missing id"))
+                .WithMessage($"Folder {folderId} not found.");
+        }
+        interceptor.Fired.Should().BeTrue();
+        (await FoldersAsync(groupId)).Should().BeEmpty();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     private async Task<int> CreateGroupAsync()

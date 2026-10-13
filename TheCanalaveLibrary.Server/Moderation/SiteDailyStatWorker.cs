@@ -55,8 +55,10 @@ public sealed class SiteDailyStatWorker(
 
                 await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
                 SiteDailyStatAggregator aggregator = scope.ServiceProvider.GetRequiredService<SiteDailyStatAggregator>();
-                DateOnly yesterday = PreviousCompletedUtcDay(DateTime.UtcNow);
-                await aggregator.UpsertDayAsync(yesterday, stoppingToken);
+                // One clock reading picks the day and decides its active_users measurability.
+                DateTime now = DateTime.UtcNow;
+                DateOnly yesterday = PreviousCompletedUtcDay(now);
+                await aggregator.UpsertDayAsync(yesterday, now, stoppingToken);
                 logger.LogInformation("site_daily_stats upserted for {StatDate}", yesterday);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -79,7 +81,8 @@ public sealed class SiteDailyStatWorker(
             .Select(s => (DateOnly?)s.StatDate)
             .FirstOrDefaultAsync(ct);
 
-        DateOnly target = PreviousCompletedUtcDay(DateTime.UtcNow);
+        DateTime now = DateTime.UtcNow;
+        DateOnly target = PreviousCompletedUtcDay(now);
         List<DateOnly> missingDays = MissingDays(latestExisting, target, MaxBackfillDays);
         if (missingDays.Count == 0) return;
 
@@ -88,7 +91,7 @@ public sealed class SiteDailyStatWorker(
 
         SiteDailyStatAggregator aggregator = scope.ServiceProvider.GetRequiredService<SiteDailyStatAggregator>();
         foreach (DateOnly day in missingDays)
-            await aggregator.UpsertDayAsync(day, ct);
+            await aggregator.UpsertDayAsync(day, now, ct);
     }
 
     /// <summary>The most recent UTC day that has fully elapsed as of <paramref name="nowUtc"/> —

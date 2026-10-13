@@ -212,6 +212,18 @@ Mechanics:
   actions, effectively serialized per circuit, and a scoped `ApplicationDbContext` never collides
   with factory-created read contexts (different instances). Revisit only if a real write-vs-write
   interleaving surfaces.
+- **Set-based writes leave the circuit's tracked copies stale.** `ExecuteUpdateAsync` and
+  `ExecuteDeleteAsync` bypass the change tracker, and the scoped write context lives as long as the
+  circuit, so an entity an earlier call tracked (an `Add`, a tracked load) outlives a later set-based
+  delete of its row. For a **natural-keyed** row (no generated key) that is a crash: re-creating the
+  row `Add`s a second instance with the same key, and EF throws "another instance with the same key
+  value … is already being tracked". A surrogate-keyed `Add` gets a temporary key and cannot collide.
+  So a natural-keyed row that a service deletes set-based and may re-create is written with one
+  `INSERT … ON CONFLICT` and never tracked (`NotificationSettingUpsert`;
+  `ServerDiscoveryFilterSettingsService.SetOverrideAsync` since the WU-SchemaHardening review fixes,
+  2026-10-13, when its table lost the surrogate key), or it is deleted through the tracker. Integration
+  tests open one scope per call and cannot see this: test such a write by calling the whole sequence
+  through **one** service instance (one scope models the circuit). Sites not yet swept: tracker **D15**.
 - **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
   (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
   `AddDbContextFactory` also registers the context type itself as a scoped service.
@@ -1337,7 +1349,9 @@ No migration.
 with its system default, effective value, and override-exists flag; `SetOverrideAsync(searchModeKey,
 filterKey, isEnabled)` is a sparse upsert/delete — a **single-field** mirror of
 `INotificationWriteService.SetSettingAsync`'s contract (when the value matches the system default the
-override row is deleted, so absence means "use default"). Its rows carry one settable field each, so
+override row is deleted, so absence means "use default"; a divergent value is one
+`INSERT … ON CONFLICT` on the natural key, never a tracked `Add` — see §"Read-Context Concurrency:
+Factory Per Method" → "Set-based writes leave the circuit's tracked copies stale"). Its rows carry one settable field each, so
 row-level sparseness is per-field sparseness here; the two-field notification table is sparse per
 column instead (owner ruling D19 — §"Notification Generation" → "Filtering semantics"). Surfaces on `/settings` (`DiscoverySettingsForm.razor`), not
 `ResultsFilterPanel` — see `audit/Discovery.md` §"Note on search-result narrowing" for why.

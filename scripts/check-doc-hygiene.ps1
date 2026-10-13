@@ -50,6 +50,7 @@ $retiredTerms = [ordered]@{
     # Case-sensitive and not preceded by a word char, so the per-field EmailIsDefault /
     # CollapsedIsDefault that replaced it never trip it.
     'NotificationSettingDto.IsDefault (split into EmailIsDefault / CollapsedIsDefault, owner ruling D19, WU-NotificationCorrectness 2026-10-12)' = '(?-i)(?<![\w*])IsDefault\b'
+    'UserStoryInteractionFilterSettingId (surrogate key dropped for the natural composite PK, WU-SchemaHardening 2026-10-13)' = '\bUserStoryInteractionFilterSettingId\b|\buser_story_interaction_filter_setting_id\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

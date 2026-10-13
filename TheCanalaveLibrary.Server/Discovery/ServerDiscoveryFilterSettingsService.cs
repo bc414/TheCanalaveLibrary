@@ -111,26 +111,18 @@ public class ServerDiscoveryFilterSettingsService(
             return;
         }
 
-        UserStoryInteractionFilterSetting? existing = await writeDb.UserStoryInteractionFilterSettings
-            .FirstOrDefaultAsync(s => s.UserId == userId
-                                      && s.SearchModeKey == searchModeKey
-                                      && s.UserStoryInteractionFilterKey == filterKey);
-
-        if (existing is null)
-        {
-            writeDb.UserStoryInteractionFilterSettings.Add(new UserStoryInteractionFilterSetting
-            {
-                UserId = userId,
-                SearchModeKey = searchModeKey,
-                UserStoryInteractionFilterKey = filterKey,
-                IsEnabled = isEnabled
-            });
-        }
-        else
-        {
-            existing.IsEnabled = isEnabled;
-        }
-
-        await writeDb.SaveChangesAsync();
+        // One upsert on the natural key, never a tracked Add. The write context is scoped to the
+        // circuit, and the delete above is set-based, so a row an earlier toggle Added would stay
+        // tracked after its delete; re-adding the same (user, mode, key) then threw "already being
+        // tracked" (WU-SchemaHardening review fixes, 2026-10-13 — the key was a surrogate before that
+        // WU). Nothing here tracks the entity, and two concurrent toggles cannot collide on the key.
+        // Rule: layer2-services.md §"Read-Context Concurrency: Factory Per Method".
+        await writeDb.Database.ExecuteSqlAsync($"""
+            INSERT INTO user_story_interaction_filter_settings
+                (user_id, search_mode_key, user_story_interaction_filter_key, is_enabled)
+            VALUES ({userId}, {searchModeKey}, {filterKey}, {isEnabled})
+            ON CONFLICT (user_id, search_mode_key, user_story_interaction_filter_key)
+            DO UPDATE SET is_enabled = EXCLUDED.is_enabled
+            """);
     }
 }
