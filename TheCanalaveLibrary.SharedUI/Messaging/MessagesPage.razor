@@ -133,9 +133,24 @@ else
     /// ([PersistentState] requires a public property) — the sidebar listing hydrates from the
     /// prerender payload. Thread state below stays ephemeral: loading it bundles a
     /// MarkConversationReadAsync write plus a post-mark-read listing refresh, both of which must
-    /// run (plain assignments) on every load.
+    /// run on every load.
+    /// <para>
+    /// The live list is <see cref="_conversations"/>: every refresh writes the field, and this
+    /// property's setter takes a value only until initialization ends. .NET 10 hands the restored
+    /// snapshot back on the page's first parameter set after initialization; that is the archive's
+    /// return to /messages, and it put the archived conversation back in the Inbox (WU-PrivateMessageEmail
+    /// browser pass, 2026-10-13; layer3-logic.md §"State Persistence"). The getter still reads the
+    /// field, so what persists at the end of prerendering is the list the prerender showed.
+    /// </para>
     /// </summary>
-    [PersistentState] public IReadOnlyList<ConversationSummaryDto>? Conversations { get; set; }
+    [PersistentState]
+    public IReadOnlyList<ConversationSummaryDto>? Conversations
+    {
+        get => _conversations;
+        set { if (!_initialized) _conversations = value; }
+    }
+
+    private IReadOnlyList<ConversationSummaryDto>? _conversations;
 
     // The archived list is deliberately NOT persisted and NOT fetched on first load. Archiving is
     // the gesture that keeps the active set small, so the archived set is the one that grows
@@ -183,7 +198,7 @@ else
 
     /// <summary>The list the sidebar renders — whichever tab is active.</summary>
     private IReadOnlyList<ConversationSummaryDto>? VisibleConversations =>
-        _tab == MessageTab.Archived ? _archivedConversations : Conversations;
+        _tab == MessageTab.Archived ? _archivedConversations : _conversations;
 
     /// <summary>
     /// Projects _threadHeader + _allMessages into a ConversationThreadDto for the children.
@@ -198,7 +213,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // ??= — restore-or-fetch idiom; every later listing refresh is a plain assignment.
+        // ??= — restore-or-fetch idiom, through the property while initialization runs; every later
+        // listing refresh writes _conversations (see the property's doc).
         Conversations ??= await WriteService.GetConversationsAsync();
 
         // Resolve compose preset when arriving from a UserCard "Send PM" action.
@@ -261,7 +277,7 @@ else
 
             // Mark read + refresh list (updates unread counts in sidebar).
             await WriteService.MarkConversationReadAsync(ConversationId.Value);
-            Conversations = await WriteService.GetConversationsAsync();
+            _conversations = await WriteService.GetConversationsAsync();
 
             // The sidebar renders _archivedConversations while the Archived tab is active, so
             // the mark-read above must be reflected there too — otherwise the just-read thread's
@@ -298,7 +314,7 @@ else
                 await _thread.ClearComposerAsync();
             // Refresh sidebar preview — both lists, since a reply to an archived thread must
             // update the archived list's preview/timestamp too (same reasoning as LoadThreadAsync).
-            Conversations = await WriteService.GetConversationsAsync();
+            _conversations = await WriteService.GetConversationsAsync();
             if (_tab == MessageTab.Archived)
                 _archivedConversations = await LoadArchivedAsync();
         }
@@ -393,7 +409,7 @@ else
             // Back to a known state: Inbox tab, fresh listing, no thread selected.
             _tab = MessageTab.Inbox;
             _archivedConversations = null;
-            Conversations = await WriteService.GetConversationsAsync();
+            _conversations = await WriteService.GetConversationsAsync();
             Nav.NavigateTo("/messages");
         }
         catch (Exception)

@@ -492,8 +492,10 @@ persistence", 2026-07-13 — adopted app-wide in the Global Flip work-unit):
   handles them, so `OnInitializedAsync` runs exactly once with no persisted state and no double
   fetch. `[PersistentState]` only matters on full document loads (first visit, F5, external link).
   Consequence: route-param dispatcher pages (`OnParametersSetAsync` reload pattern) need
-  restore-or-fetch on the *initial* load only; the param-change reload path never sees persisted
-  state and must stay a plain fetch.
+  restore-or-fetch on the *initial* load only; the param-change reload path must stay a plain fetch.
+  One exception to "no persisted state after the first load": .NET 10 hands the restored snapshot
+  back on the first parameter set after a full load, which overwrites any value assigned since
+  (`layer3-logic.md` §"State Persistence"; found 2026-10-13, tracker D20).
 - **`@key` associates state to instances** when several same-type components render on one page.
 - Options for special cases: `[PersistentState(AllowUpdates = true)]` lets enhanced-nav updates
   refresh read-only cached data; `RestoreBehavior.SkipInitialValue` / `SkipLastSnapshot` skip

@@ -541,6 +541,15 @@ in **Integration**, where a real `TestAppFactory` request exercises the actual e
 the same class statically, before anything runs). See `layer5-wasm.md` §"Components that ALSO
 render on static-SSR pages".
 
+A restored `[PersistentState]` value is different: bUnit *can* see it, but only when the test asks.
+By default bUnit restores nothing, so components take their fetch path.
+`PersistentStateTestSupport.RestoreDeclarativeStateAsync<T>` performs a full load's restore through
+the framework's own supplier, with the snapshot stored under the key the framework computes. Use it
+when the behavior under test depends on the restored value: what the interactive pass renders, or the
+.NET 10 defect that hands the snapshot back on the next parameter set (`layer3-logic.md`
+§"State Persistence"). `MessagesPageTests` has both cases, the first as a guard that the restore is
+real (WU-PrivateMessageEmail browser pass, 2026-10-13).
+
 When a hypothesis depends on that kind of real-circuit behavior, don't keep guessing against the
 automated tiers — reach for browser-based debugging instead (`run-server/SKILL.md` "Browser-based
 debugging & verification"; methodology in `canalave-conventions/debugging.md`).

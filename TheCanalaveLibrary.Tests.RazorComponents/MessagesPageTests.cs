@@ -175,6 +175,46 @@ public class MessagesPageTests : BunitContext
                 "archiving clears the pane and returns to the conversation-picker state");
     }
 
+    // ── A full load's restored list (WU-PrivateMessageEmail browser pass, 2026-10-13) ────────────
+    // A full page load restores Conversations from the prerender snapshot, and .NET 10 hands that
+    // snapshot back on the page's first parameter set after initialization — the archive's return to
+    // /messages. The page used to show the archived conversation in the Inbox until a reload, on the
+    // circuit and on WASM (layer3-logic.md §"State Persistence").
+
+    [Fact]
+    public async Task RestoredFirstLoad_RendersTheSnapshot_WithoutFetchingTheInbox()
+    {
+        _fakeService.SetConversations(NewConversation(1, "Ash"));
+        await this.RestoreDeclarativeStateAsync<MessagesPage>(
+            ("Conversations", new[] { NewConversation(2, "Misty").Dto }));
+
+        IRenderedComponent<MessagesPage> cut = Render<MessagesPage>();
+
+        cut.Markup.Should().Contain("Misty", "the restored snapshot is what the interactive pass renders");
+        _fakeService.GetConversationsCalls.Should().BeEmpty(
+            "a restored list is not fetched again — this pins that the restore in these tests is real");
+    }
+
+    [Fact]
+    public async Task Archive_AfterARestoredFirstLoad_LeavesTheConversationOutOfTheInbox()
+    {
+        var conversation = NewConversation(1, "Ash");
+        _fakeService.SetConversations(conversation);
+        _fakeService.SetThread(NewThread(1, isArchived: false));
+        await this.RestoreDeclarativeStateAsync<MessagesPage>(("Conversations", new[] { conversation.Dto }));
+
+        IRenderedComponent<MessagesPage> cut = Render<MessagesPage>(p => p
+            .Add(c => c.ConversationId, 1));
+        FindButton(cut, "Archive").Click();
+
+        // The router's parameter set for /messages, which is what the handler's NavigateTo leads to.
+        cut.Render(p => p.Add(c => c.ConversationId, (int?)null));
+
+        cut.Markup.Should().Contain("Your inbox is empty.",
+            "the archived conversation left the inbox; the restored snapshot must not put it back");
+        cut.Markup.Should().NotContain("Ash");
+    }
+
     [Fact]
     public void ArchivedThread_ButtonReadsUnarchive_AndClearsTheFlag()
     {

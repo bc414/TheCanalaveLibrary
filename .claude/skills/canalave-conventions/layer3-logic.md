@@ -71,6 +71,38 @@ Legitimate non-page injection:
 - **Security:** persisted state is exposed to the browser under `InteractiveAuto`. **Never persist
   sensitive/private data** this way.
 - For multiple instances of the same component, pair with `@key`.
+- **The restored snapshot comes back once more (.NET 10 framework defect).** After a full load restores
+  a property, the framework hands the same snapshot back on the component's *next* parameter set, and
+  it overwrites whatever the component assigned in between. (The supplier leaves its "restored value
+  pending" flag set after the first supply: `PersistentValueProviderComponentSubscription
+  .GetOrComputeLastValue` in ASP.NET Core, on `release/10.0` and `main` as read 2026-10-13. Later
+  parameter sets return the property's current value.) It bites when three things hold:
+  1. the component reassigns the property after initialization;
+  2. it then receives another parameter set: for a page, an in-page navigation to its own route
+     with other route or query values; for a child, a parent render that passes parameters;
+  3. that path does not reassign the property again.
+
+  `MessagesPage` had all three. Archiving refreshed the list, then navigated to `/messages`, and the
+  Inbox showed the archived conversation until a reload, on the circuit and on WASM
+  (WU-PrivateMessageEmail browser pass, 2026-10-13). **The idiom:** back the property with a private
+  field. The setter takes a value only until initialization ends, and every later refresh writes the
+  field. The getter reads the field, so what persists at the end of prerendering is still what the
+  prerender showed:
+
+  ```csharp
+  [PersistentState]
+  public IReadOnlyList<ConversationSummaryDto>? Conversations
+  {
+      get => _conversations;
+      set { if (!_initialized) _conversations = value; }   // _initialized: set last in OnInitializedAsync
+  }
+  private IReadOnlyList<ConversationSummaryDto>? _conversations;
+  ```
+
+  A property that `OnParametersSetAsync` reloads on every key change already overwrites the snapshot
+  and needs nothing. The other components that hold `[PersistentState]` have not been swept (tracker
+  **D20**). bUnit can reproduce the defect: `PersistentStateTestSupport.RestoreDeclarativeStateAsync`
+  (`testing.md` §"What the three tiers structurally can't see").
 
 ### Persisting Service State Across the Handoff
 
