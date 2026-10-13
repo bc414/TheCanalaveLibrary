@@ -58,8 +58,9 @@ worker).
   site now runs global InteractiveAuto; settings read+write verified in a real WASM runtime during
   the flip's browser wave (tagline round-trip, psql ground truth). Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip.
-- **L4.5 — Stage 1 (5→1 at the WU-PrivateMessageEmail review fixes, 2026-10-13: the privacy form's
-  new pointer line has not been seen in a browser; tracker H35 step 9 returns it to 5).**
+- **L4.5 — Stage 5 (5→1 at the WU-PrivateMessageEmail review fixes, 1→5 at its browser pass, both
+  2026-10-13: the privacy form's pointer line seen and followed on both render phases; tracker H35
+  closed; see its Stage note).**
 
 ---
 
@@ -82,6 +83,18 @@ for one value would disagree mid-edit. Rule: `layer2-services.md` §"Private-Mes
 touched files; `dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614; the four
 PowerShell gates pass. **No browser was available**: the line is new visible markup, so L4.5 is
 lowered and tracker **H35** step 9 holds the pass.
+
+**Browser verification (2026-10-13) — F20 L4.5 1→5; tracker H35 step 9.** The pass ran on the Aspire
+path as ReaderGamma; the method is in `audit/Messaging.md` F49's browser verification.
+- **Both render phases.** `/settings` was loaded on the circuit (`_blazor/negotiate`, no `/api`
+  call) and on a WASM revisit (no negotiate). Under the Privacy form's "Private messages" select
+  there is one muted line, "Emails about new messages: Notification settings".
+- **The link.** Its link goes to `/notifications/settings`. Followed on each phase, it opened the
+  page with its Private messages section.
+- **The wiring.** The select's `aria-describedby` names the line's id, and the form's checkboxes are
+  the five privacy toggles: none of them toggles the email.
+- **Not covered:** hearing a screen reader announce the line. The DOM wiring is verified; the
+  announcement joins the accessibility pass in tracker **F6b**.
 
 ### Feature 20 L3-Logic — WU-AccessGateSweep2 Stage note (2026-09-30): "Off" wrote the wrong enum value
 

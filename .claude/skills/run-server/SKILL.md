@@ -195,6 +195,16 @@ ring (seen 2026-10-13).
   Mailpit message, or vice versa.
 - **`stop-dev-server.ps1` is the wrong stop for this path** — it frees 5028 but leaves the
   AppHost + containers up (and DCP may show the web resource as failed). Use `stop-aspire.ps1`.
+- **`stop-aspire.ps1` cuts the backing services off before the web app has stopped** (seen 2026-10-13,
+  WU-PrivateMessageEmail browser pass).
+  - **Why:** killing the AppHost kills DCP, and DCP's proxies own the host ports (5433, 1025, 8025).
+  - **What you see:** the web app still shuts down gracefully, so its hosted services' stop work runs.
+    That work cannot reach Postgres or Mailpit: the outbound email drain logs two `fail:` connection
+    errors, and the queued mail is lost.
+  - **To watch a graceful-shutdown path with its dependencies alive:** stop only the `web` resource
+    with its Stop action in the dashboard, then finish with `stop-aspire.ps1`. The web app's log
+    from a dashboard-stopped run was gone from its `aspire-dcp*` folder by the next check, so read the
+    shutdown lines straight after the stop.
 
 ## Dev DB lifecycle — keep or wipe (agent's choice)
 

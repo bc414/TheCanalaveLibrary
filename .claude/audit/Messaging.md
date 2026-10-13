@@ -169,7 +169,7 @@ shared one.
   gate on `StartConversationAsync` only. DI: paired `AddScoped` in `Program.cs`.
   **Verified:** `dotnet build` green; integration tests all pass (see Tests below). Three legacy
   entity files moved from `Core/Models/` to `Core/Messaging/`.
-- **L3-Logic — Stage 5 (WU35, 2026-06-24; the reply box empties after a sent reply — WU-UserDeletion browser-pass fix, 2026-10-13, RazorComponents-tested, stage unchanged, see that WU's note below).** `MessagesPage.razor` (`@page "/messages/{ConversationId:int?}"`,
+- **L3-Logic — Stage 5 (WU35, 2026-06-24; after a full load, archiving no longer leaves the conversation in the Inbox — the restored list is field-backed — WU-PrivateMessageEmail browser-pass fix, 2026-10-13, RazorComponents-tested, stage unchanged, see that WU's note below; the reply box empties after a sent reply — WU-UserDeletion browser-pass fix, 2026-10-13, RazorComponents-tested, stage unchanged, see that WU's note below).** `MessagesPage.razor` (`@page "/messages/{ConversationId:int?}"`,
   `[Authorize]`). Injects `IMessagingWriteService` and `IDeviceDetectionService`. Manages: conversation
   list, thread state (`_allMessages` in newest-first order for `flex-col-reverse` rendering), compose
   modal, busy/error flags. Handles: `HandleSendReplyAsync` (appends to `_allMessages`; refreshes
@@ -197,9 +197,10 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 1 (5→1 at WU-PrivateMessageEmail, 2026-10-13: the new-message email and its two
-  unsubscribe pages have never been seen in Mailpit or a browser — no browser was available to the WU;
-  tracker **H35** holds the pass that returns it to 5).** Before that: Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13). A deleted
+- **L4.5 — Stage 5 (5→1 at WU-PrivateMessageEmail, 1→5 at its browser pass, both 2026-10-13: the
+  new-message email read in Mailpit, its run rule, archive mute and shutdown drain driven with `psql`,
+  and its two unsubscribe pages, on the Aspire path; tracker **H35** closed; the browser verification
+  in the WU-PrivateMessageEmail note below).** Before that: Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13). A deleted
   participant reads "[deleted user]" in the list, the thread header and on their messages, seen on both
   render phases (tracker **H29** closed; the WU-UserDeletion note below). Before that it went 5→1 at the WU-NotificationCorrectness
   review fixes (2026-10-13): the compose modal now gets a 400 ("Subject must be 2048 characters or
@@ -524,7 +525,7 @@ starting a conversation was refused with "This user does not accept private mess
     "both participants" note.
   - No console error and no `fail:` line. The one bug found is the reply-box fix above.
 
-### WU-PrivateMessageEmail note (2026-10-13) — owner ruling D18 built; F49 L1/L2/L5 stay 5, L4.5 5→1
+### WU-PrivateMessageEmail note (2026-10-13) — owner ruling D18 built; F49 L1/L2/L5 stay 5, L4.5 5→1 and 1→5 at its browser pass
 
 What changed (rules: `layer2-services.md` §"Private-Message Email" and §"Outbound email pipeline";
 `security.md` §"One-click unsubscribe tokens"; the settled note "D18" above):
@@ -600,6 +601,57 @@ real and none needed an owner ruling (one became a derived default for confirmat
 `dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614; build 0 errors, no new
 warnings; the four gates pass. Mutation-checked: the moderation detach, the flusher's per-group index
 and the landing page's link each fail their tests when reverted.
+
+**Browser verification (2026-10-13) — F49 L4.5 1→5; tracker H35 closed.** Aspire path (Mailpit;
+`psql` on 5433), on the persistent Aspire workbench, not reset; the WU's migration applied at that
+start. Actors: A = AuthorBeta, B = ReaderGamma, AdminUser as moderator. The circuit was proven by
+`_blazor/negotiate` and no `/api` call, with the Auto hash removed before the full load. WASM was
+proven by no negotiate and the action's `/api` request.
+- **The email (step 2).** A started conversation 3 with B in the compose modal (the GIF). One mail
+  reached Mailpit within a tick, to B only: "New private message from AuthorBeta". Its HTML and text
+  held neither the subject nor the body; both carried marker words, so their absence was checked by
+  search. It had absolute links to `/messages/3`, the unsubscribe page and `/notifications/settings`,
+  and both `List-Unsubscribe` headers (Mailpit shows its own Unsubscribe from them). In `psql`, B's
+  `last_notified_timestamp` equalled the message's `date_sent` to the microsecond; A's stayed NULL.
+- **The run rule (steps 3–4).** A sent three more without a read: the next drain composed them and
+  mailed nothing. B opened the thread at the mail's link (circuit), which moved `last_read_timestamp`.
+  A sent again: a second mail, stamped with the new `date_sent`.
+- **Archive (step 5).** B read the thread and archived it (WASM), so the run was open and the row
+  archived. A's next message was composed and not mailed. Unarchiving mailed nothing over the next
+  interval. A's next message after that was mailed and stamped.
+- **Unsubscribe (step 6).** The footer link's page changed nothing in `psql`. Its button turned
+  `email_on_new_message` off, and so did a cookieless one-click POST, the way a mail client sends it. A
+  second submit showed the same "You're unsubscribed" page (200). "Manage your email settings" opened
+  `/notifications/settings` with the box unticked.
+  - **Refusals:** a tampered token, a notification token on `/unsubscribe/messages/…` and a message
+    token on `/unsubscribe/…` each answered the 400 "Link no longer valid" page, GET and POST.
+  - **Ground truth:** nothing changed; B's `user_notification_settings` stayed empty.
+- **Shutdown drain (step 8).** A sent a message, and a second later the `web` resource was stopped from
+  the Aspire dashboard. The log shows "Application is shutting down…", then "Sent PrivateMessage email
+  to user 6": the drain mailed it, and the stamp was written.
+  - **Not through the script:** `stop-aspire.ps1` cannot show this. Killing the AppHost takes DCP's
+    port proxies with it, so the drain runs but cannot reach Postgres or Mailpit. A first try that way
+    logged two `fail:` connection errors and lost the mail, leaving the run open for the next message,
+    as the worker's crash-loss posture says.
+  - The technique is now in `run-server/SKILL.md`.
+- **The moderator stale-copy fix** (the review fixes; `audit/Moderation.md` F47). All on one circuit as
+  AdminUser at `/mod/users/6`: Warn B, then B's one-click unsubscribe, then Suspend B, then Reinstate B.
+  `email_on_new_message` stayed false through both. The stamp bump did write: `security_stamp`
+  changed.
+- **Runtime bug found and fixed.** After a full load of `/messages/3`, archiving left the conversation
+  in the Inbox until a reload, on both render phases; the API answered an empty Inbox.
+  - **Cause:** .NET 10 hands a `[PersistentState]` property's restored snapshot back on the
+    component's next parameter set, here the archive's return to `/messages`.
+  - **Fix:** `Conversations` is field-backed, and its setter takes the framework's value only during
+    initialization (`layer3-logic.md` §"State Persistence").
+  - **Tier: RazorComponents.** `MessagesPageTests` +2, through the new
+    `PersistentStateTestSupport.RestoreDeclarativeStateAsync`. One test guards that the restore is
+    real; the archive test fails without the fix.
+  - **Re-driven on both phases:** the Inbox read "Your inbox is empty.", and unarchive still brought
+    the conversation back.
+  - The other `[PersistentState]` components are not swept: tracker **D20**.
+- No console error. No `fail:` or `crit:` line beyond the two at the `stop-aspire.ps1` stop. The dev-DB
+  state left is in `workplan.md` WU-PrivateMessageEmail.
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

@@ -18,16 +18,16 @@ references it, does not restate it.
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
 - **Last landed:** WU-PrivateMessageEmail (2026-10-13) — worksheet D18. Private messages stay out of
-  the notification catalogue (ratified); Messaging owns PM email end to end. Two columns
-  (`EmailOnNewMessage`, `LastNotifiedTimestamp`); **one email per unread run**, stamped after the send;
-  archive mutes it; no sender-authored text; its own unsubscribe route; a "Private messages" section on
-  `/notifications/settings`. The domains share only the transport and the `(kind, id)` outbound
-  pipeline in `Server/Email/`. Its review fixes: a moderator circuit that had tracked a member no
-  longer writes stale columns back on Suspend/Ban (it undid an unsubscribe; `LoadTargetUserAsync`), the
-  privacy form points to the toggle (D18's "where a user looks for it"), and no-account-status-gate
-  became row 28 (e). **F20, F43 and F49 L4.5 5→1** (no browser; tracker **H35**). Filed: row 28 /
-  F25 (five derived defaults); H36 folded into H17; D15 annotated. `dotnet test`: Unit 1,308,
-  RazorComponents 860, Integration 1,614. **Pointer:** its DONE entry.
+  the notification catalogue (ratified); Messaging owns PM email end to end: two columns, **one email
+  per unread run** stamped after the send, archive mutes it, no sender-authored text, its own
+  unsubscribe route, a "Private messages" section on `/notifications/settings`, over a shared
+  `(kind, id)` pipeline in `Server/Email/`. Review fixes: a moderator circuit no longer writes a stale
+  member back (it undid an unsubscribe), the privacy form points to the toggle, row 28 (e). It flipped
+  **F20, F43 and F49 L4.5 5→1**; its browser pass the same day (Aspire, Mailpit) drove all of H35 on
+  both render phases, returned all three to 5 and fixed one runtime bug: after a full load an archived
+  conversation stayed in the Inbox (.NET 10 hands a `[PersistentState]` snapshot back; **D20** files the
+  other components). Filed: row 28 / F25, D20; H35 closed. `dotnet test`: Unit 1,308, RazorComponents
+  862, Integration 1,614. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-BlobCleanup — worksheet D14 (inline post-commit blob deletes plus a daily orphan sweep, cover upload persists its own reference; F22/row 25 filed, H31/H3 closed by its browser pass); see its DONE entry.
@@ -274,7 +274,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -300,7 +300,6 @@ references it, does not restate it.
   28 — five defaults D18's private-message email left to the build (on by default, no sender text,
   archive mutes, the run reading of its formula, no account-status gate) — added the same day by
   WU-PrivateMessageEmail, (e) by its review fixes).
-  Owed: tracker **H35**, WU-PrivateMessageEmail's browser and Mailpit pass (F20/F43/F49 L4.5 1→5).
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -317,7 +316,10 @@ references it, does not restate it.
   returned F8/F9/F10/F37/F50/F51/F66 L4.5 to 5 and closed; it fixed one runtime bug and filed **D18**
   — see WU-ThrottleCoverage's DONE entry. Tracker **H34**'s pass, WU-AuthorStoryDelete's delete dialog, its
   two outs, the taken-down editor and the deletion page's Stories line, ran 2026-10-13, returned F4/F52
-  L4.5 to 5 and closed with no runtime bug — see WU-AuthorStoryDelete's DONE entry.)
+  L4.5 to 5 and closed with no runtime bug — see WU-AuthorStoryDelete's DONE entry. Tracker **H35**'s
+  pass, WU-PrivateMessageEmail's settings section, its email in Mailpit, the unsubscribe pages and the
+  privacy form's pointer, ran 2026-10-13, returned F20/F43/F49 L4.5 to 5 and closed; it fixed one
+  runtime bug and filed **D20** — see WU-PrivateMessageEmail's DONE entry.)
 
 ---
 
@@ -474,7 +476,8 @@ is pending except where a bullet says so.
   (the new email and its unsubscribe pages); no browser or Mailpit was available, tracker **H35** holds
   the pass. Built beneath Stage-5 cells: F49 L1/L2/L5, F41 L2, F43 L3/L3.5/L5. The review fixes moved
   **F20 L4.5 5→1** (the privacy form's pointer line, H35 step 9) and built beneath F47 L2 and F20 L3.5.
-  Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+  The browser pass the same day returned F20, F43 and F49 L4.5 to 5 (H35 closed) and fixed one runtime
+  bug beneath F49 L3-Logic. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** worksheet D18 (answered 2026-08-07) and its spec `wu-specs/WU-PrivateMessageEmail.md`
   (no amendment). WU-NotificationCorrectness's hand-off: keep the composed pairing, the restore rules
   and `DrainAllAsync`; WU-ThrottleCoverage's: enumerate the new surfaces.
@@ -528,7 +531,7 @@ is pending except where a bullet says so.
   failing a test: no run predicate, no archive gate, no after-send stamp, no detach, no aborted-batch
   hook, a cancellable hook token, no rollback, no busy-disable. Migration applied, rolled back and
   re-applied on the server-only dev DB. Gates: doc-hygiene, design-tokens, render-modes, a11y pass.
-  **No browser was available** (H35). A live smoke without one: the server on the `Smtp` branch against
+  **No browser was available** at the build (H35; its browser pass is below). A live smoke without one: the server on the `Smtp` branch against
   a local SMTP sink, driven by `curl` — one mail per run, the burst, the re-fire after a read, the
   stamp, the unsubscribe GET/POST and the preference endpoints all behaved as the rule says
   (`audit/Messaging.md` F49 note); the smoke conversation was deleted from the dev DB after.
@@ -560,9 +563,43 @@ is pending except where a bullet says so.
   warnings in touched files; the four gates pass. No browser: **H35** gains F20 and step 9. Stage
   notes: `audit/Moderation.md` F47, `audit/Profiles.md` F20, `audit/Messaging.md` F49,
   `audit/Notifications.md` F41/F43.
-- **Pointers:** `audit/Messaging.md` §"D18" + F49 note; `audit/Notifications.md` WU-PrivateMessageEmail
-  Stage note; `audit/Moderation.md` F47 and `audit/Profiles.md` F20 review-fixes notes;
-  `layer2-services.md` §"Private-Message Email"; decision row 28; tracker F25, H35, H17, D15.
+- **Browser pass (2026-10-13).** Aspire path (Mailpit; `psql` on 5433), on the persistent Aspire
+  workbench, not reset. Actors: AuthorBeta (sender), ReaderGamma (recipient), AdminUser (moderator).
+  All nine H35 steps passed, on both render phases wherever UI changed. **F20, F43 and F49 L4.5 1→5;**
+  H35 closed. GIF: `e2e-WU-PrivateMessageEmail.gif` (compose, the mail in Mailpit, its headers).
+  - **Seen:** one mail per run, stamped with the message's `date_sent`; a burst stays silent; a read
+    re-arms the run; archive mutes it. The unsubscribe GET is read-only, the POST turns the email off,
+    and a re-POST shows the same page; the three wrong-token cases answer 400.
+  - **Also seen:** a WASM 401 on the toggle rolls back with the session-expired line. The moderator
+    stale-copy fix held on one real circuit (Warn, unsubscribe, Suspend, Reinstate: the email stayed
+    off).
+  - **The shutdown drain mailed a queued message** when the `web` resource was stopped from the
+    dashboard. `stop-aspire.ps1` cannot show it: DCP's proxies die first, so the drain fails and the
+    mail is lost. Recorded in `run-server/SKILL.md`.
+  - **Runtime bug fixed** (its own "browser-pass fixes" commit). After a full load, archiving left the
+    conversation in the Inbox until a reload, on both phases.
+    - **Cause:** .NET 10 hands a `[PersistentState]` property's restored snapshot back on the next
+      parameter set.
+    - **Fix:** `MessagesPage.Conversations` is field-backed, and its setter takes the framework's value
+      only during initialization.
+    - **Test:** RazorComponents `MessagesPageTests` +2, through the new
+      `PersistentStateTestSupport.RestoreDeclarativeStateAsync`; the archive test fails without the
+      fix.
+    - **Docs:** the convention is in `layer3-logic.md` §"State Persistence", `layer5-wasm.md` and
+      `testing.md`. Tracker **D20** holds the unswept `[PersistentState]` components; **F6b** gains the
+      screen-reader check of step 9's line.
+  - **Counts:** Unit 1,308, RazorComponents 862 (+2), Integration 1,614, all green; the four gates
+    pass.
+  - **Dev-DB state left (Aspire workbench):**
+    - **Conversation 3**, AuthorBeta ↔ ReaderGamma: 9 messages, unarchived, with ReaderGamma's
+      `last_notified_timestamp` set.
+    - **AdminUser's three mod-filed reports on ReaderGamma** (ids 9–11: the Warn, the Suspend and the
+      Reinstate, all resolved). ReaderGamma is Active again and her message email is back on.
+    - **Mailpit** holds the run's mails; they are ephemeral.
+- **Pointers:** `audit/Messaging.md` §"D18" + F49 note (and its browser verification);
+  `audit/Notifications.md` WU-PrivateMessageEmail Stage note; `audit/Moderation.md` F47 and
+  `audit/Profiles.md` F20 review-fixes notes; `layer2-services.md` §"Private-Message Email";
+  `layer3-logic.md` §"State Persistence"; decision row 28; tracker F25, H35, H17, D15, D20.
 
 ## WU-AuthorStoryDelete — an author's hard delete of their own story, under any moderation state, with an unstarted Spotlight booking's slot returned and a typed-title dialog that offers unpublish and a download first (worksheet D15; service audit §3.20; extends `Stories/`, `Spotlight/`, `Identity/`) — DONE ✓ (2026-10-13)
 

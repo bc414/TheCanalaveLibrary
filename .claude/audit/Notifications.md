@@ -435,7 +435,7 @@ these notifications are in `audit/Groups.md` F40's.
   D5's threat model and routed to the owner as roadmap decision row **23** (the Settled bullet below,
   `layer2-services.md`, the interface doc and the code comments say so). Behaviour unchanged.
 
-## WU-PrivateMessageEmail Stage note (2026-10-13) — F41 L2 and F43 L3/L3.5/L5 stay 5; F43 L4.5 5→1
+## WU-PrivateMessageEmail Stage note (2026-10-13) — F41 L2 and F43 L3/L3.5/L5 stay 5; F43 L4.5 5→1 and 1→5 at its browser pass
 
 Owner ruling D18 built (Shared Context's D18 note above has the settled rules; private-message email
 itself is `audit/Messaging.md` F49).
@@ -483,9 +483,33 @@ Integration unsubscribe GETs (`NotificationEmailFanOutTests.UnsubscribeGet_DoesN
 Mutation-checked: a batch-position index fails two flusher tests; the old `/settings` link fails the
 Unit test. `dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614.
 
+**Browser verification (2026-10-13) — F43 L4.5 1→5; no flip on F41; tracker H35 closed.** Aspire
+path, as ReaderGamma, with `psql` after every write; the mail half and the method are in
+`audit/Messaging.md` F49's browser verification.
+- **F43, the Private messages section (step 1).**
+  - **Circuit** (`_blazor/negotiate`, no `/api` call): the section comes after the last category
+    ("Your Reports"). It has one checkbox, ticked, labelled "Email me about new private messages",
+    and no Collapsed column. Unticking set `email_on_new_message` false, a reload showed it unticked,
+    and ticking set it back.
+  - **WASM:** a full load hydrated from the persisted value with no `GET`. The untick sent
+    `PUT /api/messaging/email-preference?enabled=false`, and a reload kept it. A client-side
+    navigation into the page made the `GET`.
+  - **A refused write:** signed out under the running WASM app, the toggle got a 401. The box rolled
+    back to ticked under "Your session has expired — sign in again to continue." with a Sign in link,
+    and the database was unchanged. Both endpoints answer 401 to an anonymous caller.
+  - **A same-URL navigation** after a toggle kept the new value, so the page does not hit tracker
+    **D20**'s snapshot re-supply (it has no route parameters).
+- **F43, the landing page's settings link (step 7).** An Account Warning email's unsubscribe page
+  reads "Manage your email settings" and links `/notifications/settings`. Followed in the browser,
+  the link opened that page. The message-email pages carry the same link.
+- **F41, the shared pipeline.** Notification and private-message mails left through the one worker:
+  the Account Warning and Account Suspended mails in the moderator check, beside the PM mails. A
+  dashboard Stop of the `web` resource ran the shutdown drain to completion. `stop-aspire.ps1` cannot
+  show that: its proxies die first (`run-server/SKILL.md`).
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; its review fixes Unit-test the per-group after-send indices and the landing page's link, no flip; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; its review fixes Unit-test the per-group after-send indices and the landing page's link, no flip; its browser pass saw notification and private-message mail leave through the one worker and the shutdown drain finish, no flip; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
@@ -952,9 +976,10 @@ write class in place of `CurrentUserId` (CS9107 shape).
     2026-10-13, owner ruling D18's standing rider — RazorComponents-tested, stage unchanged, Stage note
     above Feature 41). Settings page driven by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
     read "Stage 2 … deferred to WU33" against the grid's 5/5.)
-  - **L4.5 — Stage 1 (5→1 at WU-PrivateMessageEmail, 2026-10-13: the new "Private messages" section has
-    not been driven in a browser on either render phase — no browser was available to the WU; tracker
-    **H35** returns it to 5).** Before that it was 5: it went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13),
+  - **L4.5 — Stage 5 (5→1 at WU-PrivateMessageEmail, 1→5 at its browser pass, both 2026-10-13: the
+    "Private messages" section read, toggled and reloaded on both render phases with `psql` as ground
+    truth, a refused write rolled back with a readable line on WASM; tracker **H35** closed; the
+    WU-PrivateMessageEmail Stage note above Feature 41).** Before that it was 5: it went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13),
     because the page now reads the per-field `NotificationSettingDto` on WASM and the one-click
     unsubscribe writes one column. It went 1→5 at the browser pass the same day. That pass drove
     the per-field toggles on both render phases and the Mailpit unsubscribe, with `psql` as ground

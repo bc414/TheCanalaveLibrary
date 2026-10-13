@@ -1033,6 +1033,34 @@ unless noted. All sit under Stage-5 cells.
     the conversation locks' order, `cross-cutting.md` §"Account deletion"), and `ExecuteInTransactionAsync`
     with a "the parent is gone" check. Tests: the two Integration shapes in `testing.md` §"Testing a
     check-then-act guard" (the lock-timeout `DO` block, the lost-acknowledgement interceptor).
+- [ ] **D20 — A full load's restored `[PersistentState]` snapshot comes back on the next parameter set, and only `MessagesPage` is guarded** `[latent-risk · med · beta]` — *Filed 2026-10-13 by the WU-PrivateMessageEmail browser pass, which fixed the one page on its surface (`MessagesPage`).*
+  - Grid: no cell moves; each component sits under its feature's Stage-5 L3-Logic cell.
+  - **The defect** (.NET 10, `layer3-logic.md` §"State Persistence"): after a full load restores a
+    property, the framework supplies the same snapshot again on the component's next parameter set. Any
+    value the component assigned in between is lost. Seen on both render phases: archiving a
+    conversation left it in the Inbox until a reload.
+  - **Fixed:** `MessagesPage.Conversations` now uses the field-backed idiom. RazorComponents
+    `MessagesPageTests` covers it through `PersistentStateTestSupport.RestoreDeclarativeStateAsync`.
+  - **Unswept**, by how a second parameter set reaches them:
+    - *Pages whose route or query values change in place* (the router sets parameters again):
+      `BlogPostPage`, `BookshelvesPage`, `ChapterReadingPage`, `CustomListPage`, `FanonAxisPage`,
+      `GroupPage`, `GroupFolderManagementPage`, `ModUsersPage`, `ProfilePage`, `SearchPage`,
+      `SeriesPage`, `StoryPage`, `TagAdoptionDetailPage`, `TreeSearchPage`, and the create/edit pages
+      (`BlogPostEditorPage`, `ChapterEditorPage`, `GroupBlogPostEditorPage`, `GroupCreateEditPage`,
+      `SeriesCreateEditPage`, `SiteAnnouncementEditorPage`, `StoryEditorPage`).
+    - *Child components that take parameters* (a parent render supplies them again):
+      `CommentSection`, `RecommendationSection`, `RelatedStoriesSection`, `CommunitySpotlightDisplay`,
+      `ChapterManagerPanel`, `StoryArcManagerPanel`.
+    - *Pages with no route or query values*, which only a cascading-value change could reach. The
+      browser pass saw no re-supply on a same-URL navigation to `/notifications/settings`.
+    - *Chrome and persisted services* (`MessagesNavLink`, `NotificationBellInner`,
+      `ReaderDisplayProvider`, `DiscoveryFilterStore`): check which persistence API each uses first.
+  - **Fix shape:** for each component, find a property it reassigns after initialization on a path
+    that a second parameter set can follow without reloading it. Move each such property to the
+    field-backed idiom. Add a RazorComponents test with the restore helper wherever the path can be
+    driven. A property that `OnParametersSetAsync` reloads on every key change is already safe.
+  - Watch upstream: if a later ASP.NET Core 10 patch clears the flag after the first supply, the
+    idiom stays harmless. The convention note and this item then retire together.
 
 ---
 
@@ -1328,6 +1356,10 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     keyboard-unreachable (axe cannot catch this — it doesn't test focus order); `dismiss.js`
     selects by document order, not z-order, and has zero automated coverage, so any change to it
     must be purely additive and manually re-checked against the five working flyouts.
+  - Also for the screen-reader run (added 2026-10-13 by the WU-PrivateMessageEmail browser pass): on
+    `/settings`, the Privacy form's "Private messages" select should announce "Emails about new
+    messages: Notification settings" as its description. The `aria-describedby` wiring is verified in
+    the DOM; the announcement has not been heard.
 
 - [ ] **F7 — Operational-resilience gaps (no WU, no row, no decision)** `[off-grid · med · launch]`
   - Source: `middle-addendum.md` §3 items 8–14.
@@ -2335,7 +2367,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `/story/{id}/chapter/new` for that story is not found too.
     10. *(Review fixes.)* Save a title with a double space (`A  B`): the dialog's label shows `A B`, and
         typing `A B` enables the delete.
-- [ ] **H35 — WU-PrivateMessageEmail browser pass: the settings page's Private messages section, the new-message email in Mailpit, its unsubscribe pages, and the privacy form's pointer** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; no browser was available to it. Extended the same day by its review fixes (F20, step 9).*
+- [x] **H35 — WU-PrivateMessageEmail browser pass: the settings page's Private messages section, the new-message email in Mailpit, its unsubscribe pages, and the privacy form's pointer: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; no browser was available to it. Extended the same day by its review fixes (F20, step 9). Closed 2026-10-13 by its browser pass.*
+  - **Result:** all nine steps ran on the Aspire path and passed. F20, F43 and F49 L4.5 1→5
+    (`status.md`).
+    - **Circuit:** steps 1 and 9, the thread read in step 4, and the moderator check.
+    - **WASM:** steps 1 and 9 again, with a refused toggle (a 401 rolled back under the
+      session-expired line); the archive and unarchive in step 5.
+    - **Step 8:** proven by a dashboard Stop of the `web` resource. `stop-aspire.ps1` cuts the
+      database and Mailpit proxies first (`run-server/SKILL.md`).
+    - **Runtime bug fixed:** after a full load, an archived conversation stayed in the Inbox. Its
+      class, a .NET 10 `[PersistentState]` re-supply, is filed as **D20**.
+    - **Not covered:** a screen reader announcing step 9's line. The `aria-describedby` wiring is
+      verified; the announcement joins the accessibility pass, **F6b**.
+    - **Narrative:** `audit/Messaging.md` F49, `audit/Notifications.md` (WU-PrivateMessageEmail Stage
+      note), `audit/Profiles.md` F20, `audit/Moderation.md` F47; `workplan.md` WU-PrivateMessageEmail.
   - Grid: **F43, F49 and F20 L4.5 5→1** (`status.md`). F43's page gained a section read and written
     through Messaging's service (both render phases need it, since the WASM path is the new client
     methods); F49 gained an outbound email and two anonymous landing pages; F20's privacy form gained a

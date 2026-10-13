@@ -223,6 +223,13 @@ so L4.5 is not owed a pass.
   audit rows. A Ban, then a second moderator's Reinstate, then a Reinstate on the first circuit: refused
   as "already active". Mutation-checked: without the detach all three fail. `dotnet test` green — Unit
   1,308, RazorComponents 860, Integration 1,614.
+- **Driven in a browser (2026-10-13, the WU-PrivateMessageEmail browser pass, Aspire path).** This
+  was the first sequence above, on one real circuit: AdminUser at `/mod/users/6` warned ReaderGamma,
+  ReaderGamma's message-email one-click unsubscribe POST landed from outside the circuit, and the same
+  circuit then suspended and reinstated her. `email_on_new_message` stayed false through both, while
+  `security_stamp` changed (the full-row write ran). `ActiveReportCount` stayed 1, and the page read
+  Warned, then Suspended until the chosen time, then Active. No flip (method: `audit/Messaging.md` F49's
+  browser verification).
 
 **WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — no flip; F47 L2 stays 5.** The hard-delete
 Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and cleanup").
@@ -540,7 +547,7 @@ bigint comment ids; Integration).
 
 **Stages (updated 2026-10-13, the WU-PrivateMessageEmail review fixes — the moderator-initiated account
 paths load their target fresh, so a circuit that tracked it no longer decides on or writes back stale
-columns, beneath L2, no flip, Integration-tested, Stage note at the top of this section; earlier the
+columns, beneath L2, no flip, Integration-tested and driven on one circuit by the WU-PrivateMessageEmail browser pass the same day, Stage note at the top of this section; earlier the
 same day, WU-BlobCleanup — a hard delete erases the story's cover blob after the
 commit, beneath L2, no flip, Integration-tested and driven over HTTP on Local and Garage by its browser
 pass the same day, Stage note at the top of this section; earlier the same
