@@ -30,6 +30,7 @@ public class GroupPageTests : BunitContext
 
     private readonly FakeGroupWriteService _groupService = new();
     private readonly FakeRelatedStoriesStoryReadService _storyService = new();
+    private readonly FakeModerationWriteService _moderationService = new();
 
     public GroupPageTests()
     {
@@ -42,7 +43,7 @@ public class GroupPageTests : BunitContext
         Services.AddScoped<IGroupWriteService>(_ => _groupService);
         // The admin-less rescue panel (D13 edge (b)) reads members and writes through the moderation service.
         Services.AddScoped<IGroupReadService>(_ => _groupService);
-        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        Services.AddScoped<IModerationWriteService>(_ => _moderationService);
         Services.AddScoped<IStoryReadService>(_ => _storyService);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IBlogPostReadService>(_ => new FakeBlogPostReadService());
@@ -269,6 +270,33 @@ public class GroupPageTests : BunitContext
 
         cut.Markup.Should().NotContain(RescueHeading);
         _groupService.GetMembersCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public void RescuePanel_RefusedBecauseAnotherModeratorAssignedFirst_ReloadsTheGroup_HidesThePanel_KeepsTheMessage()
+    {
+        // error-handling.md's child-panel case (WU-UserDeletion review fixes): the panel's own member reload
+        // left Group.AdminCount at 0, so it kept offering "Assign as admin" and every retry was refused.
+        const string refusal = "This group still has an admin. A moderator can only assign an admin to a group that has none.";
+        _groupService.Members =
+        [
+            new GroupMemberDto(21, "Ash", null, GroupRole.Member, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)),
+        ];
+        _moderationService.AssignGroupAdminCalls = [];
+        _moderationService.AssignGroupAdminException = new ModerationValidationException([refusal]);
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member, adminCount: 0, asModerator: true);
+        int loadsBefore = _groupService.GetByIdCalls;
+
+        // Another moderator's assignment lands server-side while this page still shows the panel.
+        _groupService.GroupDetail = NewGroupDetail([NewFolderX(), NewFolderY()], adminCount: 1);
+        cut.Find("select").Change("21");
+        cut.Find("textarea").Input("Requested by the members");
+        FindButton(cut, "Assign as admin").Click();
+
+        cut.WaitForState(() => !cut.Markup.Contains(RescueHeading), TimeSpan.FromSeconds(2));
+        _groupService.GetByIdCalls.Should().BeGreaterThan(loadsBefore, "the refusal reloads the group itself");
+        cut.Markup.Should().Contain("This group still has an admin", "the refusal survives the panel it came from");
+        cut.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Assign as admin");
     }
 
     [Fact]

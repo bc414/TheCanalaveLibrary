@@ -11,7 +11,8 @@
    Moderator/Admin viewer and only while the group has no admin — affordance only; the service's three
    guards (moderator, zero admins, target already a member) are the control. Container + Control +
    ErrorAlert (layer4-style.md roles). Works on both render phases: the server write service on the
-   circuit, ClientModerationWriteService over WASM. *@
+   circuit, ClientModerationWriteService over WASM. A refusal goes to the host through OnStale, which
+   reloads the group (WU-UserDeletion review fixes, 2026-10-13). *@
 
 <section class="flex flex-col gap-3 rounded-lg border border-(--color-border) bg-(--color-surface) p-4"
          aria-labelledby="@($"group-rescue-heading-{_uid}")">
@@ -81,6 +82,16 @@
     /// <summary>Raised after a successful assignment so the host page reloads (the panel then hides).</summary>
     [Parameter] public EventCallback OnAssigned { get; set; }
 
+    /// <summary>
+    /// Raised with the refusal's message when the service refused because the group moved under the
+    /// panel (another moderator already assigned an admin, or the member left). The host reloads the
+    /// group, which hides this panel once the group has an admin, and shows the message itself: the
+    /// reload can remove or recreate the panel, so a message kept here would be lost
+    /// (<c>error-handling.md</c>, the child-panel case). Without a handler the panel keeps the message
+    /// and reloads its own member list.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnStale { get; set; }
+
     /// <summary>The first page only: a rescue picks among the longest-standing members, and the note
     /// below the select says when there are more.</summary>
     internal const int MemberPageSize = 100;
@@ -129,10 +140,19 @@
         }
         catch (Exception ex) when (ex is ModerationValidationException or KeyNotFoundException)
         {
-            // The group moved under the panel (another moderator assigned an admin, or the member left):
-            // keep the refusal and reload the member list so the stale choice stops being offered
-            // (error-handling.md — a failed reload is appended, never shown instead).
-            _error = ExceptionPresenter.GetUserMessage(ex);
+            // The group moved under the panel (another moderator assigned an admin, or the member left).
+            // The host decides whether this panel shows at all, so it reloads the group and keeps the
+            // message (OnStale). Standalone, keep the refusal and reload the member list so the stale
+            // choice stops being offered (error-handling.md — a failed reload is appended, never shown
+            // instead).
+            string refusal = ExceptionPresenter.GetUserMessage(ex);
+            if (OnStale.HasDelegate)
+            {
+                await OnStale.InvokeAsync(refusal);
+                return;
+            }
+
+            _error = refusal;
             try { await LoadMembersAsync(); }
             catch (Exception reloadEx)
             {

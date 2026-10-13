@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 using TheCanalaveLibrary.Client;
 using TheCanalaveLibrary.Core;
@@ -18,6 +19,8 @@ namespace TheCanalaveLibrary.Tests.Unit;
 ///   (submission sits behind the Report throttle; without <c>rateLimitedAction</c> a 429 would become a
 ///   generic server fault).</item>
 ///   <item><see cref="ClientModerationWriteService.ReinstateUserAsync"/>'s route.</item>
+///   <item><see cref="ClientModerationWriteService.AssignGroupAdminAsync"/>'s route, its JSON body and its
+///   400 mapping (WU-UserDeletion review fixes, 2026-10-13).</item>
 /// </list>
 /// Clients are constructed directly over a canned <see cref="HttpMessageHandler"/>, no host. Tier: Unit.
 /// </summary>
@@ -130,6 +133,41 @@ public class ModerationIntegrityClientTests
 
         (await act.Should().ThrowAsync<ModerationValidationException>())
             .Which.Errors.Should().Equal("This account is already active.");
+    }
+
+    // ── ClientModerationWriteService.AssignGroupAdminAsync (WU-UserDeletion, D13 edge (b)) ──
+
+    [Fact]
+    public async Task AssignGroupAdminAsync_PostsTheAssignAdminRoute_WithTheTargetAndNotesInAJsonBody()
+    {
+        // The one moderation client method with a JSON body (the notes are free text — tracker D9), so the
+        // wire names are pinned here: the endpoint binds AssignGroupAdminRequest from exactly these.
+        var handler = new CannedHandler(HttpStatusCode.NoContent, "");
+        ClientModerationWriteService svc = new(NewClient(handler));
+
+        await svc.AssignGroupAdminAsync(7, 42, "Members asked & Dawn volunteered");
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.PathAndQuery.Should().Be("/api/moderation/groups/7/assign-admin",
+            "the target and notes travel in the body, never the query string");
+        using JsonDocument body = JsonDocument.Parse(await handler.LastRequest.Content!.ReadAsStringAsync());
+        body.RootElement.GetProperty("targetUserId").GetInt32().Should().Be(42);
+        body.RootElement.GetProperty("notes").GetString().Should().Be("Members asked & Dawn volunteered");
+    }
+
+    [Fact]
+    public async Task AssignGroupAdminAsync_400_IsAModerationValidationException_WithTheServerText()
+    {
+        // What the rescue panel shows over WASM when another moderator got there first.
+        var handler = new CannedHandler(HttpStatusCode.BadRequest,
+            """{"detail":"This group still has an admin. A moderator can only assign an admin to a group that has none."}""");
+        ClientModerationWriteService svc = new(NewClient(handler));
+
+        Func<Task> act = () => svc.AssignGroupAdminAsync(7, 42, "x");
+
+        (await act.Should().ThrowAsync<ModerationValidationException>())
+            .Which.Errors.Should().Equal(
+                "This group still has an admin. A moderator can only assign an admin to a group that has none.");
     }
 
     // ── Plumbing ──────────────────────────────────────────────────────────────

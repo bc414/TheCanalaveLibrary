@@ -140,8 +140,10 @@ public interface INotificationWriteService : INotificationReadService
     /// <summary>
     /// Sends <c>GroupAdminAssigned = 62</c> to <paramref name="recipientUserId"/>: a site moderator made
     /// them an admin of a group that had none (owner ruling D13 edge (b) — "the promoted user is
-    /// notified"). <b>Null-sourced, and deliberately no moderator parameter</b>: D5's principle that a
-    /// moderator's identity is never disclosed through a notification, enforced by the type.
+    /// notified"). <b>Null-sourced, and deliberately no moderator parameter</b>, so the type keeps the
+    /// moderator out of the row. This is a default under D5's threat model, not D5's ruling: D5 covers the
+    /// sanctioned or reporting user in the 70–82 band, and the promoted member is neither. Whether 62
+    /// should name the moderator is open to the owner (roadmap decision row 23).
     /// <c>RelatedEntityId = groupId</c> (D16's single most specific anchor). Called by
     /// <c>ServerModerationWriteService.AssignGroupAdminAsync</c>, best-effort post-commit, which skips a
     /// moderator assigning themselves.

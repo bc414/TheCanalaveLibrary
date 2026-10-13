@@ -158,8 +158,9 @@ public static class NotificationPresenter
             NotificationTypeEnum.NewGroupBlogPost =>
                 target is not null ? $"New blog post in a group you follow: {target}" : "A new blog post was added to a group you follow",
 
-            // Actor-free by type (D5's principle, D13 edge (b)): a site moderator assigned the role, and
-            // the row carries no source. {target} = the group.
+            // Actor-free by type (D13 edge (b); null-sourced as a default under D5's threat model, open as
+            // decision row 23): a site moderator assigned the role, and the row carries no source.
+            // {target} = the group.
             NotificationTypeEnum.GroupAdminAssigned =>
                 target is not null ? $"You were made an admin of {target}" : "You were made a group admin",
 

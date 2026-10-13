@@ -7,8 +7,10 @@
 @inject IToastService Toasts
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
+@inject ILogger<GroupPage> Logger
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 
 @* Group detail page — /group/{id}/{slug} (WU32; former GroupDesktop composite folded in
    2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
@@ -119,10 +121,15 @@ else
             }
 
             @* Owner ruling D13 edge (b): an admin-less group waits for a site moderator. Affordance only —
-               AssignGroupAdminAsync's guards are the control. *@
+               AssignGroupAdminAsync's guards are the control. A refusal reloads the group and keeps its
+               message here, where the panel was: the reload may hide the panel (error-handling.md). *@
+            @if (_viewerIsModerator && _rescueRefusal is not null)
+            {
+                <ErrorAlert Message="@_rescueRefusal" />
+            }
             @if (_viewerIsModerator && Group.AdminCount == 0)
             {
-                <GroupAdminRescuePanel GroupId="@Group.GroupId" OnAssigned="LoadGroupAsync" />
+                <GroupAdminRescuePanel GroupId="@Group.GroupId" OnAssigned="LoadGroupAsync" OnStale="HandleRescueStaleAsync" />
             }
         </div>
 
@@ -286,6 +293,10 @@ else
     // admin-less rescue panel (D13 edge (b)) to site moderators.
     private bool _viewerIsModerator;
 
+    // The rescue panel's last refusal ("moved under the panel"), shown after the reload it triggered.
+    // Any later load clears it (LoadGroupAsync), so it describes only the refusal just made.
+    private string? _rescueRefusal;
+
     // The sole admin's Leave confirm (D13's warn-on-last-admin-leave rider).
     private bool _confirmLastAdminLeaveOpen;
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _interactionStates =
@@ -394,6 +405,7 @@ else
         _isLoading = true;
         _loadedGroupId = GroupId;
         _gate = null;
+        _rescueRefusal = null;
 
         Group = await GroupService.GetByIdAsync(GroupId);
 
@@ -447,6 +459,27 @@ else
         }
 
         _isLoading = false;
+    }
+
+    /// <summary>
+    /// The rescue panel's refusal: the group moved under it (another moderator assigned an admin, or the
+    /// picked member left). Reload the group — the panel hides once it has an admin — and keep the message
+    /// where the panel was (error-handling.md, the child-panel case). A failed reload is appended to the
+    /// refusal, never shown instead of it.
+    /// </summary>
+    private async Task HandleRescueStaleAsync(string refusal)
+    {
+        try
+        {
+            await LoadGroupAsync();
+            _rescueRefusal = refusal;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reloading group {GroupId} after a refused admin assignment failed", GroupId);
+            _rescueRefusal = refusal + " " + ExceptionPresenter.GetUserMessage(ex);
+            _isLoading = false;
+        }
     }
 
     // ── Membership callbacks ──────────────────────────────────────────────────────

@@ -532,9 +532,9 @@ public class ServerModerationWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        // "The promoted user is notified" (D13): null-sourced, so the moderator is never named (D5's
-        // principle). A moderator who assigned themselves gets nothing about their own act (the D4
-        // guardrail's general rule).
+        // "The promoted user is notified" (D13): null-sourced, so the moderator is never named (a default
+        // under D5's threat model, open as roadmap decision row 23). A moderator who assigned themselves
+        // gets nothing about their own act (the D4 guardrail's general rule).
         if (targetUserId != modId)
             await NotifyBestEffortAsync(() => notifications.NotifyGroupAdminAssignedAsync(targetUserId, groupId),
                 "GroupAdminAssigned", groupId);

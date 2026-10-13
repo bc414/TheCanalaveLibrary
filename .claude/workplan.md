@@ -17,16 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-UserDeletion (2026-10-13, two commits) — worksheet D13. Migrations
-  `WU_UserDeletion_SurvivalSet` and `WU_UserDeletion_GroupAdminAssigned` are on the server-only dev DB
-  (the Aspire DB takes them on its next start). A deleted account's **poll votes survive anonymized**,
-  account deletion **deletes the conversations it leaves empty** (closing their message reports),
+- **Last landed:** WU-UserDeletion (2026-10-13, two commits plus review fixes) — worksheet D13.
+  Migrations `WU_UserDeletion_SurvivalSet` and `WU_UserDeletion_GroupAdminAssigned` are on the
+  server-only dev DB (the Aspire DB takes them on its next start). **Poll votes survive anonymized**,
+  account deletion **deletes the conversations it leaves empty** (locked against a two-deleter race),
   messaging reads "[deleted user]", and the deletion page enumerates the policy (`cross-cutting.md`
-  §"Account deletion"). An **admin-less group** is a waiting state a moderator ends with
-  `AssignGroupAdminAsync` (three guards, a ledger-only Group report row, type 62); the sole admin's
-  Leave warns first. **F37/F40/F42/F47/F49/F52 L4.5 5→1** (no browser; tracker **H29**). Tracker
-  **F17/F18/F19** filed for the owner. `dotnet test`: Unit 1,188, RazorComponents 791, Integration
-  1,483. **Pointer:** its DONE entry.
+  §"Account deletion"). An **admin-less group** waits for a moderator's `AssignGroupAdminAsync`
+  (three guards, a ledger-only Group row, type 62); the sole admin's Leave warns first.
+  **F37/F40/F42/F47/F49/F52 L4.5 5→1** (no browser; tracker **H29**). Filed: tracker
+  **F17/F18/F19/F20**, **E11** (D13 (iii)'s auth/IP logs, a Phase-7 obligation) and **decision row
+  23** (type 62's attribution). `dotnet test`: Unit 1,190, RazorComponents 793, Integration 1,485.
+  **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
@@ -276,14 +277,15 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–22** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–23** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
   fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
   2026-09-30; 21 — ImageSharp licensing (tracker **E9**: a Six Labors key, a library swap or
   standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes; 22 — the folder-delete
-  name-clash default — added 2026-10-13 by WU-SchemaHardening). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  name-clash default — added 2026-10-13 by WU-SchemaHardening; 23 — type 62's moderator attribution —
+  added the same day by the WU-UserDeletion review fixes). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -495,8 +497,9 @@ is pending except where a bullet says so.
      F46/F47, Notifications F41/F42; worksheet D13 (two) and D8 Built lines; tracker H6 bullet closed,
      H29 filed, B25/D9/D11 annotated; `grid_axes.md` F52's service name.
 - **Left alone:** an exact `AllowMultiple` voter count after a deletion (owner-open, tracker **F17**;
-  the upper bound is pinned by a test); a sender-side message delete (**F18**); log retention and the
-  bare ids in `reports.reported_entity_id` / `notifications.related_entity_id` (**F19**); the story
+  the upper bound is pinned by a test); a sender-side message delete (**F18**); the bare ids in
+  `reports.reported_entity_id` / `notifications.related_entity_id` (**F19**; log retention moved to
+  **E11** by the review fixes, below); the story
   self-delete link (WU-AuthorStoryDelete must add it to the copy) and the blog-post delete UI (**B25**);
   avatar blobs (WU-BlobCleanup — the post-commit seam is marked); D47(b) and user-filed Group reports;
   the "on request" channel (out of band until D47); a moderator self-assignment guard and
@@ -504,6 +507,34 @@ is pending except where a bullet says so.
   (a 500, recorded in **D11**); `ServerModerationReadService`'s `"[deleted]"` submissions label (not
   D13's scope); D23's `PollId`/guard columns (WU-PollVoteIntegrity, whose migration must come after
   both of this WU's).
+- **Review fixes (2026-10-13).** Three reviews raised 15 findings, 12 distinct after merging duplicates.
+  Each was checked against the code and the worksheet; all 12 were real. One needs an owner ruling and
+  was routed, not decided.
+  1. **The orphan-conversation race (L2).** Two participants deleting at overlapping times each saw the
+     other's uncommitted participant row, so neither deleted the conversation. `DeleteUserAsync` now
+     locks the user's conversations (`FOR NO KEY UPDATE`, id order) before the delete
+     (`cross-cutting.md` §"Account deletion").
+  2. **A stale rescue panel (L3).** A refusal reloaded only the panel's members, so after another
+     moderator's assignment it kept offering "Assign as admin". It now hands the refusal to `GroupPage`
+     (`OnStale`), which reloads the group and keeps the message where the panel was
+     (`error-handling.md`, the child-panel case, new).
+  3. **D13 fidelity.** `cross-cutting.md` rule 3 now has the owner's full list, "any auth/IP logs"
+     included. The log half is ruled, so it moved out of F19 into new tracker **E11**, a Phase-7
+     obligation (`security.md` register, `roadmap.md` Phase 7, `logging.md`). Rule 1 names rider (i)'s
+     unmet halves: stories (WU-AuthorStoryDelete) and blog posts (**B25**, which no WU owns).
+     `roadmap.md`'s D13 entry, `audit/Identity.md` F52 and the worksheet's Built line agree.
+  4. **The deletion copy.** It no longer claims "nothing links what remains back to you" (server logs
+     do). It says that Retract vote works only on an open poll and that a recommendation the author
+     removed can't be deleted. Whether rider (i) reaches that recommendation is new tracker **F20**.
+  5. **Type 62's attribution (owner-open).** The docs and comments had cited D5 "by its own wording",
+     but D5 covers the sanctioned or reporting user in 70–82. The null source is now recorded as the
+     spec's default under D5's threat model, routed as **roadmap decision row 23** (sibling of row 19).
+     Behaviour unchanged.
+  6. **Tests and records.** An Integration read-back of the type-62 notification (name, link, an
+     M-audience group); Unit tests for the client's `AssignGroupAdminAsync` (route, JSON body, 400);
+     `layer2-services.md`'s `ReportedUserId` producer list (the fourth producer records the founder);
+     the panel's real heading quoted in `layer2-services.md` and `audit/Groups.md`; an "above"
+     pointer in `audit/Notifications.md`; the panel test class's pointer to `GroupAdminRescueTests`.
 - **Verification:** `dotnet build` 0 errors, no new warnings in touched files. `dotnet test` after
   Part A: Unit 1,182, RazorComponents 777 (+1), Integration 1,468 (+9); after Part B: Unit 1,188 (+6),
   RazorComponents 791 (+14), Integration 1,483 (+15). Mutation-checked: the old voter-count formula, an
@@ -511,9 +542,15 @@ is pending except where a bullet says so.
   admin-less guard, the self-notify skip, the queue's Group arm, the panel's `AdminCount` condition and
   the leave check each fail their tests. check-doc-hygiene, check-design-tokens, check-render-modes and
   check-a11y pass. No browser was available (tracker **H29**).
+  - After the review fixes: build 0 errors, no warnings in touched files; **Unit 1,190** (+2),
+    **RazorComponents 793** (+2), **Integration 1,485** (+2), all green; the four gates pass. Each fix
+    was reverted in turn and its tests failed: the conversation lock (the conversation survived with no
+    participant), the enricher's 62 arm and its `GroupAudience` bypass (no title), the page's `OnStale`
+    wiring and the panel's handler branch, and the client's body route. H29's steps 1 and 7 are
+    updated; no stage moved.
 - **Pointers:** `audit/Identity.md` F52, `audit/BlogPosts.md` F37, `audit/Messaging.md` F49,
   `audit/Groups.md` F38/F40, `audit/Moderation.md` F47, `audit/Notifications.md` (type 62) Stage notes;
-  `cross-cutting.md` §"Account deletion"; tracker F17/F18/F19/H29.
+  `cross-cutting.md` §"Account deletion"; tracker F17/F18/F19/F20/E11/H29; roadmap decision row 23.
 
 ## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)
 

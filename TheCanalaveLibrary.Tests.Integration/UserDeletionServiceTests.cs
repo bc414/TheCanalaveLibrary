@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -22,8 +23,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// options and the other users' votes. Owner ruling D13's survival set (WU-UserDeletion): a voter's
 /// votes survive anonymized and the poll read keeps its tally and voter-list length; the
 /// <c>poll_votes</c> unique index's NULLS DISTINCT; a conversation survives one participant's deletion
-/// and is deleted (its open message reports closed) with the last; a sole admin's group survives
-/// admin-less; external logins and notification settings go.
+/// and is deleted (its open message reports closed) with the last, including when the other
+/// participant's deletion is still in flight (the conversation lock — review fixes); a sole admin's
+/// group survives admin-less; external logins and notification settings go.
 ///
 /// <b>What stays manual</b> (per testing.md "What stays manual"): auth-cookie claim baking,
 /// <c>SecurityStampValidator</c> timing, and SignalR circuit teardown. This test exercises the pure
@@ -403,6 +405,42 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         report.ActionTaken.Should().Contain("both participants");
     }
 
+    [Fact]
+    public async Task DeleteUserAsync_WhileTheOtherParticipantsDeletionIsInFlight_WaitsForIt_ThenDeletesTheConversation()
+    {
+        // The check-then-act race (WU-UserDeletion review fixes): two participants deleting at overlapping
+        // times each saw the other's uncommitted participant row, so neither deleted the conversation and
+        // both committed an empty one. A raw transaction stands in for B's deletion, mid-flight: it holds
+        // the conversation lock the service takes and has deleted B's participant row, uncommitted. A's
+        // deletion must wait on that lock, then see B's committed delete. Without the lock A runs straight
+        // through, keeps the conversation (B's row still visible to it), and B's commit leaves it empty.
+        int a = await SeedUserAsync("a");
+        int b = await SeedUserAsync("b");
+        (int conversationId, _) = await SeedConversationAsync(a, b);
+
+        await using NpgsqlConnection other = new(ConnectionString);
+        await other.OpenAsync();
+        await using NpgsqlTransaction otherTx = await other.BeginTransactionAsync();
+        await ExecuteAsync(other, otherTx,
+            $"SELECT conversation_id FROM conversations WHERE conversation_id = {conversationId} FOR NO KEY UPDATE");
+        await ExecuteAsync(other, otherTx,
+            $"DELETE FROM conversation_participants WHERE conversation_id = {conversationId} AND user_id = {b}");
+
+        Task deletion = DeleteUserViaServiceAsync(a);
+        bool waited = await WaitUntilAsync(async () => deletion.IsCompleted || await AnyLockWaitAsync());
+        waited.Should().BeTrue("A's deletion either finishes or blocks on a lock within the timeout");
+        bool blockedOnTheLock = !deletion.IsCompleted;
+        await otherTx.CommitAsync();
+        await deletion;
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Conversations.AnyAsync(c => c.ConversationId == conversationId))
+            .Should().BeFalse("the later deletion sees the earlier one's committed participant delete");
+        (await db.PrivateMessages.AnyAsync(m => m.ConversationId == conversationId)).Should().BeFalse();
+        blockedOnTheLock.Should().BeTrue("A's deletion waits on the conversation lock B's deletion holds");
+    }
+
     // ── Groups (owner ruling D13 edge (b)) ───────────────────────────────────────
 
     [Fact]
@@ -666,5 +704,32 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         using IServiceScope scope = Factory.Services.CreateScope();
         UserDeletionService sut = scope.ServiceProvider.GetRequiredService<UserDeletionService>();
         await sut.DeleteUserAsync(userId);
+    }
+
+    private static async Task ExecuteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql)
+    {
+        await using NpgsqlCommand command = new(sql, connection, transaction);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>True while some backend waits on a lock (pg_locks is live, not MVCC).</summary>
+    private async Task<bool> AnyLockWaitAsync()
+    {
+        await using NpgsqlConnection probe = new(ConnectionString);
+        await probe.OpenAsync();
+        await using NpgsqlCommand command = new("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted)", probe);
+        return (bool)(await command.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>Polls <paramref name="condition"/> every 50 ms for up to 10 s; false on timeout.</summary>
+    private static async Task<bool> WaitUntilAsync(Func<Task<bool>> condition)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return true;
+            await Task.Delay(50);
+        }
+        return false;
     }
 }

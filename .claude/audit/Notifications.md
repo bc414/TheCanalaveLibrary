@@ -365,14 +365,16 @@ request. The browser console showed no errors. **No runtime bug was found.**
 
 ## WU-UserDeletion Stage note (2026-10-13) — type 62 `GroupAdminAssigned`; F42 L4.5 5→1; F41 L1/L2 stay 5
 
-Owner ruling D13 edge (b): "the promoted user is notified" (the F41 Settled bullet above).
+Owner ruling D13 edge (b): "the promoted user is notified" (the F41 Settled bullet below, in
+Feature 41's Settled list).
 - **F41 L1.** Migration `WU_UserDeletion_GroupAdminAssigned` seeds `notification_types` row 62
   (`GroupAdminAssigned`, "Group Admin Assigned", category Groups, `DefaultEmailEnabled = true`,
   `DefaultCollapsed = false`). Its `Down()` deletes the type's notifications and settings rows first
   (both FKs are RESTRICT). Rehearsed Up, Down and Up on a dev-DB clone holding a type-62 notification
   and setting; applied to the server-only dev DB.
 - **F41 L2.** `INotificationWriteService.NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` — no
-  moderator parameter (type-level D5), one `CreateCoreAsync` with a null source and the group as
+  moderator parameter (D5's type-level shape, applied by default — decision row 23), one
+  `CreateCoreAsync` with a null source and the group as
   `RelatedEntityId` (D16); ordinary cross-existing dedup applies. Client twin throws
   `NotExposedOverHttp`; the RazorComponents fake is a no-op. `NotificationEnricher.KindFor` maps 62 to
   the existing `Group` kind (group name, `/group/{id}`, `GroupAudience` lifted). The producer is
@@ -386,9 +388,22 @@ Owner ruling D13 edge (b): "the promoted user is notified" (the F41 Settled bull
 - **F42 L4.5 5→1.** The new copy has not been read in the bell, the inbox or the email; tracker
   **H29**.
 
+**WU-UserDeletion review fixes (2026-10-13) — no flip.**
+- **F41 L2 tier claim corrected.** The note above credited `GroupAdminRescueTests` with the enrichment,
+  but it read only the raw `notifications` row, so dropping `KindFor`'s 62 arm left every test green
+  (62 fell to `None`: no title, no link). New Integration test
+  `GroupAdminRescueTests.TheNotification_ReadsBackWithTheGroupsNameAndLink_EvenForAnMAudienceGroup`
+  reads the row through `INotificationReadService` as the promoted member, with mature content off on
+  an M-audience group: the group's name and `/group/{id}`, no source. It fails with the arm removed, and
+  with the `Group` kind's `GroupAudience` bypass removed.
+- **Attribution corrected.** The null source had been credited to D5 "by its own wording"; D5 covers the
+  sanctioned or reporting user in the 70–82 band. It is now recorded as the WU spec's default under
+  D5's threat model and routed to the owner as roadmap decision row **23** (the Settled bullet below,
+  `layer2-services.md`, the interface doc and the code comments say so). Behaviour unchanged.
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-10-13, WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip — Stage note above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-13, WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
@@ -441,10 +456,14 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
       band method takes a moderator id. `SpotlightSlotGranted` (90) is outside the stated band — its
       source stays (unruled — roadmap decision row 19).
     - **`GroupAdminAssigned` (62), settled for WU-UserDeletion 2026-10-13 (owner ruling D13: "the
-      promoted user is notified").** A Groups-band type a moderator act produces, so it takes D5's
-      principle by its own wording: `NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` has no
+      promoted user is notified") — except its attribution, which is a default.** A Groups-band type
+      a moderator act produces. `NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` has no
       moderator parameter and writes a null source; `RelatedEntityId` = the group (D16), resolved by
-      the existing `Group` enricher kind; the presenter arm is actor-free. Seed row: category Groups,
+      the existing `Group` enricher kind; the presenter arm is actor-free. *The null source is not
+      D5's ruling:* D5 covers the moderator's identity "to the sanctioned or reporting user" in the
+      70–82 band, and the promoted member is neither. It is the WU spec's pick under D5's threat
+      model, open to the owner as roadmap decision row **23** (sibling of row 19); corrected by the
+      WU's review fixes, which had cited D5 "by its own wording". Seed row: category Groups,
       `DefaultEmailEnabled = true` (the user did not ask for this and must be able to find out),
       `DefaultCollapsed = false`. The acting moderator assigning themselves gets no notification (the
       generalized guardrail above).

@@ -287,8 +287,9 @@ public class NotificationPresenterTests
     [Fact]
     public void Compose_GroupAdminAssigned_NamesTheGroup_AndNeverTheModerator()
     {
-        // Owner ruling D13 edge (b) under D5's principle: the row is null-sourced, and even a row that
-        // somehow carried a source must not name the moderator — the arm never interpolates the actor.
+        // Owner ruling D13 edge (b); null-sourced as a default under D5's threat model (decision row 23):
+        // the row carries no source, and even a row that somehow carried a source must not name the
+        // moderator — the arm never interpolates the actor.
         var (named, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.GroupAdminAssigned,
             NotificationCategoryEnum.Groups, sourceUserName: "ModUser", targetTitle: "Legendary Authors"));
         named.Should().Be("You were made an admin of Legendary Authors");

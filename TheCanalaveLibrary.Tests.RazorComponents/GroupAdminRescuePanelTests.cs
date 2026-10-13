@@ -12,8 +12,10 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// edge (b), WU-UserDeletion 2026-10-13). The panel lists the group's members, needs a member and notes
 /// before it submits, calls <see cref="IModerationWriteService.AssignGroupAdminAsync"/> with exactly
 /// what was picked, and raises <c>OnAssigned</c> so the page reloads. A refusal ("moved under the
-/// panel") keeps its message and reloads the member list (<c>error-handling.md</c>). The service's
-/// guards are Integration (<c>ModerationServiceTests</c>). Tier: RazorComponents (bUnit).
+/// panel") goes to the host through <c>OnStale</c> when one is wired (the host reloads the group;
+/// <c>GroupPageTests</c> covers that half), and otherwise keeps its message and reloads the member list
+/// (<c>error-handling.md</c>). The service's guards are Integration (<c>GroupAdminRescueTests</c>).
+/// Tier: RazorComponents (bUnit).
 /// </summary>
 public class GroupAdminRescuePanelTests : BunitContext
 {
@@ -110,6 +112,30 @@ public class GroupAdminRescuePanelTests : BunitContext
         _groups.GetMembersCalls.Should().Be(2, "the refusal reloads the member list");
         cut.FindAll("option").Select(o => o.TextContent.Trim()).Should().Equal("Choose a member…", "Dawn");
         AssignButton(cut).HasAttribute("disabled").Should().BeTrue("the stale pick was cleared");
+    }
+
+    [Fact]
+    public void Refusal_WithAnOnStaleHandler_HandsTheMessageToTheHost_AndShowsNothingItself()
+    {
+        // Another moderator assigned an admin meanwhile: the host must reload the group so the panel can
+        // hide, which it only learns through OnStale (WU-UserDeletion review fixes).
+        _moderation.AssignGroupAdminException = new ModerationValidationException(
+            ["This group still has an admin, so there is nothing to assign."]);
+        List<string> stale = [];
+        IRenderedComponent<GroupAdminRescuePanel> cut = Render<GroupAdminRescuePanel>(p => p
+            .Add(c => c.GroupId, GroupId)
+            .Add(c => c.OnAssigned, () => _assignedRaised++)
+            .Add(c => c.OnStale, (string message) => stale.Add(message)));
+
+        cut.Find("select").Change("21");
+        cut.Find("textarea").Input("Requested");
+        AssignButton(cut).Click();
+
+        cut.WaitForState(() => stale.Count > 0, TimeSpan.FromSeconds(2));
+        stale.Should().Equal("This group still has an admin, so there is nothing to assign.");
+        _assignedRaised.Should().Be(0);
+        cut.Markup.Should().NotContain("still has an admin", "the host shows the message; the panel may be gone");
+        _groups.GetMembersCalls.Should().Be(1, "the host's reload replaces the panel's own");
     }
 
     [Fact]

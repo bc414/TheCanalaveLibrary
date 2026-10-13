@@ -188,7 +188,8 @@ public class ServerNotificationWriteService(
 
     /// <inheritdoc/>
     public Task NotifyGroupAdminAssignedAsync(int recipientUserId, int groupId) =>
-        // Null source (D5's principle, D13): the assigning moderator is never named. Cross-existing dedup
+        // Null source (a default under D5's threat model, open as decision row 23; D13): the assigning
+        // moderator is never named. Cross-existing dedup
         // applies — a second unread "made admin of this group" for the same group would say nothing new.
         CreateCoreAsync(NotificationTypeEnum.GroupAdminAssigned, sourceUserId: null,
             [(recipientUserId, groupId)]);

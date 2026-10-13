@@ -85,11 +85,12 @@ WU-UserDeletion 2026-10-13). Do not revisit:**
   exactly three guards (caller is a moderator; the group has zero admins; the target is already a
   member). No fourth guard: a moderator may assign themselves if they are a member. It files an
   opened-and-resolved `Report` row (`Group` target, reason Other, the notes) and notifies the promoted
-  user (type 62, null-sourced). It moves no counter (D24).
+  user (type 62, null-sourced; whether it should name the moderator is roadmap decision row 23). It
+  moves no counter (D24).
 - **UI:** the sole admin's Leave confirms first, saying the group will have no admin until a site
   moderator assigns one (D13's recommended rider); `LeaveAsync` itself is unchanged. A moderator
-  viewing an admin-less group gets an "Assign an admin" panel on the group page. `GroupDetailDto`
-  carries `AdminCount` to drive both.
+  viewing an admin-less group gets the rescue panel on the group page (headed "This group has no
+  admin", button "Assign as admin"). `GroupDetailDto` carries `AdminCount` to drive both.
 - **Open, not decided here:** the request channel for "on request" (unspecified by the owner; out of
   band, by messaging a moderator, until D47), and what a moderator can do about a group that still has
   an admin (D47(b), pending).
@@ -570,6 +571,18 @@ WU's code.**
     `check-a11y.ps1` pass.
   - **L4.5 5→1.** No browser was available; tracker **H29** carries the moderator panel and the
     leave warning.
+- **WU-UserDeletion review fixes (2026-10-13) — no flip; L4.5 stays 1.** A refusal left the panel stale:
+  it reloaded only its own member list, so after another moderator's assignment `Group.AdminCount` stayed
+  0 and the panel kept offering "Assign as admin", refused on every retry. The panel now raises
+  `OnStale(message)` instead when the host wires it; `GroupPage.HandleRescueStaleAsync` reloads the group
+  (the panel hides once it has an admin) and shows the refusal in an `ErrorAlert` where the panel was,
+  since the reload can remove or recreate the panel. Any later load clears the message; a failed reload
+  is logged and appended. Standalone, the panel keeps its old behaviour. Rule: `error-handling.md`, the
+  child-panel case (new). Tier: RazorComponents — `GroupPageTests` +1 (a "still has an admin" refusal
+  reloads the group, hides the panel and keeps the message) and `GroupAdminRescuePanelTests` +1 (with a
+  handler the message goes to the host and the panel shows none); unwiring `OnStale` on the page, or
+  skipping the panel's handler branch, fails them. The class doc's pointer to the guards' tests now names
+  `GroupAdminRescueTests`. Tracker **H29** step 7's stale-tab check is updated.
 - **L1 — Stage 5** (group comment and group post FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above).
 - **L2 — Stage 5 (2026-06-24, WU32; `GroupDetailDto.AdminCount` since WU-UserDeletion, 2026-10-13, Integration-tested; group-post update/delete since WU-TptHardDelete, 2026-09-30 — Stage notes above).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
   `GetByIdAsync` (builds folder tree in-memory from flat DB load), `GetCurrentUserRoleAsync`,
@@ -583,7 +596,7 @@ WU's code.**
   fan-out is best-effort post-commit (try/catch).
   Test tier: Integration (`GroupServiceTests`) — group comments post/read, blog-post create + read,
   notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule).
-- **L3-Logic — Stage 5 (2026-06-24, WU32; `GroupPage`'s moderator flag, leave warning and the panel's submit/refusal handling since WU-UserDeletion, 2026-10-13, RazorComponents-tested — Stage note above).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
+- **L3-Logic — Stage 5 (2026-06-24, WU32; `GroupPage`'s moderator flag, leave warning and the panel's submit/refusal handling since WU-UserDeletion, 2026-10-13, the refusal handed to the page to reload the group since its review fixes the same day, RazorComponents-tested — Stage notes above).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
   `CommentSection.GroupId` param + `CommentTarget.Group` branch (exactly-one-set guard, Load/Post/Reply).
   Test tier: Unit (`GroupAudienceTypeMapperTests`) — all three presets, round-trip, unknown value throws.
   RazorComponents (`CommentSectionGroupTests`) — initial load, post dispatch, no-spoiler-toggle, guard.

@@ -136,7 +136,9 @@ loss is tolerated by design. (Following's two legacy `LogError` sites were norma
 
 **What NOT to log:** email addresses, message/chapter/comment bodies, tokens/secrets, full
 claims — IDs only. Pre-launch stance: numeric user IDs as log properties are fine; revisit
-retention/PII at Phase 7 (pairs with decision row 10).
+retention/PII at Phase 7 (pairs with decision row 10). One retention rule is already owner-ruled:
+a deleted account's auth/IP log lines must go (D13 (iii)), so Phase 7's sink needs a retention
+bound or a purge (`security.md` §"Phase-7 Deferred Register", tracker E11).
 
 ## No silent catches
 

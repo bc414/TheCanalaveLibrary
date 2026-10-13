@@ -164,7 +164,7 @@ public enum NotificationTypeEnum : short
     //Groups
     NewGroupStory = 60,
     NewGroupBlogPost = 61,
-    GroupAdminAssigned = 62, // A moderator made you an admin of an admin-less group (D13 edge (b); null-sourced — D5)
+    GroupAdminAssigned = 62, // A moderator made you an admin of an admin-less group (D13 edge (b); null-sourced — decision row 23)
     
     //Moderation
     //Notifications for the user *receiving* a moderation action

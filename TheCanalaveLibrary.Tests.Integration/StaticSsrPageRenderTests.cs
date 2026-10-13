@@ -98,8 +98,9 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
     /// <summary>
     /// Owner ruling D13 (WU-UserDeletion): the page is the Art. 13/14 compliance surface, so it must
     /// enumerate the whole survival set (poll votes and sent messages included), the destroyed set, the
-    /// delete-it-yourself-first paths, that sent messages cannot be deleted, and that removing a name
-    /// does not remove identifying details. A policy change that forgets the copy fails here.
+    /// delete-it-yourself-first paths (and where the UI closes them: a closed poll's vote, a recommendation
+    /// the author removed), that sent messages cannot be deleted, that server logs are not erased, and that
+    /// removing a name does not remove identifying details. A policy change that forgets the copy fails here.
     /// </summary>
     [Fact]
     public async Task DeletePersonalDataPage_EnumeratesTheSurvivalSet_AndTheDeleteFirstPaths()
@@ -124,6 +125,16 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
         html.Should().Contain("Removing your name does not remove what you wrote");
         html.Should().Contain("no admin until a site moderator assigns one", "D13 edge (b), the sole-admin consequence");
         html.Should().Contain($"href=\"/user/{userId}/series\"");
+
+        // Review fixes: each delete-it-first path is stated as far as the UI offers it, and the page does not
+        // claim more than the database delivers (D13 (iii)'s log half is a Phase-7 obligation, tracker E11).
+        html.Should().Contain("Retract vote on a poll that is still open", "Retract vote exists only on an open poll");
+        html.Should().Contain("Votes on a closed poll stay in its results, without your name");
+        html.Should().Contain("A recommendation the story's author removed can't be deleted",
+            "a Rejected recommendation is the sticky block record; it offers no Delete");
+        html.Should().Contain("server logs record activity by account number");
+        html.Should().Contain("They are not erased when your account is deleted");
+        html.Should().NotContain("nothing links what remains back to you", "server logs can, until Phase 7 bounds them");
     }
 
     /// <summary>

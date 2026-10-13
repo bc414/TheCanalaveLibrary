@@ -35,6 +35,15 @@ shown instead of it. The shape is `ReloadAfterRefusalAsync` in `ModSubmissionsPa
 `MyStoryLineagesPage` (the latter from the WU-CounterSymmetry browser pass, 2026-09-30: the stale
 lineage row's Reject would have revoked the approval the other tab made).
 
+When the stale surface is a **child panel whose visibility the host page decides**, reloading the
+panel's own list is not enough: the host's state is what still says the panel should show. The panel
+hands the refusal to the host (an `EventCallback<string>`), and the host reloads its data and shows
+the message itself, beside where the panel was. The reload may hide the panel, and a host that renders
+a loading state recreates it, so a message kept inside the panel would be lost either way.
+`GroupAdminRescuePanel.OnStale` → `GroupPage` is the shape (WU-UserDeletion review fixes, 2026-10-13:
+a second moderator's assignment left the panel offering "Assign as admin" on a group that already had
+an admin, refused on every retry).
+
 An unhandled render/lifecycle/event exception now degrades the *island*, not the circuit — the
 circuit (and every other island's state, including in-server drafts) survives. Boundaries do NOT
 catch background-`Task` continuations or exceptions thrown outside their subtree; the

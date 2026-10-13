@@ -819,14 +819,17 @@ both routes. The group survives unadministered until a site moderator assigns a 
   otherwise `ModerationValidationException` — a rescue does not invent a membership. Input checks: an
   unknown group is `KeyNotFoundException`; `notes` is required and fits `Report.ActionTaken` (1,024).
   It sets the member's `Role = Admin` and files the ledger row (§"Account actions" — the Group shape)
-  in one save, then notifies the promoted user (`GroupAdminAssigned`, 62, null-sourced — D5). **No
+  in one save, then notifies the promoted user (`GroupAdminAssigned`, 62, null-sourced — a default
+  under D5's threat model, owner-open as decision row 23; §"Notification Generation"). **No
   counter moves:** a role change on an existing row is not a membership change, so `GroupsJoined`
   stays put and the recompute agrees by construction (D24). Two moderators racing can both promote
   someone, leaving two admins: benign, so no lock (D23's posture).
 - **The UI warns on last-admin leave** (D13's recommended rider): the sole admin's Leave opens a
   confirm saying the group will have no admin until a site moderator assigns one. A moderator viewing
-  an admin-less group sees an "Assign an admin" panel (`GroupAdminRescuePanel`). The request channel
-  for "on request" is out of band (message a moderator) until D47.
+  an admin-less group sees the rescue panel (`GroupAdminRescuePanel`, headed "This group has no
+  admin"). A refusal there means the group moved under the panel, so the page reloads the group and
+  keeps the message (`error-handling.md`). The request channel for "on request" is out of band
+  (message a moderator) until D47.
 
 ## Notification Generation
 
@@ -937,12 +940,17 @@ granting-moderator source (unruled — roadmap decision row 19). Until the row i
 renders that name: `NotificationPresenter`'s 90 arm is actor-free, so the copy pre-empts neither
 answer (WU-NotificationCorrectness review fixes, 2026-10-13). A presenter arm must not settle an
 open attribution question by itself. **`GroupAdminAssigned` (62)** sits in the Groups band but is a
-moderator act, so D5's principle applies by its own wording ("moderator identity is never disclosed
-through a notification"): `NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` takes no moderator
-parameter and writes a null source; `RelatedEntityId` is the group (D16's single most specific anchor),
-and the presenter arm is actor-free (WU-UserDeletion, 2026-10-13). A moderator who is a member may
-assign themselves (D13 lists exactly three guards, and a self-target is not one of them); the call
-site then skips the notification, per the general rule above.
+moderator act. D5 does not reach it by its own terms: D5 rules that the acting moderator's identity is
+never disclosed "to the sanctioned or reporting user", and scopes itself to 70–82; the promoted member
+is neither, and 62 is outside the band. The build null-sources it anyway — the WU spec's pick under
+D5's threat model (a named moderator is a retaliation target, and the name buys the recipient nothing
+actionable), not an owner ruling — and routes the question to the owner as **roadmap decision row
+23**, the sibling of row 19. Until it is ruled: `NotifyGroupAdminAssignedAsync(recipientUserId,
+groupId)` takes no moderator parameter and writes a null source; `RelatedEntityId` is the group (D16's
+single most specific anchor), and the presenter arm is actor-free (WU-UserDeletion, 2026-10-13; the
+D5 attribution corrected by its review fixes). A moderator who is a member may assign themselves (D13
+lists exactly three guards, and a self-target is not one of them); the call site then skips the
+notification, per the general rule above.
 
 **Dedup.** The cross-existing key is `(type, source, related entity, unread)`: a recipient who already
 holds an unread row with that key is skipped. A null source matches a null source (EF's C# null
@@ -2313,8 +2321,10 @@ re-resolved** — nothing that reassigns ownership rewrites report history, and 
 designed exception: a `Group` target resolves to `groups.creator_id` (D8's seventh-type amendment;
 the resolver arm since WU-UserDeletion, 2026-10-13), never to a lookup of current admins, and is NULL
 whenever the founder deleted their account. A NULL Group row is expected, not a broken producer.
-Every producer sets it: submission (resolved), and the moderator-filed rows (`ApplyAccountActionToUserAsync`,
-`SetCanAutoApproveAsync`, `ReinstateUserAsync`), which set it to their target.
+Every producer sets it: submission (resolved), and the moderator-filed rows. Three of those
+(`ApplyAccountActionToUserAsync`, `SetCanAutoApproveAsync`, `ReinstateUserAsync`) set it to their
+target account. The fourth, `AssignGroupAdminAsync`, does not: its target is a group, so it records
+the Group arm's founder snapshot (`groups.creator_id`, often NULL), never the member it promotes.
 - **One resolver, two forms.** `ResolveAnswerableUserIdAsync(type, id)` returns `int?`; its default arm
   **throws**, so a new `ReportedEntityType` member fails loudly until it gets its arm. Submission uses the
   nullable form and never throws on NULL (anonymous or deleted-author content stays reportable). The

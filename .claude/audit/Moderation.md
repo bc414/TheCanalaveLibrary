@@ -215,6 +215,19 @@ F46/F47 L1/L2/L5 stay 5.** The Settled note above, built.
 - **L4.5 5→1.** `/mod/reports`' "Show resolved" now lists Group rows, undriven in a browser (tracker
   **H29**).
 
+**WU-UserDeletion review fixes (2026-10-13) — no flip.**
+- **L5 (F47).** `ClientModerationWriteService.AssignGroupAdminAsync`, the only moderation client method
+  with a JSON body, had no client test: the endpoint test posts a hand-built request. Unit
+  `ModerationIntegrityClientTests` +2: the POST goes to `api/moderation/groups/{id}/assign-admin` with
+  `targetUserId` and `notes` in the body (wire names pinned, nothing in the query string), and a 400's
+  `detail` becomes a `ModerationValidationException` carrying the server's text — what the panel shows
+  over WASM. Moving the target into the query string fails the first.
+- **L2 docs (F46/F47).** `layer2-services.md`'s `ReportedUserId` producer list now names
+  `AssignGroupAdminAsync` as the fourth moderator-filed producer, and the one that does not record its
+  target: it records the Group arm's founder snapshot. Type 62's null source is now attributed to the
+  WU spec's default under D5's threat model and routed to roadmap decision row 23 (the code comment in
+  `AssignGroupAdminAsync` says so); behaviour unchanged.
+
 **WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip; L1 stays 5.** Migration
 `WU_SchemaHardening` adds `ck_users_suspension` on `AspNetUsers`:
 `account_status = Suspended OR suspended_until_utc IS NULL`, with Suspended interpolated from
@@ -431,7 +444,8 @@ bigint comment ids; Integration).
 
 **Stages (updated 2026-10-13, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's
 Group arm beneath L2/L5, no flip there, and **L4.5 5→1** because "Show resolved" lists Group rows no browser
-has seen, tracker H29 — Stage note at the top of this section; the same day, WU-SchemaHardening —
+has seen, tracker H29 — Stage note at the top of this section; its review fixes Unit-test the client's
+`AssignGroupAdminAsync`, no flip; the same day, WU-SchemaHardening —
 `ck_users_suspension` beneath L1, no flip, Stage note at the top of this section; 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top

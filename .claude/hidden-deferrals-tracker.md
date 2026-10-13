@@ -347,6 +347,10 @@ decision work that has no row at all.
     blog posts can't be deleted on the site yet". Whoever builds the blog-post delete UI must update that
     sentence and add the path to its delete-it-first list (`DeletePersonalData.razor` is D13's compliance
     surface; `cross-cutting.md` §"Account deletion"). WU-AuthorStoryDelete owes the same for stories.
+  - **Unowned (noted 2026-10-13 by the WU-UserDeletion review fixes):** D13's rider (i) is a binding
+    owner rule that this item leaves unmet, and no campaign WU spec picks it up (WU-AuthorStoryDelete
+    covers stories only). `cross-cutting.md` rule 1 and `roadmap.md`'s D13 Resolved entry now name the
+    gap. Its UX questions above are the first thing a planning session settles with Brian.
 
 - [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
   - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
@@ -1085,6 +1089,26 @@ unless noted. All sit under Stage-5 cells.
       (`ApiExceptionHandler`, `CanalaveErrorBoundary`, the workers).
     - Or accept the lines, and document them in `logging.md` as expected noise for a rare race.
 
+- [ ] **E11 — A deleted account's auth/IP log lines must go: the Phase-7 log sink needs a retention bound** `[off-grid · med · launch]` — *Filed 2026-10-13 by the WU-UserDeletion review fixes, which moved the log half out of **F19**: the owner ruled it, so it is a build obligation, not a question.*
+  - Grid: no cell moves (no production log sink exists). F52 reads 5.
+  - Source: worksheet D13 rider (iii): "the account-level fields (email, password hash, external
+    identity links, settings, any auth/IP logs) go unconditionally."
+  - **The database half is met:** the hard delete takes email, password hash, external logins and
+    settings, and no table stores an IP address or an auth log (the per-IP rate-limit partitions in
+    `Program.cs` live in memory and are never written).
+  - **The log half is not:** the OpenTelemetry log stream carries user ids on auth events
+    (`DeletePersonalData` logs "User with ID '{UserId}' deleted themselves") and on ordinary service
+    lines, some pairing a user id with a content id (e.g. `ServerCommentWriteService`'s "…for comment
+    {CommentId} on profile {ProfileUserId}", `ServerStoryAcknowledgmentWriteService`'s "…for story
+    {StoryId} to user {AcknowledgedUserId}"). Retention is undefined until Phase 7 deploys the sink
+    (`roadmap.md` Phase 7, "Telemetry destination live").
+  - **Build:** a retention bound on the sink (or a purge on deletion) that makes a deleted account's
+    auth/IP lines go; one bound on the stream reaches the id-pairing lines too. Size it with decision
+    row 10's privacy policy. Then rewrite `DeletePersonalData.razor`'s sentence "They are not erased when
+    your account is deleted" to name the bound, and update `StaticSsrPageRenderTests`' copy test.
+  - Recorded: `security.md` §"Phase-7 Deferred Register"; `cross-cutting.md` §"Account deletion" rule 3;
+    `logging.md` §"What NOT to log".
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -1384,21 +1408,31 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
   - As built: `DeletePersonalData.razor` says plainly that sent messages cannot be deleted and stay in
     the recipient's inbox, without your name.
 
-- [ ] **F19 — A deleted account's user id survives in logs and in two polymorphic id columns** `[decision · low · launch]` — *Filed 2026-10-13 by WU-UserDeletion (its spec's X12, extended); a boundary of D13's GDPR posture, not ruled.*
+- [ ] **F19 — A deleted account's user id survives in two polymorphic id columns** `[decision · low · launch]` — *Filed 2026-10-13 by WU-UserDeletion (its spec's X12, extended); a boundary of D13's GDPR posture, not ruled. Narrowed the same day by its review fixes: the log half is ruled (D13 (iii)) and moved to **E11** as a build obligation.*
   - Grid: F52 reads 5 (unchanged).
-  - Source: D13 (iii) says account-level fields "and any auth/IP logs" go unconditionally, and (ii)
-    forbids a retained `deleted_user → old_user_id` mapping. Three places keep the bare integer:
-    1. **Application logs.** `DeletePersonalData` logs "User with ID '{UserId}' deleted themselves", and
-       request logs and traces carry user ids throughout. Retention is an operational (Phase 7) setting
-       with no rule.
-    2. **`reports.reported_entity_id`** on a `User`-type report (the moderation ledger; the row
+  - Source: D13 (ii) forbids a retained `deleted_user → old_user_id` mapping. Two columns keep the bare
+    integer of a deleted account:
+    1. **`reports.reported_entity_id`** on a `User`-type report (the moderation ledger; the row
        survives, closed).
-    3. **`notifications.related_entity_id`** on the user-anchored types (30 follower, 32 voucher, 23
+    2. **`notifications.related_entity_id`** on the user-anchored types (30 follower, 32 voucher, 23
        hidden-gem recommender) in other users' inboxes.
-  - None maps the id to the anonymized content (every content FK is nulled), so rule (ii) holds as
-    written. The question is whether log retention needs a bound before launch, and whether the two
-    columns should be zeroed at deletion. Owner call; no code changed.
+  - Neither maps the id to the anonymized content (every content FK is nulled), so rule (ii) holds as
+    written. The question is whether the two columns should be zeroed at deletion. Owner call; no code
+    changed.
   - Recorded as a boundary in `cross-cutting.md` §"Account deletion".
+
+- [ ] **F20 — Does D13's rider (i) reach a recommendation the story's author removed?** `[decision · low · beta]` — *Filed 2026-10-13 by the WU-UserDeletion review fixes; a surfaced sub-edge D13 did not rule.*
+  - Grid: F27/F28 and F52 read 5 (unchanged).
+  - Source: D13 rider (i) says authors must be able to delete their own content before deleting the
+    account. `ServerRecommendationWriteService.DeleteAsync` refuses a `Rejected` recommendation
+    ("removed by the story author and can no longer be deleted"), and `RecommendationSection` offers no
+    Delete on it: the persisted row is WU-RecLifecycle's sticky block record, which keeps the recommender
+    from resubmitting. Only the story's author (and the recommender) can see it, and the author can
+    unblock it. After an account deletion it survives anonymized, text included.
+  - The question: does rider (i) override the sticky record here (let the writer delete it, or blank
+    its text, losing the block), or does a recommendation the author already removed fall outside it?
+  - As built: `DeletePersonalData.razor` says a recommendation the story's author removed can't be
+    deleted and is kept without your name.
 
 ---
 
@@ -1845,7 +1879,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     `group_members` as ground truth). Register two throwaway accounts (the NoOp sender's on-page
     confirm link), then:
     1. As account X, read `/Account/Manage/DeletePersonalData` (static SSR): the four sections read as
-       written, and the "your profile" link opens X's Series tab.
+       written, and the "your profile" link opens X's Series tab. Since the review fixes (2026-10-13) the
+       alert says "what stays on the site is no longer linked to you", the poll-vote line says Retract
+       vote works on a poll that is still open, the recommendations line names one the author removed,
+       and "Before you go" ends with the server-logs sentence.
     2. On a seeded profile post with a **Public**, results-always poll, vote as X and as TestUser on the
        same option. Start a conversation between X and TestUser and exchange a message each way. Start a
        second conversation between X and Y, and as Y report one of X's messages in it.
@@ -1865,7 +1902,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        and notes are given. Assign: a success toast, the page reloads without the panel, `psql` shows the
        member's role as Admin and one `reports` row (type 6, reason 1, reporter = moderator =
        ModUser, `ResolvedActionTaken`, the notes). As a plain member the panel never shows. From a stale
-       second tab, assigning again shows "This group still has an admin…" inline.
+       second tab (opened while the group was still admin-less), assigning again reloads the page: the
+       panel is gone and "This group still has an admin…" shows where it was (review fixes,
+       2026-10-13). Check both render phases: the circuit and WASM paths reach the refusal differently.
     8. **Notification (F42).** As the promoted member: the bell and inbox read "You were made an admin
        of {group}" with no moderator name, linking to the group; the email (Mailpit, Aspire path) has
        the same lead line.

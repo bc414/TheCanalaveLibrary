@@ -391,6 +391,11 @@ Security items that only make sense at deployment — deliberately **not** built
   stored-XSS-via-upload residue by moving user bytes off the cookie-bearing origin. Then
   tighten CSP `img-src` from `'self' data:` to the specific host.
 - **Turnstile (or equivalent) on registration** — spam-bot damping; pairs with WU-Email.
+- **Log retention that erases a deleted account's auth/IP lines** — owner ruling D13 (iii): "any
+  auth/IP logs" go unconditionally with the account. The database holds none; the production log
+  sink must carry a retention bound (or a purge) that makes them go, sized with decision row 10's
+  privacy policy. When it lands, `DeletePersonalData.razor`'s "server logs are not erased" sentence
+  changes to name the bound (tracker **E11**; `cross-cutting.md` §"Account deletion" rule 3).
 - **HSTS tuning** — raise `max-age` toward 1 year + `includeSubDomains` once the domain is
   stable; `preload` only when certain.
 - **CSP enforce verification against the real domain** — one browse pass with enforcement on

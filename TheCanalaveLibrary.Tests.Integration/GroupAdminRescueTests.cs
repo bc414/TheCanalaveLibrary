@@ -15,6 +15,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <c>Report</c> row with the Group target, reason "Other", the notes, reporter == moderator, and the
 /// founder snapshot as <c>ReportedUserId</c> — NULL on the deletion route; type 62 to the promoted user,
 /// null-sourced and anchored on the group; <c>GroupsJoined</c> unmoved — D24; <c>AdminCount</c> 0 → 1);
+/// the type-62 row read back through <see cref="INotificationReadService"/> with the group's name and
+/// link, an M-audience group included (the enricher's Group kind);
 /// exactly three guards (a group that still has an admin, a non-member target, a non-moderator or
 /// anonymous caller) and the input checks (blank and over-long notes, an unknown group), each writing
 /// nothing; no fourth guard (a moderator may assign themselves, and is not notified of their own act);
@@ -89,7 +91,8 @@ public class GroupAdminRescueTests(PostgresFixture postgres) : IntegrationTestBa
             .Select(n => new { n.RecipientUserId, n.SourceUserId, n.RelatedEntityId })
             .SingleAsync();
         notification.RecipientUserId.Should().Be(_memberId);
-        notification.SourceUserId.Should().BeNull("the moderator is never named (D5's principle)");
+        notification.SourceUserId.Should().BeNull(
+            "the moderator is never named (a default under D5's threat model; roadmap decision row 23)");
         notification.RelatedEntityId.Should().Be(groupId);
 
         (await GroupsJoinedAsync(_memberId)).Should().Be(groupsJoinedBefore,
@@ -110,6 +113,36 @@ public class GroupAdminRescueTests(PostgresFixture postgres) : IntegrationTestBa
         (await db.Reports.Where(r => r.ReportedEntityType == ReportedEntityType.Group && r.ReportedEntityId == groupId)
                 .Select(r => r.ReportedUserId).SingleAsync())
             .Should().Be(_creatorId, "the founder is a snapshot, not the current admins (D8's seventh-type amendment)");
+    }
+
+    [Fact]
+    public async Task TheNotification_ReadsBackWithTheGroupsNameAndLink_EvenForAnMAudienceGroup()
+    {
+        // D13: the promoted user "must be able to find out". Without NotificationEnricher's 62 → Group arm the
+        // row reaches the bell, the inbox and the email with no title and no link (WU-UserDeletion review fixes).
+        int groupId = await CreateGroupWithMemberAsync();
+        await LeaveAsync(groupId, _creatorId);
+        await AssignAsModeratorAsync(groupId, _memberId, Notes);
+        string groupName;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            groupName = await db.Groups.Where(g => g.GroupId == groupId).Select(g => g.GroupName).SingleAsync();
+            // An M-audience group: the member reads with mature content off, so the Group kind's
+            // GroupAudience bypass (Personal plane) is what keeps the name.
+            await db.Groups.Where(g => g.GroupId == groupId)
+                .ExecuteUpdateAsync(s => s.SetProperty(g => g.AudienceRating, Rating.M));
+        }
+
+        SetActiveUser(_memberId); // ShowMatureContent = false
+        NotificationDto dto;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            dto = (await scope.ServiceProvider.GetRequiredService<INotificationReadService>().GetNotificationsAsync(1, 50))
+                .Should().ContainSingle(n => n.NotificationTypeId == NotificationTypeEnum.GroupAdminAssigned).Subject;
+
+        dto.TargetTitle.Should().Be(groupName);
+        dto.TargetUrl.Should().Be($"/group/{groupId}");
+        dto.SourceUserId.Should().BeNull();
     }
 
     // ── Exactly three guards ─────────────────────────────────────────────────────

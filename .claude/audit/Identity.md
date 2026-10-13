@@ -154,8 +154,17 @@ for WU-UserDeletion 2026-10-13). Do not revisit:**
   anonymization removes the name but not identifying details in the text, and the sole-admin
   consequence. Change the policy and the copy changes in the same WU. The story self-delete link
   waits for WU-AuthorStoryDelete (D15), which must add it.
-- **Open, not decided here:** a sender-side message delete (tracker **F18**); log retention of user
-  ids and the bare ids left in polymorphic columns (tracker **F19**).
+- **Rider (iii) includes "any auth/IP logs".** The database holds none, so the hard delete meets it
+  there; the log stream's half is a ruled Phase-7 build obligation on the sink's retention (tracker
+  **E11**), and until it lands the page says server logs are not erased with the account.
+- **Rider (i) is not yet met for stories** (WU-AuthorStoryDelete, D15) **or blog posts** (tracker
+  **B25**, unowned); the page says both are kept without your name.
+- **Open, not decided here:** a sender-side message delete (tracker **F18**); whether rider (i)
+  reaches a recommendation the story's author removed (**F20**); the bare ids left in polymorphic
+  columns (tracker **F19**).
+- **Two overlapping deletions of one conversation's participants are serialized** on the conversation
+  row, so the emptiness check of the later one sees the earlier one's committed delete
+  (`cross-cutting.md` §"Account deletion"; WU-UserDeletion review fixes, 2026-10-13).
 
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13, Part A: the survival set) — L4.5 5→1;
 L1/L2/L4 stay 5.**
@@ -197,6 +206,32 @@ L1/L2/L4 stay 5.**
 - **Part B (the WU's second commit, same day).** The copy gained its sole-admin sentence ("it will have
   no admin until a site moderator assigns one") once the moderator's assign-admin action existed to make
   it true (`audit/Moderation.md` F47, `audit/Groups.md` F40). The same Integration copy test asserts it.
+
+**WU-UserDeletion review fixes (2026-10-13) — no flip; L4.5 stays 1 (H29).**
+- **L2 — the orphan-conversation race.** Step 8's emptiness check was a check-then-act under READ
+  COMMITTED: two participants deleting at overlapping times each saw the other's uncommitted participant
+  row, so neither deleted the conversation and both committed an empty one, its messages and any open
+  message report left behind with nothing to reach them. Step 5 now captures the user's conversation
+  ids with `SELECT … ORDER BY conversation_id FOR NO KEY UPDATE OF c` (raw SQL), so the second deletion
+  waits and then sees the first one's committed delete. The class doc and the step-8 comment no longer
+  call the cleanup exhaustive without saying why. Tier: Integration —
+  `UserDeletionServiceTests.DeleteUserAsync_WhileTheOtherParticipantsDeletionIsInFlight_*`: a raw
+  transaction holds the lock and has deleted B's participant row; A's deletion is observed waiting on a
+  lock (`pg_locks`), and after the commit the conversation and its messages are gone. With the lock
+  removed the test fails: the conversation survives with no participant.
+- **L4 copy.** Four corrections, each against the code: (1) the alert no longer says "nothing links what
+  remains back to you", since server logs keep the account number; a new "Before you go" sentence says
+  they are not erased with the account (D13 (iii)'s "any auth/IP logs" is a Phase-7 obligation, tracker
+  **E11**); (2) Retract vote is offered only on an open poll, so the copy says so and that a closed
+  poll's votes stay without your name; (3) a recommendation the story's author removed offers no Delete
+  (the sticky block record), so the copy says it is kept without your name (whether D13's rider (i)
+  reaches it: tracker **F20**); (4) the asserted phrases sit on one source line each. Tier: Integration —
+  `StaticSsrPageRenderTests.DeletePersonalDataPage_EnumeratesTheSurvivalSet_AndTheDeleteFirstPaths` +6
+  assertions (and one `NotContain` for the old sentence).
+- **Docs.** `cross-cutting.md` rule 3 now carries the owner's full list ("any auth/IP logs") and rule 1
+  names the two content types rider (i) does not yet reach (stories: WU-AuthorStoryDelete; blog posts:
+  B25, unowned). F19 is narrowed to the polymorphic columns; E11 and F20 are new.
+- No browser was available; tracker **H29** step 1 now reads the new sentences.
 
 **WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.**
 - **L1.** A deleted user's polls now survive anonymized: `base_polls.owner_id` is nullable `ON DELETE
@@ -271,7 +306,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13 — Integration-tested, not yet browser-driven, Stage note above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13, and locks them first so two overlapping deletions cannot both miss an emptied one, since its review fixes the same day — Integration-tested, not yet browser-driven, Stage notes above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
@@ -304,7 +339,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
-  D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes — Stage notes above). L5 — N/A.**
+  D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes, and corrected by its review fixes the same day (server logs, a closed poll's votes, a removed recommendation) — Stage notes above). L5 — N/A.**
   **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13):** the rewritten copy has not been read in a
   browser; tracker **H29** owes the pass (it was 5 since the 2026-07-01 pass below).
 

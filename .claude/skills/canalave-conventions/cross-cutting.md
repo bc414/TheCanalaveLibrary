@@ -197,6 +197,16 @@ open reports on those messages. No sweeper and no worker: account deletion is th
 producer of an empty conversation, so cleaning up at the source is exhaustive. A crash between two
 saves was a second, undesigned producer; `StartConversationAsync` is one save since
 WU-NotificationCorrectness, which closed it.
+- **Two deletions of one conversation's participants are serialized on the conversation row.** The
+  emptiness check is a check-then-act under READ COMMITTED: if both participants delete at overlapping
+  times, each transaction's `NOT EXISTS` still sees the other's uncommitted participant row, neither
+  deletes the conversation, and both commit an empty one that no later step reaches. So
+  `DeleteUserAsync` locks the user's conversations (`SELECT … ORDER BY conversation_id FOR NO KEY
+  UPDATE OF c`) before it deletes the user. The second deletion waits, and its check then sees the
+  first one's committed delete. `NO KEY UPDATE` is the weakest lock two deleters conflict on, so a
+  surviving participant's message insert (the FK's `KEY SHARE`) never waits on it; the id order keeps
+  two deleters who share several conversations from deadlocking on them (WU-UserDeletion review
+  fixes, 2026-10-13).
 
 **Groups (D13 edge (b)).** A group whose last admin deletes their account (or leaves) survives with no
 admin, `creator_id` NULL. That is a waiting state; a moderator assigns a new admin on request
@@ -208,24 +218,38 @@ data (Recital 26). Anonymizing in place is therefore not retention under an exce
 bind every future change:
 1. **The anonymization must be genuine.** The user must be able to delete their own content before
    deleting the account, and the deletion page must say so. Severing the FK does nothing for content
-   whose text identifies its author.
+   whose text identifies its author. **Not yet met for two content types** (the page says so):
+   stories have no self-delete (WU-AuthorStoryDelete, D15, adds it and the page's link), and blog posts
+   of every subtype have a service delete but no button (tracker **B25**, which no WU owns yet). A
+   recommendation the story's author removed (`Rejected`, the sticky block record) refuses its
+   writer's delete; whether this rule reaches it is owner-open (tracker **F20**).
 2. **No retained mapping, ever.** No `deleted_user → old_user_id` table, for support or any other
    purpose, and no softening of the hard delete into an anonymize-in-place. Either converts
    anonymization into pseudonymization and collapses the analysis.
 3. **Account-level fields go unconditionally:** email, password hash, external sign-in links,
-   settings.
+   settings, **and any auth/IP logs** (the owner's list). The database half is met by the hard delete:
+   no table stores an IP address or an auth log (the per-IP rate-limit partitions live in memory and are
+   never written). The log half is **a ruled obligation, not an open question**: the application log
+   stream carries user ids on auth events (the deletion itself logs one) and on ordinary service lines,
+   some of which pair a user id with a content id. Until a production log sink exists there is nothing
+   to bound, so the obligation sits on Phase 7: the sink gets a retention bound (or a purge) that makes a
+   deleted account's auth/IP log lines go — a bound on the one stream reaches the id-pairing lines
+   too — sized with decision row 10's privacy policy (tracker **E11**;
+   `security.md` §"Phase-7 Deferred Register"). Until then the deletion page says plainly that server
+   logs are not erased with the account.
 
-*Boundary, not ruled:* application logs carry user ids (the deletion itself logs one), and two
-polymorphic id columns keep the bare integer of a deleted account (`reports.reported_entity_id` on a
-`User` report; `notifications.related_entity_id` on the user-anchored types). Neither maps the id to
-the anonymized content, so rule 2 holds; whether log retention or those columns need more is open
-(tracker **F19**).
+*Boundary, not ruled:* two polymorphic id columns keep the bare integer of a deleted account
+(`reports.reported_entity_id` on a `User` report; `notifications.related_entity_id` on the
+user-anchored types). Neither maps the id to the anonymized content, so rule 2 holds; whether they
+should be zeroed at deletion is owner-open (tracker **F19**).
 
 **The deletion page's copy is the compliance surface** (Art. 13/14 transparency).
 `DeletePersonalData.razor` enumerates this policy in the user's terms: what survives anonymized, what
-is destroyed, how to delete content first, that sent messages cannot be deleted and stay in the
-recipient's inbox, and that anonymization removes the name but not identifying details written into
-the content. **Change the policy, change the copy, in the same WU.**
+is destroyed, how to delete content first (and where that path does not exist or is closed: stories,
+blog posts, votes on a closed poll, a recommendation the author removed), that sent messages cannot be
+deleted and stay in the recipient's inbox, that server logs are not erased with the account, and that
+anonymization removes the name but not identifying details written into the content. **Change the
+policy, change the copy, in the same WU.**
 
 ## Dev-Only Diagnostic Endpoints
 

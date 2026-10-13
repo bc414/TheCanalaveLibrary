@@ -20,11 +20,14 @@
     @* This copy is the compliance surface for the account-deletion policy (owner ruling D13;
        cross-cutting.md §"Account deletion"): it must enumerate what survives, what is destroyed and how
        to delete content first. Change the policy, change this copy, in the same WU. Every claim here
-       was checked against the FK graph on 2026-10-13 (WU-UserDeletion). *@
+       was checked against the FK graph on 2026-10-13 (WU-UserDeletion), and each delete-it-first path
+       against the UI that offers it (its review fixes: a closed poll's vote and a recommendation the
+       author removed have none). The server-logs sentence changes when Phase 7 bounds log retention
+       (tracker E11). *@
     <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
         <p>
             <strong>Deleting your account cannot be undone.</strong> Your account is deleted outright, and
-            nothing links what remains back to you. Here's what happens to your data.
+            what stays on the site is no longer linked to you. Here's what happens to your data.
         </p>
     </div>
 
@@ -63,7 +66,10 @@
             <ul class="list-disc pl-5">
                 <li>Comments: use Delete on each comment.</li>
                 <li>Chapters: use the chapter list in your story's editor.</li>
-                <li>Recommendations: use Delete on your recommendation, on the story's page.</li>
+                <li>
+                    Recommendations: use Delete on your recommendation, on the story's page.
+                    A recommendation the story's author removed can't be deleted, so it is kept without your name.
+                </li>
                 <li>
                     Series: use Delete on the series' edit page
                     @if (user is not null)
@@ -71,7 +77,11 @@
                         <text>(your series are listed on <a href="/user/@user.Id/series" class="text-(--color-action-ink) hover:underline">your profile</a>)</text>
                     }.
                 </li>
-                <li>Polls: use Delete on the poll in your blog post's editor. Poll votes: use Retract vote on the poll.</li>
+                <li>
+                    Polls: use Delete on the poll in your blog post's editor.
+                    Poll votes: use Retract vote on a poll that is still open.
+                    Votes on a closed poll stay in its results, without your name.
+                </li>
                 <li>Stories and blog posts can't be deleted on the site yet, so they are kept without your name.</li>
                 <li>Private messages you sent can't be deleted. They stay in the other person's inbox.</li>
             </ul>
@@ -85,6 +95,10 @@
             </p>
             <p>
                 If you're the only admin of a group, it will have no admin until a site moderator assigns one.
+            </p>
+            <p>
+                The site's server logs record activity by account number, not by name.
+                They are not erased when your account is deleted.
             </p>
         </section>
     </div>

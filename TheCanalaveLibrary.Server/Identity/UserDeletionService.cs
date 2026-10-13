@@ -21,7 +21,9 @@ namespace TheCanalaveLibrary.Server;
 /// answerable for survive with those FKs nulled (SET NULL — the report row is the audit ledger).</item>
 /// <item><b>After the save</b>, it deletes the conversations the deletion left with no participant
 /// (D13 edge (a)), first closing open reports on their messages. A conversation where the other person
-/// remains survives intact: she keeps the thread, and the user's messages lose their sender.</item>
+/// remains survives intact: she keeps the thread, and the user's messages lose their sender. The
+/// user's conversation rows are locked before the delete, so two participants deleting at once are
+/// serialized and the second one's emptiness check sees the first one's delete.</item>
 /// </list>
 /// <para>Server-only (the static-SSR <c>DeletePersonalData</c> page and the dev endpoint resolve it by
 /// type); it has no Core interface.</para>
@@ -105,13 +107,27 @@ public class UserDeletionService(ApplicationDbContext writeDb)
                 .Where(v => v.VouchedUserId == userId);
             writeDb.Vouches.RemoveRange(vouchesReceived);
 
-            // --- 5. CAPTURE THE USER'S CONVERSATIONS (for step 8) ---
+            // --- 5. CAPTURE AND LOCK THE USER'S CONVERSATIONS (for step 8) ---
             // Read before the delete: the participant rows cascade away with the user, after which
             // nothing links these conversations to this account. Index-backed (the participant FK index
             // on user_id).
-            List<int> conversationIds = await writeDb.ConversationParticipants
-                .Where(p => p.UserId == userId)
-                .Select(p => p.ConversationId)
+            // Locked, because step 8 is a check-then-act under READ COMMITTED: if the other participant
+            // is being deleted at the same time, each transaction's NOT EXISTS still sees the other's
+            // uncommitted participant row, neither deletes the conversation, and both commit an empty
+            // one that nothing reaches later. With the row lock the second deletion waits here, and its
+            // step 8 then sees the first one's committed delete. NO KEY UPDATE is the weakest lock two
+            // deleters conflict on — a surviving participant's message insert (the FK's KEY SHARE) never
+            // waits on it — and the id order keeps two deleters who share several conversations from
+            // deadlocking on them (cross-cutting.md §"Account deletion").
+            List<int> conversationIds = await writeDb.Database
+                .SqlQuery<int>($"""
+                    SELECT c.conversation_id AS "Value"
+                    FROM conversations c
+                    WHERE c.conversation_id IN (
+                        SELECT p.conversation_id FROM conversation_participants p WHERE p.user_id = {userId})
+                    ORDER BY c.conversation_id
+                    FOR NO KEY UPDATE OF c
+                    """)
                 .ToListAsync();
 
             // --- 6. DELETE THE USER ---
@@ -133,7 +149,8 @@ public class UserDeletionService(ApplicationDbContext writeDb)
             // implementation refinement of the owner's "remove conversations with no remaining
             // participants" that keeps the statement O(this user's conversations) instead of an
             // anti-join over the whole table. Account deletion is the only designed producer of an
-            // empty conversation, so cleaning up at the source is exhaustive; no sweeper exists.
+            // empty conversation, and step 5's lock serializes two deletions of one conversation's
+            // participants, so cleaning up at the source is exhaustive; no sweeper exists.
             if (conversationIds.Count > 0)
             {
                 IQueryable<Conversation> emptied = writeDb.Conversations

@@ -85,7 +85,10 @@ WU-UserDeletion 2026-10-13). Do not revisit:**
   person's data; purging only the leaver's messages would leave her replies answering holes.
 - **No participant left: deleted at the source.** `UserDeletionService` deletes the conversations the
   deletion leaves with no participant, in its own transaction, after the save (messages cascade), and
-  closes open reports on their messages first (`ReportLedger`). No sweeper, no worker.
+  closes open reports on their messages first (`ReportLedger`). No sweeper, no worker. Both
+  participants deleting at overlapping times are serialized on the conversation row (`FOR NO KEY
+  UPDATE`, taken before the delete), so the second deletion's emptiness check sees the first one's
+  committed delete (WU-UserDeletion review fixes, 2026-10-13; `audit/Identity.md` F52).
 - **Not decided here:** whether a sender can delete their own sent messages before deleting the
   account (GDPR rider (i) read onto messages; tracker **F18**). No sender-side delete exists; the
   deletion page says so.
@@ -435,6 +438,10 @@ starting a conversation was refused with "This user does not accept private mess
   other participant and the deleted sender's messages; both deleted removes the conversation and its
   messages and closes the message report. No messaging test asserted the old strings.
 - **L4.5 5→1:** the new label is undriven in a browser (tracker **H29**).
+- **Review fixes (same day), no flip:** two participants deleting at overlapping times could both miss
+  the emptied conversation (each saw the other's uncommitted participant row). `UserDeletionService`
+  now locks the user's conversations before the delete; the race and its Integration test are in
+  `audit/Identity.md` F52's review-fix note.
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

@@ -96,7 +96,8 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   - **Operational resilience group** — minimal ops runbook, DR beyond the DB, cost/billing
     alerts, the explicit no-staging-environment decision.
   - **Telemetry destination live** — self-hosted Grafana LGTM container (resolved mechanism, see
-    `middle_plan_v2.md` §Resolved); deploy it, set `OTEL_EXPORTER_OTLP_ENDPOINT`.
+    `middle_plan_v2.md` §Resolved); deploy it, set `OTEL_EXPORTER_OTLP_ENDPOINT`. Its log retention
+    must erase a deleted account's auth/IP lines (owner ruling D13 (iii); tracker **E11**).
   - **Image derivative sizing** — covers/avatars currently store one 2048px original served into
     24–144px display slots on every listing grid (tracker **B14**, surfaced scoping WU-DataSaver's
     cut). Generate derivatives at upload or front R2 with Cloudflare Image Resizing, then emit
@@ -136,7 +137,8 @@ Row 19 was added the same day by its review fixes (a third such edge, previously
 transitions its spec derived rather than took from owner text. Row 21 was added 2026-10-12 by the
 WU-DependencyCVEs review fixes, promoted out of `hidden-deferrals-tracker.md` **E9** under the same
 rule. Row 22 was added 2026-10-13 by WU-SchemaHardening: an unruled edge its build had to take a
-default on.
+default on. Row 23 was added the same day by the WU-UserDeletion review fixes: its build had cited D5
+for a notification D5's own scope does not reach.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -153,6 +155,7 @@ default on.
 | 20 | **Two account-status refusals the build derived (service §2.1.3).** May a moderator *warn* someone who is serving a live suspension, and may they *ban* someone already banned? | As built (derived, not owner text): both refused with a `ModerationValidationException`. A warning would lower a live suspension to Warned — the same "silent lowering" §2.1.3 names for warning a banned user — and a second ban would write a second `AccountBanned` (74) notification, since D4 exempts 74 from dedup. Everything else in the table is literal §2.1.3 (Banned leavable only via Reinstate; a suspension needs a future date). **Refined by the WU's review fixes (2026-09-30):** the second-ban refusal holds only on the moderator-initiated path. A *report-driven* Ban on a banned account resolves that report against the standing ban (`ResolvedActionTaken`, 81 to the reporter; no status write, stamp bump or second 74). Refusing it there left every other report about a banned account closable only as "no action" (82) — account actions close no siblings (D7), Warn/Suspend on Banned are refused, and a `User` report cannot be removed — which tells the reporter something false and writes `ResolvedNoAction` into D8's history. | Escalation policy is yours; "allowed" is a one-line change per row. Rule text: `layer2-services.md` §"Moderation Services" → "The account-status transition table".
 | 21 | **ImageSharp licensing (tracker E9).** SixLabors.ImageSharp 3.1.12 carries five 2026-10 advisories (GHSA-j3p4, -j9gm, -jjfr high; -gwg2, -wmxv moderate), and every patched line (3.2.x, 4.1.2+) runs a build-time license check that fails a Release build without a Six Labors key. Choose: **(a)** apply for Six Labors community licensing and add the key as a CI secret and a dev user-secret; **(b)** swap the upload pipeline to another decoder library; **(c)** keep 3.1.12 as standing accepted risk. | As built (interim, not a ruling): hold 3.1.12 as accepted risk. All five vectors are unreachable through `ImageUploadProcessor`, and two Unit tests guard the reachable-in-principle halves. Consequences: the report-only vuln scan keeps listing ImageSharp, so the Phase-7 hard gate (tracker E3) cannot be promoted, and Dependabot's 3.2.x PR fails CI. Under (a), only 4.1.2+ clears the scan: the GitHub-reviewed ranges recorded on 2026-10-12 run to `<= 4.1.1`, so 3.2.x stays listed. | A license application and its terms, a reversal of the 2026-07-06 choice of ImageSharp (`middle_plan_v2.md` §Resolved, "Upload validation"), or standing risk at launch: licensing and launch risk posture are yours. Gates the Phase-7 vuln-scan hard gate (row 4). Rule text: `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence". |
 | 22 | **Deleting a group folder whose sub-folder would duplicate a top-level name.** Since WU-SchemaHardening a deleted folder's sub-folders move to the top level (the spec's SET NULL), and top-level names are unique. Say "Fanfic" holds a sub-folder "Favorites" and the group already has a top-level "Favorites": what should deleting "Fanfic" do? | As built (a default, not a ruling): refuse the whole delete with a message naming the clashing sub-folder ("Rename one of them first"); nothing is deleted. It mutates nothing the admin did not ask for, and follows D23's loud-failure posture. | The alternative, renaming the promoted folder automatically (say "Favorites (2)"), changes a name a group's admins chose. Which surprise is better is a product call; "rename" is a one-method change in `ServerGroupWriteService.DeleteFolderAsync`. Rule text: `layer2-services.md` §"Group Folder Integrity". |
+| 23 | **Should a group-admin assignment name the moderator who made it?** `GroupAdminAssigned` (62) tells a member that a site moderator made them the admin of an admin-less group (D13 edge (b)). | As built (the WU spec's pick, not owner text): null-sourced, no moderator parameter, actor-free copy ("You were made an admin of {group}"); the `Report` row keeps the moderator internally. | D5 says a moderator is never named "to the sanctioned or reporting user" and scopes itself to 70–82; the promoted member is neither, and 62 sits in the Groups band. D5's threat model (retaliation against volunteer moderators) argues for the default; an appointment is also good news a member may want to answer. Sibling of row 19 (type 90), whose source is kept. "Name them" needs a small build: a source parameter on `NotifyGroupAdminAssignedAsync` and an `{actor}` in the presenter arm. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". |
 
 ## Recommended next work units (2026-07-27)
 
@@ -230,9 +233,14 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   "Account deletion"; `layer2-services.md` §"Group Membership and Role Model" and §"Account actions"
   (the Group shape). Narrative: `audit/Identity.md` F52, `audit/BlogPosts.md` F37,
   `audit/Messaging.md` F49, `audit/Groups.md` F38/F40, `audit/Moderation.md` F46/F47,
-  `audit/Notifications.md` (type 62). Still open: an exact
-  multi-choice voter count after a deletion (tracker **F17**), a sender-side message delete (**F18**),
-  log retention and bare ids in polymorphic columns (**F19**), and D47(b).
+  `audit/Notifications.md` (type 62). **Rider (i) is not yet met for two content types:** stories have
+  no self-delete (WU-AuthorStoryDelete, D15) and blog posts no delete button (tracker **B25**, which no
+  WU owns yet); the deletion page names both. Still open: an exact multi-choice voter count after a
+  deletion (tracker **F17**), a sender-side message delete (**F18**), the bare ids in polymorphic
+  columns (**F19**), whether rider (i) reaches a recommendation the story's author removed (**F20**),
+  whether type 62 names the moderator (decision row **23**), and D47(b). Rider (iii)'s "any auth/IP
+  logs" is ruled, not open: a Phase-7 obligation on the log sink (tracker **E11**, `security.md`
+  §"Phase-7 Deferred Register").
 
 - **Schema hardening — folder integrity, `group_stories` as a set, the CHECK set (schema audit
   §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row) — built WU-SchemaHardening
