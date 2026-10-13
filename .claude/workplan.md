@@ -17,18 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-UserDeletion (2026-10-13, two commits plus review fixes and a browser pass) —
-  worksheet D13. Migrations `WU_UserDeletion_SurvivalSet` and `WU_UserDeletion_GroupAdminAssigned` are
-  on both dev DBs (the Aspire DB took them at the browser pass). **Poll votes survive anonymized**,
-  account deletion **deletes the conversations it leaves empty** (locked against a two-deleter race),
-  messaging reads "[deleted user]", and the deletion page enumerates the policy (`cross-cutting.md`
-  §"Account deletion"). An **admin-less group** waits for a moderator's `AssignGroupAdminAsync`
-  (three guards, a ledger-only Group row, type 62); the sole admin's Leave warns first.
-  **F37/F40/F42/F47/F49/F52 L4.5** went 5→1 and back to 5 at the browser pass, which closed **H29** and
-  fixed a pre-existing bug: the message reply box kept the sent text. Filed: tracker **F17/F18/F19/F20**,
-  **E11** (D13 (iii)'s auth/IP logs, a Phase-7 obligation) and **decision row 23** (type 62's
-  attribution). `dotnet test`: Unit 1,190, RazorComponents 795, Integration 1,485. **Pointer:** its
-  DONE entry.
+- **Last landed:** WU-PollVoteIntegrity (2026-10-13) — worksheet D23's poll paragraph and its
+  `ConfigLocked` rider. Migration `WU_PollVoteIntegrity` is on the server-only dev DB (not yet the
+  Aspire DB). **Single-choice is a database constraint:** `poll_votes` carries `poll_id` behind a
+  composite FK and a generated guard unique with `user_id`. **`AllowMultiple` cannot change under a
+  vote:** the vote row's FK `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action. A lost
+  vote or edit race is a 400, never a 500 (`layer2-services.md` §"Check-then-act posture"). No cell
+  flipped. Filed: tracker **F21**, promoted to **decision row 24** (`AnonymityMode`'s lock), and **H30**
+  (a browser smoke; no browser was available). `dotnet test`: Unit 1,190, RazorComponents 795,
+  Integration 1,498. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
@@ -241,7 +239,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13); **WU-PollVoteIntegrity** is next in the campaign's build order.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13); **WU-BlobCleanup** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -270,7 +268,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day)),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30**),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -278,7 +276,7 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–23** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–24** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -286,7 +284,8 @@ references it, does not restate it.
   2026-09-30; 21 — ImageSharp licensing (tracker **E9**: a Six Labors key, a library swap or
   standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes; 22 — the folder-delete
   name-clash default — added 2026-10-13 by WU-SchemaHardening; 23 — type 62's moderator attribution —
-  added the same day by the WU-UserDeletion review fixes). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  added the same day by the WU-UserDeletion review fixes; 24 — whether a poll's anonymity mode is
+  frozen by the database like its vote mode — added the same day by WU-PollVoteIntegrity). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -447,6 +446,50 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-PollVoteIntegrity — single-choice as a database constraint, and `AllowMultiple` frozen under a vote by an FK (worksheet D23's poll paragraph and its `ConfigLocked` rider; extends `BlogPosts/`, `Data/`) — DONE ✓ (2026-10-13)
+
+- **Cells:** none flipped. F37 L1 and L2 stay 5 (defects beneath Stage-5 cells); F37 L4.5 stays 5 (no
+  markup or normal-flow copy changed). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+- **Trigger:** the campaign amendment for this WU (no spec file; self-scoped from D23 against fe3d032):
+  `PollId` on the vote row with a composite FK, a guard set to `PollId` for single-choice polls and
+  unique with `user_id`, and the rider closed declaratively if possible.
+- **What landed:**
+  1. **Migration `WU_PollVoteIntegrity`:** `poll_votes.poll_id` (composite FK `(poll_id,
+     poll_option_id)` → `poll_options`' new alternate key, replacing the single-column option FK),
+     `poll_votes.allow_multiple` (composite FK `(poll_id, allow_multiple)` → `base_polls`' new alternate
+     key, no ON UPDATE action: the rider) and the STORED generated guard `single_choice_poll_id`,
+     unique with `user_id`, NULLS DISTINCT. Up backfills, keeps the newest of a live voter's duplicate
+     single-choice rows, then sets NOT NULL. Rehearsed Up/Down/Up on a dirtied dev-DB clone; applied to
+     the server-only dev DB.
+  2. **`ServerPollWriteService`:** `VoteAsync` writes `PollId` and the read's mode, and answers a lost
+     race (23505 on either vote index, 23503 on either composite FK, a 0-row delete) with
+     `VoteRaceMessage` (a 400; touched entries detached), never a 500 or a second live row.
+     `UpdatePollAsync` writes a pre-vote mode change set-based, because EF refuses a mutable key
+     property (probed), answers the mode FK's 23503 as the lock message, and detaches the poll after
+     every call.
+  3. **Docs:** moment 1 — `layer2-services.md` §"Check-then-act posture" (poll row built, the
+     mechanism, why it holds under concurrency, the refusals, the set-based key write, what it does
+     not cover) and the stale-tracking rule; `layer1-data-model.md` §"Column Conventions" (the
+     `poll_votes` bullet, alternate-key naming, key columns read-only, STORED generated columns);
+     F37's Settled bullets; roadmap D23 Resolved; service audit item 15; tracker **F21** and
+     **decision row 24**. Moment 2 — `testing.md` (an inline vote seed names its poll and mode).
+     Moment 3 — F37 Stage note and L1/L2 headlines; worksheet D23 Built line; tracker **H30**.
+- **Left alone:** the other three locked fields (`AnonymityMode`, `ResultsVisibility`, `DateOpened`)
+  keep the `hasVotes` check-then-act. D23's rider names `AllowMultiple` only, and whether
+  `AnonymityMode` (whose race can name a voter who voted under `Anonymous`) gets the same FK is the
+  owner's (**decision row 24**, tracker **F21**). No retry on a lost vote race: a retry would cast the
+  vote under settings the voter never saw. `PollView` still shows the refusal inline without reloading
+  the poll. The tracker F17 upper bound is unchanged: the guard does not group anonymized rows.
+- **Verification:** build 0 errors, no new warnings in touched files; **Unit 1,190**, **RazorComponents
+  795**, **Integration 1,498** (+13: `PollVoteIntegrityTests`), all green. Mutation-checked: a
+  non-unique guard, no mode FK, no vote catch, no vote detach, no poll detach, no edit catch, and
+  dropping the concurrency or option-FK branch each fail their tests. Four inline vote seeds in three
+  classes were refused by the new FKs (the rule working) and now name the poll. check-doc-hygiene,
+  check-design-tokens, check-render-modes and check-a11y pass. No browser was available: tracker **H30**
+  holds a regression smoke of the vote and edit flows.
+- **Pointers:** `audit/BlogPosts.md` F37 (Stage note and Settled bullets); `layer2-services.md`
+  §"Check-then-act posture"; tracker F21/H30; roadmap decision row 24.
 
 ## WU-UserDeletion — the account-deletion survival set ratified and built (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface) and the admin-less group rescue (worksheet D13 and its edges, schema audit §3.8; extends `Identity/`, `BlogPosts/`, `Messaging/`, `Groups/`, `Moderation/`, `Notifications/`, `Data/`) — DONE ✓ (2026-10-13)
 

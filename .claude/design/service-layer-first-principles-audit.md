@@ -606,6 +606,9 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     > upserts; the gem, highlight and vouch limits are stated-soft (no corrective — an inference from
     > D21's silence, flagged for the owner). `group_stories` is routed to WU-SchemaHardening and the
     > poll restructure to WU-PollVoteIntegrity. Rule in `layer2-services.md` §"Check-then-act posture".
+    > **Poll single-choice built** WU-PollVoteIntegrity (2026-10-13): `PollId` on the vote row, a
+    > generated guard unique with `user_id`, and the `ConfigLocked` rider as an FK that freezes
+    > `AllowMultiple` while votes exist (the other three locked fields: decision row 24, tracker F21).
 16. **Blob cleanup ownership for terminal deletion** (user deletion, hard delete, abandoned cover
     uploads): inline deletes vs periodic orphan sweeper vs "orphans accepted" — currently nobody's
     job and undocumented. Related ruling: keep the cover two-step upload protocol or move

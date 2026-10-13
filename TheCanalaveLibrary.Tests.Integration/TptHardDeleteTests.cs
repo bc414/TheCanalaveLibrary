@@ -437,8 +437,9 @@ public class TptHardDeleteTests(PostgresFixture postgres) : IntegrationTestBase(
         await db.SaveChangesAsync();
 
         int[] optionIds = [..poll.PollOptions.OrderBy(o => o.SortOrder).Select(o => o.PollOptionId)];
-        db.PollVotes.Add(new PollVote { PollOptionId = optionIds[0], UserId = _otherId });
-        db.PollVotes.Add(new PollVote { PollOptionId = optionIds[1], UserId = _thirdId });
+        // A vote row carries its poll and the poll's mode (D23's composite FKs; single-choice here).
+        db.PollVotes.Add(new PollVote { PollId = poll.PollId, PollOptionId = optionIds[0], UserId = _otherId });
+        db.PollVotes.Add(new PollVote { PollId = poll.PollId, PollOptionId = optionIds[1], UserId = _thirdId });
         await db.SaveChangesAsync();
         return (poll.PollId, optionIds);
     }

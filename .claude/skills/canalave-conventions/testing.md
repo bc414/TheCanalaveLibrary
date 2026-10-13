@@ -289,6 +289,11 @@ the list is `layer1-data-model.md` §"CHECK constraints"). The one that bites mo
 with `IsPublished = true` also sets `FirstPublishedDate` (`ck_chapters_first_published_date`), as
 the production publish path does. Adding the constraint broke 94 tests in 12 classes that skipped it.
 A story seeded in a published status needs a `PublishedDate`; `SeedStoryAsync` already does this.
+The same goes for composite FKs: an inline `PollVote` seed sets `PollId` and the poll's
+`AllowMultiple` beside `PollOptionId` (owner ruling D23, WU-PollVoteIntegrity 2026-10-13). A seed that
+sets only the option leaves `PollId` at 0 and fails 23503. A raw insert names `poll_id` and
+`allow_multiple`, and never `single_choice_poll_id`, which is generated (428C9). Four seeds in three
+classes needed this.
 
 **A CHECK, FK or unique index is pinned with one raw statement.** Write the row a writer that skipped
 the service would write, on its own `NpgsqlConnection`, and assert the `PostgresException`'s

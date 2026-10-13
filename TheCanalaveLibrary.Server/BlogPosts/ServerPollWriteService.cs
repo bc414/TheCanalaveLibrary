@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using TheCanalaveLibrary.Core;
+using TheCanalaveLibrary.Server.Data.Configurations;
 
 namespace TheCanalaveLibrary.Server;
 
@@ -16,7 +19,18 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// <b>Config lock:</b> once any vote exists, <c>AllowMultiple</c>/<c>ResultsVisibility</c>/
 /// <c>AnonymityMode</c>/<c>DateOpened</c> are frozen (<see cref="PollValidationException"/> on
-/// mismatch) — prevents retroactive anonymity exposure and multi→single vote invalidation.
+/// mismatch) — prevents retroactive anonymity exposure and multi→single vote invalidation. The
+/// <c>AllowMultiple</c> half is also held by the data (owner ruling D23's <c>ConfigLocked</c> rider,
+/// WU-PollVoteIntegrity 2026-10-13): each vote row's FK <c>(poll_id, allow_multiple)</c> →
+/// <c>base_polls</c> has no ON UPDATE action, so an edit that races the first vote is refused by the
+/// database and answered here as the same lock error. The other three fields are the service check
+/// only (tracker F21).
+/// </para>
+/// <para>
+/// <b>Single-choice is a constraint</b> (D23): the vote row's generated guard
+/// <c>single_choice_poll_id</c> is unique with <c>user_id</c>. <see cref="VoteAsync"/>'s diff is the
+/// friendly path; a vote that loses a race to the schema is a <see cref="PollValidationException"/>
+/// (<see cref="VoteRaceMessage"/>), never a 500 (<c>layer2-services.md</c> §"Check-then-act posture").
 /// </para>
 /// <para>
 /// <b>Edit notification:</b> a material edit (name/description/option change) to a voted-on poll
@@ -31,6 +45,20 @@ public class ServerPollWriteService(
     IWriteRateLimitService rateLimit)
     : ServerPollReadService(readDbFactory, activeUser), IPollWriteService
 {
+    /// <summary>
+    /// <see cref="VoteAsync"/>'s answer when its save loses a race: the voter's own other tab, the
+    /// owner's edit (an option removed, or the vote mode changed before the first vote), or the poll's
+    /// deletion changed what the call had loaded. Not retried: a retry would cast the vote under
+    /// settings the voter never saw.
+    /// </summary>
+    public const string VoteRaceMessage =
+        "This poll changed while your vote was being saved. Reload the page and vote again.";
+
+    /// <summary>The config-lock error for a vote-mode change, from the service check or the database.</summary>
+    public const string VoteModeLockedMessage = "Vote mode is locked once votes exist.";
+
+    private const string OptionForeignKey = "fk_poll_votes_poll_options_poll_id_poll_option_id";
+
     public async Task<int> CreateSitePollAsync(PollEditDto dto)
     {
         int userId = ActiveUser.RequireModerator();
@@ -107,7 +135,7 @@ public class ServerPollWriteService(
             // any vote exists. dto.DateOpened == null means "keep as-is".
             List<string> lockErrors = [];
             if (dto.AllowMultiple != poll.AllowMultiple)
-                lockErrors.Add("Vote mode is locked once votes exist.");
+                lockErrors.Add(VoteModeLockedMessage);
             if (dto.ResultsVisibility != poll.ResultsVisibility)
                 lockErrors.Add("Results visibility is locked once votes exist.");
             if (dto.AnonymityMode != poll.AnonymityMode)
@@ -134,10 +162,15 @@ public class ServerPollWriteService(
         poll.DateClosed = dto.DateClosed;
         if (!hasVotes)
         {
-            poll.AllowMultiple = dto.AllowMultiple;
             poll.ResultsVisibility = dto.ResultsVisibility;
             poll.AnonymityMode = dto.AnonymityMode;
         }
+
+        // AllowMultiple is half of base_polls' alternate key (the vote rows' mode-FK target), and EF holds
+        // a key property read-only once saved, so a pre-vote mode change is written set-based inside the
+        // transaction below (layer1-data-model.md §"Column Conventions"). If a first vote lands after the
+        // hasVotes read, that UPDATE is what the database refuses.
+        bool modeChange = !hasVotes && dto.AllowMultiple != poll.AllowMultiple;
 
         if (materialChange && hasVotes)
             poll.LastEditedAt = now;   // sweep picks this up after the 30-min quiet period
@@ -151,43 +184,67 @@ public class ServerPollWriteService(
         List<PollOption> removed = poll.PollOptions.Where(o => !retainedIds.Contains(o.PollOptionId)).ToList();
 
         IExecutionStrategy strategy = writeDb.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
+        try
         {
-            await using IDbContextTransaction tx = await writeDb.Database.BeginTransactionAsync();
-
-            if (removed.Count > 0)
+            await strategy.ExecuteAsync(async () =>
             {
-                writeDb.PollOptions.RemoveRange(removed);   // votes cascade
-                await writeDb.SaveChangesAsync();
-            }
+                await using IDbContextTransaction tx = await writeDb.Database.BeginTransactionAsync();
 
-            for (int i = 0; i < dto.Options.Count; i++)
-            {
-                if (dto.Options[i].PollOptionId is int id)
+                if (modeChange)
                 {
-                    PollOption existing = byId[id];
-                    existing.Text = dto.Options[i].Text.Trim();
-                    existing.SortOrder = -(i + 1);
+                    await writeDb.Polls
+                        .Where(p => p.PollId == poll.PollId)
+                        .ExecuteUpdateAsync(set => set.SetProperty(p => p.AllowMultiple, dto.AllowMultiple));
                 }
-            }
-            await writeDb.SaveChangesAsync();
 
-            for (int i = 0; i < dto.Options.Count; i++)
-            {
-                if (dto.Options[i].PollOptionId is int id)
-                    byId[id].SortOrder = i;
-                else
-                    writeDb.PollOptions.Add(new PollOption
+                if (removed.Count > 0)
+                {
+                    writeDb.PollOptions.RemoveRange(removed);   // votes cascade
+                    await writeDb.SaveChangesAsync();
+                }
+
+                for (int i = 0; i < dto.Options.Count; i++)
+                {
+                    if (dto.Options[i].PollOptionId is int id)
                     {
-                        PollId = poll.PollId,
-                        Text = dto.Options[i].Text.Trim(),
-                        SortOrder = i,
-                    });
-            }
-            await writeDb.SaveChangesAsync();
+                        PollOption existing = byId[id];
+                        existing.Text = dto.Options[i].Text.Trim();
+                        existing.SortOrder = -(i + 1);
+                    }
+                }
+                await writeDb.SaveChangesAsync();
 
-            await tx.CommitAsync();
-        });
+                for (int i = 0; i < dto.Options.Count; i++)
+                {
+                    if (dto.Options[i].PollOptionId is int id)
+                        byId[id].SortOrder = i;
+                    else
+                        writeDb.PollOptions.Add(new PollOption
+                        {
+                            PollId = poll.PollId,
+                            Text = dto.Options[i].Text.Trim(),
+                            SortOrder = i,
+                        });
+                }
+                await writeDb.SaveChangesAsync();
+
+                await tx.CommitAsync();
+            });
+        }
+        // A first vote committed after the hasVotes read: the mode FK (no ON UPDATE action) refuses the
+        // set-based UPDATE above and the transaction rolls back. Same answer as the service check.
+        catch (Exception ex) when (modeChange && IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation,
+                                       PollVoteConfiguration.PollModeForeignKey))
+        {
+            throw new PollValidationException(VoteModeLockedMessage);
+        }
+        finally
+        {
+            // The write context is circuit-scoped. After a set-based mode write the tracked poll still holds
+            // the old AllowMultiple (identity resolution never refreshes it), and after a failure its edits
+            // are still pending; either way the next call must load it fresh.
+            DetachPoll(poll.PollId);
+        }
     }
 
     public async Task ClosePollAsync(int pollId)
@@ -253,7 +310,7 @@ public class ServerPollWriteService(
         // poll (empty = retract all). Kept rows also refresh IsAnonymous — re-voting is how a
         // VoterChoice voter flips their own visibility.
         List<PollVote> existing = await writeDb.PollVotes
-            .Where(v => v.UserId == userId && poll.OptionIds.Contains(v.PollOptionId))
+            .Where(v => v.PollId == pollId && v.UserId == userId)
             .ToListAsync();
 
         // A pure withdrawal — the caller holds votes here, and the payload only drops some or all of
@@ -290,10 +347,30 @@ public class ServerPollWriteService(
             writeDb.PollVotes.Remove(vote);
         foreach (PollVote vote in existing.Where(v => picked.Contains(v.PollOptionId)))
             vote.IsAnonymous = isAnonymous;
-        foreach (int optionId in picked.Except(existing.Select(v => v.PollOptionId)))
-            writeDb.PollVotes.Add(new PollVote { PollOptionId = optionId, UserId = userId, IsAnonymous = isAnonymous });
+        // A new row carries the poll's mode as read above. The mode FK refuses it if the owner changed the
+        // mode since (possible only before the first vote), and the generated guard refuses a second live
+        // row on a single-choice poll (owner ruling D23).
+        List<PollVote> added = picked.Except(existing.Select(v => v.PollOptionId))
+            .Select(optionId => new PollVote
+            {
+                PollId = pollId, PollOptionId = optionId, UserId = userId,
+                AllowMultiple = poll.AllowMultiple, IsAnonymous = isAnonymous,
+            })
+            .ToList();
+        writeDb.PollVotes.AddRange(added);
 
-        await writeDb.SaveChangesAsync();
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsLostVoteRace(ex))
+        {
+            // Detach what this call touched, so a circuit-scoped context does not retry it on its next
+            // save and the next call reloads the voter's rows as they now stand.
+            foreach (PollVote vote in existing.Concat(added))
+                writeDb.Entry(vote).State = EntityState.Detached;
+            throw new PollValidationException(VoteRaceMessage);
+        }
 
         // The response is a read and applies the same kind-(g) guard. After a withdrawal from a poll
         // the caller can no longer see it is null: the clear landed, and the hidden poll's content
@@ -307,6 +384,51 @@ public class ServerPollWriteService(
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether a vote save failed because the poll or the voter's own rows changed between
+    /// <see cref="VoteAsync"/>'s load and its save. Each constraint is matched by name, so any other
+    /// failure stays a genuine fault:
+    /// <list type="bullet">
+    ///   <item>a 0-row delete or update (<see cref="DbUpdateConcurrencyException"/>): another request
+    ///   removed the row first;</item>
+    ///   <item>23505 on the single-choice guard or the (option, user) index: the same voter's other
+    ///   request inserted first;</item>
+    ///   <item>23503 on the mode FK (the owner changed the mode before the first vote) or on the option
+    ///   FK (the option, or the whole poll, was deleted).</item>
+    /// </list>
+    /// </summary>
+    private static bool IsLostVoteRace(DbUpdateException ex) =>
+        ex is DbUpdateConcurrencyException
+        || IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, PollVoteConfiguration.SingleChoiceIndex)
+        || IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, PollVoteConfiguration.OptionUserIndex)
+        || IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation, PollVoteConfiguration.PollModeForeignKey)
+        || IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation, OptionForeignKey);
+
+    /// <summary>
+    /// True when <paramref name="ex"/> (a <c>DbUpdateException</c> from <c>SaveChanges</c>, or the
+    /// <see cref="PostgresException"/> a set-based write throws directly) is <paramref name="sqlState"/>
+    /// on the named constraint.
+    /// </summary>
+    private static bool IsViolationOf(Exception ex, string sqlState, string constraintName) =>
+        (ex as PostgresException ?? ex.InnerException as PostgresException) is { } pg
+        && pg.SqlState == sqlState
+        && pg.ConstraintName == constraintName;
+
+    /// <summary>
+    /// Detaches the tracked poll and every tracked option and vote of it (see
+    /// <see cref="UpdatePollAsync"/>); a vote can be tracked here when the owner voted on this circuit.
+    /// </summary>
+    private void DetachPoll(int pollId)
+    {
+        List<EntityEntry> entries = writeDb.ChangeTracker.Entries()
+            .Where(e => e.Entity is BasePoll p && p.PollId == pollId
+                        || e.Entity is PollOption o && o.PollId == pollId
+                        || e.Entity is PollVote v && v.PollId == pollId)
+            .ToList();
+        foreach (EntityEntry entry in entries)
+            entry.State = EntityState.Detached;
+    }
 
     private static void ValidateOrThrow(PollEditDto dto)
     {

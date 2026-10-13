@@ -224,6 +224,11 @@ Mechanics:
   2026-10-13, when its table lost the surrogate key), or it is deleted through the tracker. Integration
   tests open one scope per call and cannot see this: test such a write by calling the whole sequence
   through **one** service instance (one scope models the circuit). Sites not yet swept: tracker **D15**.
+  The same staleness hits a tracked row whose **column** a set-based write changed: a later tracking
+  query hands back the tracked instance with the old value, because identity resolution never
+  refreshes it. Detach what the set-based write touched (`ServerPollWriteService.UpdatePollAsync`
+  detaches the poll and its options after its `AllowMultiple` write — WU-PollVoteIntegrity,
+  2026-10-13).
 - **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
   (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
   `AddDbContextFactory` also registers the context type itself as a scoped service.
@@ -2895,9 +2900,56 @@ failure.
 | `user_notification_settings` upsert (settings page + one-click unsubscribe; two concurrent unsubscribe POSTs are a real pattern) | n/a — a crash | Harden | `INSERT … ON CONFLICT (user_id, notification_type_id) DO UPDATE SET <the writer's own columns>`, then the all-NULL conditional delete (§"Filtering semantics") | WU-NotificationCorrectness |
 | Notification cross-existing dedup | no — every row is a real event; only the anti-flood intent is disappointed | Accept-and-record (a policy) | Advisory check-then-insert, sequential callers only (§"Filtering semantics" → "Dedup") | — |
 | `group_stories` idempotent add | yes — membership is set semantics | Harden | Unique `ix_group_stories_group_id_story_id`; `AddStoryAsync` keeps the `AnyAsync` fast path and treats a 23505 on that index as already added (§"Group Folder Integrity") | WU-SchemaHardening |
-| Poll single-choice | **yes** — tallies are published numbers | Restructure, not lock | `PollId` on the vote row + a single-choice guard column, unique on `(guard, user_id)`; the `ConfigLocked` first-vote-vs-config-edit rider | not yet — routed to WU-PollVoteIntegrity (the Block H migration wave) |
+| Poll single-choice | **yes** — tallies are published numbers | Restructure, not lock | `PollId` on the vote row (composite FK to `poll_options`) + a generated single-choice guard, unique on `(guard, user_id)`; the `ConfigLocked` rider as a composite FK `(poll_id, allow_multiple)` → `base_polls` with no ON UPDATE action (below) | WU-PollVoteIntegrity |
 | USI flip-delta counters | no — derived data | Accept | Recompute-corrected (§"Transition-delta rule") | — |
 | Hidden gem (5/user), highlight (5/story), vouch limit (5/user) | no | Accept — **stated-soft** | See below | — |
+
+**The poll single-choice restructure (built WU-PollVoteIntegrity, 2026-10-13).** D23: single-choice was
+inexpressible only because the vote row carried no `PollId`. Now it does, and every link that makes the
+guard sound is a declared constraint (`PollVoteConfiguration`, migration `WU_PollVoteIntegrity`):
+- `poll_votes.poll_id` is honest by the composite FK `(poll_id, poll_option_id)` → `poll_options`'
+  alternate key: a vote cannot name one poll and another poll's option.
+- `poll_votes.allow_multiple` is honest by the composite FK `(poll_id, allow_multiple)` →
+  `base_polls`' alternate key, with **no ON UPDATE action**: a vote can only carry the poll's current
+  mode, and the poll's mode cannot change while any vote references it (23503). This is the `ConfigLocked`
+  rider. `ConfigLocked` itself is still derived (`TotalVoterCount > 0`) and `UpdatePollAsync`'s `hasVotes`
+  read is still the friendly path, but the `AllowMultiple` half of the lock now lives in the data.
+- `single_choice_poll_id` is a **STORED generated column** (`poll_id` when `allow_multiple` is false,
+  NULL otherwise), unique with `user_id`, NULLS DISTINCT. Generated, not writer-set: a writer-set guard
+  would be the convention D23 rejects. NULLS DISTINCT leaves multi-choice rows and D13's anonymized rows
+  untouched.
+
+**Why it holds under concurrency, not only for sequential writers.** The vote INSERT's FK check takes
+`FOR KEY SHARE` on the poll row; an UPDATE of a column in a unique key takes `FOR UPDATE`. The two
+conflict, so a first vote and a mode edit serialize: if the vote commits first, the edit's FK check
+sees it and refuses; if the edit commits first, the vote's FK check finds no `(poll_id, old mode)` row
+and refuses. Two same-voter single-choice inserts collide on the guard index. No interleaving commits
+a second live row on a single-choice poll or a vote under a mode the poll no longer has.
+
+**What the service does with a refusal.** Each is a 400 (`PollValidationException`), never a 500, and
+the rejected entries are detached, since the write context is circuit-scoped:
+- `VoteAsync`: a 23505 on either vote index, a 23503 on either composite FK, or a 0-row delete or update
+  (`DbUpdateConcurrencyException`) means the poll or the voter's own votes changed between the load and
+  the save (another tab, the owner's edit, a removed option). It answers
+  `ServerPollWriteService.VoteRaceMessage` and asks for a reload. It does not retry: a retry would
+  silently cast the vote under settings the voter never saw.
+- `UpdatePollAsync`: a 23503 on the mode FK means a first vote landed after the `hasVotes` read. It
+  answers the existing "Vote mode is locked once votes exist." message.
+
+**`AllowMultiple` is a key column, so the one legal change is set-based.** EF holds every key property
+read-only once saved and refuses to configure it otherwise (`layer1-data-model.md` §"Column
+Conventions"). `UpdatePollAsync` therefore writes a pre-vote mode change with `ExecuteUpdateAsync`
+inside its transaction, and afterwards detaches the tracked poll and its options (§"Read-Context
+Concurrency: Factory Per Method" → "Set-based writes leave the circuit's tracked copies stale"). A
+future writer that assigns `AllowMultiple` on a tracked
+poll fails loudly in EF, which is the intended tripwire.
+
+**Not covered — the other three locked fields.** `AnonymityMode`, `ResultsVisibility` and `DateOpened`
+also freeze at the first vote, but only through the `hasVotes` check-then-act. D23's rider names
+`AllowMultiple` only. Under the classification test `ResultsVisibility` and `DateOpened` read as
+policies (no tally or name is wrong when they move), but an `AnonymityMode` flip that races a first
+vote can publish the name of a voter who voted under `Anonymous`. That is arguably a constraint; the same
+FK would cover it with one more column. Owner-open: decision row 24 (tracker **F21**).
 
 **Stated-soft limits (D23's conditional, written down so it is not left implied).** D23 said D21
 "owes recompute paths for `IsHiddenGem`, `IsHighlightedByAuthor`, and vouch counts", and that if D21

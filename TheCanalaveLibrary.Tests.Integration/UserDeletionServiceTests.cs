@@ -321,22 +321,24 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         // anonymized row fail, and dropping uniqueness would let the duplicate live vote in.
         int authorId = await SeedUserAsync("author");
         int voter = await SeedUserAsync("voter");
-        (_, int[] optionIds) = await SeedPublicPollAsync(authorId, await SeedProfilePostAsync(authorId));
+        (int pollId, int[] optionIds) = await SeedPublicPollAsync(authorId, await SeedProfilePostAsync(authorId));
         int optionId = optionIds[0];
 
+        // The poll is single-choice, so since WU-PollVoteIntegrity the single-choice guard's index must keep
+        // NULLS DISTINCT too for the two anonymized rows below (PollVoteIntegrityTests pins each index by name).
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await db.Database.ExecuteSqlAsync(
-            $"INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({optionId}, {voter}, false)");
+            $"INSERT INTO poll_votes (poll_id, poll_option_id, user_id, allow_multiple, is_anonymous) VALUES ({pollId}, {optionId}, {voter}, false, false)");
 
         Func<Task> duplicate = () => db.Database.ExecuteSqlAsync(
-            $"INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({optionId}, {voter}, false)");
+            $"INSERT INTO poll_votes (poll_id, poll_option_id, user_id, allow_multiple, is_anonymous) VALUES ({pollId}, {optionId}, {voter}, false, false)");
         (await duplicate.Should().ThrowAsync<Npgsql.PostgresException>())
             .Which.SqlState.Should().Be("23505");
 
         await db.Database.ExecuteSqlRawAsync(
-            "INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({0}, NULL, false), ({0}, NULL, false)",
-            optionId);
+            "INSERT INTO poll_votes (poll_id, poll_option_id, user_id, allow_multiple, is_anonymous) VALUES ({0}, {1}, NULL, false, false), ({0}, {1}, NULL, false, false)",
+            pollId, optionId);
         (await db.PollVotes.CountAsync(v => v.PollOptionId == optionId && v.UserId == null)).Should().Be(2);
     }
 
@@ -629,8 +631,9 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         await db.SaveChangesAsync();
 
         int[] optionIds = [..poll.PollOptions.OrderBy(o => o.SortOrder).Select(o => o.PollOptionId)];
-        db.PollVotes.Add(new PollVote { PollOptionId = optionIds[0], UserId = voterOne });
-        db.PollVotes.Add(new PollVote { PollOptionId = optionIds[1], UserId = voterTwo });
+        // A vote row carries its poll and the poll's mode (D23's composite FKs; testing.md "FK parents").
+        db.PollVotes.Add(new PollVote { PollId = poll.PollId, PollOptionId = optionIds[0], UserId = voterOne });
+        db.PollVotes.Add(new PollVote { PollId = poll.PollId, PollOptionId = optionIds[1], UserId = voterTwo });
         await db.SaveChangesAsync();
         return (poll.PollId, optionIds);
     }
@@ -658,7 +661,13 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.PollVotes.Add(new PollVote { PollOptionId = pollOptionId, UserId = userId });
+        // A vote row carries its poll and the poll's mode (D23's composite FKs).
+        var option = await db.PollOptions.Where(o => o.PollOptionId == pollOptionId)
+            .Select(o => new { o.PollId, o.Poll.AllowMultiple }).SingleAsync();
+        db.PollVotes.Add(new PollVote
+        {
+            PollId = option.PollId, PollOptionId = pollOptionId, UserId = userId, AllowMultiple = option.AllowMultiple,
+        });
         await db.SaveChangesAsync();
     }
 

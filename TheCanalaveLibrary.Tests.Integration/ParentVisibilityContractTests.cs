@@ -1392,7 +1392,8 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
         ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
         int[] options = await db.PollOptions.Where(o => o.PollId == pollId)
             .OrderBy(o => o.SortOrder).Select(o => o.PollOptionId).ToArrayAsync();
-        db.PollVotes.Add(new PollVote { PollOptionId = options[0], UserId = _strangerId, IsAnonymous = false });
+        // A vote row carries its poll and the poll's mode (D23's composite FKs; single-choice here).
+        db.PollVotes.Add(new PollVote { PollId = pollId, PollOptionId = options[0], UserId = _strangerId, IsAnonymous = false });
         await db.SaveChangesAsync();
         await db.Set<ProfileBlogPost>().Where(p => p.BlogPostId == postId)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPublished, false));

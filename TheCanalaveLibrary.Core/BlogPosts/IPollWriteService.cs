@@ -55,7 +55,10 @@ public interface IPollWriteService : IPollReadService
     /// <returns>The refreshed poll, or <c>null</c> after a withdrawal from a poll the caller can no
     /// longer see.</returns>
     /// <exception cref="KeyNotFoundException">Poll not found, or (anything but a withdrawal) its parent post is not visible to the caller.</exception>
-    /// <exception cref="PollValidationException">Poll not open; option not on this poll; several options on a single-choice poll.</exception>
+    /// <exception cref="PollValidationException">Poll not open; option not on this poll; several options on a
+    /// single-choice poll; or the poll or the caller's own votes changed between the load and the save
+    /// (another tab, the owner's edit) — the database holds single-choice and the vote mode (owner ruling
+    /// D23), and a lost race is answered as this refusal, never a 500.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously);
 }

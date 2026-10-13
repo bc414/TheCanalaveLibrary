@@ -530,6 +530,48 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
+**WU-PollVoteIntegrity Stage note (2026-10-13; owner ruling D23 and its `ConfigLocked` rider) — no
+flip.** Single-choice is now a database constraint, and `AllowMultiple` cannot change while a vote
+exists, against every writer and every interleaving (the Settled bullets below).
+- **L1.** Migration `WU_PollVoteIntegrity`. `poll_votes` gains `poll_id` (composite FK `(poll_id,
+  poll_option_id)` → `poll_options`' new alternate key, replacing the single-column option FK),
+  `allow_multiple` (composite FK `(poll_id, allow_multiple)` → `base_polls`' new alternate key
+  `ak_base_polls_poll_id_allow_multiple`, ON DELETE CASCADE, no ON UPDATE action) and the STORED
+  generated guard `single_choice_poll_id`, unique with `user_id` as
+  `ix_poll_votes_single_choice_poll_id_user_id` (NULLS DISTINCT). EF added the two FK indexes
+  `ix_poll_votes_poll_id_poll_option_id` and `ix_poll_votes_poll_id_allow_multiple`. Up adds the columns
+  nullable, backfills them, keeps the newest of a live voter's several rows on one single-choice poll,
+  then sets NOT NULL; no scaffold default is left. Rehearsed Up, Down, Up on a dev-DB clone dirtied with
+  a single-choice duplicate (the older row went), three anonymized rows and a two-pick multi-choice voter
+  (both untouched); on the clone a raw mode flip under a vote answered 23503 and a second live
+  single-choice row 23505. Applied to the server-only dev DB.
+- **L2.** `ServerPollWriteService`. `VoteAsync` loads the caller's rows by `PollId` and writes new rows
+  with `PollId` and the read's `AllowMultiple`; a lost race (23505 on either vote index, 23503 on either
+  composite FK, a 0-row delete) is `PollValidationException(VoteRaceMessage)` with the touched entries
+  detached, where it used to be a 500 or, for the single-choice case, a silent second row.
+  `UpdatePollAsync` writes a pre-vote mode change set-based (EF holds a key column read-only), answers
+  the mode FK's 23503 as the existing lock message, and detaches the poll, its options and votes after
+  every call. **Probed:** EF refuses `SetAfterSaveBehavior(Save)` on a key property at model build, hence
+  the set-based write (`layer1-data-model.md` §"Column Conventions").
+- **Not decided here:** the other three locked fields keep the `hasVotes` check-then-act; whether
+  `AnonymityMode` gets the FK too is decision row 24 (tracker **F21**).
+- **Tests.** **Integration** `PollVoteIntegrityTests` (13, new). Schema, one raw statement each with
+  SQLSTATE and constraint name: a second live single-choice row; anonymized rows coexisting; multi-choice
+  rows allowed while the (option, user) index holds; the generated guard refusing a written value
+  (428C9); the mode frozen under a vote and free again without one; another poll's option and a wrong
+  mode refused. Service, with `InterleavingCommandInterceptor`: the same voter's competing single-choice
+  vote (refused, one row, and a retry on the same context lands), a competing multi-choice pick (both
+  stand), a mode flip before the vote's INSERT, an option removed before it, the voter's own row removed
+  before the save, a first vote before the edit's mode UPDATE (refused as locked, the rename rolled
+  back), and two mode edits through one scope. Mutation-checked: a non-unique guard, no mode FK, no vote
+  catch, no vote detach, no poll detach, no edit catch, and dropping the concurrency or option-FK branch
+  each fail their tests. Four inline vote seeds in `UserDeletionServiceTests`, `TptHardDeleteTests` and
+  `ParentVisibilityContractTests` now name the poll (the schema refused them, as designed;
+  `testing.md`).
+- **L4.5 stays 5.** No markup or normal-flow copy changed; the new refusal text shows only on a lost
+  race, which no manual pass can time. Tracker **H30** holds a regression smoke of the vote and edit
+  flows for the browser pass (no browser was available to this WU).
+
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13) — L4.5 5→1; L1/L2/L3/L3.5 stay 5.** A
 deleted voter's votes now survive anonymized (the Settled bullet "Voter deletion" below).
 - **L1.** `PollVote` is keyed by a surrogate `PollVoteId`; `UserId` is `int?` with `ON DELETE SET
@@ -656,7 +698,20 @@ detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled —
   `PollVote.IsAnonymous` per-voter opt-in).
 - **Config locks after first vote.** `AllowMultiple`/`ResultsVisibility`/`AnonymityMode` freeze
   once any vote exists (prevents retroactive anonymity exposure and multi→single vote
-  invalidation). Name/description/options stay editable while open.
+  invalidation). Name/description/options stay editable while open. **Since WU-PollVoteIntegrity
+  (2026-10-13; D23's `ConfigLocked` rider) the `AllowMultiple` half is held by the data:** each vote
+  row's composite FK `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action, so the mode
+  cannot change while a vote exists, even against an edit racing the first vote. The other three
+  locked fields (`AnonymityMode`, `ResultsVisibility`, `DateOpened`) keep the service's `hasVotes`
+  check-then-act. **Open, not decided here:** whether `AnonymityMode` (whose race can publish a name)
+  gets the same treatment — decision row 24 (tracker **F21**).
+- **Single-choice is a database constraint (owner ruling D23, 2026-08-08; built WU-PollVoteIntegrity
+  2026-10-13).** A tally is a published number, so "one live vote per voter on a single-choice poll"
+  holds against every writer: `poll_votes` carries `poll_id` (composite FK to `poll_options`) and the
+  generated guard `single_choice_poll_id`, unique with `user_id` (NULLS DISTINCT, so anonymized rows and
+  multi-choice rows are untouched). A vote that loses a race (another tab, the owner's edit, a removed
+  option) is a 400 asking for a reload, never a 500. Rule: `layer2-services.md` §"Check-then-act
+  posture".
 - **Lifecycle:** `DateOpened` may be future (scheduled open; not votable until then).
   `DateClosed` nullable — null = indefinite, open until manual close (manual close = stamp
   `DateClosed` = now; no extra flag). Votes changeable/retractable until closed. SitePoll
@@ -716,15 +771,16 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
 bullet below, 2026-07-13.)
 
-- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; `poll_votes` surrogate key + nullable SET NULL `user_id` since WU-UserDeletion, 2026-10-13 — Stage note at this feature's top; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; single-choice and the vote mode held by the schema — `poll_id`/`allow_multiple` behind composite FKs, the generated guard unique with `user_id` — since WU-PollVoteIntegrity, 2026-10-13, Integration-tested by `PollVoteIntegrityTests`, Stage note at this feature's top; `poll_votes` surrogate key + nullable SET NULL `user_id` since WU-UserDeletion, 2026-10-13 — Stage note at this feature's top; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; anonymized votes counted and listed, the sweep notifies live voters only, since WU-UserDeletion, 2026-10-13 — Integration-tested, Stage note at this feature's top; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; a vote or mode edit that loses a race to the schema is a 400, never a 500, and a pre-vote mode change is written set-based, since WU-PollVoteIntegrity, 2026-10-13 — Integration-tested, Stage note at this feature's top; anonymized votes counted and listed, the sweep notifies live voters only, since WU-UserDeletion, 2026-10-13 — Integration-tested, Stage note at this feature's top; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock
   pre/post votes, option reconcile (rename/delete/add/reorder with vote preservation),
   LastEditedAt material-vs-reorder stamping, close/archive orthogonality, delete cascade,
-  non-owner manage gates). Rules helpers covered by **Unit** (`PollRulesTests`,
+  non-owner manage gates), plus `PollVoteIntegrityTests` (13, WU-PollVoteIntegrity 2026-10-13: the
+  schema rules and the interleaved race refusals). Rules helpers covered by **Unit** (`PollRulesTests`,
   `PollEditDtoTests`).
 - **Edit-notification sweep — Stage 5** (`PollEditNotificationSweeper`/`PollEditNotificationWorker`,
   the SpotlightGoLiveSweeper worker/body split; `TestAppFactory` removes the worker). Covering

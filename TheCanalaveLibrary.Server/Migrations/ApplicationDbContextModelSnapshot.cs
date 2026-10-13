@@ -543,6 +543,9 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.HasKey("PollId");
 
+                    b.HasAlternateKey("PollId", "AllowMultiple")
+                        .HasName("ak_base_polls_poll_id_allow_multiple");
+
                     b.HasIndex("LastEditedAt")
                         .HasDatabaseName("ix_base_polls_last_edited_at")
                         .HasFilter("last_edited_at IS NOT NULL");
@@ -2075,6 +2078,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasKey("PollOptionId")
                         .HasName("pk_poll_options");
 
+                    b.HasAlternateKey("PollId", "PollOptionId")
+                        .HasName("ak_poll_options_poll_id_poll_option_id");
+
                     b.HasIndex("PollId", "SortOrder")
                         .IsUnique()
                         .HasDatabaseName("ix_poll_options_poll_id_sort_order");
@@ -2095,13 +2101,27 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PollVoteId"));
 
+                    b.Property<bool>("AllowMultiple")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_multiple");
+
                     b.Property<bool>("IsAnonymous")
                         .HasColumnType("boolean")
                         .HasColumnName("is_anonymous");
 
+                    b.Property<int>("PollId")
+                        .HasColumnType("integer")
+                        .HasColumnName("poll_id");
+
                     b.Property<int>("PollOptionId")
                         .HasColumnType("integer")
                         .HasColumnName("poll_option_id");
+
+                    b.Property<int?>("SingleChoicePollId")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("integer")
+                        .HasColumnName("single_choice_poll_id")
+                        .HasComputedColumnSql("CASE WHEN allow_multiple THEN NULL ELSE poll_id END", true);
 
                     b.Property<int?>("UserId")
                         .HasColumnType("integer")
@@ -2113,9 +2133,19 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_poll_votes_user_id");
 
+                    b.HasIndex("PollId", "AllowMultiple")
+                        .HasDatabaseName("ix_poll_votes_poll_id_allow_multiple");
+
+                    b.HasIndex("PollId", "PollOptionId")
+                        .HasDatabaseName("ix_poll_votes_poll_id_poll_option_id");
+
                     b.HasIndex("PollOptionId", "UserId")
                         .IsUnique()
                         .HasDatabaseName("ix_poll_votes_poll_option_id_user_id");
+
+                    b.HasIndex("SingleChoicePollId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_poll_votes_single_choice_poll_id_user_id");
 
                     b.ToTable("poll_votes", (string)null);
                 });
@@ -5310,18 +5340,27 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.PollVote", b =>
                 {
-                    b.HasOne("TheCanalaveLibrary.Core.PollOption", "PollOption")
-                        .WithMany("Votes")
-                        .HasForeignKey("PollOptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_poll_votes_poll_options_poll_option_id");
-
                     b.HasOne("TheCanalaveLibrary.Core.User", "User")
                         .WithMany("PollVotes")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_poll_votes_users_user_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.BasePoll", null)
+                        .WithMany()
+                        .HasForeignKey("PollId", "AllowMultiple")
+                        .HasPrincipalKey("PollId", "AllowMultiple")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_poll_votes_base_polls_poll_id_allow_multiple");
+
+                    b.HasOne("TheCanalaveLibrary.Core.PollOption", "PollOption")
+                        .WithMany("Votes")
+                        .HasForeignKey("PollId", "PollOptionId")
+                        .HasPrincipalKey("PollId", "PollOptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_poll_votes_poll_options_poll_id_poll_option_id");
 
                     b.Navigation("PollOption");
 

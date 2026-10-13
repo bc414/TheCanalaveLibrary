@@ -2252,6 +2252,7 @@ answers must ship as one doctrine paragraph or neither reads correctly.
 
 **Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Check-then-act posture" (USI, `group_members` and vouch upserts built; the three limits written down as stated-soft per the conditional above, reading D21's silence on them as the decline — an inference flagged for the owner in `roadmap.md` §Resolved; `group_stories` and the poll restructure still routed to WU-SchemaHardening and WU-PollVoteIntegrity).
 **Built:** WU-SchemaHardening (2026-10-13) — rule now stated in `layer2-services.md` §"Group Folder Integrity" and §"Check-then-act posture" (the `group_stories` row: unique `ix_group_stories_group_id_story_id`; a racing add counts as already added).
+**Built:** WU-PollVoteIntegrity (2026-10-13) — rule now stated in `layer2-services.md` §"Check-then-act posture" → "The poll single-choice restructure" and `layer1-data-model.md` §"Column Conventions" (`PollId` on the vote row behind a composite FK; a STORED generated guard unique with `user_id`; the `ConfigLocked` rider as an FK `(poll_id, allow_multiple)` → `base_polls` with no ON UPDATE action, so `AllowMultiple` cannot change under a vote. The rider covers `AllowMultiple` only, as named here; `AnonymityMode` is decision row 24, tracker F21).
 
 ### D24. Does creating a group count as joining?
 

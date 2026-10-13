@@ -863,6 +863,9 @@ unless noted. All sit under Stage-5 cells.
     "isn't a member" refusal (a 400), detaching the two pending entries first so the circuit's context
     does not retry them. Not built: D23 did not route the site, and the window is a moderator's click
     against a member's leave.
+  - **Handled elsewhere, not in this list:** `VoteAsync`'s create-create races (both `poll_votes`
+    unique indexes) and its delete-delete race answer a 400 since WU-PollVoteIntegrity (2026-10-13),
+    which made single-choice a database constraint (D23's poll row).
   - Fix shape:
     - Inserts: `INSERT … ON CONFLICT DO NOTHING`, with the counter or notification gated on
       rows-affected (the `JoinAsync` shape).
@@ -1266,7 +1269,8 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
        the build had let return the hidden parent's `LikeCount`). The "poll must be Open" rule still
        binds withdrawals (it is not a visibility guard); **D42** concerns site polls, which have no
        parent guard. Rule: `identity-and-authorization.md` §"Raises vs clears". WU-PollVoteIntegrity
-       restructures this method's schema later and must keep the diff-then-guard order.
+       restructures this method's schema later and must keep the diff-then-guard order. (Kept:
+       WU-PollVoteIntegrity, 2026-10-13, changed only the load's key and the save.)
     2. **Own-content curation raises have no parent guard.** `SetHiddenGemAsync(true)` and
        `SetHighlightedByAuthorAsync(true)` raise flags on the caller's own recommendation with no
        story-visibility check (a Hidden Gem fires a notification to the story's author). Which guard
@@ -1433,6 +1437,26 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     its text, losing the block), or does a recommendation the author already removed fall outside it?
   - As built: `DeletePersonalData.razor` says a recommendation the story's author removed can't be
     deleted and is kept without your name.
+
+- [ ] **F21 — The poll config lock's other three fields are still a check-then-act; `AnonymityMode`'s race can publish a name** `[decision · low · beta]` — *Filed 2026-10-13 by WU-PollVoteIntegrity; a surfaced sub-edge D23's rider did not rule. Promoted the same day to `roadmap.md` decision row 24.*
+  - Grid: F37 L1/L2 read 5 (unchanged).
+  - Source: D23's `ConfigLocked` rider names `AllowMultiple` only ("it depends on `AllowMultiple` being
+    immutable once votes exist"). WU-PollVoteIntegrity built that half in the data: the vote row's FK
+    `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action. `AnonymityMode`,
+    `ResultsVisibility` and `DateOpened` also freeze at the first vote (F37's settled requirements), but
+    only through `UpdatePollAsync`'s `hasVotes` read, so an edit that races a first vote can still land.
+  - D23's classification test, applied: `ResultsVisibility` and `DateOpened` read as **policies** (when
+    they move, no tally or name is wrong; the owner's intent is merely served late). `AnonymityMode` is
+    the arguable one: a vote cast under `Anonymous` stores `is_anonymous = false` (the flag means
+    something only under `VoterChoice`), so if the mode flips to `Public` in that window the voter list
+    names someone who voted under a promise of anonymity. That reads as a reader being wrong (a
+    constraint), but it can also be read as the voter's intent being disappointed (a policy).
+  - The question: does `AnonymityMode` get the same treatment? Built shape if yes: carry
+    `anonymity_mode` on the vote row and widen the FK and `base_polls`' alternate key to
+    `(poll_id, allow_multiple, anonymity_mode)`; the edit's mode write goes set-based like
+    `AllowMultiple`'s. Cost: one `smallint` per vote row. If no, write it down as stated-soft in
+    `layer2-services.md` §"Check-then-act posture".
+  - As built: the three fields keep the service check; `layer2-services.md` names them as not covered.
 
 ---
 
@@ -1919,6 +1943,24 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     9. **Queue (F47).** `/mod/reports` with "Show resolved": the row reads "Group: {name}" with a link to
        the group and offers no action; it is absent from the open queue. The founder's
        `/mod/users/{id}` history lists it (when the founder still exists).
+
+- [ ] **H30 — WU-PollVoteIntegrity browser smoke: the restructured vote and edit paths still work** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PollVoteIntegrity, which ran with no browser available.*
+  - Grid: F37 L4.5 stays 5. No markup or copy that a normal flow renders changed; the new refusal text
+    appears only when a write loses a race, which no manual pass can time. The smoke checks that the
+    schema change (new vote columns, two composite FKs, the generated guard) broke nothing on either
+    render phase.
+  - Steps (server-only path, both render phases; `psql` on `poll_votes` and `base_polls` after each
+    write — every vote row has `poll_id` equal to its option's poll, `allow_multiple` equal to the
+    poll's, and `single_choice_poll_id` equal to `poll_id` on a single-choice poll and NULL on a
+    multi-choice one):
+    1. On `/polls` as ModUser, create a Single-choice site poll; before anyone votes, edit it to
+       Multiple choice and back (`base_polls.allow_multiple` follows; the editor shows no error).
+    2. As TestUser, vote, change the vote to another option, retract, vote again. One row at most.
+    3. On a Multiple-choice poll (a blog-post poll from `/blog/{id}/edit`), tick two options, then
+       one. Rows follow the ticks.
+    4. As the owner, with a vote present, the editor's mode select is disabled as before; a direct
+       `PUT /api/polls/{id}` with the other mode answers 400 "Vote mode is locked once votes exist."
+    5. Delete the poll: its options and votes go (`psql`).
 
 ---
 

@@ -250,6 +250,24 @@ independently. The service layer rejects logically impossible write combinations
   cannot sit in a PK. The index keeps the default **NULLS DISTINCT** on purpose, the opposite of
   `group_folders`' NULLS NOT DISTINCT: anonymized rows on one option must coexist, while the live
   one-vote-per-(option, user) rule is unchanged. Do not "fix" it with `AreNullsDistinct(false)`.
+  **Single-choice is a constraint too** (owner ruling D23; WU-PollVoteIntegrity 2026-10-13): the row
+  carries `poll_id` (composite FK `(poll_id, poll_option_id)` → `poll_options`) and `allow_multiple`
+  (composite FK `(poll_id, allow_multiple)` → `base_polls`, no ON UPDATE action), and the generated
+  guard `single_choice_poll_id` is unique with `user_id`, NULLS DISTINCT for the same reason. The
+  mechanism and why it holds under concurrency: `layer2-services.md` §"Check-then-act posture".
+- **A composite FK needs an alternate key on the principal** (`HasPrincipalKey`, or `HasAlternateKey`
+  named `ak_<table>_<columns>`). EF names an alternate key after the **DbSet**, not the table, on a TPT
+  base (`ak_polls_…` for `base_polls`), so name it with `.HasName(...)` there.
+- **A key column is read-only once saved.** EF holds every key property (primary or alternate)
+  read-only after insert: a tracked change throws, and `SetAfterSaveBehavior(Save)` on a key fails
+  model building (probed 2026-10-13, WU-PollVoteIntegrity). When the domain lets a key column change
+  (`BasePoll.AllowMultiple`, before a poll's first vote), change it with `ExecuteUpdateAsync` and then
+  detach the tracked copy (`layer2-services.md` §"Read-Context Concurrency: Factory Per Method" →
+  "Set-based writes leave the circuit's tracked copies stale"). The throw on a tracked change is the
+  tripwire that keeps every other writer on that path.
+- **A generated column is STORED** (`HasComputedColumnSql(sql, stored: true)`). Postgres 18 makes a
+  bare `GENERATED ALWAYS AS` column virtual, and a virtual column cannot be indexed. Never set its
+  property in code (give it a private setter); raw inserts and COPY must omit it.
 - **Timestamps:** all `DateTime` → `timestamp(2) with time zone` (8 bytes); all `DateOnly` → `date` (4 bytes).
   Creation timestamps use `.HasDefaultValueSql("CURRENT_TIMESTAMP")`.
 - **Strings:** `[Required]` + non-nullable `string` for mandatory; `string?` for optional;

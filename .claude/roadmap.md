@@ -138,7 +138,8 @@ transitions its spec derived rather than took from owner text. Row 21 was added 
 WU-DependencyCVEs review fixes, promoted out of `hidden-deferrals-tracker.md` **E9** under the same
 rule. Row 22 was added 2026-10-13 by WU-SchemaHardening: an unruled edge its build had to take a
 default on. Row 23 was added the same day by the WU-UserDeletion review fixes: its build had cited D5
-for a notification D5's own scope does not reach.
+for a notification D5's own scope does not reach. Row 24 was added the same day by WU-PollVoteIntegrity,
+promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider did not rule.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -156,6 +157,7 @@ for a notification D5's own scope does not reach.
 | 21 | **ImageSharp licensing (tracker E9).** SixLabors.ImageSharp 3.1.12 carries five 2026-10 advisories (GHSA-j3p4, -j9gm, -jjfr high; -gwg2, -wmxv moderate), and every patched line (3.2.x, 4.1.2+) runs a build-time license check that fails a Release build without a Six Labors key. Choose: **(a)** apply for Six Labors community licensing and add the key as a CI secret and a dev user-secret; **(b)** swap the upload pipeline to another decoder library; **(c)** keep 3.1.12 as standing accepted risk. | As built (interim, not a ruling): hold 3.1.12 as accepted risk. All five vectors are unreachable through `ImageUploadProcessor`, and two Unit tests guard the reachable-in-principle halves. Consequences: the report-only vuln scan keeps listing ImageSharp, so the Phase-7 hard gate (tracker E3) cannot be promoted, and Dependabot's 3.2.x PR fails CI. Under (a), only 4.1.2+ clears the scan: the GitHub-reviewed ranges recorded on 2026-10-12 run to `<= 4.1.1`, so 3.2.x stays listed. | A license application and its terms, a reversal of the 2026-07-06 choice of ImageSharp (`middle_plan_v2.md` §Resolved, "Upload validation"), or standing risk at launch: licensing and launch risk posture are yours. Gates the Phase-7 vuln-scan hard gate (row 4). Rule text: `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence". |
 | 22 | **Deleting a group folder whose sub-folder would duplicate a top-level name.** Since WU-SchemaHardening a deleted folder's sub-folders move to the top level (the spec's SET NULL), and top-level names are unique. Say "Fanfic" holds a sub-folder "Favorites" and the group already has a top-level "Favorites": what should deleting "Fanfic" do? | As built (a default, not a ruling): refuse the whole delete with a message naming the clashing sub-folder ("Rename one of them first"); nothing is deleted. It mutates nothing the admin did not ask for, and follows D23's loud-failure posture. | The alternative, renaming the promoted folder automatically (say "Favorites (2)"), changes a name a group's admins chose. Which surprise is better is a product call; "rename" is a one-method change in `ServerGroupWriteService.DeleteFolderAsync`. Rule text: `layer2-services.md` §"Group Folder Integrity". |
 | 23 | **Should a group-admin assignment name the moderator who made it?** `GroupAdminAssigned` (62) tells a member that a site moderator made them the admin of an admin-less group (D13 edge (b)). | As built (the WU spec's pick, not owner text): null-sourced, no moderator parameter, actor-free copy ("You were made an admin of {group}"); the `Report` row keeps the moderator internally. | D5 says a moderator is never named "to the sanctioned or reporting user" and scopes itself to 70–82; the promoted member is neither, and 62 sits in the Groups band. D5's threat model (retaliation against volunteer moderators) argues for the default; an appointment is also good news a member may want to answer. Sibling of row 19 (type 90), whose source is kept. "Name them" needs a small build: a source parameter on `NotifyGroupAdminAssignedAsync` and an `{actor}` in the presenter arm. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". |
+| 24 | **Should a poll's anonymity mode be frozen by the database once votes exist, like its vote mode?** D23's `ConfigLocked` rider named `AllowMultiple`, and WU-PollVoteIntegrity froze it with an FK (`layer2-services.md` §"Check-then-act posture"). `AnonymityMode` (with `ResultsVisibility` and `DateOpened`) still freezes only through `UpdatePollAsync`'s `hasVotes` read, so an owner's edit that crosses the first vote can land: a vote cast under `Anonymous` is then named under `Public`. | As built (the status quo, not a ruling): the service check only. The window is one request wide. | D23's classification test reads two ways here: a reader publishes a name (a constraint), or the voter's intent is disappointed (a policy). The fix costs one column per vote row. Tracker **F21**. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -282,7 +284,11 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   - **D23:** a classification test per check-then-act family. USI, `group_members` and vouch
     inserts are upserts now. The gem, highlight and vouch limits are stated-soft. `group_stories` is
     routed to WU-SchemaHardening (built there 2026-10-13, entry above) and the poll restructure to
-    WU-PollVoteIntegrity.
+    WU-PollVoteIntegrity (built 2026-10-13: `PollId` on the vote row behind a composite FK, a generated
+    single-choice guard unique with `user_id`, and the `ConfigLocked` rider as a composite FK
+    `(poll_id, allow_multiple)` → `base_polls` with no ON UPDATE action). The rider covers
+    `AllowMultiple` only, as D23 named it; whether `AnonymityMode`'s lock gets the same treatment is
+    an owner question, decision row 24 (tracker F21).
     **For the owner:** "stated-soft with no corrective" is D23's fallback for when D21 declines to
     fund a corrective. D21 never mentions the limits, so the build read that silence as a decline. It
     is an inference, not your ruling. Say so if you want a corrective funded instead.
