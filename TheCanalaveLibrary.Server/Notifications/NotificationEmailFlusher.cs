@@ -42,6 +42,11 @@ namespace TheCanalaveLibrary.Server;
 ///   dropped as a per-message failure) and must not go twice, and ids judged ineligible are already
 ///   correctly gone;</item>
 ///   <item>any other transport exception → every composed id (assume nothing was processed);</item>
+///   <item>a mail the server <b>deferred</b> (a 4xx to its recipient, reported by the transport
+///   whether or not the batch then stopped) → requeued through
+///   <see cref="NotificationEmailBuffer.Defer"/>, which drops it, counted and logged here, at its
+///   <see cref="NotificationEmailBuffer.MaxDeferrals"/>th deferral (review fixes, 2026-10-13). It
+///   never holds back the rest of the batch;</item>
 ///   <item>cancellation (a shutdown mid-flight) restores by the same rules and rethrows the
 ///   <see cref="OperationCanceledException"/> itself, so the caller's shutdown path still sees one.</item>
 /// </list>
@@ -63,14 +68,22 @@ public sealed class NotificationEmailFlusher(
     public const int MaxBatchSize = 200;
 
     /// <summary>
-    /// Drains and sends one batch. Returns the number of emails handed to the transport (which is
-    /// not the same as the number delivered — see the class doc's failure posture). On failure the
-    /// unsent ids are already back in the buffer when this throws.
+    /// Drains and sends one batch. Returns the number of emails the transport took (sent, or dropped
+    /// as a per-message failure — not the number delivered, see the class doc's failure posture);
+    /// mails the server deferred are not counted. On failure the unsent ids are already back in the
+    /// buffer when this throws.
     /// </summary>
-    public async Task<int> FlushAsync(CancellationToken cancellationToken = default)
+    public async Task<int> FlushAsync(CancellationToken cancellationToken = default) =>
+        (await FlushBatchAsync(cancellationToken)).Taken;
+
+    /// <summary>One batch's result: mails the transport took, and whether any drained id left the
+    /// queue for good (sent, dropped, or ineligible) rather than going straight back as a deferral.</summary>
+    private readonly record struct BatchResult(int Taken, bool Settled);
+
+    private async Task<BatchResult> FlushBatchAsync(CancellationToken cancellationToken)
     {
         List<long> batch = buffer.Drain(MaxBatchSize);
-        if (batch.Count == 0) return 0;
+        if (batch.Count == 0) return new BatchResult(0, Settled: false);
 
         List<(long NotificationId, OutgoingMail Mail)> composed;
         try
@@ -90,24 +103,33 @@ public sealed class NotificationEmailFlusher(
             throw;
         }
 
-        if (composed.Count == 0) return 0;
+        if (composed.Count == 0)
+        {
+            // Every drained id was ineligible: all of them are settled.
+            buffer.ForgetDeferrals(batch);
+            return new BatchResult(0, Settled: true);
+        }
 
+        IReadOnlyList<int> deferredIndices;
         try
         {
-            await transport.SendBatchAsync([.. composed.Select(c => c.Mail)], cancellationToken);
-            return composed.Count;
+            deferredIndices = await transport.SendBatchAsync([.. composed.Select(c => c.Mail)], cancellationToken);
         }
         catch (Exception ex)
         {
-            // The transport reports how many leading mails reached a terminal outcome; a transport
-            // that throws anything else is assumed to have processed none (IMailTransport contract).
-            int processed = ex is MailBatchInterruptedException interrupted
-                ? Math.Clamp(interrupted.ProcessedCount, 0, composed.Count)
-                : 0;
+            // The transport reports how many leading mails it finished with, and which of those the
+            // server deferred; a transport that throws anything else is assumed to have processed
+            // none (IMailTransport contract).
+            var interrupted = ex as MailBatchInterruptedException;
+            int processed = interrupted is null ? 0 : Math.Clamp(interrupted.ProcessedCount, 0, composed.Count);
             List<long> unsent = [.. composed.Skip(processed).Select(c => c.NotificationId)];
             buffer.Restore(unsent);
+            HashSet<long> stillQueued = RequeueDeferred(
+                composed, interrupted?.DeferredIndices.Where(i => i < processed) ?? []);
+            stillQueued.UnionWith(unsent);
+            buffer.ForgetDeferrals(batch.Where(id => !stillQueued.Contains(id)));
 
-            Exception cause = ex is MailBatchInterruptedException { InnerException: { } inner } ? inner : ex;
+            Exception cause = interrupted is { InnerException: { } inner } ? inner : ex;
             if (cause is OperationCanceledException)
             {
                 // A shutdown cancelled the send mid-batch. The unsent tail is back in the buffer;
@@ -124,6 +146,44 @@ public sealed class NotificationEmailFlusher(
                 processed, composed.Count, unsent.Count);
             throw;
         }
+
+        HashSet<long> deferred = RequeueDeferred(composed, deferredIndices);
+        buffer.ForgetDeferrals(batch.Where(id => !deferred.Contains(id)));
+        return new BatchResult(composed.Count - Math.Min(deferredIndices.Count, composed.Count),
+            Settled: deferred.Count < batch.Count);
+    }
+
+    /// <summary>
+    /// Hands the mails the server deferred back to the buffer, which counts each one's deferrals and
+    /// gives up on it at <see cref="NotificationEmailBuffer.MaxDeferrals"/>. A mail given up on is
+    /// counted on <c>canalave.email.failed</c> and logged here (the transport left the deferral to
+    /// its caller), so no mail ever disappears silently.
+    /// </summary>
+    /// <returns>The ids actually requeued (deferred and still under the cap).</returns>
+    private HashSet<long> RequeueDeferred(
+        List<(long NotificationId, OutgoingMail Mail)> composed, IEnumerable<int> deferredIndices)
+    {
+        List<(long NotificationId, OutgoingMail Mail)> deferred =
+            [.. deferredIndices.Where(i => i >= 0 && i < composed.Count).Distinct().Select(i => composed[i])];
+        if (deferred.Count == 0) return [];
+
+        HashSet<long> exhausted = [.. buffer.Defer(deferred.Select(d => d.NotificationId))];
+        foreach ((long _, OutgoingMail mail) in deferred.Where(d => exhausted.Contains(d.NotificationId)))
+        {
+            CanalaveTelemetry.Email.Failed.Add(1, new KeyValuePair<string, object?>("canalave.email.kind", mail.Kind));
+            logger.LogError(
+                "Notification email {EmailKind} to user {UserId} was deferred by the SMTP server {MaxDeferrals} times; dropped (the in-app notification stands).",
+                mail.Kind, mail.UserId, NotificationEmailBuffer.MaxDeferrals);
+        }
+
+        HashSet<long> requeued = [.. deferred.Select(d => d.NotificationId).Where(id => !exhausted.Contains(id))];
+        if (requeued.Count > 0)
+        {
+            logger.LogWarning(
+                "{DeferredCount} notification email(s) deferred by the SMTP server (a 4xx to the recipient); requeued for retry.",
+                requeued.Count);
+        }
+        return requeued;
     }
 
     /// <summary>
@@ -133,8 +193,10 @@ public sealed class NotificationEmailFlusher(
     /// deep queue. Lives here, not on the worker, so Integration tests drive it deterministically.
     ///
     /// <para>Stops at the first failed batch (that batch is already restored — retrying a dead SMTP
-    /// host in a loop would only spin until the budget ran out) or when
-    /// <paramref name="budget"/> is cancelled. Never throws.</para>
+    /// host in a loop would only spin until the budget ran out), at a batch that settled nothing
+    /// (everything it drained was deferred again, so what is left is mail the server is deferring, and
+    /// retrying it at once would only repeat the deferral), or when <paramref name="budget"/> is
+    /// cancelled. Never throws.</para>
     /// </summary>
     /// <returns>The number of ids still queued when it stopped (0 = fully drained).</returns>
     public async Task<int> DrainAllAsync(CancellationToken budget)
@@ -144,7 +206,8 @@ public sealed class NotificationEmailFlusher(
             while (buffer.Count > 0)
             {
                 budget.ThrowIfCancellationRequested();
-                await FlushAsync(budget);
+                if (!(await FlushBatchAsync(budget)).Settled)
+                    break;
             }
         }
         catch (OperationCanceledException) when (budget.IsCancellationRequested)

@@ -260,6 +260,100 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         Transport.Sent.Should().HaveCount(1);
     }
 
+    // ── A deferred recipient never holds back the batch (review fixes, 2026-10-13) ──
+    // Before them, a 4xx to one recipient aborted the batch; the restored mail led the retried tail
+    // and aborted every later batch the same way, so one full mailbox stalled all notification email.
+
+    [Fact]
+    public async Task DeferredRecipient_DoesNotHoldBackTheRest_AndIsRetriedUntilTheMailboxRecovers()
+    {
+        int full = await SeedUserAsync("email-full");
+        int[] others = [_recipientId, await SeedUserAsync("email-d2")];
+        await NotifyNewFollowerAsync(recipientId: full);
+        foreach (int r in others)
+            await NotifyNewFollowerAsync(recipientId: r);
+        long fullId = await NotificationIdForAsync(full);
+        Transport.DeferUser(full);
+
+        (await FlushAsync()).Should().Be(2, "the deferred mail is not counted as taken");
+        Transport.Sent.Select(m => m.UserId).Should().BeEquivalentTo(others);
+        Buffer.Count.Should().Be(1, "only the deferred mail is queued again");
+        Buffer.DeferralsOf(fullId).Should().Be(1);
+
+        // Later mail still flows while the deferred one keeps being retried beside it.
+        int later = await SeedUserAsync("email-d3");
+        await NotifyNewFollowerAsync(recipientId: later);
+        (await FlushAsync()).Should().Be(1);
+        Transport.Sent.Select(m => m.UserId).Should().Contain(later);
+        Buffer.Count.Should().Be(1);
+        Buffer.DeferralsOf(fullId).Should().Be(2);
+
+        // The mailbox recovers: the retry sends it once, and its deferral count is forgotten.
+        Transport.AcceptUser(full);
+        (await FlushAsync()).Should().Be(1);
+        Transport.Sent.Count(m => m.UserId == full).Should().Be(1);
+        Buffer.Count.Should().Be(0);
+        Buffer.DeferralsOf(fullId).Should().Be(0, "a sent mail leaves no deferral state behind");
+    }
+
+    [Fact]
+    public async Task DeferredRecipient_IsDroppedAtMaxDeferrals_AndTheInAppNotificationStands()
+    {
+        await NotifyNewFollowerAsync();
+        Transport.DeferUser(_recipientId);
+
+        for (int attempt = 1; attempt < NotificationEmailBuffer.MaxDeferrals; attempt++)
+        {
+            (await FlushAsync()).Should().Be(0);
+            Buffer.Count.Should().Be(1, $"deferral {attempt} of {NotificationEmailBuffer.MaxDeferrals} requeues the mail");
+        }
+
+        (await FlushAsync()).Should().Be(0);
+        Buffer.Count.Should().Be(0, "a mailbox that never recovers is given up on, not retried for the process's life");
+        Transport.Sent.Should().BeEmpty();
+        (await NotificationCountForAsync(_recipientId)).Should().Be(1, "mail is a side-channel; the in-app row stands");
+    }
+
+    [Fact]
+    public async Task AnAbortedBatch_RequeuesTheMailItDeferredBeforeTheAbort()
+    {
+        int full = await SeedUserAsync("email-af1");
+        int[] recipients = [full, _recipientId];
+        foreach (int r in recipients)
+            await NotifyNewFollowerAsync(recipientId: r);
+        Transport.DeferUser(full);
+
+        // Both mails are processed (one sent, one deferred), then the batch stops — so the deferred
+        // one sits inside ProcessedCount, and only DeferredIndices says it was not sent.
+        Transport.FailAfter(2, new IOException("connection reset"));
+        Func<Task> flush = async () => await FlushAsync();
+        await flush.Should().ThrowAsync<MailBatchInterruptedException>();
+
+        Transport.Sent.Should().ContainSingle().Which.UserId.Should().Be(_recipientId);
+        Buffer.Count.Should().Be(1, "the deferred mail goes back even though the batch then stopped");
+
+        Transport.AcceptUser(full);
+        (await FlushAsync()).Should().Be(1);
+        Transport.Sent.Select(m => m.UserId).Should().BeEquivalentTo(recipients);
+    }
+
+    [Fact]
+    public async Task DrainAll_StopsWhenOnlyDeferredMailIsLeft_InsteadOfRetryingItAtOnce()
+    {
+        int full = await SeedUserAsync("email-dd1");
+        await NotifyNewFollowerAsync(recipientId: full);
+        await NotifyNewFollowerAsync();
+        long fullId = await NotificationIdForAsync(full);
+        Transport.DeferUser(full);
+
+        int stranded = await DrainAllAsync(CancellationToken.None);
+
+        stranded.Should().Be(1, "the mail the server keeps deferring is reported, not burned through");
+        Transport.Sent.Should().ContainSingle().Which.UserId.Should().Be(_recipientId);
+        Buffer.DeferralsOf(fullId).Should().Be(2,
+            "one deferral in the batch that also sent, one in the batch that settled nothing — then it stops");
+    }
+
     // ── Shutdown drain (WU-NotificationCorrectness, R6) ──────────────────────────
 
     [Fact]
@@ -439,6 +533,30 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
     }
 
     [Fact]
+    public async Task UnsubscribePost_ForAnAccountDeletedSinceTheMail_AnswersTheInvalidLinkPage_Not500()
+    {
+        // The token is signed and lives a year; account deletion is a hard delete. Mail clients and
+        // link scanners re-POST old messages, so a valid token for a gone account does arrive. The
+        // old insert tripped the user_id FK into a 500 (WU-NotificationCorrectness review fixes).
+        await NotifyNewFollowerAsync();
+        await FlushAsync();
+        string path = new Uri(Transport.Sent.Single().Headers!["List-Unsubscribe"].Trim('<', '>')).PathAndQuery;
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<UserDeletionService>().DeleteUserAsync(_recipientId))
+                .Should().BeTrue();
+        }
+
+        using HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync(path, null);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Link no longer valid");
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task UnsubscribePost_RejectsATamperedToken()
     {
         using HttpClient client = Factory.CreateClient();
@@ -473,6 +591,17 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<NotificationEmailFlusher>().DrainAllAsync(budget);
+    }
+
+    /// <summary>The id of <paramref name="recipientId"/>'s one notification.</summary>
+    private async Task<long> NotificationIdForAsync(int recipientId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.Notifications.AsNoTracking()
+            .Where(n => n.RecipientUserId == recipientId)
+            .Select(n => n.NotificationId)
+            .SingleAsync();
     }
 
     /// <summary>Queues ids no notification row has — they drain as ineligible and are dropped.</summary>

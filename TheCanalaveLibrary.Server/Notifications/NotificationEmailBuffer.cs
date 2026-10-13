@@ -39,7 +39,23 @@ public sealed class NotificationEmailBuffer
     /// </summary>
     public const int MaxDepth = 100_000;
 
+    /// <summary>
+    /// How many times one notification's mail may be deferred by the SMTP server (a 4xx to its
+    /// recipient — <c>IMailTransport.SendBatchAsync</c>'s deferral class) before it is dropped
+    /// (WU-NotificationCorrectness review fixes, 2026-10-13). A mailbox that is full for good would
+    /// otherwise be retried every cycle for as long as the process lives, and each new notification to
+    /// it would add another such mail. Ten attempts span about five minutes at the worker's 30-second
+    /// cadence (longer under a backlog): enough for a brief per-recipient throttle to clear. Real
+    /// greylisting retries belong to the mail provider's relay, which queues for the remote server
+    /// itself. The in-app notification is durable either way.
+    /// </summary>
+    public const int MaxDeferrals = 10;
+
     private readonly ConcurrentQueue<long> _pending = new();
+
+    // Deferral counts for ids currently being retried. Empty in the normal case; an entry lives from
+    // an id's first deferral until it is sent, judged ineligible, or dropped at MaxDeferrals.
+    private readonly ConcurrentDictionary<long, int> _deferrals = new();
 
     // Deliberately not IDisposable: instruments on the shared static Meter can't be individually
     // unregistered. Production has exactly one buffer per process; extra registrations from
@@ -123,9 +139,51 @@ public sealed class NotificationEmailBuffer
             _pending.Enqueue(id);
     }
 
+    /// <summary>
+    /// Requeues ids whose mail the SMTP server deferred, counting each one's deferrals. An id deferred
+    /// for the <see cref="MaxDeferrals"/>th time is not requeued; it is returned so the caller can
+    /// count and log the dropped mail (never a silent drop).
+    /// </summary>
+    /// <returns>The ids that reached <see cref="MaxDeferrals"/> and were dropped.</returns>
+    public List<long> Defer(IEnumerable<long> notificationIds)
+    {
+        List<long> exhausted = [];
+        foreach (long id in notificationIds)
+        {
+            int deferrals = _deferrals.AddOrUpdate(id, 1, static (_, n) => n + 1);
+            if (deferrals >= MaxDeferrals)
+            {
+                _deferrals.TryRemove(id, out _);
+                exhausted.Add(id);
+            }
+            else
+            {
+                _pending.Enqueue(id);
+            }
+        }
+        return exhausted;
+    }
+
+    /// <summary>
+    /// Forgets the deferral count of ids that left the queue for good (sent, dropped, or judged
+    /// ineligible), so a later deferral of an unrelated failure starts from zero and the map does not
+    /// grow. A no-op in the normal case, when nothing is being retried.
+    /// </summary>
+    public void ForgetDeferrals(IEnumerable<long> notificationIds)
+    {
+        if (_deferrals.IsEmpty) return;
+        foreach (long id in notificationIds)
+            _deferrals.TryRemove(id, out _);
+    }
+
+    /// <summary>How many times <paramref name="notificationId"/> has been deferred so far (0 = never).</summary>
+    public int DeferralsOf(long notificationId) =>
+        _deferrals.TryGetValue(notificationId, out int n) ? n : 0;
+
     /// <summary>Discards all pending ids. Test isolation only — never called in production.</summary>
     public void Clear()
     {
         while (_pending.TryDequeue(out _)) { }
+        _deferrals.Clear();
     }
 }

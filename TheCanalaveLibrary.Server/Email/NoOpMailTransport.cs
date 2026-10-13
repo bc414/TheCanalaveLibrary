@@ -15,7 +15,7 @@ public sealed class NoOpMailTransport(ILogger<NoOpMailTransport> logger) : IMail
     public Task SendAsync(OutgoingMail mail, CancellationToken cancellationToken = default) =>
         SendBatchAsync([mail], cancellationToken);
 
-    public Task SendBatchAsync(IReadOnlyList<OutgoingMail> batch, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<int>> SendBatchAsync(IReadOnlyList<OutgoingMail> batch, CancellationToken cancellationToken = default)
     {
         foreach (OutgoingMail mail in batch)
         {
@@ -26,6 +26,6 @@ public sealed class NoOpMailTransport(ILogger<NoOpMailTransport> logger) : IMail
                 mail.Kind, mail.UserId, mail.Subject);
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult<IReadOnlyList<int>>([]);
     }
 }

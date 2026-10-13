@@ -25,7 +25,8 @@ namespace TheCanalaveLibrary.Server;
 /// non-cancellation send exception was swallowed as "per-message", connection-class ones included,
 /// so after a mid-batch disconnect each remaining message failed <c>ServiceNotConnected</c> and was
 /// dropped forever. Now a send failure is per-message terminal only when
-/// <see cref="IsPerMessageFailure"/> says so; anything else stops the batch with
+/// <see cref="IsPerMessageFailure"/> says so, a deferral (returned for retry, the batch goes on) only
+/// when <see cref="IsDeferral"/> says so; anything else stops the batch with
 /// <see cref="MailBatchInterruptedException"/> carrying how many leading messages were processed
 /// (<see cref="IMailTransport.SendBatchAsync"/>'s contract).</para>
 ///
@@ -43,13 +44,15 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
     /// <summary>
     /// The single-message path (Identity's confirmation/reset mail). A batch abort is unwrapped and
     /// its inner exception rethrown, so Identity sees the exception classes it always saw for a
-    /// connect failure rather than the batch wrapper.
+    /// connect failure rather than the batch wrapper. A deferral is dropped (logged and counted as a
+    /// per-message failure): this path has no queue to retry from, and it is what the path did for a
+    /// refused recipient before WU-NotificationCorrectness.
     /// </summary>
     public async Task SendAsync(OutgoingMail mail, CancellationToken cancellationToken = default)
     {
         try
         {
-            await SendBatchAsync([mail], cancellationToken);
+            await SendCoreAsync([mail], deferralsAreRetried: false, cancellationToken);
         }
         catch (MailBatchInterruptedException ex) when (ex.InnerException is not null)
         {
@@ -58,9 +61,15 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
     }
 
     /// <inheritdoc/>
-    public async Task SendBatchAsync(IReadOnlyList<OutgoingMail> batch, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<int>> SendBatchAsync(IReadOnlyList<OutgoingMail> batch, CancellationToken cancellationToken = default) =>
+        SendCoreAsync(batch, deferralsAreRetried: true, cancellationToken);
+
+    /// <param name="deferralsAreRetried">True when the caller retries deferred messages (the batch
+    /// path); false makes a deferral per-message terminal (the single-message path).</param>
+    private async Task<IReadOnlyList<int>> SendCoreAsync(
+        IReadOnlyList<OutgoingMail> batch, bool deferralsAreRetried, CancellationToken cancellationToken)
     {
-        if (batch.Count == 0) return;
+        if (batch.Count == 0) return [];
 
         EmailOptions o = options.Value;
 
@@ -69,10 +78,11 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
             ? SecureSocketOptions.StartTls
             : SecureSocketOptions.None;
 
-        // Leading messages that reached a terminal outcome (sent, or dropped per message). Anything
-        // that stops the loop reports it, so the caller restores exactly the unsent tail: the
-        // remainder is not lost and the sent head is not duplicated.
+        // Leading messages the loop finished with (sent, dropped per message, or deferred — the
+        // deferred ones also listed). Anything that stops the loop reports both, so the caller retries
+        // exactly the unsent ones: the remainder is not lost and the sent head is not duplicated.
         int processed = 0;
+        List<int> deferred = [];
         try
         {
             // A connect/auth failure stops the batch with processed = 0: nothing was sent.
@@ -80,10 +90,11 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
             if (!string.IsNullOrEmpty(o.Smtp.User))
                 await client.AuthenticateAsync(o.Smtp.User, o.Smtp.Password ?? "", cancellationToken);
 
-            foreach (OutgoingMail mail in batch)
+            for (int i = 0; i < batch.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await SendOneAsync(client, o, mail, cancellationToken);
+                if (!await SendOneAsync(client, o, batch[i], deferralsAreRetried, cancellationToken))
+                    deferred.Add(i);
                 processed++;
             }
         }
@@ -91,7 +102,7 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
         {
             // Not logged here: the unsent tail is retried, and the caller (NotificationEmailFlusher,
             // or Identity through SendAsync) is the one log site (logging.md no-double-log).
-            throw new MailBatchInterruptedException(processed, ex);
+            throw new MailBatchInterruptedException(processed, ex, deferred);
         }
         finally
         {
@@ -111,17 +122,19 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
                 }
             }
         }
+
+        return deferred;
     }
 
     /// <summary>
-    /// The per-message vs. batch-abort rule for an exception thrown by <c>SmtpClient.SendAsync</c>:
-    /// per-message terminal <b>only</b> for an <see cref="SmtpCommandException"/> with a 5xx status
-    /// while the client is still connected — the server judged this message on its merits and will
-    /// judge it the same way on every retry. Everything else aborts the batch: a 4xx is transient
-    /// (provider throttling such as 421/451/454 included), and a protocol error, a dropped
-    /// connection (<c>ServiceNotConnectedException</c>, <see cref="IOException"/>,
-    /// <c>SocketException</c>) or any failure after the client disconnected would fail every
-    /// remaining message for reasons that have nothing to do with them.
+    /// The per-message rule for an exception thrown by <c>SmtpClient.SendAsync</c>: per-message
+    /// terminal <b>only</b> for an <see cref="SmtpCommandException"/> with a 5xx status while the
+    /// client is still connected — the server judged this message on its merits and will judge it the
+    /// same way on every retry. A 4xx is never per-message: to the recipient it is a deferral
+    /// (<see cref="IsDeferral"/>), anywhere else a batch abort. A protocol error, a dropped connection
+    /// (<c>ServiceNotConnectedException</c>, <see cref="IOException"/>, <c>SocketException</c>) or
+    /// any failure after the client disconnected aborts the batch: it would fail every remaining
+    /// message for reasons that have nothing to do with them.
     /// </summary>
     /// <param name="ex">The exception <c>SendAsync</c> threw.</param>
     /// <param name="clientStillConnected"><c>SmtpClient.IsConnected</c>, read after the throw.</param>
@@ -131,10 +144,32 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
         && (int)command.StatusCode is >= 500 and <= 599;
 
     /// <summary>
-    /// Composes and sends one message. Returns normally when the message reached a terminal outcome
-    /// (sent, or dropped as a per-message failure); throws when the batch must stop.
+    /// The deferral rule (WU-NotificationCorrectness review fixes, 2026-10-13): a 4xx reply to
+    /// <c>RCPT TO</c> (<see cref="SmtpErrorCode.RecipientNotAccepted"/>) other than 421, while the
+    /// client is still connected. The server will not take this one recipient <em>now</em> — a full
+    /// mailbox, greylisting, a per-recipient rate limit — and MailKit has already reset the
+    /// transaction, so the connection serves the rest of the batch. The message is returned to the
+    /// caller for a later retry instead of stopping the batch: a stopped batch would put this mail at
+    /// the head of the retried tail, where it would stop every later batch the same way. A 421
+    /// ("closing the channel") or a 4xx to <c>MAIL FROM</c> or <c>DATA</c> is about the server or
+    /// the sender, not the recipient, and stays a batch abort.
     /// </summary>
-    private async Task SendOneAsync(SmtpClient client, EmailOptions o, OutgoingMail mail, CancellationToken cancellationToken)
+    /// <param name="ex">The exception <c>SendAsync</c> threw.</param>
+    /// <param name="clientStillConnected"><c>SmtpClient.IsConnected</c>, read after the throw.</param>
+    public static bool IsDeferral(Exception ex, bool clientStillConnected) =>
+        clientStillConnected
+        && ex is SmtpCommandException { ErrorCode: SmtpErrorCode.RecipientNotAccepted } command
+        && command.StatusCode != SmtpStatusCode.ServiceNotAvailable
+        && (int)command.StatusCode is >= 400 and <= 499;
+
+    /// <summary>
+    /// Composes and sends one message. Returns <c>true</c> when the message reached a terminal outcome
+    /// (sent, or dropped as a per-message failure) and <c>false</c> when the server deferred it and
+    /// <paramref name="deferralsAreRetried"/> (otherwise a deferral is dropped like a per-message
+    /// failure); throws when the batch must stop.
+    /// </summary>
+    private async Task<bool> SendOneAsync(
+        SmtpClient client, EmailOptions o, OutgoingMail mail, bool deferralsAreRetried, CancellationToken cancellationToken)
     {
         // Custom span: HttpClient/socket instrumentation is blind to SMTP — nothing names "one
         // email" as a unit (logging.md §"Custom Instrumentation").
@@ -152,7 +187,7 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
             // ArgumentException): the same input fails the same way forever, so it is per-message
             // terminal and never stops the batch.
             RecordDropped(activity, ex, mail);
-            return;
+            return true;
         }
 
         try
@@ -162,7 +197,22 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
         catch (Exception ex) when (IsPerMessageFailure(ex, client.IsConnected))
         {
             RecordDropped(activity, ex, mail);
-            return;
+            return true;
+        }
+        catch (Exception ex) when (IsDeferral(ex, client.IsConnected))
+        {
+            if (!deferralsAreRetried)
+            {
+                // The single-message path has no queue to retry from: terminal here.
+                RecordDropped(activity, ex, mail);
+                return true;
+            }
+
+            // Deferred: the span records it; the caller retries the message and is the one place
+            // that logs it (and counts it as failed if it ever gives up).
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return false;
         }
         catch (Exception ex)
         {
@@ -177,6 +227,7 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
         // Recipient address deliberately excluded from the log — logging.md "What NOT to
         // log": email addresses. The user id is the correlatable identifier instead.
         logger.LogInformation("Sent {EmailKind} email to user {UserId}", mail.Kind, mail.UserId);
+        return true;
     }
 
     private static MimeMessage Compose(EmailOptions o, OutgoingMail mail)

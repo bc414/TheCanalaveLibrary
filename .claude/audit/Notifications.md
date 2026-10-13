@@ -194,7 +194,8 @@ Generation" → "Filtering semantics" and §"Email fan-out".
   `CollapsedIsDefault` (retired term registered in `check-doc-hygiene.ps1`). Nothing renders them.
 - **F41 L2 — the email side-channel.**
   - `SmtpMailTransport` classifies send failures: per-message only for a 5xx while still connected
-    (`IsPerMessageFailure`), or a compose failure. Everything else throws
+    (`IsPerMessageFailure`), or a compose failure; a 4xx to `RCPT TO` while connected is a deferral
+    (`IsDeferral`, added by the review fixes below). Everything else throws
     `MailBatchInterruptedException(ProcessedCount)`. A mid-batch disconnect used to drop the rest of
     the batch for good; a whole-batch restore would have re-sent the head.
   - The flusher restores only the unsent tail. Cancellation restores too and rethrows the OCE.
@@ -210,10 +211,13 @@ Generation" → "Filtering semantics" and §"Email fan-out".
   `DateCreated`, and offset paging skipped or repeated them. No DDL: `EXPLAIN` shows an Incremental Sort
   over the index prefix (`layer6-indexes.md`). The other paged reads: tracker **D13**.
 - **F42 L3 — presenter copy.** Arms for 90–92 (routed here by WU-InertFeatures) and 100. All four used
-  to read "You have a new notification" in the bell, the inbox and the email subject.
-  - 90 names the granting moderator, as decision row 19's "as built" describes.
+  to read "You have a new notification" in the bell, the inbox and the email's lead line (its subject
+  is the type's display name).
+  - 90 is actor-free: "You were granted a Community Spotlight slot". As first built it named the
+    granting moderator, which answered the unruled decision row 19 by itself; the review fixes below
+    took the name out.
   - 91/92 name the sponsor ("Someone" once deleted).
-  - 100 is actor-free.
+  - 100 is actor-free and, since the review fixes, title-free (tracker D8).
 - **Tests.**
   - **Integration** (+18): `NotificationServiceTests` +7 — per-field collapse, three unsubscribe
     shapes, two interleaved upsert races (`InterleavingCommandInterceptor`), the tied-timestamp
@@ -226,12 +230,71 @@ Generation" → "Filtering semantics" and §"Email fan-out".
     all 47 types plus three copy facts, two `MessagingValidationsTests`.
   - **RazorComponents:** none — no component changed.
   - Every fix-specific test was mutation-checked: each fails with its fix reverted.
-- **Browser: not run, and not available in this environment.** Copy-only display change, so F42
-  L4.5 stays 5 (the WU-InertFeatures presenter-slice precedent). The owed checks are tracker **H26**.
+- **Browser: not run, and not available in this environment.** The owed checks are tracker **H26**.
+  This note first kept F42 L4.5 at 5 as a copy-only change, citing the WU-InertFeatures presenter
+  slice, but that slice had a browser pass behind it. The review fixes below flip it to 1.
 - **Left open:** tracker **D8** (blog-post titles after the author goes Private) was routed here by
   the WU-AccessGateSweep2 review fixes. It is not built: its one-line fix would blank the post
   author's own type-33 notifications, and an unpublished post is the same leak. Re-scoped in the
-  tracker.
+  tracker; the review fixes routed it to WU-TrackerFixes.
+
+## WU-NotificationCorrectness review fixes Stage note (2026-10-13) — F42/F43/F49 L4.5 5→1; F41/F42/F43 L2 stay 5
+
+Three reviews raised 14 findings, 11 distinct after merging duplicates. Each was checked against the
+code and the owner's text. All 11 were real and none needed an owner ruling. One detail was wrong:
+the presenter's text reaches the email's lead line, not its subject, which is the type's display
+name.
+
+- **F41 L2 — one deferred recipient no longer stalls all notification email.** As built, a 4xx to
+  `RCPT TO` while connected (452 over quota, 450/451 greylisting) aborted the batch. The restored
+  mail led the retried tail, so it aborted every later batch, and nothing capped its retries. Now
+  `SmtpMailTransport.IsDeferral` classes it as a **deferral**: the batch goes on, and `SendBatchAsync`
+  returns the deferred indices (`MailBatchInterruptedException.DeferredIndices` when the batch then
+  stops). The flusher requeues them through `NotificationEmailBuffer.Defer`, which drops a mail at
+  its 10th deferral (`MaxDeferrals`), counted on `canalave.email.failed` and logged at Error.
+  `DrainAllAsync` stops at a batch that settled nothing, so shutdown does not burn a deferred mail's
+  retries. A 421, or a 4xx to `MAIL FROM`/`DATA`, is still a batch abort. On Identity's
+  single-message path a deferral is dropped (logged), as before the WU.
+- **F43 L2 — unsubscribe for a deleted account.** The signed token lives 365 days and deletion is a
+  hard delete. The insert's `user_id` FK turned such a re-POST into a 500, as it did before the WU.
+  The insert is now `INSERT … SELECT … WHERE EXISTS` (the `ReadingProgressFlusher` shape), and the
+  endpoint answers the same "link no longer valid" page (400) as an expired token.
+- **F42 L3 — presenter.** 90 is actor-free. Decision row 19 is unruled, and the arm had answered it
+  "yes" in the bell, the inbox and the default-on email. 100 is title-free: its post title resolves
+  through `BlogPostDirect`, which does not drop a post its author has since made Private or
+  unpublished (tracker D8, now routed to WU-TrackerFixes).
+- **Docs.**
+  - The two code stamps that carried the template's 2026-09-30 now read 2026-10-12.
+  - `audit/Spotlight.md` F55: 21 tests.
+  - `audit/Identity.md` F1 L2 gained the transport-contract note.
+  - Roadmap row 19 is annotated.
+  - The WU-QuickFixes entry moved to `workplan-archive.md`.
+  - The SeedTool re-seed ran against a scratch database. Its COPY loaded 444
+    `user_notification_settings` rows (99 with a NULL `email_enabled`, 242 with a NULL `collapsed`),
+    with no all-NULL row and no stored value equal to its type default.
+- **Tests.**
+  - **Unit** (+12): `SmtpMailTransportClassificationTests` covers the deferral rule (the 4xx/421/
+    sender/data split). Four wire tests drive the real MailKit client against an in-process loopback
+    SMTP stub: a 452 is returned while the rest of the batch goes out; a 550 is dropped; a 421 after
+    a deferral aborts and reports it; a 452 on the single path is dropped, not thrown.
+    `NotificationPresenterTests`: 90 never names the moderator, 100 never names the post, and both
+    joined the actor-free theory.
+  - **Integration** (+7): `NotificationEmailFanOutTests` +5:
+    - a deferred recipient does not hold back the batch and is retried until it recovers;
+    - the drop at `MaxDeferrals`;
+    - a deferral inside an aborted batch is requeued;
+    - the drain stops when only deferred mail is left;
+    - the deleted-account unsubscribe POST answers 400.
+
+    `NotificationServiceTests` +2: the feed's and the settings read's per-field `Collapsed` with an
+    email-only row against a flipped `DefaultCollapsed` (restored in `finally`), and the deleted-account
+    unsubscribe on both branches.
+  - **RazorComponents:** none (no component changed).
+  - Mutation-checked: with each fix reverted, its tests fail.
+- **Browser: not run, none available.** The bell and inbox copy changed (F42), the settings page
+  reads the per-field DTO on WASM (F43) and the compose modal has a new 400 (F49). By the campaign's
+  precedent (WU-InertFeatures F41, WU-ModerationIntegrity F46/F53), **F42, F43 and F49 L4.5 go 5→1**
+  until tracker **H26** runs.
 
 ## Feature 41 — Notification Generation
 
@@ -241,7 +304,9 @@ went 5→1 when the WU shipped with no browser available, and back to 5 when its
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
 closed). L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed. **L2 stays 5 under WU-NotificationCorrectness
 (2026-10-12):** the email flusher restores only unsent mail and drains to empty on shutdown, dedup is documented as
-an advisory policy, and a deleted Spotlight sponsor is a null source (Stage note above Feature 41).
+an advisory policy, and a deleted Spotlight sponsor is a null source. **Its review fixes (2026-10-13)** made a 4xx
+to one recipient a deferral (requeued, dropped at the 10th) instead of a batch abort that stalled every later batch
+(Stage notes above Feature 41).
 
 - **L1 — Stage 5 (`related_entity_id` widened to `bigint`, WU-InertFeatures 2026-09-30).** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
   (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
@@ -503,8 +568,9 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged, L4.5 stays 5 as a copy-only change with its browser check owed in tracker H26; Stage
-  note above Feature 41).**
+  unchanged; Stage notes above Feature 41).** **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness
+  review fixes, 2026-10-13):** the bell and inbox copy for 90–92/100 has not been driven in a browser.
+  Back to 5 when tracker **H26** runs.
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes
   `(type, long)` pairs and narrows each kind's id set to `int` before querying (out-of-range ids miss);
   results are a `NotificationTarget(Title, Url, ContextTitle)` record consumed by the read service and
@@ -664,7 +730,8 @@ write class in place of `CurrentUserId` (CS9107 shape).
   `EmailEnabled` stopped being inert at WU-NotifEmail 2026-07-31 — it now gates real mail and is
   writable from the one-click unsubscribe endpoint as well as this page; stage unchanged; per-field
   write/read rule, race-free upsert and per-field DTO flags, WU-NotificationCorrectness 2026-10-12 —
-  stage unchanged, Stage note above Feature 41).**
+  stage unchanged; an unsubscribe link for a since-deleted account answers 400 instead of a 500, its
+  review fixes 2026-10-13; Stage notes above Feature 41).**
   Settled constraints (the sparse rule is per field since owner ruling D19 — answered 2026-08-07,
   built WU-NotificationCorrectness 2026-10-12; rule text `layer2-services.md` §"Notification
   Generation" → "Filtering semantics"):
@@ -681,6 +748,9 @@ write class in place of `CurrentUserId` (CS9107 shape).
   - **L3/L3.5 — Stage 5** (built WU33, 2026-06-24 — see its Stage-5 note below). Settings page driven
     by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
     read "Stage 2 … deferred to WU33" against the grid's 5/5.)
+  - **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness review fixes, 2026-10-13).** The page now reads
+    the per-field `NotificationSettingDto` on WASM, and the one-click unsubscribe writes one column.
+    Neither has been driven in a browser. Back to 5 when tracker **H26** runs.
   - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
     site now runs global InteractiveAuto; the notification settings page loads in a real WASM
     runtime during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed:

@@ -357,7 +357,7 @@ D24's `GroupsJoined` oscillation would have been caught.
 
 ## Unit of work, partial sends, drains and tiebreaks (WU-NotificationCorrectness)
 
-Five Integration shapes from the notification and messaging fixes (2026-10-12):
+Six Integration shapes and one Unit shape from the notification and messaging fixes (2026-10-12, review fixes 2026-10-13):
 - **"One save" is asserted, and so is the rollback.** Resolve the `ApplicationDbContext` and the
   service from **one** scope, count `db.SavedChanges` events around the call, and assert exactly one
   (`MessagingWriteServiceTests.StartConversation_CommitsTheWholeGraphInOneSave`). Pair it with an
@@ -368,6 +368,17 @@ Five Integration shapes from the notification and messaging fixes (2026-10-12):
   records the first `n` messages and throws `MailBatchInterruptedException(n, inner)`. Assert what was
   sent, what was restored to the buffer, and that the next flush sends the rest with no duplicate.
   `FailNextBatchWith` stays the "no progress reported" case. `Clear()` resets both.
+- **A mailbox that keeps deferring** (a 4xx to its recipient) is `RecordingMailTransport.DeferUser(id)`:
+  every message to that user comes back in the deferred list until `AcceptUser(id)` or `Clear()`. Key
+  it by user, not by batch index, because the flusher's compose order is unordered. To put a deferral
+  inside an aborted batch's processed prefix, make `FailAfter(n, …)` cover the whole batch. Assert the
+  requeue and the deferral count with `NotificationEmailBuffer.DeferralsOf(id)`, and loop `FlushAsync`
+  `MaxDeferrals` times for the drop (WU-NotificationCorrectness review fixes, 2026-10-13).
+- **The SMTP transport itself is Unit-tested over the wire** against an in-process loopback stub
+  (`SmtpMailTransportClassificationTests.StubSmtpServer`: a `TcpListener` on port 0, one connection,
+  no extensions advertised, a per-recipient `RCPT TO` reply). It drives the real MailKit client with
+  no host, container or database, so it stays in the Unit tier. Run each call under a deadline token
+  plus `WaitAsync`, so a protocol mismatch fails instead of hanging.
 - **Shutdown drains** are driven through `NotificationEmailFlusher.DrainAllAsync(budget)`, never the
   worker (it is removed from the test host, like every timer worker). To put a real notification
   past the first batch, enqueue ids no row has first (they drain as ineligible); pass an

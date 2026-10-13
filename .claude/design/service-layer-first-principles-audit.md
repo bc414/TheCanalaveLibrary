@@ -437,7 +437,9 @@ code change:
 > story's author gets type 25 only. **The next three bullets built: WU-NotificationCorrectness
 > (2026-10-12).** SMTP death: a per-message vs. batch-abort classification plus
 > `MailBatchInterruptedException.ProcessedCount`, so the flusher restores only the unsent remainder.
-> Shutdown: `DrainAllAsync` drains to empty within a 15 s budget. Tiebreak: `OldestUnreadFirst` ends
+> Its review fixes (2026-10-13) added a third class: a 4xx to one recipient is a *deferral*, requeued
+> with a per-id cap rather than aborting the batch, which would have let one full mailbox stall every
+> later batch. Shutdown: `DrainAllAsync` drains to empty within a 15 s budget. Tiebreak: `OldestUnreadFirst` ends
 > in `NotificationId` (no DDL). Dedup: accepted as an advisory policy under D23's test (doc only, no
 > index). `StartConversationAsync` is one save. The lineage/acknowledgment bullet stays routed to
 > WU-ThrottleCoverage.

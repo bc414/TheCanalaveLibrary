@@ -17,18 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-NotificationCorrectness (2026-10-12) — worksheet D19 plus service audit §2.8's
-  remainder. No cell flipped. Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to
-  the dev DB.
+- **Last landed:** WU-NotificationCorrectness (2026-10-12; review fixes 2026-10-13) — worksheet D19
+  plus service audit §2.8's remainder. **F42/F43/F49 L4.5 5→1** at the review fixes, until tracker
+  **H26** runs. Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB.
   - **D19:** `UserNotificationSetting` is sparse per field; unsubscribe writes only its own column.
     The settings upsert is race-free under D23.
-  - **Mail:** a mid-batch SMTP death restores only the unsent mail (`MailBatchInterruptedException`).
-    Shutdown drains to empty within 15 s.
-  - **Smaller fixes:** the feed tiebreak, a one-save `StartConversationAsync`, the subject cap, the
-    90–92/100 presenter arms, and a deleted Spotlight sponsor passed as a null source.
-  - **Tracker:** **D13** filed (the paged-ordering sweep), **H26** filed (its browser pass), **D8**
-    re-scoped and not built.
-  - `dotnet test`: Unit 1,157, RazorComponents 770, Integration 1,401. **Pointer:** its DONE entry.
+  - **Mail:** a mid-batch SMTP death restores only the unsent mail; shutdown drains to empty within
+    15 s; a 4xx to one recipient is a capped deferral, never a batch abort (review fixes).
+  - **Smaller fixes:** feed tiebreak, one-save `StartConversationAsync`, subject cap, 90–92/100
+    presenter arms (90 and 100 kept name-free pending row 19 and D8), deleted-sponsor null source.
+  - **Tracker:** **D13** and **H26** filed; **D8** routed to WU-TrackerFixes.
+  - `dotnet test`: Unit 1,169, RazorComponents 770, Integration 1,408. **Pointer:** its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
@@ -36,7 +35,7 @@ references it, does not restate it.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
-  Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
+  Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry in `workplan-archive.md`.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
   turned out to be the visible tip of a **moderation feature that could not be used at all**.
@@ -266,7 +265,7 @@ references it, does not restate it.
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
-  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it),
+  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -389,6 +388,13 @@ cells/verification) when built.
 - **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6.
+- **Tracker D8 → WU-TrackerFixes** (the worksheet-decisions campaign's tracker sweep) — **Cells:**
+  F41/F42 L2 (stay 5). **Scope:** `BlogPostDirect` stops resolving a post whose author has since
+  gone Private or that is unpublished, for the non-author types 13–16 and 100; 33 keeps resolving
+  for the post's author. The tracker recommends the type split. Then give the `PollUpdated` arm its
+  post title back; it is title-free until then. **Pointer:** tracker D8;
+  `audit/Notifications.md` §"WU-NotificationCorrectness review fixes Stage note". **Deps:** none.
+  Routed 2026-10-13.
 *(WU-NotifEmail moved to the DONE run below, 2026-07-31.)*
 ---
 
@@ -437,10 +443,12 @@ is pending except where a bullet says so.
 
 ## WU-NotificationCorrectness — `UserNotificationSetting` sparse per field (worksheet D19), mail restores only the unsent and drains to empty, feed tiebreak, one-save `StartConversationAsync`, subject cap (service audit §2.8; extends `Notifications/`, `Email/`, `Messaging/`, `Spotlight/`, `SeedTool/`) — DONE ✓ (2026-10-12)
 
-- **Cells:** none flipped. F41/F42/F43 L1/L2, F49 L2 and F55 L2 stay 5: defects beneath sound cells.
-  F42 L4.5 stays 5 as a copy-only change. Migration `WU_NotificationCorrectness_SparseSettingFields`
-  is applied to the dev DB. Dated 2026-10-12 (the session's `currentDate`, per CLAUDE.md and
-  WU-DependencyCVEs' precedent), not the template's 2026-09-30.
+- **Cells:** the build flipped none. F41/F42/F43 L1/L2, F49 L2 and F55 L2 stay 5: defects beneath
+  sound cells. The review fixes (2026-10-13) flipped **F42, F43 and F49 L4.5 5→1** (UI behaviour
+  changed, no browser, tracker H26); the build had kept F42 at 5 as a "copy-only change".
+  Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB. Dated
+  2026-10-12 (the session's `currentDate`, per CLAUDE.md and WU-DependencyCVEs' precedent), not the
+  template's 2026-09-30; the review fixes ran on 2026-10-13.
 - **Trigger:** worksheet D19 (answered 2026-08-07); service audit §2.8's items not owned by
   WU-InertFeatures; amendment U8. It also took the 90–92 presenter arms WU-InertFeatures routed here.
 - **What landed:**
@@ -478,7 +486,8 @@ is pending except where a bullet says so.
 - **Left alone:**
   - Tracker **D8** (blog titles after the author goes Private), routed here by WU-AccessGateSweep2:
     not built, re-scoped. Its one-line fix would blank the author's own type-33 notifications, and
-    an unpublished post leaks the same way. Unowned.
+    an unpublished post leaks the same way. The review fixes routed it to **WU-TrackerFixes** and
+    hold type 100 title-free until it is built.
   - The other `Skip/Take` orderings (tracker **D13**, audit before the cross-cutting build).
   - The PM email / `(kind,id)` buffer (WU-PrivateMessageEmail builds on this flusher shape and must
     keep the partial-restore and drain-to-empty rules).
@@ -486,14 +495,47 @@ is pending except where a bullet says so.
   - Service §4 rows 3/4 and the write-service DAG paragraph (WU-DocCorrections).
   - The CHECK `email_enabled IS NOT NULL OR collapsed IS NOT NULL` (WU-SchemaHardening's call).
   - The three-state default/on/off control (D19's accepted cost).
+- **Review fixes (2026-10-13).** Three reviews raised 14 findings, 11 distinct after merging
+  duplicates. Each was checked against the code and the owner's text. All 11 were real (one detail
+  was not: the presenter's text reaches the email's lead line, not its subject). None needed an
+  owner ruling.
+  1. **One deferred recipient stalled all notification email (high).** A 4xx to `RCPT TO` while
+     connected (452 over quota, 450/451 greylisting) aborted the batch. The restored mail led the
+     retried tail and aborted every later batch, with no retry cap, and each shutdown drain stopped
+     at it. It is now a third transport class, the **deferral** (`SmtpMailTransport.IsDeferral`): the
+     batch goes on, and `SendBatchAsync` returns the deferred indices (`DeferredIndices` on an abort).
+     The flusher requeues them through `NotificationEmailBuffer.Defer`, which drops a mail at its
+     10th deferral (counted failed, logged at Error). `DrainAllAsync` stops at a batch that settled
+     nothing. A 421 and a 4xx to `MAIL FROM`/`DATA` still abort. Identity's single path drops a
+     deferral, as before the WU. Spec R5's "4xx aborts" is superseded in `layer2-services.md`.
+  2. **Presenter.** 90 is actor-free: naming the moderator answered the unruled decision row 19 in
+     the bell, the inbox and the default-on email. Row 19 is annotated. 100 is title-free until
+     tracker D8 is built: the poll-edit sweep notifies the voters of a post that has since gone
+     Private or been unpublished. D8 is routed to WU-TrackerFixes.
+  3. **Unsubscribe for a deleted account** (365-day token, hard delete) tripped the FK into a 500.
+     The insert is now `INSERT … SELECT … WHERE EXISTS`, and the endpoint answers the
+     invalid-link page (400).
+  4. **F42/F43/F49 L4.5 5→1.** The "copy-only" precedent the build cited had a browser pass behind
+     it.
+  5. **Tests and records.**
+     - New tests: the feed's per-field `Collapsed` against a flipped default with a row present, and
+       the SeedTool re-seed (scratch DB: 444 rows, none all-NULL, none equal to a default).
+     - Stamps: two code stamps 2026-09-30 → 2026-10-12; Spotlight F55 now counts 21 tests.
+     - Docs: an `audit/Identity.md` F1 L2 transport note; WU-QuickFixes archived (`workplan.md` was
+       1,641 lines; every other DONE entry is under two weeks old).
 - **Verification:**
   - `dotnet build`: 0 errors, 32 warnings (none in touched files).
   - `dotnet test`: **Unit 1,157** (+67), **RazorComponents 770** (unchanged), **Integration 1,401**
     (+18), all green. The four gates pass.
   - Every fix-specific test was mutation-checked: each fails with its fix reverted (two batches plus
     both directions of the email coalesce).
+  - After the review fixes: build 0 errors, 32 warnings; **Unit 1,169** (+12), **RazorComponents
+    770**, **Integration 1,408** (+7), all green; the four gates pass. Each fix was reverted in turn
+    and its tests failed: the flusher's success-path and abort-path requeues, the drain's settle
+    check, the deferral-count reset, `IsDeferral`, the conditional insert and the feed coalesce.
   - **Browser: not run, none available** → tracker **H26**.
-- **Pointers:** `audit/Notifications.md` §"WU-NotificationCorrectness Stage note";
+- **Pointers:** `audit/Notifications.md` §"WU-NotificationCorrectness Stage note" and its
+  review-fixes note; `audit/Identity.md` F1 L2 transport note;
   `audit/Messaging.md` F49; `audit/Spotlight.md` F55; `layer2-services.md` §"Notification
   Generation" / §"Email fan-out".
 
@@ -1563,79 +1605,3 @@ is pending except where a bullet says so.
   `audit/Moderation.md` F47/F48/F62 Stage notes, `audit/Export.md` F54; `roadmap.md` §Resolved (D1,
   D2) and decision rows 14–16; `testing.md` §"Testing a check-then-act guard"; tracker D6, D7, E7, F9,
   H12, D9, H15; worksheet D1/D2 "Built:" lines; browser pass: `layer5-wasm.md` §"WASM renderer vs third-party DOM" rule 3, `identity-and-authorization.md` route note, `audit/Seo.md` F64 and the browser-verification Stage notes in `audit/Stories.md` F4 and `audit/Moderation.md` F48.
-
-## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
-
-- **Cells:** none flipped. Every touched cell (F8/F9/F10 L2, F15 L2, F19 L3-Logic/L3.5, the
-  `ContentSurface` atom) was already Stage 5 and stays 5 — the already-sound-cell shape this
-  tracker exists for (B0/B4/B12/A6).
-- **Trigger:** a read of the process docs looking for gaps that are *fixes*, not decisions. Four
-  qualified; the entries that read like small fixes but are actually design questions were
-  deliberately left alone, with the reason recorded (see "Left alone" below).
-- **What landed:**
-  1. **MA-107 — DI double-registration (7 clusters).** SavedTagSelection, CustomList, Series,
-     StoryLineage, StoryAcknowledgment, StoryArc and Notification each registered the *write* class
-     against both interfaces, so a scope injecting both got two instances of the same
-     `ApplicationDbContext`-holding service. All seven now forward the read interface to the write
-     registration — the shape already used by Moderation, Badges and Fanon, and the one the audit
-     named the safer default. **Found in passing:** `ISavedTagSelectionWriteService` is the one
-     write interface in the codebase that does *not* inherit its read interface (the forwarding
-     delegate wouldn't compile), so that cluster registers the concrete class and forwards both
-     interfaces — the `ServerTagHierarchyCache` shape. Rule now recorded in `layer2-services.md`
-     §"Registering an inherited pair", which had no guidance for the inherited case at all.
-  2. **MA-408 — `SavedTagSelection` N+1.** The profile Tag Selections tab looped `HydrateDetailAsync`
-     (two queries per selection); it now runs two queries for the whole tab. New Integration test
-     guards the failure mode a batch rewrite introduces and a single-row fixture can't see: chips
-     landing on the wrong selection.
-  3. **VouchButton follow-gate staleness (tracker H6).** `FollowButton` is a self-contained write and
-     told nobody when it flipped, so `ProfileBanner` kept feeding `VouchButton` the page-load
-     `RelationshipState.IsFollowing` — follow and vouch in one visit and the vouch button stayed
-     hidden until a reload (recorded in the 2026-07-01 browser pass, never fixed). `FollowButton` now
-     raises `OnFollowChanged`; the banner mirrors it. New `ProfileBannerTests` (3).
-  4. **MA-007 + MA-211 — two dead-idiom cleanups.** `ContentSurface.FrameStyle` (the magic-int
-     switcher for a gate review that ended 2026-07-10; the component's own header said the parameter
-     goes when a treatment is ratified) and its only caller, the dev gallery's three-way switcher,
-     are gone — the ratified side rails are now a `const`. `ServerStoryArcWriteService` stopped
-     copying primary-ctor params into fields; the CS9107 alias it carried was unnecessary, since
-     `writeDb` is never passed to the base constructor and `ActiveUser` is already exposed.
-- **Left alone, deliberately:** **MA-006** (`ContentSurface`'s raw-hex reading-background palettes)
-  is a choice between tokenizing into a *locked* `@theme` manifest and recording a sanctioned
-  exception — a call, not a fix. **B15** (`CollapseCommentThreads`) is a design question the tracker
-  already reserves for Brian. **B16** (`ResultsFilterPanel`'s `PageSize` hardcode) needs a
-  consumer-contract audit, which its own entry says is a WU, not a point fix. **C3/C5** (index
-  shapes) would add DDL without measurement, against the doctrine C1 set.
-- **Also verified stale, no work needed:** **MA-509** (triplicated audience-badge statics) was
-  already extracted to `SharedUI/Groups/GroupDisplayFormat.cs` and its Desktop/Mobile copies died
-  with WU-ResponsiveMerge. `deferred-work.md` §3 and its pickup order are annotated.
-- **Verification.** `dotnet build` green (0 errors; warning count unchanged from baseline).
-  `dotnet test`: **Unit 793** (unchanged), **RazorComponents 665** (+3, new `ProfileBannerTests`),
-  **Integration 1,058 passed / 1,064 total** (+1, the new batched-hydration test). Both new tests
-  were mutation-checked by hand — each fails on the pre-fix code and passes after.
-  **Environment caveat (the 2026-09-20 run happened in a Linux cloud container, not the Windows
-  workbench):**
-  the 6 non-passing Integration tests are the whole `S3ImageStorageServiceTests` class, which needs
-  the Garage container image; every container registry's blob CDN is blocked by the container's
-  egress proxy, so those 6 could not start (`GarageFixture.InitializeAsync` — Docker image pull),
-  and the Postgres tier ran against a locally installed Postgres 16 instead of the pinned
-  `postgres:18-alpine` container. No S3/image-storage code was touched. The PowerShell gates
-  (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`, `check-a11y.ps1`, `check-render-modes.ps1`)
-  could not run either — no `pwsh` in the image.
-  **Pre-merge re-verification (2026-09-29, Windows workbench) — closes the caveat:** `dotnet build`
-  green, no warnings in any file the WU touched. Full `dotnet test` against the real containers
-  (`postgres:18-alpine` + Garage): **Unit 793/793, RazorComponents 665/665, Integration
-  1,064/1,064** — the 6 `S3ImageStorageServiceTests` and the new batched-hydration test included.
-  All four PowerShell gates passed.
-  **CI's Doc-hygiene step fixed in the same merge (2026-09-29).** The PR's CI failed at
-  `check-doc-hygiene.ps1` with 411 violations while the same script was clean on Windows. This was
-  not caused by this WU: every PR back to at least 2026-08-23, Dependabot's included, failed the same
-  step. Check 4's repo-file index ran `Get-ChildItem -Recurse` without `-Force`, and on Linux every
-  dot-prefixed directory is hidden, so `.claude/` and `.github/` were never indexed and every doc
-  cross-reference read as MISSING. Its exclusion regex also only matched `\`, and `GetFileName`
-  kept a `Client\Routes.razor`-style token whole. Fixed with `-Force`, an either-separator
-  exclusion, and `\`→`/` normalization. Verified in a `mcr.microsoft.com/powershell` Linux container
-  (411 violations reproduced; clean after the fix) and on Windows (still clean). A planted bogus
-  reference is flagged identically on both, so the check still catches real misses.
-- **Pointers:** `audit/Tags.md` §"WU-QuickFixes Stage note" (F15); `audit/Following.md`
-  §"WU-QuickFixes slice" (F19); `audit/Stories.md` §"WU-QuickFixes slice" (F8/F9/F10 + MA-211);
-  `layer2-services.md` §"Registering an inherited pair"; `hidden-deferrals-tracker.md` D4/H6;
-  `modernization-audit/deferred-work.md` §3/§6.

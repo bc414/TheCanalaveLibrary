@@ -57,6 +57,8 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
 - **L2 — Stage 5.** Cookie auth configured for 401/403 (correct, §1), `RequireConfirmedAccount`, password
   policy, `AddIdentityCore<User>().AddRoles().AddApiEndpoints()`. Post-move references resolved (see
   above). `AddIdentityCore` (vs `AddIdentity`) confirmed as the intended choice for the scaffolded UI flow.
+  The transactional mail's send-failure contract changed with the shared transport
+  (WU-NotificationCorrectness, 2026-10-12) — stage unchanged; see its transport note below.
 - **L3-Logic — Stage 5.** Scaffold uses form-POST-to-endpoint + `SignInManager` cookie writes (matches
   §9.5). §3.19 login/logout triggers added as a minimal `LoginDisplay.razor` leaf (SharedUI/Layout) — an
   `<AuthorizeView>` showing the username + a logout form-POST when authenticated, a "Log in" link to
@@ -367,6 +369,25 @@ the identical `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven
 not separately re-driven. `dotnet test` 1344/1344 (491 Unit / 450 RazorComponents / 403
 Integration). Rule: `identity-and-authorization.md` "Identity & Auth"; `run-server/SKILL.md` "Aspire path" +
 "Email ground truth".
+
+### F1 L2 — WU-NotificationCorrectness transport note (2026-10-12; review fixes 2026-10-13) — no flip
+
+The three Identity messages (confirmation link, reset link, reset code) reach SMTP through
+`SmtpEmailSender` → `IMailTransport.SendAsync`. WU-NotificationCorrectness rewrote that transport's
+failure contract for notification batches (`layer2-services.md` §"Email fan-out" → "Transport
+failure contract"), and the single-message path changed with it:
+- **Before:** only a connect or auth failure reached the Identity pages. Every failure while
+  sending was logged, counted and swallowed, so `Register`/`ForgotPassword` showed success with no
+  mail sent.
+- **After:** a 5xx reply to a still-connected client stays logged and dropped. So does a 4xx to
+  `RCPT TO` (a deferral; the single path has no retry queue — the review fixes restored that).
+  Everything else is unwrapped from `MailBatchInterruptedException` and rethrown as its inner
+  exception: a connection lost mid-send, a protocol error, or a 4xx to `MAIL FROM`/`DATA` (421
+  included). The Identity pages have no catch (unchanged), so the user now sees an error rather than
+  a false "check your email".
+- **Tests:** Unit `SmtpMailTransportClassificationTests`. A cancelled single send surfaces the
+  `OperationCanceledException` itself, not the wrapper; a 452 to the recipient on the single path
+  completes without throwing (loopback SMTP stub). No Identity page or Stage changed.
 
 ## WU38a Stage note (2026-07-11) — F1 L2/L3-Logic/L3.5 re-verified (additive); F52 L4-Style → Stage 5
 

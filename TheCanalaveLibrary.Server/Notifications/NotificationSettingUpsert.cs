@@ -86,11 +86,18 @@ public static class NotificationSettingUpsert
     /// <c>DefaultCollapsed</c>.
     ///
     /// <para>Idempotent — unsubscribing an already-unsubscribed type rewrites the same state and
-    /// returns <c>true</c>. Mail clients and link scanners both re-POST these URLs, so that is a
-    /// requirement, not a nicety; two concurrent POSTs both succeed (see the class doc).</para>
+    /// returns <see cref="UnsubscribeResult.Applied"/>. Mail clients and link scanners both re-POST
+    /// these URLs, so that is a requirement, not a nicety; two concurrent POSTs both succeed (see the
+    /// class doc).</para>
+    ///
+    /// <para><b>The account may be gone.</b> The signed token lives 365 days and account deletion is
+    /// a hard delete, so a re-POST of an old message's link can name a user who no longer exists. The
+    /// insert is conditional on the user existing (the <c>ReadingProgressFlusher</c> deleted-user
+    /// shape), so it never trips the <c>user_id</c> foreign key into a 500, and the caller answers
+    /// <see cref="UnsubscribeResult.UserGone"/> as an invalid link (WU-NotificationCorrectness review
+    /// fixes, 2026-10-13).</para>
     /// </summary>
-    /// <returns><c>false</c> when the type is unknown; otherwise <c>true</c>.</returns>
-    public static async Task<bool> UnsubscribeAsync(
+    public static async Task<UnsubscribeResult> UnsubscribeAsync(
         ApplicationDbContext writeDb,
         ReadOnlyApplicationDbContext readDb,
         int userId,
@@ -99,29 +106,48 @@ public static class NotificationSettingUpsert
     {
         NotificationType? type = await readDb.NotificationTypes
             .FirstOrDefaultAsync(t => t.NotificationTypeId == notifType, cancellationToken);
-        if (type is null) return false;
+        if (type is null) return UnsubscribeResult.UnknownType;
 
         bool? storedEmail = StoredValue(false, type.DefaultEmailEnabled);
 
         if (storedEmail is bool off)
         {
-            // Insert with collapsed NULL (tracks the default), or update email_enabled alone.
-            await writeDb.Database.ExecuteSqlAsync($"""
+            // Insert with collapsed NULL (tracks the default), or update email_enabled alone. The
+            // SELECT … WHERE EXISTS yields no row for a deleted account, so nothing is written (and
+            // the FK is never reached); an existing row of a live account is updated by ON CONFLICT.
+            int written = await writeDb.Database.ExecuteSqlAsync($"""
                 INSERT INTO user_notification_settings (user_id, notification_type_id, email_enabled, collapsed)
-                VALUES ({userId}, {(short)notifType}, {off}, NULL)
+                SELECT {userId}, {(short)notifType}, {off}, NULL::boolean
+                WHERE EXISTS (SELECT 1 FROM "AspNetUsers" u WHERE u.id = {userId})
                 ON CONFLICT (user_id, notification_type_id)
                 DO UPDATE SET email_enabled = EXCLUDED.email_enabled
                 """, cancellationToken);
-            return true;
+            return written > 0 ? UnsubscribeResult.Applied : UnsubscribeResult.UserGone;
         }
 
         // The type already defaults email off: drop an email override if one exists (no row → no-op),
         // then remove the row if that left both columns NULL.
-        await writeDb.UserNotificationSettings
+        int cleared = await writeDb.UserNotificationSettings
             .Where(s => s.UserId == userId && s.NotificationTypeId == notifType && s.EmailEnabled != null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.EmailEnabled, (bool?)null), cancellationToken);
         await DeleteIfBothDefaultAsync(writeDb, userId, notifType, cancellationToken);
-        return true;
+
+        // Nothing to clear is the normal idempotent case — unless the account itself is gone, which
+        // answers the same way as the insert branch above.
+        if (cleared == 0 && !await writeDb.Users.AnyAsync(u => u.Id == userId, cancellationToken))
+            return UnsubscribeResult.UserGone;
+        return UnsubscribeResult.Applied;
+    }
+
+    /// <summary>What <see cref="UnsubscribeAsync"/> did.</summary>
+    public enum UnsubscribeResult
+    {
+        /// <summary>Email is off for the type (or already was) — the success page.</summary>
+        Applied,
+        /// <summary>The token named a type that is not seeded — nothing written.</summary>
+        UnknownType,
+        /// <summary>The token's account no longer exists — nothing written; answered as an invalid link.</summary>
+        UserGone,
     }
 
     /// <summary>

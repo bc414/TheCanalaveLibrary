@@ -20,7 +20,8 @@ namespace TheCanalaveLibrary.Server;
 /// worker drains the buffer <em>to empty</em> within <see cref="ShutdownDrainBudget"/>, via
 /// <see cref="NotificationEmailFlusher.DrainAllAsync"/> — one final flush used to move only one batch,
 /// stranding everything past the first 200 on every deploy. Whatever is still queued when the budget
-/// runs out, or after a failed batch, is logged as a Warning with its count. A hard crash still loses
+/// runs out, after a failed batch, or because the server keeps deferring it, is logged as a Warning
+/// with its count. A hard crash still loses
 /// the in-memory buffer. That loss is acceptable and bounded by design: the in-app notification is
 /// always already durable, so the worst case is a missing email for a notification the user can still
 /// see on the site.</para>

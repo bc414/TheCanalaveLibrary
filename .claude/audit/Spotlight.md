@@ -89,9 +89,10 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   index shipped with L1 by design (low-volume table); L6 stays N/A.
 - **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12 — stage unchanged, Stage note at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
   SiteSettings cluster. Redemption is advisory-lock-serialized under `CreateExecutionStrategy()`.
-  Covered by the Integration tier (`SpotlightServiceTests`, 20 tests: grant cap/roles/donation-seam
+  Covered by the Integration tier (`SpotlightServiceTests`, 21 tests: grant cap/roles/donation-seam
   NotSupported, every redemption rejection, a two-racers-one-opening concurrency test, sweep
-  fires-once idempotency, FK cascade/SetNull, settings round-trip + non-mod write rejection) and
+  fires-once idempotency, a sponsor deleted before go-live still notifies with a null source, FK
+  cascade/SetNull, settings round-trip + non-mod write rejection) and
   the Unit tier (`SpotlightBlocksTests`, 12 tests: grid floor/pre-epoch/on-grid, bookable-block
   tiling/horizon bounds).
 - **L3-Logic / L3.5-Structure — Stage 5** (behavior changed beneath them 2026-09-30 by

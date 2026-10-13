@@ -127,6 +127,10 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
+- **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness review fixes, 2026-10-13).** The compose modal
+  now gets a 400 ("Subject must be 2048 characters or fewer.") where it got a 500. Nobody has driven
+  it in a browser. Back to 5 when tracker **H26** step 4 runs. The browser verification of 2026-07-02
+  below covers everything else.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A).** The flip makes every
   injected service need a client impl, so the old "no REST endpoints to wasm-enable" N/A no longer
   holds: endpoints + client impl live (WU-L5Sweep), and messaging read+send verified in a real WASM
@@ -396,9 +400,9 @@ re-save (or `reset-dev-db.ps1`).
 starting a conversation was refused with "This user does not accept private messages." on WASM (a
 403 on `POST /api/messaging/conversations`) and on the circuit. No `conversations` row was written.
 
-### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced
+### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes (2026-10-13)
 
-**No cell flips.** The WU35 settled decisions are untouched; the `AllowPrivateMessages` gate stays on
+**No cell flips at the build** (the review fixes flipped L4.5; last bullet). The WU35 settled decisions are untouched; the `AllowPrivateMessages` gate stays on
 `StartConversationAsync`.
 - **One save (service audit §2.8).** `StartConversationAsync` used to save the `Conversation` alone
   and then save its two participants and first message, on the false comment "EF needs the
@@ -418,7 +422,9 @@ starting a conversation was refused with "This user does not accept private mess
   error with nothing written. Unit `MessagingValidationsTests` +2 (over the cap; at the cap after
   trimming). Each fails with its fix reverted.
 - **Browser: not run.** The compose modal's refusal for a 2,049-character subject is a step in
-  tracker H26.
+  tracker H26. The review fixes (2026-10-13) flipped **F49 L4.5 5→1** until that step runs. The
+  campaign flips L4.5 when a visible refusal ships without a browser pass (WU-ModerationIntegrity's
+  F46 duplicate-report refusal); this note had first left it at 5.
 
 ### Tests (WU35, 2026-06-24)
 

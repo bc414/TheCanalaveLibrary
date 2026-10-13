@@ -63,20 +63,27 @@ public static class NotificationEmailEndpoints
                 // UnsubscribeTokenService.TryRead. Logged at Information, not Warning: stale links
                 // and link-scanner traffic make this a routine outcome, not an incident.
                 logger.LogInformation("Rejected an invalid or expired unsubscribe token.");
-                return Results.Content(Page(
-                    "Link no longer valid",
-                    "<p>This unsubscribe link has expired or is not valid.</p>" +
-                    "<p>You can still manage every notification setting from your account.</p>",
-                    settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
+                return InvalidLinkPage();
             }
 
             await using ReadOnlyApplicationDbContext readDb =
                 await readDbFactory.CreateDbContextAsync(cancellationToken);
 
-            bool applied = await NotificationSettingUpsert.UnsubscribeAsync(
+            NotificationSettingUpsert.UnsubscribeResult result = await NotificationSettingUpsert.UnsubscribeAsync(
                 writeDb, readDb, userId, notifType, cancellationToken);
 
-            if (!applied)
+            if (result == NotificationSettingUpsert.UnsubscribeResult.UserGone)
+            {
+                // A validly signed link for an account deleted since the mail went out (tokens live a
+                // year; mail clients and scanners re-POST old messages). The same page and the same
+                // Information level as an expired link: routine, nothing to unsubscribe, and the page
+                // does not reveal which of the two it was.
+                logger.LogInformation(
+                    "Unsubscribe token named user {UserId}, whose account no longer exists.", userId);
+                return InvalidLinkPage();
+            }
+
+            if (result == NotificationSettingUpsert.UnsubscribeResult.UnknownType)
             {
                 logger.LogWarning(
                     "Unsubscribe token carried unknown notification type {NotificationType} for user {UserId}.",
@@ -108,11 +115,7 @@ public static class NotificationEmailEndpoints
         {
             if (tokens.TryRead(token) is not (int _, NotificationTypeEnum notifType))
             {
-                return Results.Content(Page(
-                    "Link no longer valid",
-                    "<p>This unsubscribe link has expired or is not valid.</p>" +
-                    "<p>You can still manage every notification setting from your account.</p>",
-                    settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
+                return InvalidLinkPage();
             }
 
             await using ReadOnlyApplicationDbContext readDb =
@@ -146,6 +149,17 @@ public static class NotificationEmailEndpoints
     /// Minimal self-contained HTML shell. Inline styles only — this page must render identically
     /// whether or not the app's stylesheet loads, and it is never composed with site layout.
     /// </summary>
+    /// <summary>
+    /// The one "link no longer valid" answer (400): a tampered, expired or rotated-key token, or a
+    /// valid token whose account has since been deleted — deliberately indistinguishable.
+    /// </summary>
+    private static IResult InvalidLinkPage() =>
+        Results.Content(Page(
+            "Link no longer valid",
+            "<p>This unsubscribe link has expired or is not valid.</p>" +
+            "<p>You can still manage every notification setting from your account.</p>",
+            settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
+
     private static string Page(string title, string bodyHtml, bool settingsLink) =>
         $"""
          <!doctype html>

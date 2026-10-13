@@ -198,6 +198,48 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         dto!.Collapsed.Should().BeFalse("DefaultCollapsed for NewFollowerOnYou is false");
     }
 
+    [Fact]
+    public async Task EffectiveCollapsed_WithAnEmailOnlyOverride_FollowsADefaultFlip_AtTheFeedAndTheSettingsRead()
+    {
+        // D19's third read site (the feed) and the settings read, with a row PRESENT whose collapsed
+        // column is NULL — the case the no-row test above cannot see. A coalesce fixed at one site and
+        // missed at the other is the realistic failure (worksheet D19, Tests). Every seeded type
+        // defaults Collapsed = false, so the default is flipped to make a wrong coalesce visible.
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+        SetActiveUser(_recipientId);
+        await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: false, collapsed: false);
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row.Should().NotBeNull("email is overridden");
+        row!.Collapsed.Should().BeNull("collapsed equals its default, so it is not pinned");
+
+        // notification_types survives the Respawn reset (TablesToIgnore): restore in finally.
+        await SetDefaultCollapsedAsync(NotificationTypeEnum.NewFollowerOnYou, true);
+        try
+        {
+            NotificationDto feed = (await CallGetNotificationsAsync(page: 1, pageSize: 10))
+                .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou);
+            feed.Collapsed.Should().BeTrue("a NULL collapsed column follows the type default, row or no row");
+
+            NotificationSettingDto setting = (await CallGetSettingsAsync())
+                .Single(s => s.TypeId == NotificationTypeEnum.NewFollowerOnYou);
+            setting.Collapsed.Should().BeTrue();
+            setting.CollapsedIsDefault.Should().BeTrue("a row exists, but its collapsed field is not overridden");
+            setting.EmailEnabled.Should().BeFalse();
+            setting.EmailIsDefault.Should().BeFalse();
+
+            // An overridden collapsed wins over the (now true) default at the feed.
+            await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: false, collapsed: false);
+            (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou))!.Collapsed.Should().BeFalse();
+            (await CallGetNotificationsAsync(page: 1, pageSize: 10))
+                .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou)
+                .Collapsed.Should().BeFalse();
+        }
+        finally
+        {
+            await SetDefaultCollapsedAsync(NotificationTypeEnum.NewFollowerOnYou, false);
+        }
+    }
+
     // ── MarkAsReadAsync ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -358,7 +400,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         SetActiveUser(_recipientId);
         await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: true);
 
-        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().Be(NotificationSettingUpsert.UnsubscribeResult.Applied);
 
         UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
         row.Should().NotBeNull();
@@ -369,8 +411,8 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
     [Fact]
     public async Task Unsubscribe_WithNoRow_LeavesCollapsedNull_AndIsIdempotent()
     {
-        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
-        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue(
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().Be(NotificationSettingUpsert.UnsubscribeResult.Applied);
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().Be(NotificationSettingUpsert.UnsubscribeResult.Applied,
             "mail clients and link scanners re-POST the same link");
 
         UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
@@ -404,6 +446,29 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         (await SettingRowAsync(_actorId, NotificationTypeEnum.NewVouchOnYou)).Should().BeNull();
     }
 
+    [Fact]
+    public async Task Unsubscribe_ForADeletedAccount_WritesNothing_AndReportsTheUserGone()
+    {
+        // The token outlives the account (365 days; deletion is a hard delete). The default-on branch's
+        // insert used to trip the user_id FK into a 500 (WU-NotificationCorrectness review fixes).
+        int gone = await SeedUserAsync("NS-gone");
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<UserDeletionService>().DeleteUserAsync(gone))
+                .Should().BeTrue();
+        }
+
+        (await CallUnsubscribeAsync(gone, NotificationTypeEnum.NewFollowerOnYou))
+            .Should().Be(NotificationSettingUpsert.UnsubscribeResult.UserGone, "default-on type: the conditional insert finds no user");
+        (await CallUnsubscribeAsync(gone, NotificationTypeEnum.NewVouchOnYou))
+            .Should().Be(NotificationSettingUpsert.UnsubscribeResult.UserGone, "default-off type: nothing to clear, and no account");
+        (await SettingRowAsync(gone, NotificationTypeEnum.NewFollowerOnYou)).Should().BeNull();
+
+        // A live account with nothing to clear is still the idempotent success.
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou))
+            .Should().Be(NotificationSettingUpsert.UnsubscribeResult.Applied);
+    }
+
     // ── D23 applied: the settings upsert never 500s on a concurrent insert (R7) ──
 
     [Fact]
@@ -427,7 +492,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
                 .GetRequiredService<IDbContextFactory<ReadOnlyApplicationDbContext>>().CreateDbContextAsync();
 
             (await NotificationSettingUpsert.UnsubscribeAsync(
-                writeDb, readDb, _recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
+                writeDb, readDb, _recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().Be(NotificationSettingUpsert.UnsubscribeResult.Applied);
         }
 
         interceptor.Fired.Should().BeTrue("the competing insert must have landed before the writer's own");
@@ -891,6 +956,18 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             .FirstOrDefaultAsync();
     }
 
+    /// <summary>
+    /// Flips a type's <c>DefaultCollapsed</c>. <c>notification_types</c> is in Respawn's
+    /// <c>TablesToIgnore</c>, so every caller restores the seeded value in a <c>finally</c>.
+    /// </summary>
+    private async Task SetDefaultCollapsedAsync(NotificationTypeEnum type, bool collapsed)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.NotificationTypes.Where(t => t.NotificationTypeId == type)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.DefaultCollapsed, collapsed));
+    }
+
     /// <summary>The raw stored row (per-field NULLs visible), or null when there is none.</summary>
     private async Task<UserNotificationSetting?> SettingRowAsync(int userId, NotificationTypeEnum type)
     {
@@ -904,7 +981,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
     /// The one-click unsubscribe's write, for a user resolved from its signed token in production — so
     /// it takes the user id directly rather than the active user.
     /// </summary>
-    private async Task<bool> CallUnsubscribeAsync(int userId, NotificationTypeEnum type)
+    private async Task<NotificationSettingUpsert.UnsubscribeResult> CallUnsubscribeAsync(int userId, NotificationTypeEnum type)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext writeDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();

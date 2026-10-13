@@ -852,7 +852,10 @@ ledger. **Type-level enforcement: no `INotificationWriteService` method in this 
 moderator id parameter** — that is what stops a future call site from reintroducing the leak. The
 band is uniform on purpose, good news included: if only sanctions were anonymous, a name's presence
 would itself say "you're fine". `SpotlightSlotGranted` (90) sits outside D5's stated band and keeps its
-granting-moderator source (unruled — roadmap decision row 19).
+granting-moderator source (unruled — roadmap decision row 19). Until the row is ruled, no surface
+renders that name: `NotificationPresenter`'s 90 arm is actor-free, so the copy pre-empts neither
+answer (WU-NotificationCorrectness review fixes, 2026-10-13). A presenter arm must not settle an
+open attribution question by itself.
 
 **Dedup.** The cross-existing key is `(type, source, related entity, unread)`: a recipient who already
 holds an unread row with that key is skipped. A null source matches a null source (EF's C# null
@@ -970,6 +973,11 @@ Rules that bind the flusher:
     before it were sent (or dropped as a per-message failure) and must not be sent twice, and
     ineligible ids were already judged and are correctly gone;
   - any other transport exception → every composed id (assume nothing was processed);
+  - **a deferred mail** (below) → requeued through `NotificationEmailBuffer.Defer`, which counts
+    deferrals per id and drops the mail at `MaxDeferrals` (10) — counted on `canalave.email.failed`
+    and logged at Error there. Deferred mails never hold back the rest of the batch (WU-NotificationCorrectness
+    review fixes, 2026-10-13: before them a 4xx to one recipient aborted the batch, and that mail,
+    restored at the head of the tail, aborted every later batch too);
   - **cancellation restores too.** A shutdown that cancels a send mid-batch restores the unsent
     remainder and rethrows the `OperationCanceledException` itself, so the worker's shutdown path
     still sees an OCE. Error-level logging is for non-cancellation failures only.
@@ -978,8 +986,9 @@ Rules that bind the flusher:
 - **Shutdown drains to empty, within a budget.** A batch is bounded (`MaxBatchSize` = 200, deliberate
   per-tick work), so one final flush would strand everything past the first batch.
   `NotificationEmailFlusher.DrainAllAsync(budget)` loops `FlushAsync` while the buffer is non-empty,
-  stops on the first failed batch (already restored) or on cancellation, and returns the stranded
-  count; the worker runs it under `NotificationEmailWorker.ShutdownDrainBudget` (15 s, inside the
+  stops on the first failed batch (already restored), on a batch that settled nothing (everything it
+  drained was deferred again — retrying at once would only repeat the deferral) or on cancellation,
+  and returns the stranded count; the worker runs it under `NotificationEmailWorker.ShutdownDrainBudget` (15 s, inside the
   host's default 30 s `ShutdownTimeout`) and logs a Warning with the count when anything is
   stranded. A hard crash still loses the in-memory buffer; the in-app rows are durable either way.
 - **Never silently drop.** If the buffer's bound is hit, log and increment a counter — a fan-out
@@ -992,20 +1001,36 @@ single-sourced. Selecting a provider is a config change; no code depends on whic
 
 **Transport failure contract — partial progress is reported, never guessed**
 (WU-NotificationCorrectness, 2026-10-12; `IMailTransport.SendBatchAsync`'s doc is the normative
-copy). A batch has two failure classes:
+copy). A send has three outcomes besides success:
 - **Per-message terminal** — logged, counted on `canalave.email.failed`, dropped, and the batch goes
   on. It is either a failure to *compose* the message (a malformed address, a bad header: the same
   input fails the same way forever) or an SMTP **5xx** reply while the client is **still connected**
   (`SmtpMailTransport.IsPerMessageFailure` is the one copy of that rule).
-- **Batch abort** — everything else: a 4xx (transient, including provider throttling such as
-  421/451/454), a protocol error, a dropped connection, any failure after the client disconnected,
-  connect/auth failure, and cancellation between messages. The transport throws
-  `MailBatchInterruptedException(ProcessedCount, inner)`, where `ProcessedCount` counts the
-  **leading** messages that reached a terminal outcome; messages from `ProcessedCount` on were not
-  sent and are safe to retry. A transport that processed ≥ 1 message before failing **must** wrap.
-  Aborts are not counted as `failed` (they are retried) and are logged once, by the caller.
-- The single-message `SendAsync` (Identity's confirmation/reset mail) unwraps and rethrows the inner
-  exception, so Identity sees the same exception classes it always saw for a connect failure.
+- **Deferred** — a **4xx reply to `RCPT TO`** (MailKit's `SmtpErrorCode.RecipientNotAccepted`) other
+  than 421, while the client is still connected: a full mailbox, greylisting, a per-recipient rate
+  limit. The reply is about that one recipient and the connection is fine, so the batch goes on;
+  `SendBatchAsync` returns the deferred indices and the caller retries them later
+  (`SmtpMailTransport.IsDeferral` is the one copy of that rule; WU-NotificationCorrectness review
+  fixes, 2026-10-13). Not counted as `failed` and not logged by the transport (the span records it):
+  the caller decides whether the mail is ever dropped. Aborting the batch here instead would let one
+  mailbox that keeps answering 4xx stall every mail queued behind it, because the restored mail leads
+  the retried tail.
+- **Batch abort** — everything else: a 4xx to the connection, the sender or the message data
+  (421 anywhere included — provider throttling such as 421/451/454 lands here), a protocol error, a
+  dropped connection, any failure after the client disconnected, connect/auth failure, and
+  cancellation between messages. The transport throws
+  `MailBatchInterruptedException(ProcessedCount, inner, DeferredIndices)`, where `ProcessedCount`
+  counts the **leading** messages the transport finished with (sent, dropped, or deferred — the
+  deferred ones listed in `DeferredIndices`); messages from `ProcessedCount` on were not sent and are
+  safe to retry. A transport that processed ≥ 1 message before failing **must** wrap. Aborts are not
+  counted as `failed` (they are retried) and are logged once, by the caller.
+- The single-message `SendAsync` (Identity's confirmation/reset mail) has no retry queue, so a
+  deferral there is per-message terminal (logged, counted, dropped — what that path did for every
+  send failure before WU-NotificationCorrectness), and a batch abort is unwrapped to its inner
+  exception, so Identity sees the same exception classes it always saw for a connect failure. Since
+  WU-NotificationCorrectness that includes a send-time connection loss, protocol error or a 4xx to
+  `MAIL FROM`/`DATA`, which the Identity pages (no catch) surface as an error rather than a silent
+  "sent" (`audit/Identity.md` F1 L2 note).
 
 **Absolute links.** Use `IPublicUrlProvider.AbsolutePageUrl` (`Core/Seo/`, backed by
 `Site:PublicBaseUrl`). A worker has no `HttpContext`, and a request-derived base is wrong here for
@@ -1017,7 +1042,12 @@ add one.
 visible footer link. Unsubscribing turns email off for one type through the same sparse helper as
 `SetSettingAsync` (`NotificationSettingUpsert`) — never reimplement the "matches default ⇒ NULL;
 both NULL ⇒ delete the row" rule. It writes only `email_enabled` and leaves `collapsed` alone
-(§"Filtering semantics"), and it is idempotent: mail clients and link scanners both re-POST.
+(§"Filtering semantics"), and it is idempotent: mail clients and link scanners both re-POST. The
+signed token outlives the account it names (365 days; account deletion is a hard delete), so the
+insert is conditional on the user still existing (`INSERT … SELECT … WHERE EXISTS`, the
+`ReadingProgressFlusher` deleted-user shape) and a link for a deleted account answers the "link no
+longer valid" page (400), never a foreign-key 500 (WU-NotificationCorrectness review fixes,
+2026-10-13).
 
 **Email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text — the per-type
 switch is not forked. Bodies are table-based inline-CSS HTML and are the one markup surface

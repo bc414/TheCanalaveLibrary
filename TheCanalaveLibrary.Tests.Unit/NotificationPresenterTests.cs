@@ -229,6 +229,7 @@ public class NotificationPresenterTests
         NotificationTypeEnum.ExternalLinkVerified, NotificationTypeEnum.ExternalLinkRejected,
         NotificationTypeEnum.ReportReceived, NotificationTypeEnum.ReportResolved,
         NotificationTypeEnum.ReportResolvedNoAction, NotificationTypeEnum.TagUpdateSuggestion,
+        NotificationTypeEnum.SpotlightSlotGranted, NotificationTypeEnum.PollUpdated,
     ];
 
     [Theory]
@@ -326,10 +327,21 @@ public class NotificationPresenterTests
     }
 
     [Fact]
-    public void Compose_Spotlight90To92_NameTheActorAndTheStory()
+    public void Compose_SpotlightSlotGranted_NeverNamesTheGrantingModerator()
     {
-        NotificationPresenter.Compose(Make(NotificationTypeEnum.SpotlightSlotGranted, NotificationCategoryEnum.SiteNews,
-            sourceUserName: "ModUser")).Text.Should().Be("ModUser granted you a Community Spotlight slot");
+        // Whether a grant names its moderator is roadmap decision row 19, unruled. The row carries
+        // the moderator as its source, so the arm must not render it — in the bell, the inbox or the
+        // (default-on) email — until the owner rules (WU-NotificationCorrectness review fixes).
+        foreach (string? moderator in new[] { "ModUser", null })
+        {
+            NotificationPresenter.Compose(Make(NotificationTypeEnum.SpotlightSlotGranted, NotificationCategoryEnum.SiteNews,
+                sourceUserName: moderator)).Text.Should().Be("You were granted a Community Spotlight slot");
+        }
+    }
+
+    [Fact]
+    public void Compose_Spotlight91And92_NameTheSponsorAndTheStory()
+    {
         NotificationPresenter.Compose(Make(NotificationTypeEnum.StorySpotlighted, NotificationCategoryEnum.YourStories,
             sourceUserName: "Sponsor", targetTitle: "The Dragon's Path")).Text
             .Should().Be("Sponsor put The Dragon's Path in the Community Spotlight");
@@ -347,11 +359,14 @@ public class NotificationPresenterTests
     }
 
     [Fact]
-    public void Compose_PollUpdated_IsActorFree_AndNamesThePostWhenThereIsOne()
+    public void Compose_PollUpdated_IsActorFree_AndTitleFree()
     {
+        // Title-free until tracker D8 is built: the post title resolves through BlogPostDirect, which
+        // still resolves a post its author has since made Private or unpublished, and the poll-edit
+        // sweep notifies that post's voters too (WU-NotificationCorrectness review fixes).
         NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows,
             sourceUserName: "AuthorAlpha", targetTitle: "Weekly Poll")).Text
-            .Should().Be("A poll you voted on in Weekly Poll was changed");
+            .Should().Be("A poll you voted on was changed");
         NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows)).Text
             .Should().Be("A poll you voted on was changed", "a site poll carries no related entity");
     }

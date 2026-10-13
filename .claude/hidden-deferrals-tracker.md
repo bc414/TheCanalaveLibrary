@@ -755,7 +755,7 @@ unless noted. All sit under Stage-5 cells.
     question, so it is recorded rather than fixed. A status move deliberately does not touch
     `LastUpdatedDate` (`layer2-services.md` §"Story Lifecycle"); this item is about chapters only.
 
-- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness, which re-scoped it without building it (2026-10-12; see the last bullets).*
+- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness, which re-scoped it without building it (2026-10-12); its review fixes routed it to WU-TrackerFixes (2026-10-13; see the last bullets).*
   - Grid: F41/F42 L2=5 (unchanged).
   - Source: `NotificationEnricher.BatchLoadEntitiesAsync`, `BlogPostDirect` branch (used by
     `NewBlogPostByFollowedUser`/`OnFollowedStory`/`OnFavoritedStory`/`OnReadItLaterStory`,
@@ -785,7 +785,15 @@ unless noted. All sit under Stage-5 cells.
       recipients.
     The split keeps the enricher recipient-agnostic; the second answers the general case. Either way,
     add Integration tests that the author's own 33 keeps its title and that a follower's 13 loses it.
-  - Owner: no WU. The next notification-enricher change takes it.
+  - **Type 100 is held title-free until this is built** (WU-NotificationCorrectness review fixes,
+    2026-10-13). The WU's new `PollUpdated` arm had put the post title into visible text, and the
+    poll-edit sweep notifies the voters of a post whose author has since gone Private or that is
+    unpublished. That is a fresh notification naming a hidden post, not just a stale one. The arm now
+    reads "A poll you voted on was changed". Building D8 lets it name the post again: restore
+    `{target}` in the arm and add a presenter test.
+  - **Owner: WU-TrackerFixes** (the campaign's tracker sweep, which works from this file's open items),
+    routed by the WU-NotificationCorrectness review fixes on 2026-10-13. Recommended shape: the type
+    split above. It keeps the enricher recipient-agnostic, which the email flusher needs.
 
 - [ ] **D9 — Moderator free-text reasons travel in the query string** `[latent-risk · low · launch]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass; not decided there.*
   - Grid: F47/F48 L5=5 (unchanged).
@@ -1654,16 +1662,19 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - Fix shape: return to the editor (or the story page) when the chapter is unpublished. Showing
       authors their own drafts on the reading page would be a different, owner-level call.
 - [ ] **H26 — WU-NotificationCorrectness browser pass: the new notification copy, the settings page on the per-field DTO, the subject cap** `[test-hygiene · low · beta]` — *Filed 2026-10-12 by WU-NotificationCorrectness, which ran with no browser available.*
-  - Grid: no cell moved. F42 L4.5 stays 5 as a copy-only change (the WU-InertFeatures presenter-slice
-    precedent); F43 and F49 had no UI change.
+  - Grid: **F42, F43 and F49 L4.5 = 1** (5→1 at the WU's review fixes, 2026-10-13). Running this pass
+    returns them to 5. The build had kept F42 at 5 as a "copy-only change", citing the WU-InertFeatures
+    presenter slice, but that slice had a browser pass behind it.
   - **Steps** (both render phases; `psql` as ground truth; the Aspire path for the mail steps):
-    1. **Presenter copy, 90–92 and 100** (all four read "You have a new notification" before). Grant
-       a slot on `/mod/spotlight` → the awardee's bell reads "{moderator} granted you a Community
-       Spotlight slot". Redeem it for another author's story with a recommendation attached; at
-       go-live the author reads "{sponsor} put {story} in the Community Spotlight" and the
-       recommender "… with your recommendation". Edit a poll someone voted on; after the 30-minute
-       quiet period the voter reads "A poll you voted on in {post} was changed". Mailpit: the same text
-       is each email's subject and lead line.
+    1. **Presenter copy, 90–92 and 100** (all four read "You have a new notification" before).
+       - Grant a slot on `/mod/spotlight`. The awardee's bell reads "You were granted a Community
+         Spotlight slot", with no moderator name: decision row 19 is unruled.
+       - Redeem it for another author's story with a recommendation attached. At go-live the author
+         reads "{sponsor} put {story} in the Community Spotlight", and the recommender reads "… with
+         your recommendation".
+       - Edit a poll someone voted on. After the 30-minute quiet period the voter reads "A poll you
+         voted on was changed", with no post title (tracker D8).
+       - Mailpit: each email's lead line is the same text, and its subject is the type's display name.
     2. **Settings page on the per-field DTO** (`/notifications/settings`). Toggle only Collapsed for
        New Chapter. The row is `email_enabled NULL, collapsed true`, and the page still shows Email on
        after a reload. Toggle it back: the row is gone. On WASM, a stale bundle that still expects
@@ -1672,9 +1683,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `email_enabled false`, `collapsed` unchanged. A second POST still answers 200.
     4. **Compose modal subject cap.** A 2,049-character subject is refused with "Subject must be 2048
        characters or fewer." (400 on WASM). No `conversations` row is written.
-  - Not browser-observable: the mid-batch restore, the shutdown drain, the feed tiebreak and the
-    deleted-sponsor null source. Integration covers them (`audit/Notifications.md`,
-    WU-NotificationCorrectness Stage note).
+  - Not browser-observable: the mid-batch restore, the shutdown drain, the feed tiebreak, the
+    deleted-sponsor null source, the deferral of a 4xx recipient and the deleted-account unsubscribe
+    (400). Integration and Unit cover them (`audit/Notifications.md`, the WU-NotificationCorrectness
+    Stage note and its review-fixes note).
 
 ---
 

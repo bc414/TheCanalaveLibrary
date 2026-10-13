@@ -32,7 +32,8 @@ namespace TheCanalaveLibrary.SharedUI;
 /// any future type added to <see cref="NotificationTypeEnum"/> before this switch is updated —
 /// every <em>existing</em> type has its own arm, which <c>NotificationPresenterTests</c> asserts
 /// (90–92 and 100 used to reach the catch-all; arms added WU-NotificationCorrectness, 2026-10-12).
-/// The text also feeds the notification email's subject and body.</para>
+/// The text is also the notification email's lead line (its subject is the type's display
+/// name).</para>
 /// </summary>
 public static class NotificationPresenter
 {
@@ -233,11 +234,12 @@ public static class NotificationPresenter
 
             // ── Community Spotlight (90–92; arms added WU-NotificationCorrectness, 2026-10-12 —
             // they used to fall through to the catch-all) ──────────────────────────────
-            // 90 keeps its granting moderator as the source (roadmap decision row 19, unruled), so
-            // the arm names them, as that row's "as built" describes; a deleted moderator reads
-            // "Someone".
+            // 90 is composed actor-free. Whether a slot grant names the granting moderator is
+            // roadmap decision row 19, still unruled; the row keeps the moderator as the source, but
+            // no surface shows the name until the owner rules. The arm reads correctly under either
+            // answer, and the email (default on) cannot carry a name the owner may yet de-identify.
             NotificationTypeEnum.SpotlightSlotGranted =>
-                $"{actor} granted you a Community Spotlight slot",
+                "You were granted a Community Spotlight slot",
 
             // {actor} = the sponsor (null after their account's deletion → "Someone");
             // {target} = the spotlighted story.
@@ -251,13 +253,13 @@ public static class NotificationPresenter
                     ? $"{actor} put {target} in the Community Spotlight with your recommendation"
                     : $"{actor} put a story in the Community Spotlight with your recommendation",
 
-            // ── Polls (100) — composed actor-free: a site poll's owner is staff, and the voter
-            // needs the change, not who made it. {target} = the owning blog post (null for site
-            // polls, which carry no related entity). ───────────────────────────────────────
+            // ── Polls (100) — composed actor-free and title-free. Actor-free: a site poll's owner
+            // is staff, and the voter needs the change, not who made it. Title-free until tracker
+            // D8 is built: the owning post's title resolves through BlogPostDirect, which does not
+            // yet drop a post its author has since made Private or unpublished, and the poll-edit
+            // sweep notifies voters of such a post too. The link still leads to the post. ──────
             NotificationTypeEnum.PollUpdated =>
-                target is not null
-                    ? $"A poll you voted on in {target} was changed"
-                    : "A poll you voted on was changed",
+                "A poll you voted on was changed",
 
             // ── Forward-compat catch-all (a type minted before its arm is written) ──
             _ => "You have a new notification"

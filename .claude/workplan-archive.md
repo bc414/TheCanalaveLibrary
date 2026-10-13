@@ -9,8 +9,10 @@
 > pages), then dated DONE entries 2026-07-06 → 2026-07-18 (first sweep, 2026-07-27), then
 > 2026-07-23 → 2026-08-01, oldest first (second sweep, 2026-09-30 — `workplan.md` had reached
 > 2,516 lines against its ~1,500 trigger; entries moved verbatim, only their order reversed to
-> keep this file chronological). Entries from 2026-09-20 onward remain in `workplan.md` until a
-> future archival sweep.
+> keep this file chronological), then WU-QuickFixes (2026-09-20; third sweep, 2026-10-13, by the
+> WU-NotificationCorrectness review fixes — `workplan.md` had reached 1,641 lines, and it was the
+> only DONE entry older than two weeks). Entries from 2026-09-30 onward remain in `workplan.md`
+> until a future archival sweep.
 
 ---
 
@@ -5399,3 +5401,81 @@ written there as planned items and updated in place to DONE without being re-fil
 - **Dev-DB note:** the browser pass mutated the persistent workbench — AuthorBeta is Suspended,
   LurkerDelta Banned, two new reports exist. `scripts\reset-dev-db.ps1` restores it (and the seeder
   now creates a User-targeted report, so `/mod/users` is non-empty on a fresh seed).
+
+---
+
+## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
+
+- **Cells:** none flipped. Every touched cell (F8/F9/F10 L2, F15 L2, F19 L3-Logic/L3.5, the
+  `ContentSurface` atom) was already Stage 5 and stays 5 — the already-sound-cell shape this
+  tracker exists for (B0/B4/B12/A6).
+- **Trigger:** a read of the process docs looking for gaps that are *fixes*, not decisions. Four
+  qualified; the entries that read like small fixes but are actually design questions were
+  deliberately left alone, with the reason recorded (see "Left alone" below).
+- **What landed:**
+  1. **MA-107 — DI double-registration (7 clusters).** SavedTagSelection, CustomList, Series,
+     StoryLineage, StoryAcknowledgment, StoryArc and Notification each registered the *write* class
+     against both interfaces, so a scope injecting both got two instances of the same
+     `ApplicationDbContext`-holding service. All seven now forward the read interface to the write
+     registration — the shape already used by Moderation, Badges and Fanon, and the one the audit
+     named the safer default. **Found in passing:** `ISavedTagSelectionWriteService` is the one
+     write interface in the codebase that does *not* inherit its read interface (the forwarding
+     delegate wouldn't compile), so that cluster registers the concrete class and forwards both
+     interfaces — the `ServerTagHierarchyCache` shape. Rule now recorded in `layer2-services.md`
+     §"Registering an inherited pair", which had no guidance for the inherited case at all.
+  2. **MA-408 — `SavedTagSelection` N+1.** The profile Tag Selections tab looped `HydrateDetailAsync`
+     (two queries per selection); it now runs two queries for the whole tab. New Integration test
+     guards the failure mode a batch rewrite introduces and a single-row fixture can't see: chips
+     landing on the wrong selection.
+  3. **VouchButton follow-gate staleness (tracker H6).** `FollowButton` is a self-contained write and
+     told nobody when it flipped, so `ProfileBanner` kept feeding `VouchButton` the page-load
+     `RelationshipState.IsFollowing` — follow and vouch in one visit and the vouch button stayed
+     hidden until a reload (recorded in the 2026-07-01 browser pass, never fixed). `FollowButton` now
+     raises `OnFollowChanged`; the banner mirrors it. New `ProfileBannerTests` (3).
+  4. **MA-007 + MA-211 — two dead-idiom cleanups.** `ContentSurface.FrameStyle` (the magic-int
+     switcher for a gate review that ended 2026-07-10; the component's own header said the parameter
+     goes when a treatment is ratified) and its only caller, the dev gallery's three-way switcher,
+     are gone — the ratified side rails are now a `const`. `ServerStoryArcWriteService` stopped
+     copying primary-ctor params into fields; the CS9107 alias it carried was unnecessary, since
+     `writeDb` is never passed to the base constructor and `ActiveUser` is already exposed.
+- **Left alone, deliberately:** **MA-006** (`ContentSurface`'s raw-hex reading-background palettes)
+  is a choice between tokenizing into a *locked* `@theme` manifest and recording a sanctioned
+  exception — a call, not a fix. **B15** (`CollapseCommentThreads`) is a design question the tracker
+  already reserves for Brian. **B16** (`ResultsFilterPanel`'s `PageSize` hardcode) needs a
+  consumer-contract audit, which its own entry says is a WU, not a point fix. **C3/C5** (index
+  shapes) would add DDL without measurement, against the doctrine C1 set.
+- **Also verified stale, no work needed:** **MA-509** (triplicated audience-badge statics) was
+  already extracted to `SharedUI/Groups/GroupDisplayFormat.cs` and its Desktop/Mobile copies died
+  with WU-ResponsiveMerge. `deferred-work.md` §3 and its pickup order are annotated.
+- **Verification.** `dotnet build` green (0 errors; warning count unchanged from baseline).
+  `dotnet test`: **Unit 793** (unchanged), **RazorComponents 665** (+3, new `ProfileBannerTests`),
+  **Integration 1,058 passed / 1,064 total** (+1, the new batched-hydration test). Both new tests
+  were mutation-checked by hand — each fails on the pre-fix code and passes after.
+  **Environment caveat (the 2026-09-20 run happened in a Linux cloud container, not the Windows
+  workbench):**
+  the 6 non-passing Integration tests are the whole `S3ImageStorageServiceTests` class, which needs
+  the Garage container image; every container registry's blob CDN is blocked by the container's
+  egress proxy, so those 6 could not start (`GarageFixture.InitializeAsync` — Docker image pull),
+  and the Postgres tier ran against a locally installed Postgres 16 instead of the pinned
+  `postgres:18-alpine` container. No S3/image-storage code was touched. The PowerShell gates
+  (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`, `check-a11y.ps1`, `check-render-modes.ps1`)
+  could not run either — no `pwsh` in the image.
+  **Pre-merge re-verification (2026-09-29, Windows workbench) — closes the caveat:** `dotnet build`
+  green, no warnings in any file the WU touched. Full `dotnet test` against the real containers
+  (`postgres:18-alpine` + Garage): **Unit 793/793, RazorComponents 665/665, Integration
+  1,064/1,064** — the 6 `S3ImageStorageServiceTests` and the new batched-hydration test included.
+  All four PowerShell gates passed.
+  **CI's Doc-hygiene step fixed in the same merge (2026-09-29).** The PR's CI failed at
+  `check-doc-hygiene.ps1` with 411 violations while the same script was clean on Windows. This was
+  not caused by this WU: every PR back to at least 2026-08-23, Dependabot's included, failed the same
+  step. Check 4's repo-file index ran `Get-ChildItem -Recurse` without `-Force`, and on Linux every
+  dot-prefixed directory is hidden, so `.claude/` and `.github/` were never indexed and every doc
+  cross-reference read as MISSING. Its exclusion regex also only matched `\`, and `GetFileName`
+  kept a `Client\Routes.razor`-style token whole. Fixed with `-Force`, an either-separator
+  exclusion, and `\`→`/` normalization. Verified in a `mcr.microsoft.com/powershell` Linux container
+  (411 violations reproduced; clean after the fix) and on Windows (still clean). A planted bogus
+  reference is flagged identically on both, so the check still catches real misses.
+- **Pointers:** `audit/Tags.md` §"WU-QuickFixes Stage note" (F15); `audit/Following.md`
+  §"WU-QuickFixes slice" (F19); `audit/Stories.md` §"WU-QuickFixes slice" (F8/F9/F10 + MA-211);
+  `layer2-services.md` §"Registering an inherited pair"; `hidden-deferrals-tracker.md` D4/H6;
+  `modernization-audit/deferred-work.md` §3/§6.
