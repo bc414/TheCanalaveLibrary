@@ -96,6 +96,7 @@ else
                            OnSendReply="HandleSendReplyAsync"
                            OnLoadOlderMessages="HandleLoadOlderAsync"
                            OnToggleArchive="HandleToggleArchiveAsync"
+                           OnReportMessage="@(id => _reportDialog.OpenAsync(ReportedEntityType.Message, id))"
                            IsArchived="@(_threadHeader?.IsArchived ?? false)"
                            BusyArchiving="_archiving"
                            BusySending="_replying"
@@ -103,6 +104,9 @@ else
                            ErrorMessage="@_replyError" />
         </section>
     </div>
+
+    @* Reporting a message (tracker B17): the page is [Authorize], so every viewer may report. *@
+    <ReportDialog @ref="_reportDialog" />
 
     @* Compose modal renders as a fixed overlay; position is independent of layout. *@
     <ComposeConversationModal IsOpen="_composeOpen"
@@ -169,6 +173,7 @@ else
 
     // The thread pane, for emptying its reply composer after a successful send.
     private MessageThread? _thread;
+    private ReportDialog _reportDialog = default!;
 
     /// <summary>
     /// Accumulated messages in newest-first order ([newest,...,oldest]).

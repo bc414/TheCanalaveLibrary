@@ -5,7 +5,7 @@
    Surface like all UGC. Authorship is signaled by layout only — own messages right-aligned,
    the other party left-aligned, each side carrying its avatar + name (Container metadata).
    MessageText is stored sanitized HTML (sanitize-once-on-save) — rendered via RichTextView.
-   No service injection. *@
+   No service injection; Report is a HasDelegate-gated callback the page wires. *@
 
 <div class="flex @(Message.IsOwnMessage ? "flex-row-reverse" : "flex-row") items-start gap-2">
     @* alt="" (WU-A11y, 2026-07-31): the adjacent sender-name <span> already carries the name. *@
@@ -23,13 +23,28 @@
             <RichTextView HtmlContent="@Message.MessageText" />
         </ContentSurface>
 
-        <time class="text-xs text-(--color-text-muted)"
-              datetime="@Message.DateSent.ToString("O")">
-            @Message.DateSent.ToString("MMM d, yyyy h:mm tt")
-        </time>
+        <div class="flex items-center gap-2 text-xs text-(--color-text-muted)">
+            <time datetime="@Message.DateSent.ToString("O")">
+                @Message.DateSent.ToString("MMM d, yyyy h:mm tt")
+            </time>
+            @* Report (tracker B17) — the other party's messages only, host-wired *@
+            @if (!Message.IsOwnMessage && OnReport.HasDelegate)
+            {
+                <button type="button"
+                        class="hover:text-danger transition-colors"
+                        aria-label="Report this message"
+                        @onclick="() => OnReport.InvokeAsync(Message.MessageId)">
+                    Report
+                </button>
+            }
+        </div>
     </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public MessageDto Message { get; set; } = null!;
+
+    /// <summary>Report this message — raises its id (tracker B17). Never rendered on the viewer's
+    /// own message.</summary>
+    [Parameter] public EventCallback<long> OnReport { get; set; }
 }

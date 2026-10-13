@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Bunit;
+using Bunit.TestDoubles;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -21,6 +23,7 @@ public class BookshelvesPageTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiFakeService = new();
     private readonly FakeStoryReadService _storyReadService = new();
+    private readonly FakeUserSettingsService _settingsService = new();
 
     public BookshelvesPageTests()
     {
@@ -36,12 +39,19 @@ public class BookshelvesPageTests : BunitContext
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ReportDialog (inside the page) injects IReportSubmissionService (D9 split).
         Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
+        // The page reads the viewer's DefaultPaginationSize for its page size (tracker B16).
+        Services.AddScoped<IUserSettingsService>(_ => _settingsService);
+        // TagFilter's saved-selection flyouts render for a signed-in viewer (WU43).
+        Services.AddScoped<ISavedTagSelectionReadService>(_ => new FakeSavedTagSelectionReadService());
+        Services.AddScoped<ISavedTagSelectionWriteService>(_ => new FakeSavedTagSelectionWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine —
         // _currentUserId stays null). TagFilter's WU43 flyouts stay off the DOM the same way.
-        this.AddAuthorization();
+        _auth = this.AddAuthorization();
     }
+
+    private readonly BunitAuthorizationContext _auth;
 
     // ── Factory helpers ──────────────────────────────────────────────────────────
 
@@ -132,5 +142,20 @@ public class BookshelvesPageTests : BunitContext
 
         string href = cut.Find("nav a[aria-current='page']").GetAttribute("href") ?? "";
         href.Should().Contain(BookshelfTabSlug.For(BookshelfTab.Completed));
+    }
+
+    // ── Page size (tracker B16) ──────────────────────────────────────────────────
+
+    [Fact]
+    public void SignedInViewer_ListingsAreSizedByTheirDefaultPaginationSize()
+    {
+        // The page is [Authorize] in production; the settings read runs before the first load.
+        _auth.SetAuthorized("user-7").SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        _settingsService.DefaultPaginationSize = 50;
+
+        RenderPage(BookshelfTab.Favorites);
+
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(50,
+            "the viewer's DefaultPaginationSize sizes the shelf, not a constant 20");
     }
 }

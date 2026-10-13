@@ -213,8 +213,16 @@
     // the interaction checkboxes would never reflect the defaults actually applied to the query.
     private bool _userHasInteracted;
 
+    // Page size is the dispatcher's, resolved from the viewer's DefaultPaginationSize (tracker B16):
+    // the panel only echoes it on Apply. No control here edits it, so it tracks InitialFilter on
+    // every parameter set, ahead of the interaction guard below (layer3.5-structure.md §"Seed state
+    // vs. live fetch in filter components").
+    private int _pageSize = new StoryFilterDto().PageSize;
+
     protected override void OnParametersSet()
     {
+        if (InitialFilter is not null) _pageSize = InitialFilter.PageSize;
+
         if (_userHasInteracted) return;
 
         // Seed tag chips from the explicit chip params (resolved by the dispatcher via
@@ -293,7 +301,7 @@
             ExcludedShips = _excludedShips,
             Sort = effectiveSort,
             Page = 1,
-            PageSize = 20
+            PageSize = _pageSize
         };
 
         await OnSearch.InvokeAsync(dto);

@@ -3,8 +3,9 @@
 @inject IReportSubmissionService ReportSubmission
 @inject ILogger<ReportDialog> Logger
 
-@* Report dialog (WU34 Feature 46). Cross-cutting leaf — consumed by StoryCard, UserCard,
-   CommentItem, BlogPostCard, recommendation cards, and the message thread. Built on the shared
+@* Report dialog (WU34 Feature 46). Cross-cutting leaf — one host per page, opened by StoryCard
+   (via StoryDeck), UserCard, CommentItem, BlogPostCard, BlogPostPage, RecommendationCard and
+   MessageItem (every allow-set type has an entry point since tracker B17). Built on the shared
    Modal primitive (extracted WU-A11y, 2026-07-31 — see layer3.5-structure.md "Container
    Composite"). Reports are submitted without page navigation. Injects the narrow
    IReportSubmissionService, never a moderator interface (owner ruling D9 — this leaf sits on public

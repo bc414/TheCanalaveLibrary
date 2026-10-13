@@ -133,6 +133,10 @@ else
             }
         </div>
 
+        @* One ReportDialog host per page, at page level so the stories and the blog section both reach it
+           (tracker B17; the WU34 one-host rule). *@
+        <ReportDialog @ref="_reportDialog" />
+
         @* The sole admin's Leave confirms first (D13's recommended rider: warn rather than cure). *@
         <ConfirmDialog @bind-IsOpen="_confirmLastAdminLeaveOpen" Title="Leave as the only admin?" IsDestructive="true"
                        ConfirmText="Leave group" CancelText="Stay" OnConfirm="HandleLeaveAsync">
@@ -185,7 +189,6 @@ else
                                EmptyMessage="No stories in this group yet."
                                OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))"
                                CardOverlay="@AdminStoryOverlay" />
-                    <ReportDialog @ref="_reportDialog" />
                     <ConfirmDialog @bind-IsOpen="_confirmRemoveOpen" Title="Remove story?" IsDestructive="true"
                                    ConfirmText="Remove" CancelText="Cancel" OnConfirm="HandleRemoveConfirmedAsync">
                         <p class="text-(--color-text)">
@@ -214,7 +217,13 @@ else
                         <div class="flex flex-col gap-3">
                             @foreach (BlogPostListingDto post in BlogPosts)
                             {
-                                <BlogPostCard Post="post" />
+                                @* Report (tracker B17): signed-in viewers only; IsOwner hides it on
+                                   the viewer's own post. No EditHref: group-post edits are B25. *@
+                                <BlogPostCard Post="post"
+                                              IsOwner="@(_currentUserId is not null && post.AuthorId == _currentUserId)"
+                                              OnReport="@(_currentUserId is not null
+                                                  ? EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.BlogPost, id))
+                                                  : default)" />
                             }
                         </div>
                         @if (TotalBlogPosts > BlogPosts.Length)

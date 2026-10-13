@@ -151,11 +151,24 @@ else
                 <a href="/blog/@Post.BlogPostId/edit"
                    class="text-sm text-(--color-action-ink) hover:underline">Edit</a>
             }
+
+            @* Report (tracker B17): signed-in non-authors only — the report endpoint requires auth.
+               Same Control recipe as BlogPostCard's footer Report. *@
+            @if (_currentUserId is not null && !isAuthor)
+            {
+                <button type="button"
+                        class="text-sm text-(--color-text-muted) hover:text-danger hover:underline"
+                        @onclick="() => _reportDialog.OpenAsync(ReportedEntityType.BlogPost, Post.BlogPostId)">
+                    Report post
+                </button>
+            }
         </div>
 
         <ErrorAlert Message="@_likeError" ShowSignIn="@_likeErrorIsSessionExpired" />
 
     </article>
+
+    <ReportDialog @ref="_reportDialog" />
 
     @* ── Polls (Feature 37) — blocks after the post content, before comments.
          Authors manage polls in the edit page; here they render vote-only. ──── *@
@@ -212,6 +225,8 @@ else
 
     // Current viewer (null = anonymous).
     private int? _currentUserId;
+
+    private ReportDialog _reportDialog = default!;
 
     // Like state — initialised from Post, then updated optimistically.
     private int _likeCount;

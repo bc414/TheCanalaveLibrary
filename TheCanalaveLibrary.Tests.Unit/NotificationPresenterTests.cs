@@ -376,16 +376,17 @@ public class NotificationPresenterTests
     }
 
     [Fact]
-    public void Compose_PollUpdated_IsActorFree_AndTitleFree()
+    public void Compose_PollUpdated_IsActorFree_AndNamesTheResolvedPost()
     {
-        // Title-free until tracker D8 is built: the post title resolves through BlogPostDirect, which
-        // still resolves a post its author has since made Private or unpublished, and the poll-edit
-        // sweep notifies that post's voters too (WU-NotificationCorrectness review fixes).
+        // The post title is back since tracker D8 was built (WU-TrackerFixes): BlogPostDirect now drops
+        // a post its author has made Private or that was unpublished, so a resolved title is one the
+        // voter can still open. Actor-free either way.
         NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows,
             sourceUserName: "AuthorAlpha", targetTitle: "Weekly Poll")).Text
-            .Should().Be("A poll you voted on was changed");
+            .Should().Be("A poll you voted on in Weekly Poll was changed");
         NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows)).Text
-            .Should().Be("A poll you voted on was changed", "a site poll carries no related entity");
+            .Should().Be("A poll you voted on was changed",
+                "a site poll carries no related entity, and a hidden post resolves to no title");
     }
 
     // ── Mutation sanity: a missing switch arm returns non-empty (default arm) ─────

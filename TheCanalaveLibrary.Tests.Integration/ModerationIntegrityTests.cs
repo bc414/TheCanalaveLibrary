@@ -199,7 +199,9 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
         int recipientId = await SeedUserAsync("Recipient");
         long messageId = await SeedMessageAsync(senderId, recipientId);
         long primary = await SubmitAsAsync(recipientId, ReportedEntityType.Message, messageId);
-        long sibling = await SubmitAsAsync(await SeedUserAsync("R2"), ReportedEntityType.Message, messageId);
+        // Only a participant may report a message (tracker B17's rider, WU-TrackerFixes), so the sibling
+        // is the conversation's other participant rather than an outsider.
+        long sibling = await SubmitAsAsync(senderId, ReportedEntityType.Message, messageId);
 
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
         await Mod().ResolveWithRemovalAsync(primary, "Harassment.");

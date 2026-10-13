@@ -314,4 +314,35 @@ public class BlogPostPageTests : BunitContext
         public Task<PollDto[]> GetPollsForBlogPostAsync(int blogPostId) => Task.FromResult(Array.Empty<PollDto>());
         public Task<PollDto?> GetPollAsync(int pollId) => Task.FromResult<PollDto?>(null);
     }
+
+    // ── Report post (tracker B17) ─────────────────────────────────────────────────
+
+    private static IElement? ReportPostButton(IRenderedComponent<BlogPostPage> cut) =>
+        cut.FindAll("button").FirstOrDefault(b => b.TextContent.Trim() == "Report post");
+
+    [Fact]
+    public void SignedInNonAuthor_SeesReportPost_WhichOpensTheReportDialog()
+    {
+        AuthenticateAs(ViewerId);
+        var cut = RenderPage(MakePost());
+
+        ReportPostButton(cut).Should().NotBeNull();
+        ReportPostButton(cut)!.Click();
+
+        cut.Find("[role='dialog'][aria-label='Report Content']").Should().NotBeNull(
+            "the page hosts its own ReportDialog for the post");
+    }
+
+    [Fact]
+    public void ReportPost_IsHidden_ForTheAuthor()
+    {
+        AuthenticateAs(AuthorId);
+        ReportPostButton(RenderPage(MakePost())).Should().BeNull("nobody reports their own post");
+    }
+
+    [Fact]
+    public void ReportPost_IsHidden_ForAnonymousViewers()
+    {
+        ReportPostButton(RenderPage(MakePost())).Should().BeNull("the report endpoint requires auth");
+    }
 }

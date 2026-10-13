@@ -266,19 +266,20 @@ public class ServerBlogPostReadService(
 
         // Load raw content server-side; MakeSnippet is computed in-process after projection
         // (SQL has no HTML-stripping function; the snippet is a display concern, not a search one).
-        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers, bool IsPublished)> rows
-            = await query
-                .OrderByDescending(p => p.DateCreated)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool, bool>(
-                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers, p.IsPublished))
-                .ToListAsync();
+        var rows = await query
+            .OrderByDescending(p => p.DateCreated)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new
+            {
+                p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers, p.IsPublished, p.AuthorId,
+            })
+            .ToListAsync();
 
         BlogPostListingDto[] items = rows
             .Select(r => new BlogPostListingDto(
-                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6,
-                IsPublished: r.Item7))
+                r.BlogPostId, r.Title, BlogPostText.MakeSnippet(r.Content), r.DateCreated, r.Rating, r.HasSpoilers,
+                IsPublished: r.IsPublished, AuthorId: r.AuthorId))
             .ToArray();
 
         return (items, totalCount);
@@ -333,19 +334,20 @@ public class ServerBlogPostReadService(
         int totalCount = await query.CountAsync();
         if (totalCount == 0) return ([], 0);
 
-        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers)> rows
+        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers, int? AuthorId)> rows
             = await query
                 .OrderByDescending(p => p.DateCreated)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool>(
-                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers))
+                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool, int?>(
+                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers, p.AuthorId))
                 .ToListAsync();
 
+        // AuthorId lets the group page hide Report on the viewer's own posts (tracker B17).
         BlogPostListingDto[] items = rows
             .Select(r => new BlogPostListingDto(
                 r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6,
-                IsPublished: true))  // group feed always published-only
+                IsPublished: true, AuthorId: r.Item7))  // group feed always published-only
             .ToArray();
 
         return (items, totalCount);
@@ -374,19 +376,19 @@ public class ServerBlogPostReadService(
         int totalCount = await query.CountAsync();
         if (totalCount == 0) return ([], 0);
 
-        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool IsPublished)> rows
+        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool IsPublished, int? AuthorId)> rows
             = await query
                 .OrderByDescending(p => p.DateCreated)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool>(
-                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.IsPublished))
+                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool, int?>(
+                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.IsPublished, p.AuthorId))
                 .ToListAsync();
 
         BlogPostListingDto[] items = rows
             .Select(r => new BlogPostListingDto(
                 r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5,
-                HasSpoilers: false, IsPublished: r.Item6))
+                HasSpoilers: false, IsPublished: r.Item6, AuthorId: r.Item7))
             .ToArray();
 
         return (items, totalCount);

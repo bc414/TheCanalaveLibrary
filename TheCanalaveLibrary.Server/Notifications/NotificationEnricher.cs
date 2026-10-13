@@ -43,14 +43,17 @@ public static class NotificationEnricher
     /// <summary>
     /// Internal enum classifying what entity table a notification's <c>RelatedEntityId</c>
     /// references. Used by <see cref="KindFor"/> and <see cref="BatchLoadEntitiesAsync"/>.
-    /// Two blog-post kinds exist deliberately: <c>BlogPost</c> resolves via <c>GroupBlogPosts</c>
+    /// Three blog-post kinds exist deliberately: <c>BlogPost</c> resolves via <c>GroupBlogPosts</c>
     /// and links to the *group* (<c>/group/{GroupId}</c> — NewGroupBlogPost's chosen target);
-    /// <c>BlogPostDirect</c> resolves via the TPT-root <c>BlogPosts</c> DbSet and links to the
-    /// *post* (<c>/blog/{id}</c>, the unified BlogPostPage route serving both post kinds).
+    /// <c>BlogPostDirect</c> and <c>OwnBlogPost</c> resolve via the TPT-root <c>BlogPosts</c> DbSet
+    /// and link to the *post* (<c>/blog/{id}</c>, the unified BlogPostPage route serving every post
+    /// kind). They split by recipient (tracker D8): <c>OwnBlogPost</c>'s recipient is the post's
+    /// author and resolves the post as stored; <c>BlogPostDirect</c>'s recipients are never the
+    /// author, so it drops a post they can no longer open.
     /// <c>GroupStory</c> (owner ruling D16) resolves the junction row to the group (title + link) and
     /// the story (context title).
     /// </summary>
-    private enum RelatedEntityKind { None, User, Story, Chapter, Group, GroupStory, BlogPost, BlogPostDirect, Tag }
+    private enum RelatedEntityKind { None, User, Story, Chapter, Group, GroupStory, BlogPost, BlogPostDirect, OwnBlogPost, Tag }
 
     /// <summary>
     /// Batch-resolves <c>(type, relatedEntityId)</c> pairs to their targets.
@@ -152,7 +155,8 @@ public static class NotificationEnricher
         // context entity's id, and one cross-context type cannot map to one table (re-pointing it at
         // the comment via the BaseComments TPT root is on D16's conformance list, tracker B23). ──
         NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.Chapter,
-        NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.BlogPostDirect,
+        // 33's recipient is always the post's author (tracker D8's type split): OwnBlogPost.
+        NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.OwnBlogPost,
         NotificationTypeEnum.NewCommentOnYourProfile         => RelatedEntityKind.User,
         NotificationTypeEnum.NewBlogPostByFollowedUser       => RelatedEntityKind.BlogPostDirect,
         NotificationTypeEnum.NewBlogPostOnFollowedStory      => RelatedEntityKind.BlogPostDirect,
@@ -314,13 +318,38 @@ public static class NotificationEnricher
 
         if (idsByKind.TryGetValue(RelatedEntityKind.BlogPostDirect, out var directPostIds) && directPostIds.Count > 0)
         {
-            // TPT-root lookup (WU-B2): resolves BOTH post kinds; /blog/{id} is the unified
-            // BlogPostPage route. No IgnoreQueryFilters — blog posts carry no audience/rating
-            // global filter (rating is an explicit .Where in the blog read service), and the
-            // IsTakenDown named filter stays active deliberately: a taken-down post drops out
-            // → null target → the presenter's graceful no-title fallback.
+            // TPT-root lookup (WU-B2): resolves every post kind; /blog/{id} is the unified
+            // BlogPostPage route. These recipients (13–16, 100) are never the post's author, so the
+            // lookup drops a post they can no longer open (tracker D8): an unpublished post, or a
+            // profile post whose author's profile is Private. That is BlogPostVisibilityGuard's
+            // Class-A half; UsersOnly needs no check (every recipient is signed in), and rating,
+            // audience and reveals are Class B, which Personal-plane notifications never filter.
+            // The check reads only the post, never the recipient, so the email composer (no active
+            // user) shares it. No IgnoreQueryFilters: the IsTakenDown named filter stays active
+            // deliberately — a taken-down post drops out → null target → the graceful fallback.
             result[RelatedEntityKind.BlogPostDirect] = (await readDb.BlogPosts
                     .Where(b => directPostIds.Contains(b.BlogPostId))
+                    .Where(b => b is ProfileBlogPost
+                        ? ((ProfileBlogPost)b).IsPublished
+                          && (b.Author == null
+                              || b.Author.PrivacySettings.ProfileVisibility != ProfileVisibility.Private)
+                        : b is GroupBlogPost
+                            ? ((GroupBlogPost)b).IsPublished
+                            : ((SiteBlogPost)b).IsPublished)
+                    .Select(b => new { b.BlogPostId, b.Title })
+                    .ToListAsync())
+                .ToDictionary(
+                    b => b.BlogPostId,
+                    b => new NotificationTarget(b.Title, $"/blog/{b.BlogPostId}", null));
+        }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.OwnBlogPost, out var ownPostIds) && ownPostIds.Count > 0)
+        {
+            // The author's own post (33): resolved as stored — publish state and the author's own
+            // privacy never hide a post from its author. Same TPT root, same link, same active
+            // IsTakenDown filter as BlogPostDirect above.
+            result[RelatedEntityKind.OwnBlogPost] = (await readDb.BlogPosts
+                    .Where(b => ownPostIds.Contains(b.BlogPostId))
                     .Select(b => new { b.BlogPostId, b.Title })
                     .ToListAsync())
                 .ToDictionary(

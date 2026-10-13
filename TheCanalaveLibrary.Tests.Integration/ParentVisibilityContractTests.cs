@@ -717,6 +717,65 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
             "takedown is the one hiding reason that must not block a report");
     }
 
+    // A message's visibility is participation (tracker B17's rider, WU-TrackerFixes 2026-10-13). Message
+    // ids are sequential, so before this an outsider could put any stranger's message in the queue.
+
+    /// <summary>FK parents, inline: a conversation, both participants, then one message.</summary>
+    private async Task<long> SeedMessageAsync(int senderId, int recipientId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
+        Conversation conversation = new() { Subject = "Hi", DateCreated = DateTime.UtcNow };
+        conversation.ConversationParticipants.Add(new ConversationParticipant { UserId = senderId });
+        conversation.ConversationParticipants.Add(new ConversationParticipant { UserId = recipientId });
+        PrivateMessage message = new()
+        {
+            SenderUserId = senderId, MessageText = "<p>hello</p>", DateSent = DateTime.UtcNow,
+        };
+        conversation.PrivateMessages.Add(message);
+        db.Conversations.Add(conversation);
+        await db.SaveChangesAsync();
+        return message.MessageId;
+    }
+
+    [Fact]
+    public async Task Report_Message_ByAParticipant_IsAccepted()
+    {
+        int recipientId = await SeedUserAsync("pv-recipient");
+        long messageId = await SeedMessageAsync(_authorId, recipientId);
+
+        SetActiveUser(recipientId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await Resolve<IReportSubmissionService>(scope).SubmitReportAsync(
+                new SubmitReportRequest(ReportedEntityType.Message, messageId, 1, null));
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        (await Resolve<ApplicationDbContext>(verifyScope).Reports.CountAsync(r =>
+                r.ReportedEntityType == ReportedEntityType.Message && r.ReportedEntityId == messageId))
+            .Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Report_Message_ByANonParticipant_IsRefusedLikeAMissingId()
+    {
+        int recipientId = await SeedUserAsync("pv-recipient");
+        long messageId = await SeedMessageAsync(_authorId, recipientId);
+
+        SetActiveUser(_strangerId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            Func<Task> act = () => Resolve<IReportSubmissionService>(scope).SubmitReportAsync(
+                new SubmitReportRequest(ReportedEntityType.Message, messageId, 1, null));
+            await act.Should().ThrowAsync<KeyNotFoundException>(
+                "a stranger's private message is not visible to them, so it is not reportable by them");
+        }
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        (await Resolve<ApplicationDbContext>(verifyScope).Reports.AnyAsync(r =>
+                r.ReportedEntityType == ReportedEntityType.Message && r.ReportedEntityId == messageId))
+            .Should().BeFalse("nothing reached the moderator queue");
+    }
+
     // ══ Coverage-gap closure (2026-07-26) ════════════════════════════════════════
     // The nine surfaces below were governed by the sweep but had no test in this suite's first
     // draft, while its doc comment already claimed full enrolment. See the note in that comment.

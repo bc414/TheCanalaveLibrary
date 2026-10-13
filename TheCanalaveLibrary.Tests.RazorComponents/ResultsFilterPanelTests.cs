@@ -207,6 +207,44 @@ public class ResultsFilterPanelTests : BunitContext
             "after the user's first interaction the panel stops re-syncing from InitialFilter (MA-402)");
     }
 
+    // ── Page size (tracker B16): the dispatcher's, echoed, never frozen ──────────────
+
+    [Fact]
+    public async Task Apply_EchoesTheInitialFiltersPageSize()
+    {
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.ShowTagFilter, false)
+            .Add(c => c.ShowInteractionFilters, false)
+            .Add(c => c.InitialFilter, new StoryFilterDto { PageSize = 50 })
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        emitted!.PageSize.Should().Be(50, "the panel echoes the dispatcher's page size, never a literal 20");
+    }
+
+    [Fact]
+    public async Task PageSize_StillTracksTheDispatcher_AfterTheUsersFirstInteraction()
+    {
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.ShowTagFilter, false)
+            .Add(c => c.ShowInteractionFilters, false)
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        // The user interacts first; the dispatcher's resolved size arrives later (a late seed).
+        await cut.Find("input[type='search']").TriggerEventAsync("oninput",
+            new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "torterra" });
+        cut.Render(p => p.Add(c => c.InitialFilter, new StoryFilterDto { TextQuery = "seeded", PageSize = 35 }));
+
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        emitted!.PageSize.Should().Be(35,
+            "no panel control edits page size, so the interaction guard must not freeze it");
+        emitted.TextQuery.Should().Be("torterra", "the guard still protects what the user did touch");
+    }
+
     // ── Ship seeding parity (decision row 13, closes tracker B11) ────────────────────
 
     private static StoryFilterDto ShipSeedFilter() => new()

@@ -5,7 +5,7 @@
    Users search, tree search nodes). Pure leaf: takes a UserCardDto, injects no service.
    View Profile is a plain link, always present. The remaining caret actions (Discover from this
    User, Copy link, Report, Send PM) are optional EventCallbacks gated by HasDelegate — a consumer
-   wires only what it has; Report (WU34) and Send PM (WU35) stay dark until those features land.
+   wires only what it has (Report: VouchList, the tree-search tabs and the profile banner).
    Avatar is a stored relative URL (User.ProfilePictureRelativeUrl copied verbatim by the producing
    read service), not a sprite key — see layer4-style.md "Avatars Are Stored URLs, Not Sprite Keys".
    Badges render up to 3 (capped here, ordered by DisplayOrder — producers emit all visible). *@

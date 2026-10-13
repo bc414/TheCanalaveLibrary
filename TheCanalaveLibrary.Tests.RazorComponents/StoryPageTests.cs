@@ -55,6 +55,8 @@ public class StoryPageTests : BunitContext
         // renders nothing (BothEmpty) — see RelatedStoriesSectionTests for its own coverage.
         Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
         Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
+        // RecommendationSection hosts its own ReportDialog (tracker B17).
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         // RichTextView and the view-ping registration use JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous by default;

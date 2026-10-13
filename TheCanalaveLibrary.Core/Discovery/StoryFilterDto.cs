@@ -60,7 +60,12 @@ public sealed record StoryFilterDto
     /// <summary>1-based page number.</summary>
     public int Page { get; init; } = 1;
 
-    /// <summary>Results per page. Callers should cap at a reasonable max (e.g. 20).</summary>
+    /// <summary>
+    /// Results per page. Seeded by the page dispatcher from the viewer's
+    /// <c>ReaderSettingsDto.DefaultPaginationSize</c> (signed-in viewers; anonymous viewers keep 20);
+    /// <c>ResultsFilterPanel</c> echoes it on Apply. Server-side bounds are worksheet D20's bounds
+    /// half (pending).
+    /// </summary>
     public int PageSize { get; init; } = 20;
 
     /// <summary>

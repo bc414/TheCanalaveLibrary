@@ -625,6 +625,8 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
         (BlogPostListingDto[] items, int total) = await GetGroupBlogPostsAsync(groupId, page: 1, pageSize: 10);
         total.Should().Be(1);
         items.Should().ContainSingle(p => p.BlogPostId == blogPostId && p.Title == "Group Post");
+        // The group page hides Report on the viewer's own post by this (tracker B17).
+        items.Single().AuthorId.Should().Be(_userId, "listing rows carry their author");
     }
 
     [Fact]

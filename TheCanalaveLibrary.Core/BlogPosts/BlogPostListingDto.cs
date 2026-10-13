@@ -10,6 +10,10 @@ namespace TheCanalaveLibrary.Core;
 /// (<see cref="IBlogPostReadService.GetByGroupAsync"/>). For author-feed projections
 /// (<see cref="IBlogPostReadService.GetByAuthorAsync"/>), it may be <c>false</c> when
 /// <c>includeUnpublished</c> is passed (owner viewing their own profile).
+///
+/// <see cref="AuthorId"/> (tracker B17, WU-TrackerFixes 2026-10-13) lets a mixed-author feed — the
+/// group blog section — hide the Report control on the viewer's own posts. Null for a post whose
+/// author deleted their account. Optional and last, so older payloads still deserialize.
 /// </summary>
 public record BlogPostListingDto(
     int BlogPostId,
@@ -18,4 +22,5 @@ public record BlogPostListingDto(
     DateTime DateCreated,
     Rating Rating,
     bool HasSpoilers,
-    bool IsPublished = true);
+    bool IsPublished = true,
+    int? AuthorId = null);

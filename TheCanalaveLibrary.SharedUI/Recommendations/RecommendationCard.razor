@@ -10,7 +10,7 @@
      · NeedsRevision    — dashed border + "revision requested" strip with the author's note
      · Rejected/Removed — dashed border + "removed by the story author" strip
    Pure leaf: no service injection. All writes are optional EventCallbacks gated by HasDelegate
-   (recommender vs. author vs. anonymous viewer wire only what they own). Live cards can also carry
+   (recommender vs. author vs. anonymous viewer wire only what they own), Report included. Live cards can also carry
    the two Feature 30 reader entry points (Read It Later / Read now — owner ruling D3), host-wired. *@
 
 <div class="relative rounded-xl border @CardBorderClass p-4 bg-(--color-surface)">
@@ -203,6 +203,17 @@
                 Unblock
             </button>
         }
+
+        @* Report (tracker B17) — others' recommendations only, host-wired for signed-in viewers *@
+        @if (!Rec.IsOwnRecommendation && OnReport.HasDelegate)
+        {
+            <button type="button"
+                    class="hover:text-danger transition-colors"
+                    aria-label="Report this recommendation"
+                    @onclick="() => OnReport.InvokeAsync(Rec.RecommendationId)">
+                Report
+            </button>
+        }
     </div>
 
     @* ── Reader entry points (Feature 30, owner ruling D3) — live recommendations only ──────────
@@ -250,6 +261,12 @@
     [Parameter] public EventCallback<int> OnRequestRevision { get; set; }
     [Parameter] public EventCallback<int> OnRemove { get; set; }
     [Parameter] public EventCallback<int> OnUnblock { get; set; }
+
+    /// <summary>
+    /// Report this recommendation — raises the recommendation id (tracker B17). Never rendered on the
+    /// viewer's own recommendation; the host wires it only for signed-in viewers.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnReport { get; set; }
 
     // Feature 30 reader entry points (owner ruling D3). The host decides what a click means: an
     // anonymous viewer gets a login nudge, a signed-in one the RIL-from-card write.

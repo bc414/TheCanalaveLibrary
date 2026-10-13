@@ -45,6 +45,8 @@ public class StoryExternalLinksRowTests : BunitContext
         Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
         Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
+        // RecommendationSection hosts its own ReportDialog (tracker B17).
+        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

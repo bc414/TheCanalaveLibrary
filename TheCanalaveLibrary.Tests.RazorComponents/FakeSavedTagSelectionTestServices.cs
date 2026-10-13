@@ -84,18 +84,28 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
     /// original hardcoded value for every test that doesn't care about this field.</summary>
     public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
 
-    public Task<UserSettingsDto> GetMySettingsAsync() => Task.FromResult(new UserSettingsDto(
-        Tagline: null,
-        ProfilePictureRelativeUrl: null,
-        ThemeId: 1,
-        PrefersAnimatedSprites: true,
-        Reader: new ReaderSettingsDto(
-            "Georgia", 16, 1.5f, 800, false, true, DefaultPaginationSize,
-            DefaultSearchSort, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
-        Privacy: new PrivacySettingsDto(
-            ProfileVisibility.Public, true, SocialInteractionPermission.Public,
-            SocialInteractionPermission.UsersOnly, true, true, false, false),
-        Author: new AuthorSettingsDto(Rating.T)));
+    /// <summary>How many times a page read the viewer's settings (tracker B16: anonymous viewers must
+    /// never call it — the WASM client's read is auth-required).</summary>
+    public int GetMySettingsCalls { get; private set; }
+
+    public Task<UserSettingsDto> GetMySettingsAsync() => Task.FromResult(Settings());
+
+    private UserSettingsDto Settings()
+    {
+        GetMySettingsCalls++;
+        return new UserSettingsDto(
+            Tagline: null,
+            ProfilePictureRelativeUrl: null,
+            ThemeId: 1,
+            PrefersAnimatedSprites: true,
+            Reader: new ReaderSettingsDto(
+                "Georgia", 16, 1.5f, 800, false, true, DefaultPaginationSize,
+                DefaultSearchSort, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
+            Privacy: new PrivacySettingsDto(
+                ProfileVisibility.Public, true, SocialInteractionPermission.Public,
+                SocialInteractionPermission.UsersOnly, true, true, false, false),
+            Author: new AuthorSettingsDto(Rating.T));
+    }
 
     public Task UpdateProfileAsync(UpdateProfileDto dto) => Task.CompletedTask;
     public Task UpdateReaderSettingsAsync(ReaderSettingsDto dto) => Task.CompletedTask;

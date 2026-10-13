@@ -31,7 +31,7 @@ public class ModUsersPageTests : BunitContext
         EntityType: ReportedEntityType.User,
         EntityId: 42,
         TargetLabel: "SomeUser",
-        TargetUrl: "/user/SomeUser",
+        TargetUrl: "/user/42",
         ReasonName: "Harassment",
         Notes: null,
         Status: ReportStatusEnum.Open,
@@ -100,6 +100,10 @@ public class ModUsersPageTests : BunitContext
         // D8/B18 (WU-ModerationIntegrity): the history now reads ReportedUserId across every target
         // type, so the scope caveat it used to carry is deleted, not narrowed.
         cut.Markup.Should().NotContain("not listed here");
+
+        // The profile route is /user/{UserId:int}; the username form 404'd (WU-TrackerFixes).
+        cut.FindAll("a").Single(a => a.TextContent.Trim() == "View profile")
+            .GetAttribute("href").Should().Be("/user/42");
     }
 
     [Fact]

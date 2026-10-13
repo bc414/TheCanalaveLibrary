@@ -613,6 +613,20 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     }
 
     [Fact]
+    public async Task GetReportQueueAsync_AUserTargetsLink_IsTheIdProfileRoute()
+    {
+        // The profile route is /user/{UserId:int}; the queue linked /user/{UserName}, which never
+        // matched it (WU-TrackerFixes 2026-10-13).
+        int targetId = await SeedUserAsync("ReportedUser");
+        long reportId = await SeedReportAsync(ReportedEntityType.User, targetId, _reporterId, targetId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        ReportQueueItemDto[] queue = await GetMod().GetReportQueueAsync();
+
+        queue.Single(r => r.ReportId == reportId).TargetUrl.Should().Be($"/user/{targetId}");
+    }
+
+    [Fact]
     public async Task GetPendingSubmissionsAsync_ShowsMRatedSubmission_ToModWithMatureOff()
     {
         int authorId = await SeedUserAsync("MRatedSubAuthor");

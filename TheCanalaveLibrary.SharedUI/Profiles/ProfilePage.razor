@@ -14,6 +14,7 @@
 @inject ISavedTagSelectionReadService TagSelectionReadService
 @inject ISavedTagSelectionWriteService TagSelectionWriteService
 @inject ICustomListReadService CustomListReadService
+@inject IUserSettingsService SettingsService
 @inject IToastService Toasts
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
@@ -186,9 +187,14 @@ else
                         <div class="flex flex-col gap-3">
                             @foreach (var post in BlogPosts)
                             {
+                                @* Report (tracker B17): signed-in non-owners only — the report
+                                   endpoint requires auth, and the card hides it on own posts. *@
                                 <BlogPostCard Post="@post"
                                              IsOwner="@_isOwner"
-                                             EditHref="@(_isOwner ? $"/blog/{post.BlogPostId}/edit" : null)" />
+                                             EditHref="@(_isOwner ? $"/blog/{post.BlogPostId}/edit" : null)"
+                                             OnReport="@(_currentUserId is not null && !_isOwner
+                                                 ? EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.BlogPost, id))
+                                                 : default)" />
                             }
                         </div>
                         <PaginationControls CurrentPage="@_blogPage"
@@ -345,7 +351,11 @@ else
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private const int BlogPageSize = 20;
-    private const int StoryPageSize = 20;
+
+    // The VIEWER's DefaultPaginationSize for the story tabs (tracker B16), resolved in
+    // OnInitializedAsync before the first listing load, on both render passes; anonymous viewers keep
+    // 20. Blog paging stays BlogPageSize: it is not a story-listing surface.
+    private int _storyPageSize = new StoryFilterDto().PageSize;
 
     private ProfileTab _tab;
     private bool _isLoading = true;
@@ -401,7 +411,7 @@ else
     // Mature count-line disclosure items for the current story tab (WU-AccessGate) — per-viewer
     // deterministic, not persisted.
     private IReadOnlyList<GatedMetadataDto> _gatedItems = [];
-    private StoryFilterDto _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+    private StoryFilterDto _storyFilter = new();
 
     private int _blogPage = 1;
 
@@ -470,6 +480,13 @@ else
         if (int.TryParse(idClaim, out int id)) _currentUserId = id;
         _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
 
+        if (_currentUserId is int)
+        {
+            int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
+            if (preferred > 0) _storyPageSize = preferred;
+        }
+        _storyFilter = new StoryFilterDto { PageSize = _storyPageSize };
+
         // Parse tab; bad slug → 404.
         ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
         if (parsed is null) { Nav.NotFound(); _initialized = true; return; }
@@ -512,7 +529,7 @@ else
             Header = null;
             _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
             _loadedUserId = UserId;
-            _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+            _storyFilter = new StoryFilterDto { PageSize = _storyPageSize };
             _blogPage = 1;
             await LoadHeaderAsync();
             if (Header is not null)
@@ -521,7 +538,7 @@ else
         else
         {
             // Same user, different tab — keep banner, reload payload only.
-            _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+            _storyFilter = new StoryFilterDto { PageSize = _storyPageSize };
             _blogPage = 1;
             await LoadTabPayloadAsync();
         }

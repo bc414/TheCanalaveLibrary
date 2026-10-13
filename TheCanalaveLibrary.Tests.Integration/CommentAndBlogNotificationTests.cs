@@ -487,6 +487,91 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
         dto.TargetTitle.Should().NotBeNullOrEmpty();
     }
 
+    // Tracker D8 (WU-TrackerFixes 2026-10-13): a notification minted while the post was visible stops
+    // naming it once its non-author recipients can no longer open it; the author's own 33 keeps it.
+
+    public enum PostHiding { AuthorGoesPrivate, PostUnpublished }
+
+    [Theory]
+    [InlineData(PostHiding.AuthorGoesPrivate)]
+    [InlineData(PostHiding.PostUnpublished)]
+    public async Task Enrichment_AHiddenPost_DropsOutOfAFollowersNotification_ButNotOutOfTheAuthorsOwn(PostHiding hiding)
+    {
+        int followerId = await SeedUserAsync("Follower");
+        await SeedFollowAsync(followerId, _authorId, receiveAlerts: true);
+        int postId = await CreateAndPublishProfilePostAsync(_authorId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_commenterId, showMatureContent: false));
+        await PostBlogCommentAsync(new PostBlogPostCommentDto { BlogPostId = postId, CommentText = "<p>Nice.</p>" });
+
+        if (hiding == PostHiding.AuthorGoesPrivate)
+            await SetProfileVisibilityAsync(_authorId, ProfileVisibility.Private);
+        else
+        {
+            SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorId, showMatureContent: false));
+            await UpdateProfilePostAsync(postId, isPublished: false);
+        }
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(followerId, showMatureContent: false));
+        NotificationDto followers = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewBlogPostByFollowedUser);
+        followers.TargetTitle.Should().BeNull("the follower can no longer open the post, so it must not be named");
+        followers.TargetUrl.Should().BeNull("and must not be linked: BlogPostPage would 404 for them");
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorId, showMatureContent: false));
+        NotificationDto authors = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewCommentOnBlog);
+        authors.TargetTitle.Should().Be("Fan-out post", "type 33's recipient is the author, who still sees their own post");
+        authors.TargetUrl.Should().Be($"/blog/{postId}");
+    }
+
+    [Fact]
+    public async Task Enrichment_AUsersOnlyAuthorsPost_StillNamesItForAFollower()
+    {
+        // The control: UsersOnly admits every signed-in recipient, so nothing drops.
+        int followerId = await SeedUserAsync("Follower");
+        await SeedFollowAsync(followerId, _authorId, receiveAlerts: true);
+        int postId = await CreateAndPublishProfilePostAsync(_authorId);
+        await SetProfileVisibilityAsync(_authorId, ProfileVisibility.UsersOnly);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(followerId, showMatureContent: false));
+        NotificationDto dto = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.NewBlogPostByFollowedUser);
+        dto.TargetTitle.Should().Be("Fan-out post");
+        dto.TargetUrl.Should().Be($"/blog/{postId}");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Enrichment_PollUpdated_OnAGroupPost_NamesItOnlyWhilePublished(bool isPublished)
+    {
+        // BlogPostDirect's group-post branch (tracker D8): a group post carries no profile privacy, so
+        // only its publish state decides. The row is seeded directly; the poll-edit sweep is covered
+        // by PollServiceTests.
+        int voterId = await SeedUserAsync("Voter");
+        int postId = await SeedGroupPostAsync(_authorId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            GroupBlogPost post = await db.GroupBlogPosts.SingleAsync(p => p.BlogPostId == postId);
+            post.IsPublished = isPublished;
+            db.Notifications.Add(new Notification
+            {
+                RecipientUserId = voterId, NotificationTypeId = NotificationTypeEnum.PollUpdated,
+                SourceUserId = _authorId, RelatedEntityId = postId, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(voterId, showMatureContent: false));
+        NotificationDto dto = (await GetNotificationsAsync())
+            .Single(n => n.NotificationTypeId == NotificationTypeEnum.PollUpdated);
+
+        dto.TargetTitle.Should().Be(isPublished ? "Seeded group post" : null);
+        dto.TargetUrl.Should().Be(isPublished ? $"/blog/{postId}" : null);
+    }
+
     [Fact]
     public async Task Enrichment_NewStoryComment_ResolvesChapterUrl()
     {
@@ -639,6 +724,15 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
     }
 
     // ── Seeding helpers ──────────────────────────────────────────────────────────
+
+    private async Task SetProfileVisibilityAsync(int userId, ProfileVisibility visibility)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User user = await db.Users.FirstAsync(u => u.Id == userId);
+        user.PrivacySettings.ProfileVisibility = visibility;
+        await db.SaveChangesAsync();
+    }
 
     private async Task<int> SeedChapterAsync(int storyId)
     {

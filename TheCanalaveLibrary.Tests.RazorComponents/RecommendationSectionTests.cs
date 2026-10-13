@@ -20,11 +20,14 @@ public class RecommendationSectionTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeService = new();
     private readonly FakeUserStoryInteractionWriteService _fakeInteractions = new();
+    private readonly FakeReportSubmissionService _reports = new();
 
     public RecommendationSectionTests()
     {
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeService);
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeInteractions);
+        // The section hosts its own ReportDialog (tracker B17), which injects IReportSubmissionService.
+        Services.AddScoped<IReportSubmissionService>(_ => _reports);
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
@@ -374,5 +377,39 @@ public class RecommendationSectionTests : BunitContext
 
         cut.Find("[aria-label='Saved to Read It Later']").HasAttribute("disabled").Should().BeTrue();
         cut.Find("a[href='/story/99/1?rec=5']");
+    }
+
+    // ── Report (tracker B17) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Report_SignedIn_OpensTheSectionsOwnDialog_OnOthersRecsOnly()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(1), MakeRec(2, isOwn: true)]);
+        _reports.Reasons = [new ReportReasonDto(1, "Spam", null)];
+
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.CurrentUserId, 77));
+
+        cut.FindAll("button[aria-label='Report this recommendation']").Should().ContainSingle(
+            "Report shows on the other recommender's card and never on the viewer's own");
+
+        cut.Find("button[aria-label='Report this recommendation']").Click();
+
+        cut.Find("[role='dialog']").GetAttribute("aria-label").Should().Be("Report Content");
+        cut.Markup.Should().Contain("Spam", "the dialog loaded the report reasons");
+    }
+
+    [Fact]
+    public void Report_Anonymous_IsNotOffered()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(1)]);
+
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.CurrentUserId, (int?)null));
+
+        cut.FindAll("button[aria-label='Report this recommendation']").Should().BeEmpty(
+            "the report endpoint requires auth");
     }
 }

@@ -206,4 +206,34 @@ public class RecommendationCardTests : BunitContext
         cut.FindAll("[aria-label*='Read It Later']").Should().BeEmpty("a hidden rec can't be attributed");
         cut.FindAll("a[href*='?rec=']").Should().BeEmpty();
     }
+
+    // ── Report (tracker B17) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void RecommendationCard_Report_OnOthersRec_RaisesTheRecommendationId()
+    {
+        int? reported = null;
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec())
+            .Add(c => c.OnReport, EventCallback.Factory.Create<int>(this, id => reported = id)));
+
+        cut.Find("button[aria-label='Report this recommendation']").Click();
+
+        reported.Should().Be(1);
+    }
+
+    [Fact]
+    public void RecommendationCard_Report_AbsentOnOwnRec_AndWhenUnwired()
+    {
+        IRenderedComponent<RecommendationCard> own = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec(isOwn: true))
+            .Add(c => c.OnReport, EventCallback.Factory.Create<int>(this, _ => { })));
+        own.FindAll("button[aria-label='Report this recommendation']").Should().BeEmpty(
+            "nobody reports their own recommendation");
+
+        IRenderedComponent<RecommendationCard> unwired = Render<RecommendationCard>(p => p
+            .Add(c => c.Rec, PlainRec()));
+        unwired.FindAll("button[aria-label='Report this recommendation']").Should().BeEmpty(
+            "the host wires Report only for signed-in viewers");
+    }
 }

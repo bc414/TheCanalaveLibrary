@@ -259,13 +259,15 @@ public static class NotificationPresenter
                     ? $"{actor} put {target} in the Community Spotlight with your recommendation"
                     : $"{actor} put a story in the Community Spotlight with your recommendation",
 
-            // ── Polls (100) — composed actor-free and title-free. Actor-free: a site poll's owner
-            // is staff, and the voter needs the change, not who made it. Title-free until tracker
-            // D8 is built: the owning post's title resolves through BlogPostDirect, which does not
-            // yet drop a post its author has since made Private or unpublished, and the poll-edit
-            // sweep notifies voters of such a post too. The link still leads to the post. ──────
+            // ── Polls (100) — composed actor-free: a site poll's owner is staff, and the voter needs
+            // the change, not who made it. {target} = the owning blog post, resolved through
+            // BlogPostDirect, which drops a post its author has since made Private or that was
+            // unpublished (tracker D8, WU-TrackerFixes 2026-10-13); null for those and for site
+            // polls, which carry no related entity. ─────────────────────────────────────────────
             NotificationTypeEnum.PollUpdated =>
-                "A poll you voted on was changed",
+                target is not null
+                    ? $"A poll you voted on in {target} was changed"
+                    : "A poll you voted on was changed",
 
             // ── Forward-compat catch-all (a type minted before its arm is written) ──
             _ => "You have a new notification"

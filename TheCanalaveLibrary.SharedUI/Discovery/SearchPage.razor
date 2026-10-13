@@ -213,16 +213,22 @@ else if (_selectionUnavailable)
         _filter = _filter with { ExcludedInteractions = DefaultExcludedInteractions };
 
         // Reader-setting defaults (WU-DiscoveryOverrideUI): DefaultPaginationSize governs the
-        // random-mode batch size; DefaultSearchSort seeds the initial sort. Anonymous viewers keep
-        // the hardcoded fallbacks (_randomBatchSize=20, Sort=Random from _filter's field
-        // initializer). A later device-local restore (OnAfterRenderAsync) still wins over both —
-        // it runs after this and only applies when it narrows differently (decision row 13).
+        // random-mode batch size and the sorted page size; DefaultSearchSort seeds the initial sort.
+        // Anonymous viewers keep the hardcoded fallbacks (20, Sort=Random from _filter's field
+        // initializer). A later device-local restore (OnAfterRenderAsync) still wins over the sort —
+        // it runs after this and only applies when it narrows differently (decision row 13) — but
+        // never over the sizes: the snapshot stores ids only.
         if (_currentUserId is int)
         {
             ReaderSettingsDto reader = (await SettingsService.GetMySettingsAsync()).Reader;
 
+            // The same setting sizes a sorted page (tracker B16): it rides _filter.PageSize into the
+            // first sorted load and, through the panel's InitialFilter echo, every Apply after it.
             if (reader.DefaultPaginationSize > 0)
+            {
                 _randomBatchSize = reader.DefaultPaginationSize;
+                _filter = _filter with { PageSize = reader.DefaultPaginationSize };
+            }
 
             // Only DatePublished is valid as this surface's INITIAL sort besides Random: Relevance
             // needs a live text query (none exists pre-load — ResultsFilterPanel itself hides
@@ -320,7 +326,8 @@ else if (_selectionUnavailable)
         // Nothing to do when the restored filter would produce the batch already on screen.
         if (!NarrowsDifferently(restored)) return;
 
-        _filter = restored;
+        // The snapshot stores ids only, so ToFilter's PageSize is the DTO default: keep the viewer's.
+        _filter = restored with { PageSize = _filter.PageSize };
         await ResolveSeedDisplayAsync();
 
         Items = [];

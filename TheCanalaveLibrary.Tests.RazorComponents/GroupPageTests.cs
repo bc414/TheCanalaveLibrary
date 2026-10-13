@@ -31,6 +31,7 @@ public class GroupPageTests : BunitContext
     private readonly FakeGroupWriteService _groupService = new();
     private readonly FakeRelatedStoriesStoryReadService _storyService = new();
     private readonly FakeModerationWriteService _moderationService = new();
+    private readonly FakeBlogPostReadService _blogService = new();
 
     public GroupPageTests()
     {
@@ -46,7 +47,7 @@ public class GroupPageTests : BunitContext
         Services.AddScoped<IModerationWriteService>(_ => _moderationService);
         Services.AddScoped<IStoryReadService>(_ => _storyService);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
-        Services.AddScoped<IBlogPostReadService>(_ => new FakeBlogPostReadService());
+        Services.AddScoped<IBlogPostReadService>(_ => _blogService);
         Services.AddScoped<ICommentWriteService>(_ => new FakeCommentWriteService());
         Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
         Services.AddScoped<IToastService>(_ => new FakeToastService());
@@ -339,5 +340,44 @@ public class GroupPageTests : BunitContext
 
         cut.WaitForState(() => _groupService.LeaveCalls > 0, TimeSpan.FromSeconds(2));
         cut.Markup.Should().NotContain("Leave as the only admin?");
+    }
+
+    // ── Blog-post Report (tracker B17) ─────────────────────────────────────────────
+
+    [Fact]
+    public void BlogPosts_ReportShowsOnOthersPosts_NotOnTheViewersOwn()
+    {
+        // The viewer is user 1 (RenderGroup's signed-in claim).
+        _blogService.GroupResult = (
+        [
+            new BlogPostListingDto(11, "My own post", "Snippet", DateTime.UtcNow, Rating.T, false, AuthorId: 1),
+            new BlogPostListingDto(12, "Someone else's post", "Snippet", DateTime.UtcNow, Rating.T, false, AuthorId: 2),
+        ], 2);
+
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member);
+
+        // BlogPostCard: root div > title row > title link, so the card is the link's grandparent.
+        string[] ReportsOnCard(string title) =>
+        [
+            .. cut.FindAll("a[href^='/blog/']").Single(a => a.TextContent.Trim() == title)
+                .ParentElement!.ParentElement!.QuerySelectorAll("button")
+                .Select(b => b.TextContent.Trim()).Where(t => t == "Report"),
+        ];
+
+        ReportsOnCard("Someone else's post").Should().ContainSingle();
+        ReportsOnCard("My own post").Should().BeEmpty("the listing's AuthorId marks the viewer's own post");
+    }
+
+    [Fact]
+    public void BlogPosts_Anonymous_NoReport()
+    {
+        _blogService.GroupResult = (
+            [new BlogPostListingDto(12, "Someone else's post", "Snippet", DateTime.UtcNow, Rating.T, false, AuthorId: 2)], 1);
+
+        IRenderedComponent<GroupPage> cut = RenderGroup(role: null);
+
+        cut.Markup.Should().Contain("Someone else's post");
+        cut.FindAll("button").Where(b => b.TextContent.Trim() == "Report").Should().BeEmpty(
+            "the report endpoint requires auth");
     }
 }

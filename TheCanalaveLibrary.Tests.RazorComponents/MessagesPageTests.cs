@@ -24,10 +24,13 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class MessagesPageTests : BunitContext
 {
     private readonly FakeMessagingWriteService _fakeService = new();
+    private readonly FakeReportSubmissionService _reports = new();
 
     public MessagesPageTests()
     {
         Services.AddScoped<IMessagingWriteService>(_ => _fakeService);
+        // The page hosts a ReportDialog for message reports (tracker B17).
+        Services.AddScoped<IReportSubmissionService>(_ => _reports);
         JSInterop.Mode = JSRuntimeMode.Loose;
         this.AddAuthorization().SetAuthorized("TestUser");
     }
@@ -285,5 +288,26 @@ public class MessagesPageTests : BunitContext
         cut.Markup.Should().Contain("Message is too long.");
         ComposerClears().Should().Be(before,
             "a refused message keeps its text so the sender can fix it and send again");
+    }
+
+    // ── Report a message (tracker B17) ────────────────────────────────────────────
+
+    [Fact]
+    public void ReportOnTheOtherPartysMessage_OpensThePagesReportDialog()
+    {
+        _reports.Reasons = [new ReportReasonDto(1, "Harassment", null)];
+        MessageDto theirs = new(MessageId: 41, ConversationId: 1, SenderUserId: 101, SenderUsername: "Ash",
+            SenderAvatarUrl: "/img/default-avatar.svg", MessageText: "<p>hi</p>",
+            DateSent: DateTime.UtcNow, IsOwnMessage: false);
+        _fakeService.SetConversations(NewConversation(1, "Ash"));
+        _fakeService.SetThread(NewThread(1, isArchived: false) with { Messages = [theirs], TotalMessageCount = 1 });
+
+        IRenderedComponent<MessagesPage> cut = Render<MessagesPage>(p => p
+            .Add(c => c.ConversationId, 1));
+
+        cut.Find("button[aria-label='Report this message']").Click();
+
+        cut.Find("[role='dialog'][aria-label='Report Content']").Should().NotBeNull();
+        cut.Markup.Should().Contain("Harassment", "the dialog loaded the report reasons");
     }
 }

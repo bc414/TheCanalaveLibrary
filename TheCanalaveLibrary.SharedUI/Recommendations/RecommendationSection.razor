@@ -8,7 +8,7 @@
 
 @* Coordination composite — owns the story recommendation section: load, submission composer
    (gated on auth + not-already-recommended), optimistic like with rollback, Hidden-Gem toggle,
-   author spotlight toggle, and delete-confirm dialog. Injects IRecommendationWriteService
+   author spotlight toggle, delete-confirm dialog, and its own ReportDialog (tracker B17). Injects IRecommendationWriteService
    (which :IRecommendationReadService) — one injection gives read + write. All writes resolve
    here; nothing bubbles to the page dispatcher except OnReadItLaterSaved, which lets the page
    re-read the viewer's interaction state after a card's Read It Later (owner ruling D3 — the
@@ -54,7 +54,10 @@ else
                                 OnUnblock="@(viewerIsStoryAuthor && isRejected ? EventCallback.Factory.Create<int>(this, HandleUnblockAsync) : default)"
                                 OnReadItLater="@(isLive ? EventCallback.Factory.Create<int>(this, HandleReadItLaterAsync) : default)"
                                 IsReadItLaterSaved="@StoryIsReadItLater"
-                                ShowReadNow="@isLive" />
+                                ShowReadNow="@isLive"
+                                OnReport="@(CurrentUserId is not null && !rec.IsOwnRecommendation
+                                    ? EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.Recommendation, id))
+                                    : default)" />
 
             @* Inline editor for this card (edit-in-place) *@
             @if (_editingId == rec.RecommendationId)
@@ -149,6 +152,9 @@ else
                IsDestructive="true"
                OnConfirm="HandleRemoveConfirmAsync" />
 
+@* ── Report dialog (tracker B17) — the section hosts its own, the CommentSection pattern ── *@
+<ReportDialog @ref="_reportDialog" />
+
 @* ── Inline error feedback ────────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
@@ -198,6 +204,7 @@ else
     private bool _busy;
     private string? _error;
     private bool _errorIsSessionExpired;
+    private ReportDialog _reportDialog = default!;
 
     // WU-RecLifecycle author-action state
     private int? _revisionRequestId;

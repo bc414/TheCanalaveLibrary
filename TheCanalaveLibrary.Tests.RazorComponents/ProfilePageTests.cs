@@ -1,4 +1,5 @@
 using Bunit;
+using Bunit.TestDoubles;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +40,15 @@ public class ProfilePageTests : BunitContext
 
     private readonly FakeUserProfileReadService _profileService;
     private readonly FakeBlogPostReadService _blogService;
+    private readonly FakeStoryReadService _storyReadService = new();
+    private readonly FakeUserSettingsService _settingsService = new();
+
+    // The viewer: anonymous unless a test calls SignInAs before rendering. AddAuthorization (not a
+    // bare cascading value) because the story tabs' TagFilter renders an AuthorizeView.
+    private readonly BunitAuthorizationContext _auth;
+
+    private void SignInAs(int userId) =>
+        _auth.SetAuthorized($"user-{userId}").SetClaims(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
 
     public ProfilePageTests()
     {
@@ -72,7 +82,7 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<IUserProfileReadService>(_ => _profileService);
         Services.AddScoped<IFollowingReadService>(_ => new FakeFollowingWriteService());
         Services.AddScoped<IFollowingWriteService>(_ => new FakeFollowingWriteService());
-        Services.AddScoped<IStoryReadService>(_ => new FakeStoryReadService());
+        Services.AddScoped<IStoryReadService>(_ => _storyReadService);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IRecommendationReadService>(_ => new FakeRecommendationReadService());
         Services.AddScoped<IBlogPostReadService>(_ => _blogService);
@@ -89,9 +99,15 @@ public class ProfilePageTests : BunitContext
         // PublicUrlProvider is a pure Core class (no host dependency); a fixed test base is fine.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
 
-        // Anonymous AuthenticationState cascading value.
-        var anonState = Task.FromResult(new AuthenticationState(new ClaimsPrincipal()));
-        Services.AddCascadingValue(_ => anonState);
+        // The story tabs size their page from the viewer's DefaultPaginationSize (tracker B16).
+        Services.AddScoped<IUserSettingsService>(_ => _settingsService);
+        // The story tabs' ResultsFilterPanel: TagSelector/ShipFilter inject ITagReadService, TagChip
+        // ISpriteReadService.
+        Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+
+        // AuthenticationState cascade: anonymous by default (see SignInAs).
+        _auth = this.AddAuthorization();
     }
 
     // ── F1 lifecycle-reload test ──────────────────────────────────────────────────────────────
@@ -131,5 +147,71 @@ public class ProfilePageTests : BunitContext
             "Blog tab title must appear after tab switch — OnParametersSetAsync reloaded the payload");
         cut.Markup.Should().NotContain(BioText,
             "Profile tab bio text must not appear on the Blog tab after reload");
+    }
+
+    // ── Story-tab page size (tracker B16) ────────────────────────────────────────────────────
+
+    [Fact]
+    public void SignedInViewer_StoryTabs_AreSizedByTheViewersDefaultPaginationSize()
+    {
+        SignInAs(99); // a visitor, not the profile's owner: the size is the VIEWER's preference
+        _settingsService.DefaultPaginationSize = 50;
+
+        Render<ProfilePage>(p => p
+            .Add(c => c.UserId, TestUserId)
+            .Add(c => c.Tab, ProfileTabSlug.For(ProfileTab.Favorites)));
+
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(50);
+    }
+
+    [Fact]
+    public void AnonymousViewer_StoryTabs_KeepTwenty_WithoutReadingSettings()
+    {
+        _settingsService.DefaultPaginationSize = 50;
+
+        Render<ProfilePage>(p => p
+            .Add(c => c.UserId, TestUserId)
+            .Add(c => c.Tab, ProfileTabSlug.For(ProfileTab.Favorites)));
+
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(20);
+        _settingsService.GetMySettingsCalls.Should().Be(0,
+            "an anonymous viewer has no settings, and the WASM settings read requires auth");
+    }
+
+    // ── Blog-tab Report (tracker B17) ────────────────────────────────────────────────────────
+
+    private IRenderedComponent<ProfilePage> RenderBlogTab() =>
+        Render<ProfilePage>(p => p
+            .Add(c => c.UserId, TestUserId)
+            .Add(c => c.Tab, ProfileTabSlug.For(ProfileTab.Blog)));
+
+    private static bool IsReportButton(AngleSharp.Dom.IElement b) => b.TextContent.Trim() == "Report";
+
+    [Fact]
+    public void BlogTab_SignedInVisitor_CanReportAPost_ThroughThePagesDialog()
+    {
+        SignInAs(99);
+
+        IRenderedComponent<ProfilePage> cut = RenderBlogTab();
+        cut.FindAll("button").Where(IsReportButton).Should().ContainSingle(
+            "a signed-in visitor sees Report on each post card");
+
+        cut.FindAll("button").First(IsReportButton).Click();
+
+        cut.Find("[role='dialog']").GetAttribute("aria-label").Should().Be("Report Content",
+            "the card's Report opens the page's single ReportDialog");
+    }
+
+    [Theory]
+    [InlineData(false)] // anonymous: the report endpoint requires auth
+    [InlineData(true)]  // the owner: never offered on their own posts
+    public void BlogTab_NoReport_ForAnonymousViewers_OrTheOwner(bool signedInAsOwner)
+    {
+        if (signedInAsOwner) SignInAs(TestUserId);
+
+        IRenderedComponent<ProfilePage> cut = RenderBlogTab();
+
+        cut.Markup.Should().Contain(BlogPostTitle, "the post card itself still renders");
+        cut.FindAll("button").Where(IsReportButton).Should().BeEmpty();
     }
 }

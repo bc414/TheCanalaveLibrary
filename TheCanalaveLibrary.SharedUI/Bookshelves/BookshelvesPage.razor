@@ -5,6 +5,7 @@
 @inject IStoryReadService StoryReadService
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IRecommendationReadService RecommendationReadService
+@inject IUserSettingsService SettingsService
 @inject NavigationManager Nav
 
 @if (_isLoading)
@@ -141,6 +142,11 @@ else
 
     private BookshelfTab _tab;
     private int? _currentUserId;
+
+    // The viewer's DefaultPaginationSize (tracker B16), resolved once in OnInitializedAsync before
+    // the first listing load, on both render passes — a restored page must sit under a pager of the
+    // same size. Every filter this page builds carries it; the panel echoes it on Apply.
+    private int _pageSize = new StoryFilterDto().PageSize;
     private StoryFilterDto _filter = new();
 
     // Candidate IDs for the active tab — computed once per tab switch, reused across page turns.
@@ -191,6 +197,12 @@ else
         string? idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
 
+        if (_currentUserId is int)
+        {
+            int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
+            if (preferred > 0) _pageSize = preferred;
+        }
+
         await LoadTabAsync();
         _initialized = true;
     }
@@ -201,7 +213,7 @@ else
         // Skip the first pass (races OnInitializedAsync) and skip unrelated re-renders.
         if (!_initialized) return;
         if (Tab == _loadedTab) return;
-        _filter = new(); // reset filter state for the incoming tab
+        _filter = new() { PageSize = _pageSize }; // reset filter state for the incoming tab
         // Plain reload (not restore-or-fetch): internal SPA navigations never prerender, so the
         // persisted value from the previous tab must not short-circuit the new tab's fetch
         // (layer3-logic.md §"Route-Parameter Dispatchers").
@@ -225,8 +237,8 @@ else
         // Actively Reading defaults to the viewer-relative recency sort (most-recently-read first);
         // every other tab keeps the StoryFilterDto default (DatePublished).
         _filter = _tab == BookshelfTab.ActivelyReading
-            ? new() { Sort = DefaultSortOrder.RecentlyRead }
-            : new();
+            ? new() { Sort = DefaultSortOrder.RecentlyRead, PageSize = _pageSize }
+            : new() { PageSize = _pageSize };
         await LoadPageAsync();
     }
 

@@ -55,7 +55,16 @@ internal sealed class FakeStoryReadService : IStoryReadService
     /// <summary>Configurable knob for page tests whose listings load through the filter path
     /// (BookshelvesPageTests). Default empty preserves the original no-op behavior.</summary>
     public (StoryListingDto[] Items, int TotalCount) ListingsResult { get; set; } = ([], 0);
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false) => Task.FromResult(ListingsResult);
+
+    /// <summary>The filter the last <see cref="GetListingsAsync"/> call received (tracker B16: the
+    /// page-size tests check the dispatcher's resolved <c>PageSize</c> reaches the read).</summary>
+    public StoryFilterDto? LastListingsFilter { get; private set; }
+
+    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false)
+    {
+        LastListingsFilter = filter;
+        return Task.FromResult(ListingsResult);
+    }
     public Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
     public Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
 
@@ -124,8 +133,10 @@ internal sealed class FakeBlogPostReadService : IBlogPostReadService
     public Task<(BlogPostListingDto[] Items, int TotalCount)> GetByAuthorAsync(int authorId, int page, int pageSize, bool includeUnpublished = false) =>
         Task.FromResult(AuthorResult);
     public Task<BlogPostEditDto?> GetForEditAsync(int blogPostId) => Task.FromResult<BlogPostEditDto?>(null);
+    /// <summary>Configurable knob for GroupPageTests' blog section (tracker B17). Default empty.</summary>
+    public (BlogPostListingDto[] Items, int TotalCount) GroupResult { get; set; } = ([], 0);
     public Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(int groupId, int page, int pageSize) =>
-        Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
+        Task.FromResult(GroupResult);
     public Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(int page, int pageSize, bool includeUnpublished = false) =>
         Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
     public Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId) => Task.FromResult<SiteAnnouncementEditDto?>(null);

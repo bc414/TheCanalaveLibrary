@@ -1,5 +1,6 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
 
@@ -49,5 +50,27 @@ public class MessageItemTests : BunitContext
         // RichTextView renders the MarkupString inside a div; the text should appear in DOM.
         cut.Markup.Should().Contain("Great chapter!",
             "MessageItem must render the stored message HTML via RichTextView");
+    }
+
+    // ── Report (tracker B17) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void MessageItem_Report_OnTheOtherPartysMessage_RaisesItsId_AndNeverOnOwn()
+    {
+        long? reported = null;
+        EventCallback<long> onReport = EventCallback.Factory.Create<long>(this, id => reported = id);
+        MessageDto theirs = OwnMessage() with { MessageId = 7, SenderUserId = 2, SenderUsername = "Them", IsOwnMessage = false };
+
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
+            .Add(c => c.Message, theirs)
+            .Add(c => c.OnReport, onReport));
+        cut.Find("button[aria-label='Report this message']").Click();
+        reported.Should().Be(7);
+
+        IRenderedComponent<MessageItem> own = Render<MessageItem>(p => p
+            .Add(c => c.Message, OwnMessage())
+            .Add(c => c.OnReport, onReport));
+        own.FindAll("button[aria-label='Report this message']").Should().BeEmpty(
+            "nobody reports their own message");
     }
 }

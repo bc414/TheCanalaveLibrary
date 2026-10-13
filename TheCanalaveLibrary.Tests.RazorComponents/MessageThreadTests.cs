@@ -1,6 +1,7 @@
 using AngleSharp.Dom;
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
 
@@ -103,5 +104,24 @@ public class MessageThreadTests : BunitContext
 
         cut.Markup.Should().Contain("Select a conversation");
         TryFindButton(cut, "Archive").Should().BeNull();
+    }
+
+    // ── Report (tracker B17) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ReportOnAMessage_BubblesItsMessageId_ThroughOnReportMessage()
+    {
+        long? reported = null;
+        MessageDto theirs = new(MessageId: 41, ConversationId: 1, SenderUserId: 2, SenderUsername: "Ash",
+            SenderAvatarUrl: "/img/default-avatar.svg", MessageText: "<p>hi</p>",
+            DateSent: DateTime.UtcNow, IsOwnMessage: false);
+
+        IRenderedComponent<MessageThread> cut = Render<MessageThread>(p => p
+            .Add(c => c.Thread, NewThread(isArchived: false) with { Messages = [theirs], TotalMessageCount = 1 })
+            .Add(c => c.OnReportMessage, EventCallback.Factory.Create<long>(this, id => reported = id)));
+
+        cut.Find("button[aria-label='Report this message']").Click();
+
+        reported.Should().Be(41);
     }
 }

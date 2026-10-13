@@ -80,7 +80,7 @@ else
         <div class="flex flex-1 flex-col-reverse overflow-y-auto px-4 py-3 gap-4">
             @foreach (var msg in Thread.Messages)
             {
-                <MessageItem Message="@msg" />
+                <MessageItem Message="@msg" OnReport="OnReportMessage" />
             }
         </div>
 
@@ -112,6 +112,11 @@ else
 
     /// <summary>Raised when the user clicks "Load older messages".</summary>
     [Parameter] public EventCallback OnLoadOlderMessages { get; set; }
+
+    /// <summary>Raised with a message's id when the viewer reports it (tracker B17). Passed straight
+    /// to each <see cref="MessageItem"/>, which shows Report only on the other party's messages.
+    /// Unset → no Report control.</summary>
+    [Parameter] public EventCallback<long> OnReportMessage { get; set; }
 
     /// <summary>Shows a spinner on the Send button while a reply is being posted.</summary>
     [Parameter] public bool BusySending { get; set; }

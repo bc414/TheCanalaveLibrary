@@ -327,7 +327,8 @@ public class ServerModerationReadService(
 
                     result[type] = data.ToDictionary(
                         x => (long)x.Id,
-                        x => (x.UserName ?? $"User#{x.Id}", (string?)$"/user/{x.UserName}", x.ActiveReportCount));
+                        // The profile route is /user/{UserId:int}: a username never matches it.
+                        x => (x.UserName ?? $"User#{x.Id}", (string?)$"/user/{x.Id}", x.ActiveReportCount));
                     break;
                 }
                 case ReportedEntityType.Comment:

@@ -1043,7 +1043,8 @@ public class ServerModerationWriteService(
     /// M-audience group) must be refused.</item>
     /// </list>
     /// Throws <see cref="KeyNotFoundException"/> either way so a hidden target and an absent one are
-    /// indistinguishable. <c>Message</c> is participant-scoped and validated by its own path.
+    /// indistinguishable. A <c>Message</c> is visible only to a participant of its conversation, so
+    /// a non-participant (or an anonymous reporter) is refused like an absent id (tracker B17).
     /// </summary>
     private async Task RequireReportableTargetAsync(ReportedEntityType type, long id)
     {
@@ -1094,9 +1095,14 @@ public class ServerModerationWriteService(
             ReportedEntityType.Comment => await readDb.BaseComments.AnyAsync(c => c.CommentId == id),
             ReportedEntityType.Recommendation =>
                 await readDb.Recommendations.AnyAsync(r => r.RecommendationId == (int)id),
-            // Messages are participant-scoped, not content-visibility-scoped; existence above is the
-            // check, and a non-participant cannot learn a message id through any read path.
-            ReportedEntityType.Message => true,
+            // Messages are participant-scoped: "visible" means the reporter is a participant of the
+            // message's conversation (tracker B17). Message ids are sequential longs, so without this
+            // any signed-in user could put a stranger's private message in front of moderators. A
+            // null reporter matches no participant row.
+            ReportedEntityType.Message => await readDb.PrivateMessages.AnyAsync(m =>
+                m.MessageId == id
+                && readDb.ConversationParticipants.Any(p =>
+                    p.ConversationId == m.ConversationId && p.UserId == ActiveUser.UserId)),
             _ => false,
         };
         if (!visible) throw NotFound();

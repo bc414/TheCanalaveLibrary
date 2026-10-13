@@ -296,4 +296,24 @@ public class SearchPageTests : BunitContext
             .Select(b => b.TextContent.Trim())
             .Should().Contain("Give me more", "an inapplicable default sort falls back to random mode");
     }
+
+    // ── Sorted page size (tracker B16) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task Authenticated_SortedPages_UseTheReaderSettingsPageSize_OnLoadAndOnApply()
+    {
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.DatePublished;
+        _settingsService.DefaultPaginationSize = 35;
+        _storyReadService.ListingsResult = ([MakeStory(1)], 1);
+
+        IRenderedComponent<SearchPage> cut = Render<SearchPage>();
+
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(35,
+            "the first sorted load is sized by the viewer's DefaultPaginationSize, not a constant 20");
+
+        // The panel echoes the seeded size on Apply, so a later page stays the same size.
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(35);
+    }
 }
