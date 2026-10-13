@@ -640,7 +640,7 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     value + semantics now.
     *Ruled worksheet D18 (the absence ratified; PM email built Messaging-owned, one email per unread
     run, sharing only the transport); built WU-PrivateMessageEmail, 2026-10-13. Rule in
-    `layer2-services.md` §"Private-Message Email". Four derived defaults: decision row 28.*
+    `layer2-services.md` §"Private-Message Email". Five derived defaults: decision row 28.*
 19. **CSRF posture as policy**: SameSite=Lax is the effective sole CSRF control for the
     cookie-authenticated JSON API (antiforgery is form-post-only, uploads deliberately exempt).
     Defensible; currently implied. One sentence in `security.md` — and it converts the upload

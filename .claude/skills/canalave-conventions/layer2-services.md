@@ -236,6 +236,19 @@ Mechanics:
   detaches the poll, its options and any tracked votes of it in a `finally`, after every call: its
   set-based `AllowMultiple` write leaves the tracked poll stale, and a refused save leaves the edit's
   changes pending for the circuit's next `SaveChanges` to write (WU-PollVoteIntegrity, 2026-10-13).
+  Detaching only helps the circuit that wrote: a write from **another** scope (an HTTP request, another
+  user's circuit) leaves this circuit's copy stale with no way to tell it. That is harmless while the
+  copy only feeds a tracked save, which writes the columns it changed, but a **full-row writer** turns
+  it into a silent revert. Identity's `UserManager` update family (`UpdateAsync`,
+  `UpdateSecurityStampAsync`, …) marks every column modified, and the codebase's set-based `User`
+  writes never touch `concurrency_stamp`, so Identity's concurrency check passes and every column
+  changed since the load goes back to the old value: a counter, a member's message-email unsubscribe.
+  So a circuit-scoped method that hands a `User` to `UserManager`, or decides on its current values,
+  loads it fresh. `ServerModerationWriteService.LoadTargetUserAsync` detaches any tracked copy before
+  the query; the report-driven account action gets the same from `InResolveTransactionAsync`'s
+  `ChangeTracker.Clear()` (WU-PrivateMessageEmail review fixes, 2026-10-13). Per-request callers (the
+  Identity pages, the consent endpoints) load fresh by construction; what remains is the milliseconds
+  between their load and their save, Identity's own design, accepted.
 - **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
   (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
   `AddDbContextFactory` also registers the context type itself as a scoped service.
@@ -1225,7 +1238,7 @@ kind's `IOutboundEmailComposer`, and sends every composed mail in **one** `SendB
 pooled SMTP connection. This is the standard buffer/flusher/worker trio — see §"Signal Buffering" and
 `ReadingProgressFlushWorker.cs`. Two kinds exist: `Notification` (create-core enqueues notification
 ids; `Notifications/NotificationEmailComposer`) and `PrivateMessage` (Messaging enqueues message ids;
-`Messaging/PrivateMessageEmailComposer`, §"Private-message email (D18)"). The buffer, worker and
+`Messaging/PrivateMessageEmailComposer`, §"Private-Message Email"). The buffer, worker and
 flusher were notification-named and lived in `Notifications/` until WU-PrivateMessageEmail
 (2026-10-13) renamed and generalized them: shared infrastructure must carry no feature's vocabulary
 (D18).
@@ -2306,8 +2319,11 @@ private-message email end to end and shares only the transport and the outbound 
   shape). It is a scalar column, not a field in the `PrivacySettings` JSON beside
   `AllowPrivateMessages`: `ServerUserSettingsService.UpdatePrivacySettingsAsync` replaces that JSON
   group wholesale from the privacy form's DTO, so a field inside it would reset on every privacy
-  save. Written only by `IMessagingWriteService.SetMyNewMessageEmailEnabledAsync` and the messaging
-  unsubscribe endpoint, both set-based.
+  save. Its only deliberate writers are `IMessagingWriteService.SetMyNewMessageEmailEnabledAsync` and
+  the messaging unsubscribe endpoint, both set-based. Identity's full-row `UserManager` updates also
+  rewrite it, with whatever value their `User` instance holds, so the one circuit-scoped caller loads
+  that instance fresh (§"Read-Context Concurrency: Factory Per Method" → "Set-based writes leave the
+  circuit's tracked copies stale"); otherwise a moderator's account action could undo an unsubscribe.
 - **The suppression watermark, `ConversationParticipant.LastNotifiedTimestamp`** (nullable).
   Written only by the composer's after-send hook, set-based. No other code assigns it.
 - **The body** (`PrivateMessageEmailBodies`), **the composer** (`PrivateMessageEmailComposer`), and
@@ -2329,8 +2345,12 @@ participant row of a conversation the batch names when all of these hold:
 - **Not archived.** Archive mutes email too. Archive is the only disposal gesture against an
   unwanted correspondent (§"Conversation Archiving Is Sticky"), and an email that bypassed it would
   take that relief away. Unarchiving reopens nothing by itself; the next new message mails.
-- **`EmailOnNewMessage`, `EmailConfirmed`, and a non-null address.** Account status is not a gate,
-  mirroring the notification composer.
+- **`EmailOnNewMessage`, `EmailConfirmed`, and a non-null address.** Account status is not a gate
+  (a built default, `roadmap.md` decision row 28 (e)). The notification composer's reason for the
+  same choice does not carry over: its account-action notices are exactly what a restricted user
+  must receive, while this mail's only action is "Read it on the site". What bounds it here is the
+  run rule: a Banned or currently Suspended recipient cannot sign in to read, so their runs never
+  reopen, and they get at most one mail per conversation until they read again.
 
 The sender drops out by construction: sending stamps the sender's own `LastReadTimestamp`. Each
 (conversation, recipient) pair yields at most one mail per flush. Outcomes: a 20-message burst while
@@ -2372,11 +2392,16 @@ mailed" holds only for a read that lands before that tick. A per-kind minimum ag
 `InvalidOperationException`, 401). The write is one `ExecuteUpdateAsync`, then it detaches any
 tracked `User` it touched (§"Read-Context Concurrency: Factory Per Method" → "Set-based writes leave
 the circuit's tracked copies stale"). HTTP: `GET`/`PUT /api/messaging/email-preference`. Unthrottled
-as a self-scoped setting (`security.md` enumeration). The one UI is the "Private messages" section of
-`/notifications/settings` (§"Outbound email pipeline" → the standing rider), not the privacy form.
+as a self-scoped setting (`security.md` enumeration). The one toggle is the "Private messages" section
+of `/notifications/settings` (D18: the page is the composition surface where users look for email
+preferences; §"Outbound email pipeline" → the standing rider). D18 also places the preference "beside
+`AllowPrivateMessages` — where a user looks for it", so the privacy form's "Private messages" control
+carries a one-line pointer to that toggle (`PrivacySettingsForm`, `#allow-pm-email-hint`). A pointer,
+not a second toggle: the privacy form saves on its button, the settings page per toggle, and two
+controls for one value would disagree mid-edit.
 
-The derived choices here (default on, no sender text, archive mutes, the run reading) are built
-defaults awaiting the owner's confirmation in `roadmap.md` decision row 28.
+The derived choices here (default on, no sender text, archive mutes, the run reading, no account-status
+gate) are built defaults awaiting the owner's confirmation in `roadmap.md` decision row 28.
 
 ## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 

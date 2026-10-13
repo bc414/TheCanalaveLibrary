@@ -42,9 +42,15 @@
             </select>
         </div>
 
+        @* The new-message email preference is Messaging's own column, toggled only on
+           /notifications/settings (owner ruling D18: that page is where users look for email
+           preferences). D18 also puts it "beside AllowPrivateMessages — where a user looks for it",
+           so this control points there. A pointer, not a second toggle: this form saves on its button,
+           that page per toggle (layer2-services.md §"Private-Message Email"). *@
         <div class="flex flex-col gap-1">
             <label for="allow-pm" class="text-sm font-medium text-(--color-text)">Private messages</label>
             <select id="allow-pm"
+                    aria-describedby="allow-pm-email-hint"
                     class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                     value="@((int)_allowPrivateMessages)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int apm)) _allowPrivateMessages = (SocialInteractionPermission)apm; }">
@@ -52,6 +58,10 @@
                 <option value="@((int)SocialInteractionPermission.UsersOnly)">Users only — logged-in members only</option>
                 <option value="@((int)SocialInteractionPermission.Nobody)">Off — no private messages</option>
             </select>
+            <p id="allow-pm-email-hint" class="text-xs text-(--color-text-muted)">
+                Emails about new messages:
+                <a href="/notifications/settings" class="text-(--color-action-ink) hover:underline">Notification settings</a>
+            </p>
         </div>
 
         @* Boolean toggles *@

@@ -49,6 +49,27 @@ public class OutboundEmailFlusherTests
         _transport.Batches.Should().ContainSingle("one connection per flush, whatever the mix of kinds")
             .Which.Select(m => m.Subject).Should().BeEquivalentTo(["Notification 1", "Notification 2", "PrivateMessage 10"]);
         taken.Should().Be(3);
+
+        // Each hook gets indices into its OWN composed list. The private-message group follows two
+        // notification mails in the batch, so a batch position (2) would be out of range for its one
+        // mail, the stamp would fail and only log, and the run would be re-mailed every flush.
+        notifications.AfterSendCalls.Should().ContainSingle().Which.Should().Equal(0, 1);
+        messages.AfterSendCalls.Should().ContainSingle().Which.Should().Equal(0);
+    }
+
+    [Fact]
+    public async Task ADeferredMailInALaterGroup_IsExcludedFromItsOwnGroupsIndices()
+    {
+        var notifications = new StubComposer(OutboundEmailKind.Notification);
+        var messages = new StubComposer(OutboundEmailKind.PrivateMessage);
+        _buffer.Enqueue([Notification(1), Message(10), Message(11)]);
+        _transport.DeferSubjects.Add("PrivateMessage 10");
+
+        await NewFlusher(notifications, messages).FlushAsync();
+
+        notifications.AfterSendCalls.Should().ContainSingle().Which.Should().Equal(0);
+        messages.AfterSendCalls.Should().ContainSingle().Which.Should().Equal(new[] { 1 },
+            "batch position 2 is the second mail of the private-message group, and the deferred first one is not taken");
     }
 
     [Fact]

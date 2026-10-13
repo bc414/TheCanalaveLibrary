@@ -45,7 +45,10 @@ worker).
   Full narrative: `audit/Discovery.md` §"WU-DiscoveryOverrideUI Stage note". This bullet's "5
   sub-forms" count and the Badges/ExternalAccounts/RevealManagementList additions since WU30 are
   otherwise unreconciled here — pre-existing staleness, not touched by this WU.
-- **L3.5-Structure — Stage 5** (WU30). 5 sub-form Razor components with clear param/callback
+- **L3.5-Structure — Stage 5** (WU30; `PrivacySettingsForm`'s "Private messages" control gained a
+  pointer to the message-email toggle on `/notifications/settings` — WU-PrivateMessageEmail review
+  fixes, 2026-10-13, owner ruling D18, RazorComponents-tested, stage unchanged, see its Stage note).
+  5 sub-form Razor components with clear param/callback
   boundaries; picture upload raises `IBrowserFile` callback; page handles stream + URL patch.
   Verified: build green.
 - **L4-Style — Stage 5** (WU30). Tailwind v4 token-based styling throughout; sub-forms use
@@ -55,8 +58,30 @@ worker).
   site now runs global InteractiveAuto; settings read+write verified in a real WASM runtime during
   the flip's browser wave (tagline round-trip, psql ground truth). Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip.
+- **L4.5 — Stage 1 (5→1 at the WU-PrivateMessageEmail review fixes, 2026-10-13: the privacy form's
+  new pointer line has not been seen in a browser; tracker H35 step 9 returns it to 5).**
 
 ---
+
+### Feature 20 L3.5/L4.5 — WU-PrivateMessageEmail review fixes Stage note (2026-10-13): the privacy form points to the message-email toggle
+
+**F20 L4.5 5→1; every other F20 cell stays 5.** Owner ruling D18 places the new-message email
+preference "beside `AllowPrivateMessages` — where a user looks for it", and also has the notification
+settings page render "a second section for messaging email" because "users will look in one place".
+The build put the only toggle on `/notifications/settings` and nothing on the privacy form, which
+dropped the first clause. `PrivacySettingsForm`'s "Private messages" control now carries one muted
+line under its select, "Emails about new messages: Notification settings", whose link goes to
+`/notifications/settings`; the select names it as its description (`aria-describedby`). It is a
+pointer, not a second toggle: this form saves on its button and that page per toggle, so two controls
+for one value would disagree mid-edit. Rule: `layer2-services.md` §"Private-Message Email" →
+"Preference API"; settled reading: `audit/Messaging.md` §"D18".
+
+**How verified:** RazorComponents — `PrivacySettingsFormTests.ThePrivateMessagesControl_PointsToTheMessageEmailToggle_AndOffersNoSecondOne`
+(the line exists, the select's `aria-describedby` names it, its link equals `NotificationSettingsPage`'s
+`@page` route, and no checkbox on the form mentions email). `dotnet build` green, no new warnings in
+touched files; `dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614; the four
+PowerShell gates pass. **No browser was available**: the line is new visible markup, so L4.5 is
+lowered and tracker **H35** step 9 holds the pass.
 
 ### Feature 20 L3-Logic — WU-AccessGateSweep2 Stage note (2026-09-30): "Off" wrote the wrong enum value
 

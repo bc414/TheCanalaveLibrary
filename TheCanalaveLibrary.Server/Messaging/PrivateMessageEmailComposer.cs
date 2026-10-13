@@ -20,8 +20,12 @@ namespace TheCanalaveLibrary.Server;
 ///   <item>the row is not archived (archive mutes email too — decision row 28 (c));</item>
 ///   <item>the user has <c>EmailOnNewMessage</c> on, a confirmed address, and an address.</item>
 /// </list>
-/// <para>Account status is not a gate, mirroring <see cref="NotificationEmailComposer"/>. The sender
-/// drops out by construction: sending stamps the sender's own <c>LastReadTimestamp</c>.</para>
+/// <para>Account status is not a gate — a built default awaiting the owner (<c>roadmap.md</c>
+/// decision row 28 (e)). <see cref="NotificationEmailComposer"/> makes the same choice for its own
+/// reason (account-action notices are what a restricted user must receive), which does not carry over
+/// here. What bounds it is the run rule: a Banned or currently Suspended recipient cannot sign in to
+/// read, so their runs never reopen — at most one mail per conversation until they read again. The
+/// sender drops out by construction: sending stamps the sender's own <c>LastReadTimestamp</c>.</para>
 ///
 /// <para><b>Write-side read, Case 1.</b> Reads use the write context, untracked: this checks a
 /// watermark it writes itself, so replica lag must never let it mail a run twice (the

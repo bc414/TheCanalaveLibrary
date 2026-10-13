@@ -108,8 +108,12 @@ public class User : IdentityUser<int>
     public PrivacySettings PrivacySettings { get; set; } = new PrivacySettings();
 
     // --- New-message email preference (owner ruling D18, WU-PrivateMessageEmail) ---
-    // Messaging-owned (D18); written only by IMessagingWriteService.SetMyNewMessageEmailEnabledAsync
-    // and the messaging unsubscribe endpoint (/unsubscribe/messages/{token}), both set-based. A
+    // Messaging-owned (D18); its only deliberate writers are
+    // IMessagingWriteService.SetMyNewMessageEmailEnabledAsync and the messaging unsubscribe endpoint
+    // (/unsubscribe/messages/{token}), both set-based. Identity's full-row UserManager updates also
+    // rewrite it with whatever their User instance holds, so a circuit-scoped caller loads that
+    // instance fresh (layer2-services.md "Set-based writes leave the circuit's tracked copies
+    // stale"; ServerModerationWriteService.LoadTargetUserAsync). A
     // scalar column, not a field inside the PrivacySettings JSON beside AllowPrivateMessages:
     // UpdatePrivacySettingsAsync replaces that JSON group wholesale from the privacy form, which
     // would reset this on every privacy save. Default on (a derived default, roadmap decision row 28

@@ -950,6 +950,15 @@ unless noted. All sit under Stage-5 cells.
     this at the sites it shares, so the two belong in one WU.
   - **Fix shape:** per site, an `ON CONFLICT` insert or a delete through the tracker, plus an
     Integration test that runs the sequence through one scope.
+  - **The column half, swept and fixed** (annotated 2026-10-13 by the WU-PrivateMessageEmail review
+    fixes; not this item's natural-key defect, recorded here because it is the same rule). A stale
+    tracked copy turns into a silent revert under a full-row writer. The only one is Identity's
+    `UserManager` update family; its only circuit-scoped caller is `ServerModerationWriteService`
+    (the stamp bump on Suspend/Ban), and no service calls `Update`, `Attach` or sets
+    `EntityState.Modified`. A moderator circuit that had tracked the target (an earlier Warn) wrote back
+    every `User` column changed since: a member's message-email unsubscribe, `ActiveReportCount`,
+    `ApprovedStorySubmissions`. The moderator-initiated account paths now load the target fresh
+    (`LoadTargetUserAsync`); Integration `ModerationIntegrityTests` runs each sequence through one scope.
 - [ ] **D16 — An import of more than five chapters commits five and then refuses** `[latent-risk · med · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage (its spec's T1); found while classifying the import surface, not fixed — the fix needs a design choice.*
   - Grid: F63 (Import) cells stay 5; the throttle behaves as specified, the commit loop does not fit it.
   - Source: `SharedUI/Import/StoryChapterImport.razor` `CommitAsync` calls
@@ -1634,7 +1643,7 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     Opening the full editor for a taken-down story (property edits, `content-safety.md`'s "so they
     can often fix it") is a separate question no ruling reaches; the build keeps it closed, as before
     D15.
-- [ ] **F25 — Four choices D18's private-message email left to the build** `[decision · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail. Promoted the same day to `roadmap.md` decision row 28.*
+- [ ] **F25 — Five choices D18's private-message email left to the build** `[decision · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail. Promoted the same day to `roadmap.md` decision row 28. (e) added the same day by its review fixes.*
   - Grid: no cell moves on its account (F49 L1/L2/L5 and F43 L3/L3.5/L5 stay 5).
   - (a) **Default on.** `User.EmailOnNewMessage` defaults to `true` (migration backfills existing
     users on). D18 calls PM email "the highest-value email on the site" and sets no default.
@@ -1647,6 +1656,12 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     notified and an unread other-party message exists. D18's literal "newer than both watermarks"
     would mail on every drain cycle of one unread run, against D18's own outcomes. Pinned by
     Integration `PrivateMessageEmailTests` (burst, standing unread, re-fire after read).
+  - (e) **Account status is not a gate.** A Banned or currently Suspended recipient is mailed like
+    anyone else. They cannot sign in to read, so their runs never reopen: at most one mail per
+    conversation until they read again. D18 is silent; the notification composer's no-gate reason
+    (its account-action notices are what a restricted user must receive) does not carry over to a mail
+    whose only action is "Read it on the site". Pinned by Integration
+    `PrivateMessageEmailTests.ABannedRecipient_IsMailedOncePerConversation_AndNeverAgain`.
   - Each answer is a one-line change in `PrivateMessageEmailComposer` / `User` / the bodies.
 
 ---
@@ -1858,6 +1873,14 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     `SessionExpiredException`, and an escaped one replaces the whole page instead of showing
     `ErrorAlert`'s sign-in link.
   - Fix shape: the same catch, with an inline `ErrorAlert`.
+  - **`NotificationSettingsPage`'s category toggles, in detail** (folded in from H36 by the
+    WU-PrivateMessageEmail review fixes, 2026-10-13). `HandleToggleAsync` updates `Settings`
+    optimistically and awaits `SetSettingAsync` with no catch, so a refusal (an expired WASM session, an
+    account deleted under a live session) also leaves the optimistic state un-rolled-back. A precedent
+    now sits in the same file: the Private messages section's `HandleNewMessageEmailToggleAsync` keeps
+    the previous row, holds a per-row busy flag, rolls back on failure and shows one `ErrorAlert` under
+    its section; the categories want one under each category. RazorComponents tests go beside
+    `NotificationSettingsPageTests`' refusal case.
 
 - [ ] **H18 — Dev seed: follower counters disagree with the follow rows** `[test-hygiene · low · anytime]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
   - Grid: none (dev data only).
@@ -2312,14 +2335,15 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `/story/{id}/chapter/new` for that story is not found too.
     10. *(Review fixes.)* Save a title with a double space (`A  B`): the dialog's label shows `A B`, and
         typing `A B` enables the delete.
-- [ ] **H35 — WU-PrivateMessageEmail browser pass: the settings page's Private messages section, the new-message email in Mailpit, and its unsubscribe pages** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; no browser was available to it.*
-  - Grid: **F43 and F49 L4.5 5→1** (`status.md`). F43's page gained a section read and written through
-    Messaging's service (both render phases need it, since the WASM path is the new client methods);
-    F49 gained an outbound email and two anonymous landing pages. This pass returns both to 5.
-    Integration (`PrivateMessageEmailTests`), Unit (`OutboundEmailFlusherTests`,
+- [ ] **H35 — WU-PrivateMessageEmail browser pass: the settings page's Private messages section, the new-message email in Mailpit, its unsubscribe pages, and the privacy form's pointer** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; no browser was available to it. Extended the same day by its review fixes (F20, step 9).*
+  - Grid: **F43, F49 and F20 L4.5 5→1** (`status.md`). F43's page gained a section read and written
+    through Messaging's service (both render phases need it, since the WASM path is the new client
+    methods); F49 gained an outbound email and two anonymous landing pages; F20's privacy form gained a
+    pointer line under its "Private messages" control (the review fixes). This pass returns all three
+    to 5. Integration (`PrivateMessageEmailTests`), Unit (`OutboundEmailFlusherTests`,
     `PrivateMessageEmailBodiesTests`, `MessagingUnsubscribeTokenServiceTests`,
-    `ClientMessagingEmailPreferenceTests`) and RazorComponents (`NotificationSettingsPageTests`) cover the
-    behavior.
+    `ClientMessagingEmailPreferenceTests`, `UnsubscribeLandingPageTests`) and RazorComponents
+    (`NotificationSettingsPageTests`, `PrivacySettingsFormTests`) cover the behavior.
   - Already exercised without a browser (2026-10-13, server-only `Smtp` branch against a local SMTP
     sink, `curl`): steps 2–4, step 6's GET/POST, and the endpoints behind step 1. What this pass adds is
     the browser itself — the section's interactivity on both render phases, the mail as Mailpit renders
@@ -2341,17 +2365,14 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     7. A notification email's unsubscribe page (any type) now links "Manage your email settings" to
        `/notifications/settings` (it pointed at `/settings` before this WU).
     8. Stop the server while a PM mail is queued (inside 30 s): the shutdown drain sends it.
-- [ ] **H36 — The notification settings page's category toggles let a refused write escape to the page boundary** `[polish · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail (found while adding the page's Private messages section; not built, out of the WU's scope).*
-  - Grid: F43 L3-Logic stays 5 (pre-existing since WU33; no behavior of this WU depends on it).
-  - `NotificationSettingsPage.HandleToggleAsync` updates `Settings` optimistically and awaits
-    `SetSettingAsync` with no catch. A refusal — an expired session on WASM (`SessionExpiredException`),
-    an account deleted under a live session — escapes to `MainLayout`'s `CanalaveErrorBoundary` and
-    replaces the whole page, and the optimistic state is never rolled back. `layer3-logic.md`
-    §"Optimistic Updates & Debounce" rule 4 says a self-contained write catches, rolls back and shows
-    `ExceptionPresenter`'s message inline.
-  - Fix shape: the Private messages section's handler (`HandleNewMessageEmailToggleAsync`, same file)
-    — keep the previous row, a per-row busy flag, roll back on failure, one `ErrorAlert` under the
-    category. RazorComponents tests beside `NotificationSettingsPageTests`' refusal case.
+    9. *(Review fixes.)* `/settings` as B, on the circuit and on a WASM revisit: under the Privacy
+       form's "Private messages" select, one muted line "Emails about new messages: Notification
+       settings", whose link goes to `/notifications/settings`; a screen reader announces the line as
+       the select's description. Nothing on the privacy form toggles the email.
+- [x] **H36 — Duplicate of H17 (CLOSED 2026-10-13, retired id)** `[polish · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; folded into **H17** the same day by its review fixes.*
+  - The defect it named, `NotificationSettingsPage`'s category toggles with no catch, was already
+    H17's first bullet. Its detail (no rollback, the same-file precedent, the test location) now lives
+    there. The id stays retired so citations of it resolve here; track the work under **H17**.
 
 ---
 

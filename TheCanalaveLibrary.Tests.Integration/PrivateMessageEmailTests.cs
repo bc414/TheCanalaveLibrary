@@ -195,6 +195,31 @@ public class PrivateMessageEmailTests(PostgresFixture postgres) : IntegrationTes
         Transport.Sent.Single().UserId.Should().Be(_recipientId);
     }
 
+    [Fact]
+    public async Task ABannedRecipient_IsMailedOncePerConversation_AndNeverAgain()
+    {
+        // Account status is not a gate: a built default awaiting the owner (roadmap.md decision row 28
+        // (e)). What bounds it is the run rule. A recipient who cannot sign in never reads, so the run
+        // never reopens. Changing the default must fail this test and be argued for.
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Users
+                .Where(u => u.Id == _recipientId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.AccountStatus, AccountStatusEnum.Banned));
+        }
+        int conversationId = await StartAsync();
+        (await FlushAsync()).Should().Be(1, "a restricted account is mailed like any other (decision row 28 (e))");
+
+        for (int i = 0; i < 3; i++)
+        {
+            await SendAsync(conversationId, _senderId);
+            await FlushAsync();
+        }
+
+        Transport.Sent.Should().ContainSingle("the run stays notified until a read reopens it, and a banned member cannot read")
+            .Which.UserId.Should().Be(_recipientId);
+    }
+
     // ── Failure posture ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -316,6 +341,8 @@ public class PrivateMessageEmailTests(PostgresFixture postgres) : IntegrationTes
         HttpResponseMessage get = await client.GetAsync(path);
         get.StatusCode.Should().Be(HttpStatusCode.OK);
         (await EmailOnNewMessageAsync(_recipientId)).Should().BeTrue("a GET is what link scanners follow; it changes nothing");
+        (await get.Content.ReadAsStringAsync()).Should().Contain("href=\"/notifications/settings\"",
+            "the page that holds the message-email toggle (D18's standing rider), not /settings");
 
         HttpResponseMessage post = await client.PostAsync(path, null);
         post.StatusCode.Should().Be(HttpStatusCode.OK);

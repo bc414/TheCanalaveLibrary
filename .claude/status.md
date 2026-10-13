@@ -96,7 +96,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 17 | Story Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |

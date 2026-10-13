@@ -1,3 +1,4 @@
+using System.Net;
 using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   what it destroys, silently, and leaves reports on surviving content open.</item>
 ///   <item><b>§2.1.3 account-status table</b> (on both entry points) and Reinstate; the report-driven
 ///   action tells the member reporter (81), keeps its decrement past the stamp bump, and resolves a
-///   report about an already-banned account against the standing ban (review fixes).</item>
+///   report about an already-banned account against the standing ban (review fixes). A moderator
+///   circuit that already tracks the target decides on, and writes back, the row as it is now, not as
+///   it loaded it (WU-PrivateMessageEmail review fixes, 2026-10-13).</item>
 ///   <item><b>D9 read gates</b>: every moderator-only read refuses a signed-in non-moderator (403 type)
 ///   and an anonymous caller (401 type) on the service itself — the tier that catches a circuit-path
 ///   regression.</item>
@@ -623,6 +626,81 @@ public class ModerationIntegrityTests(PostgresFixture postgres) : IntegrationTes
         await FluentActions.Invoking(() => Mod().ApplyAccountActionToUserAsync(
                 target, _reasonId, ModeratorActionType.ReinstateUser, "x"))
             .Should().ThrowAsync<ModerationValidationException>().WithMessage("*use Reinstate*");
+    }
+
+    // ── A moderator circuit that already tracks the target (WU-PrivateMessageEmail review fixes) ──
+    // One scope models the circuit: its write context outlives every call, so an earlier action's
+    // tracked User comes back from identity resolution with the values it was loaded with
+    // (layer2-services.md "Set-based writes leave the circuit's tracked copies stale").
+
+    [Fact]
+    public async Task ASuspend_OnACircuitThatTrackedTheTarget_KeepsEveryColumnChangedSince()
+    {
+        int target = await SeedUserAsync("Target");
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using IServiceScope circuit = Factory.Services.CreateScope();
+        IModerationWriteService mod = circuit.ServiceProvider.GetRequiredService<IModerationWriteService>();
+        await mod.ApplyAccountActionToUserAsync(target, _reasonId, ModeratorActionType.WarnUser, "First warning.");
+
+        // Elsewhere, after the warning: the member unsubscribes from message email with the one-click
+        // POST, and another member reports them. Both are set-based writes from other scopes.
+        string token = Factory.Services.GetRequiredService<MessagingUnsubscribeTokenService>().CreateToken(target);
+        using HttpClient client = Factory.CreateClient();
+        (await client.PostAsync(MessagingUnsubscribeTokenService.PathFor(token), null))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        await SubmitAsAsync(await SeedUserAsync("R1"), ReportedEntityType.User, target);
+        (await LoadUserAsync(target)).ActiveReportCount.Should().Be(1);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await mod.ApplyAccountActionToUserAsync(target, _reasonId, ModeratorActionType.SuspendUser, "Escalated.",
+            DateTime.UtcNow.AddDays(3));
+
+        User user = await LoadUserAsync(target);
+        user.AccountStatus.Should().Be(AccountStatusEnum.Suspended);
+        user.EmailOnNewMessage.Should().BeFalse(
+            "the stamp bump writes every column of the User it is given; a stale copy undid the unsubscribe");
+        user.ActiveReportCount.Should().Be(1, "the same stale copy put the counter back to its old value");
+    }
+
+    [Fact]
+    public async Task AnAutoApproveChange_OnACircuitThatTrackedTheTarget_SeesAnotherModeratorsChange()
+    {
+        int target = await SeedUserAsync("Target");
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using IServiceScope circuit = Factory.Services.CreateScope();
+        IModerationWriteService mod = circuit.ServiceProvider.GetRequiredService<IModerationWriteService>();
+        await mod.SetCanAutoApproveAsync(target, canAutoApprove: false, _reasonId, "Revoked.");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(await SeedUserAsync("OtherMod")));
+        await Mod().SetCanAutoApproveAsync(target, canAutoApprove: true, _reasonId, "Restored on appeal.");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await mod.SetCanAutoApproveAsync(target, canAutoApprove: false, _reasonId, "Revoked again.");
+
+        (await LoadUserAsync(target)).CanAutoApprove.Should().BeFalse(
+            "the circuit's copy still read false, so the revoke was skipped as 'unchanged'");
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await Db(scope).Reports.CountAsync(r => r.ReportedEntityType == ReportedEntityType.User
+                && r.ReportedEntityId == target))
+            .Should().Be(3, "each of the three changes files its audit row");
+    }
+
+    [Fact]
+    public async Task Reinstate_OnACircuitThatTrackedTheTarget_SeesTheCurrentStatus()
+    {
+        int target = await SeedUserAsync("Target");
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using IServiceScope circuit = Factory.Services.CreateScope();
+        IModerationWriteService mod = circuit.ServiceProvider.GetRequiredService<IModerationWriteService>();
+        await mod.ApplyAccountActionToUserAsync(target, _reasonId, ModeratorActionType.BanUser, "Banned.");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(await SeedUserAsync("OtherMod")));
+        await Mod().ReinstateUserAsync(target, "Appeal upheld.");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await FluentActions.Invoking(() => mod.ReinstateUserAsync(target, "Appeal upheld."))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*already active*",
+                "the circuit's copy still read Banned, so a second reinstatement went through");
     }
 
     [Fact]

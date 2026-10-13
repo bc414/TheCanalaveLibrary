@@ -421,7 +421,7 @@ public class ServerModerationWriteService(
         if (targetUserId == modId)
             throw new ModerationValidationException(["You can't apply an account action to yourself."]);
 
-        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+        User targetUser = await LoadTargetUserAsync(targetUserId)
             ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
 
         if (!await writeDb.ReportReasons.AnyAsync(rr => rr.ReportReasonId == reasonId))
@@ -468,7 +468,7 @@ public class ServerModerationWriteService(
         if (targetUserId == modId)
             throw new ModerationValidationException(["You can't apply an account action to yourself."]);
 
-        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+        User targetUser = await LoadTargetUserAsync(targetUserId)
             ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
 
         if (string.IsNullOrWhiteSpace(reason))
@@ -712,7 +712,7 @@ public class ServerModerationWriteService(
         if (targetUserId == modId)
             throw new ModerationValidationException(["You can't change your own auto-approve standing."]);
 
-        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+        User targetUser = await LoadTargetUserAsync(targetUserId)
             ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
 
         if (!await writeDb.ReportReasons.AnyAsync(rr => rr.ReportReasonId == reasonId))
@@ -875,6 +875,27 @@ public class ServerModerationWriteService(
     }
 
     /// <summary>
+    /// Loads the target of a moderator-initiated account path as the database holds it now, tracked.
+    /// The scoped write context lives as long as the moderator's circuit, so an earlier call (a Warn,
+    /// an auto-approve change) may already track this user, and a tracking query would hand that
+    /// instance back with the values it was loaded with — identity resolution never refreshes it. Any
+    /// write since, from another scope, would then be invisible: the transition checks would decide on
+    /// an old status, and <see cref="BumpSecurityStampIfEjectingAsync"/>'s full-row
+    /// <c>UserManager</c> write would put every changed column back (a member's message-email
+    /// unsubscribe, <c>ActiveReportCount</c>, <c>ApprovedStorySubmissions</c>). So any tracked copy is
+    /// detached first (<c>layer2-services.md</c> "Set-based writes leave the circuit's tracked copies
+    /// stale"; WU-PrivateMessageEmail review fixes, 2026-10-13). The report-driven path needs none of
+    /// this: <see cref="InResolveTransactionAsync{T}"/> clears the tracker before its load.
+    /// </summary>
+    private async Task<User?> LoadTargetUserAsync(int userId)
+    {
+        foreach (var entry in writeDb.ChangeTracker.Entries<User>().Where(e => e.Entity.Id == userId).ToList())
+            entry.State = EntityState.Detached;
+
+        return await writeDb.Users.SingleOrDefaultAsync(u => u.Id == userId);
+    }
+
+    /// <summary>
     /// Writes the status. <c>SuspendedUntilUtc</c> is set only when the resulting status is
     /// <c>Suspended</c> and cleared otherwise, so "set only while Suspended" holds for every row a
     /// moderator action writes (service §2.1.3(c)).
@@ -889,7 +910,9 @@ public class ServerModerationWriteService(
     /// Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the user out) —
     /// WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the security stamp every 30
     /// minutes; a mismatch ends the live circuit, and the next sign-in attempt is blocked by
-    /// CanalaveSignInManager.CanSignInAsync.
+    /// CanalaveSignInManager.CanSignInAsync. <c>UserManager</c> writes every column of
+    /// <paramref name="targetUser"/>, so the caller must have loaded it fresh
+    /// (<see cref="LoadTargetUserAsync"/>, or after <see cref="InResolveTransactionAsync{T}"/>'s clear).
     /// </summary>
     private async Task BumpSecurityStampIfEjectingAsync(User targetUser, AccountStatusEnum newStatus)
     {

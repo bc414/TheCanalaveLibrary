@@ -532,6 +532,8 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         response.IsSuccessStatusCode.Should().BeTrue();
         (await EffectiveEmailEnabledAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou))
             .Should().BeTrue("the confirmation page must not act on its own");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("href=\"/notifications/settings\"",
+            "the settings link goes to the page that holds email settings; /settings has none (fixed WU-PrivateMessageEmail)");
     }
 
     [Fact]

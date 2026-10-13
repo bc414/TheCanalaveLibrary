@@ -460,7 +460,7 @@ itself is `audit/Messaging.md` F49).
   `IMessagingWriteService` (`[PersistentState] bool? NewMessageEmailEnabled`, restore-or-fetch), shows
   only an Email toggle, writes optimistically one write at a time, and rolls back with an inline
   `ErrorAlert` on a refusal. The existing category toggles still have no catch; not changed here
-  (tracker **H36**).
+  (tracker **H17**, which already listed them; filed as H36 and folded into H17 by the review fixes).
 - **F43 L4.5 5→1** — no browser was available; tracker **H35**.
 
 **Verified:** `dotnet build` green; `dotnet test` green — Unit 1,304, RazorComponents 859, Integration
@@ -472,9 +472,20 @@ paid). Mutation-checked: skipping the aborted batch's after-send call, or passin
 token, fails `OutboundEmailFlusherTests`; dropping the section's rollback or its busy-disable fails
 `NotificationSettingsPageTests`.
 
+**Review fixes (2026-10-13) — no flip on F41/F43.** Two test gaps closed. The flusher's after-send
+hooks get indices into each composer's own mails, and only the private-message stamp uses them; no test
+had a hook group that was not first in the batch. `OutboundEmailFlusherTests` now asserts both groups'
+indices in the mixed-kind test and adds a deferral inside a later group (Unit, 10 cases). The landing
+page's settings link, a user-visible fix with no test, is pinned by Unit `UnsubscribeLandingPageTests`
+(the link equals `NotificationSettingsPage`'s `@page` route; the title is encoded) and by both
+Integration unsubscribe GETs (`NotificationEmailFanOutTests.UnsubscribeGet_DoesNotChangeAnything`,
+`PrivateMessageEmailTests.TheUnsubscribeLink_TurnsMessageEmailOff_AndOnlyThePostDoesIt`).
+Mutation-checked: a batch-position index fails two flusher tests; the old `/settings` link fails the
+Unit test. `dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614.
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; its review fixes Unit-test the per-group after-send indices and the landing page's link, no flip; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**

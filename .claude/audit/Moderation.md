@@ -193,6 +193,37 @@ blob, because it is reversible. Rule: `layer2-services.md` §"Image Storage — 
 cleanup". **Phase 7:** a deleted object stays in CDN caches (`/uploads/{**key}` is `immutable`), so
 the illegal-content path needs a cache purge once Cloudflare fronts R2 (`roadmap.md` Phase 7).
 
+**WU-PrivateMessageEmail review fixes Stage note (2026-10-13) — no flip; F47 L2 stays 5.** The
+moderator-initiated account paths decided on, and wrote back, a stale copy of their target. The scoped
+write context lives as long as the moderator's circuit, so once an earlier call (a Warn, an auto-approve
+change) had tracked user X, later tracking queries handed that instance back with the values it was
+loaded with. Two consequences, both reproduced:
+- **A full-row revert.** On Suspend/Ban, `BumpSecurityStampIfEjectingAsync` passes the target to
+  `UserManager.UpdateSecurityStampAsync`, which marks every column modified. The set-based `User` writes
+  from other scopes never touch `concurrency_stamp`, so Identity's concurrency check passed and every
+  column changed since the load went back: a member's one-click message-email unsubscribe (the new
+  `EmailOnNewMessage`, where a reviewer found it), `ActiveReportCount`, `ApprovedStorySubmissions`.
+- **Decisions on an old value.** `EnsureLegalAccountTransition` read a stale status;
+  `ReinstateUserAsync` let a second moderator's reinstatement through again ("already active" was
+  missed); `SetCanAutoApproveAsync` skipped a revoke as "unchanged" after another moderator had
+  restored it.
+
+`ApplyAccountActionToUserAsync`, `ReinstateUserAsync` and `SetCanAutoApproveAsync` now load the target
+through `LoadTargetUserAsync`, which detaches any tracked copy before the query. The report-driven
+`ApplyAccountActionAsync` already loaded fresh, after `InResolveTransactionAsync`'s
+`ChangeTracker.Clear()`. Sweep: Identity's `UserManager` update family is the codebase's only full-row
+writer (no service calls `Update`, `Attach` or sets `EntityState.Modified`), and this service is its
+only circuit-scoped caller. Rule: `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" →
+"Set-based writes leave the circuit's tracked copies stale"; tracker **D15** annotated. No UI changed,
+so L4.5 is not owed a pass.
+- **How verified (Integration):** `ModerationIntegrityTests` runs each sequence through one scope (one
+  scope models the circuit). A Warn, then an unsubscribe POST and a member report from other scopes,
+  then a Suspend: `email_on_new_message` stays false and `ActiveReportCount` stays 1. A revoke, then a
+  second moderator's restore, then a revoke on the first circuit: the column ends false with three
+  audit rows. A Ban, then a second moderator's Reinstate, then a Reinstate on the first circuit: refused
+  as "already active". Mutation-checked: without the detach all three fail. `dotnet test` green — Unit
+  1,308, RazorComponents 860, Integration 1,614.
+
 **WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — no flip; F47 L2 stays 5.** The hard-delete
 Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and cleanup").
 `ServerModerationWriteService` gains `IImageStorageService` (DI-only). `ApplyHardDeleteAsync` returns a
@@ -507,7 +538,10 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-10-13, WU-BlobCleanup — a hard delete erases the story's cover blob after the
+**Stages (updated 2026-10-13, the WU-PrivateMessageEmail review fixes — the moderator-initiated account
+paths load their target fresh, so a circuit that tracked it no longer decides on or writes back stale
+columns, beneath L2, no flip, Integration-tested, Stage note at the top of this section; earlier the
+same day, WU-BlobCleanup — a hard delete erases the story's cover blob after the
 commit, beneath L2, no flip, Integration-tested and driven over HTTP on Local and Garage by its browser
 pass the same day, Stage note at the top of this section; earlier the same
 day, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's

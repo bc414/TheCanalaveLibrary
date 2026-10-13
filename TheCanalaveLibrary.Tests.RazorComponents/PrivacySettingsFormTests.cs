@@ -83,4 +83,31 @@ public class PrivacySettingsFormTests : BunitContext
             "a saved Nobody must match the Off option — otherwise no option matches and the browser "
             + "silently displays the first one (Public)");
     }
+
+    /// <summary>
+    /// Owner ruling D18 puts the new-message email preference "beside <c>AllowPrivateMessages</c> —
+    /// where a user looks for it", and its one toggle on <c>/notifications/settings</c>. The privacy
+    /// form's "Private messages" control therefore carries a pointer to that page, announced as the
+    /// select's description, and no second toggle (WU-PrivateMessageEmail review fixes, 2026-10-13).
+    /// </summary>
+    [Fact]
+    public void ThePrivateMessagesControl_PointsToTheMessageEmailToggle_AndOffersNoSecondOne()
+    {
+        IRenderedComponent<PrivacySettingsForm> cut = Render<PrivacySettingsForm>(p => p.Add(f => f.Initial, Defaults));
+
+        IElement hint = cut.Find("#allow-pm-email-hint");
+        cut.Find("#allow-pm").GetAttribute("aria-describedby").Should().Be("allow-pm-email-hint",
+            "a screen reader on the select hears where the email setting lives");
+        hint.TextContent.Should().Contain("Emails about new messages");
+
+        string href = hint.QuerySelector("a")!.GetAttribute("href")!;
+        string notificationSettingsRoute = typeof(NotificationSettingsPage)
+            .GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), inherit: false)
+            .Cast<Microsoft.AspNetCore.Components.RouteAttribute>().Single().Template;
+        href.Should().Be(notificationSettingsRoute, "the pointer must land on the page that holds the toggle");
+
+        cut.FindAll("input[type=checkbox]").Select(c => c.ParentElement!.TextContent)
+            .Should().NotContain(text => text.Contains("email", StringComparison.OrdinalIgnoreCase),
+                "one value, one toggle: a second one here would save on a different gesture");
+    }
 }

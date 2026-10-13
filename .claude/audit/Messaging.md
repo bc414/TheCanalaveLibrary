@@ -106,10 +106,21 @@ row 28 / tracker F25):**
   (`LastNotifiedTimestamp` NULL, or at or before `LastReadTimestamp`) and an unread other-party
   message exists. D18's literal "newer than both watermarks" would re-mail every drain cycle during
   one unread run, contradicting its own outcomes.
+- (e) **Account status is not a gate** (added by the WU-PrivateMessageEmail review fixes, 2026-10-13).
+  D18 is silent. A Banned or currently Suspended recipient cannot sign in to read, so their runs
+  never reopen: at most one mail per conversation until they read again.
 
 **Decided by the build, as D18 directed:** the drain interval is the shared 30 s worker (a PM waits
-0–30 s for the next tick); no second knob. The preference is a scalar column on `User`, not a field
-in the `PrivacySettings` JSON, because the privacy form replaces that JSON wholesale.
+0–30 s for the next tick); no second knob.
+
+**Decided by the build (a technical constraint and a reading of D18's two placement clauses, not a
+product choice):** the preference is a scalar column on `User`, not a field in the `PrivacySettings`
+JSON beside `AllowPrivateMessages`, because the privacy form replaces that JSON wholesale. Its one
+toggle is the "Private messages" section of `/notifications/settings` (D18: "users will look in one
+place"; the page "renders a second section for messaging email"). D18's "beside
+`AllowPrivateMessages` — where a user looks for it" is met by a one-line pointer under the privacy
+form's "Private messages" control (WU-PrivateMessageEmail review fixes, 2026-10-13; `audit/Profiles.md`
+F20).
 
 Rules: `layer2-services.md` §"Private-Message Email" and §"Outbound email pipeline";
 `cross-cutting.md` §"Two unread systems"; `security.md` §"One-click unsubscribe tokens".
@@ -145,7 +156,7 @@ shared one.
 - **L1 — Stage 5 (two columns added by WU-PrivateMessageEmail, 2026-10-13 — `User.EmailOnNewMessage`, `ConversationParticipant.LastNotifiedTimestamp`, owner ruling D18; Integration-tested, stage unchanged, see its note below).** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`.
-- **L2 — Stage 5 (WU35, 2026-06-24; new-message email — both sends enqueue, `PrivateMessageEmailComposer` mails one email per unread run, the preference methods and the one-click unsubscribe — WU-PrivateMessageEmail, 2026-10-13, owner ruling D18, Integration- and Unit-tested, stage unchanged, see its note below; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; new-message email — both sends enqueue, `PrivateMessageEmailComposer` mails one email per unread run, the preference methods and the one-click unsubscribe — WU-PrivateMessageEmail, 2026-10-13, owner ruling D18, Integration- and Unit-tested, stage unchanged, see its note below; its review fixes recorded the no-account-status-gate default as decision row 28 (e) and pinned it, Integration-tested, stage unchanged; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (5 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`,
   `GetMyNewMessageEmailEnabledAsync` — the last added WU-PrivateMessageEmail) and
@@ -566,6 +577,29 @@ confirmation and changed nothing, its POST set `email_on_new_message` false, and
 /api/messaging/email-preference?enabled=true` set it back. The settings page's prerender carried the
 Private messages section. The smoke conversation was deleted from the dev DB afterwards. Not a browser
 pass: interactivity on both render phases and real-client rendering stay with **H35**.
+
+**Review fixes (2026-10-13) — no further flip on F49.** Three reviews raised seven findings; all were
+real and none needed an owner ruling (one became a derived default for confirmation):
+- **No account-status gate, recorded as a choice.** The composer and `layer2-services.md` justified it
+  as "mirroring the notification composer", whose reason (account-action notices) does not carry over.
+  It is now decision row 28 **(e)** / tracker F25 (e) with its own reason (the run rule bounds a
+  restricted recipient to one mail per conversation until they read again), pinned by
+  `PrivateMessageEmailTests.ABannedRecipient_IsMailedOncePerConversation_AndNeverAgain`.
+- **D18's "where a user looks for it".** The privacy form's "Private messages" control now points to
+  the toggle (`audit/Profiles.md` F20, which takes the L4.5 flip). The settled note's "as D18
+  directed" no longer covers the scalar-column choice.
+- **An unsubscribe undone by a moderator.** A moderator circuit that had tracked the member wrote
+  `email_on_new_message` back to true on a later Suspend/Ban (Identity's full-row stamp bump). Fixed in
+  Moderation (`audit/Moderation.md` F47 review-fixes note); `User.cs`'s "written only by" comment and
+  the rule bullet now name the full-row writer.
+- **Tests and docs.** The landing page's settings link is pinned (Unit `UnsubscribeLandingPageTests`;
+  both Integration unsubscribe GETs); the flusher's per-group after-send indices are asserted for a
+  group that is not first in the batch (Unit `OutboundEmailFlusherTests`); a dead section pointer in
+  `layer2-services.md` fixed; tracker H36 folded into **H17**, which already held it.
+
+`dotnet test` green — Unit 1,308, RazorComponents 860, Integration 1,614; build 0 errors, no new
+warnings; the four gates pass. Mutation-checked: the moderation detach, the flusher's per-group index
+and the landing page's link each fail their tests when reverted.
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 
