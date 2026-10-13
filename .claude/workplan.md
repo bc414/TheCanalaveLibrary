@@ -17,16 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-BlobCleanup (2026-10-13) — worksheet D14, both halves. **Blob cleanup has two
-  owners:** an inline post-commit delete at account deletion (the avatar) and the moderation hard delete
-  (the story cover), plus a daily `ImageOrphanSweeper` backstop (unfiltered reference read, 24 h grace,
-  dry-run first cycle, 100-delete cap, store → DB only, generated keys only, kill switch
-  `ImageStorage:OrphanSweep:Enabled`); `IImageStorageService` gained `EnumerateAsync` (a recorded
-  amendment). **Cover upload persists its own reference:** `CoverArtRelativeUrl` left the write DTOs,
-  `RemoveCoverArtAsync` + `DELETE /api/stories/{id}/cover` are new, and the editor uploads on pick. No
-  migration. F4 L4.5 5→1 (no browser; tracker **H31**). Filed: **F22**, promoted to **decision row 25**
-  (do a deleted user's surviving stories keep their covers? built: yes). `dotnet test`: Unit 1,225,
-  RazorComponents 805, Integration 1,539. **Pointer:** its DONE entry.
+- **Last landed:** WU-BlobCleanup (2026-10-13) — worksheet D14, both halves, plus its review fixes.
+  **Blob cleanup has two owners:** an inline post-commit delete at account deletion (the avatar) and the
+  moderation hard delete (the story cover), plus a daily `ImageOrphanSweeper` backstop (unfiltered
+  reference read, 24 h grace, a dry run at each start and the first real cycle an hour later, 100-delete
+  cap, store → DB only, generated keys only, kill switch); `IImageStorageService` gained
+  `EnumerateAsync`. **Cover upload persists its own reference:** `CoverArtRelativeUrl` left the write
+  DTOs, `RemoveCoverArtAsync` is new, the editor uploads on pick, and its cover, save and status writes
+  never overlap. No migration. F4 and F52 L4.5 5→1 (no browser; tracker **H31**, which absorbed H3).
+  Filed: **F22** → **decision row 25** (covers kept on a deleted user's stories). `dotnet test`: Unit
+  1,235, RazorComponents 811, Integration 1,539. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
@@ -454,8 +454,9 @@ is pending except where a bullet says so.
 ## WU-BlobCleanup — blob cleanup owned twice (an inline post-commit delete at every terminal deletion path, a daily orphan sweep as the backstop) and cover upload persisting its own reference (worksheet D14, both halves; service audit §3.16 and §2.12; extends `Images/`, `Stories/`, `Moderation/`, `Identity/`) — DONE ✓ (2026-10-13)
 
 - **Cells:** F4 L4.5 5→1 (the editor's cover flow changed, no browser; tracker **H31**). F4
-  L2/L3-Logic/L3.5/L5, F47 L2 and F52 L2 stay 5 (built beneath Stage-5 cells); the Images cluster has
-  no grid row. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+  L2/L3-Logic/L3.5/L4/L5, F47 L2 and F52 L2 stay 5 (built beneath Stage-5 cells); the Images cluster
+  has no grid row. The review fixes flipped **F52 L4.5 5→1** (the deletion page's copy changed again;
+  H31). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** worksheet D14 (answered 2026-08-07) and its spec `wu-specs/WU-BlobCleanup.md` (which
   merges D14's WU-CoverPersistence half), with the campaign amendment: X9 dropped
   (`daily_story_stats` cascades from `stories`), the hard-delete blob delete after the strategy returns.
@@ -517,6 +518,38 @@ is pending except where a bullet says so.
   (`HttpIOException`), which escaped the retry's `AmazonS3Exception`-only catch; the retry now tolerates
   `IOException`/`HttpRequestException` until its deadline. check-doc-hygiene, check-design-tokens, check-render-modes and check-a11y pass. No
   browser was available: tracker **H31** holds the pass.
+- **Review fixes (2026-10-13).** Three reviews raised 14 findings, 12 distinct after merging duplicates.
+  All 12 were real; none needed an owner ruling.
+  1. **The sweep was inert under daily restarts (L2).** The dry run ran at each start and the first
+     real cycle a day later, so a process restarted at least daily never deleted, against D14's
+     "orphans accepted is rejected for any class". Now the first real cycle follows a completed dry run
+     by an hour (`ImageOrphanSweepWorker.DelayAfterCycle`); left: a process restarted more often than
+     hourly only dry-runs. **Unit** `ImageOrphanSweepWorkerTests` (3).
+  2. **A cover call could overlap the save (F4 L3-Logic).** Pick-then-Save started the save under a
+     streaming upload; its reload aborted the upload, and on a circuit both shared the scoped write
+     context. The editor's three writes (cover call, save, status change) are now mutually exclusive,
+     disabled both ways and re-checked in each handler; the save-vs-status pair predated the WU and was
+     closed in the same edit. `layer2-services.md`'s write-context bullet now says this is the page's
+     job. **RazorComponents** +6 (`StoryEditorPageTests` +4 with the 403 cover case,
+     `StoryPropertiesFormTests` +2).
+  3. **The deletion page missed the cover delete-first path (F52 L4).** "Cover images: use Remove cover
+     in your story's editor." and "The same goes for a cover image that shows you." (D13 rider (i));
+     `cross-cutting.md`'s copy paragraph; **F52 L4.5 5→1** per the WU-UserDeletion precedent;
+     `StaticSsrPageRenderTests` asserts both.
+  4. **Untested client impls (F4 L5).** **Unit** `ClientStoryCoverServiceTests` (7): the DELETE's verb,
+     route and refusals, the multipart upload, and the `StoryEditDTO` echo beside the polymorphic tags.
+  5. **Docs.** ImageStorage's Settled note split into D14's text and the derived build choices, with
+     `layer2-services.md` marking each sweep constraint *(D14)* or *(derived)*; the trap test's comments
+     say what each test catches (re-mutation-checked); the hard-delete recipe gains its blob step and
+     `content-safety.md`'s escape hatch names the cover erasure and CDN caveat; the DELETE's
+     "no body, so no antiforgery concern" is now a fact, not a CSRF rationale (D38 pending); F4's L4
+     headline and F52's L4/L4.5 headlines updated; tracker **H3** folded into **H31** (roadmap tier-6
+     row repointed), H31 gains the overlap and real-sweep steps; the D14 Built line notes the timing.
+
+  Mutation-checked: dropping the editor's handler guards or the form's cross-disables fails the overlap
+  tests; a reference read routed through `Stories` fails only the mis-injected-context test, as its
+  comment now says. **Unit 1,235** (+10), **RazorComponents 811** (+6), **Integration 1,539**, all
+  green; build 0 errors, no new warnings in touched files; the four gates pass. No browser: **H31**.
 - **Pointers:** `audit/ImageStorage.md` (Settled + Stage note), `audit/Stories.md` F4,
   `audit/Moderation.md` F47, `audit/Identity.md` F52; `layer2-services.md` §"Image Storage — blob
   ownership and cleanup"; roadmap decision row 25; tracker F22, H31.

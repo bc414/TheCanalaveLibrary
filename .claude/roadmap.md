@@ -209,7 +209,7 @@ done.
 | **2** | ~~WU-UserModeration~~ **DONE 2026-08-01** | B13 (opens B17/B18/B19) | Filed as `polish · low`; was the tip of an **unusable moderation feature** — nothing could report a User, and `/mod/reports`' Warn control threw for every report that could actually exist, so nobody could be warned, suspended or banned. See "Resolved" below. |
 | **2** | WU-NotifEmail (in progress, 2026-07-31) | B1 | **Pulled off the Phase-6 gate 2026-07-31.** The old placement assumed a live audience was the forcing function and that the unchosen email provider was in the way; neither holds. Provider selection is a config switch over plain SMTP (decision row 8's *mechanism* half was resolved at WU-Email) and the whole path is Mailpit-verifiable today, so there is nothing a beta audience teaches that a dev inbox doesn't. Building it before beta also means the settings page stops lying to the first real users. Does **not** close row 8 / F4 — deliverability (provider, sending domain, SPF/DKIM/DMARC) stays at Phase 7. Settled constraints: `audit/Notifications.md` §"Notification email fan-out." |
 | **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
-| **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
+| **6** | WU-TestHygieneSweep | H3 (folded into H31, 2026-10-13), H4 (manual-verify half) | Cover-art browser-verify (now H31's steps 1–5, the WU-BlobCleanup browser pass), paste-from-Word manual check |
 | **6** | *(fold H7 into whichever WU next touches the test suite, or its own pass)* | H7 | The 25 C-consolidate merges are mechanical, no urgency, no dependency |
 | **6** | *(standalone, own WU whenever convenient)* | ~~A6~~ **DONE 2026-07-31** (WU-ExploreFilterAxes), A7 | Discovery-adjacent but distinct from Tier 2's cluster (~~Explore filter axes~~; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function. A6 turned out to be a *design* reopen (a settled "not filtered" note) rather than the code task its one-liner implied — see "Resolved" below. A7 unchanged. |
 | **6** | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Moved down from Tier 2 (2026-07-30) — Recommendations/Vouches/Messaging/Series/Comments are already Stage 5 across every column and nothing else open touches their query shapes (checked against the full tracker, not inferred from the stage number — Stage 5 means "matches current spec," not "won't change"). No hard gate forces it earlier: Phase 3's freeze only mints Stage 6 on the L4-Style column (`middle_plan.md:106`), so C2–C6's L6=5 claims aren't at risk of being frozen unverified. **Soft floor this tier doesn't otherwise carry: finish before Phase 6 Beta opens** — Recommendations/Comments/Messaging/Vouches take real concurrent traffic there, the exact paths C2–C6 flag as unindexed, and re-measuring/re-indexing after the fact is cheap but discovering the gap via slow beta pages isn't a good look. |
@@ -240,9 +240,12 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
     the commit, outside the retry: the avatar at account deletion, the cover at a moderation hard
     delete. D15's author story delete inherits the rule.
   - A **daily orphan sweep** (`ImageOrphanSweeper`) as the backstop for fault residue. It reads the
-    references unfiltered, has a 24 h grace window, a dry-run first cycle, a 100-delete cap per cycle,
-    and a kill switch; it acts store → DB only, on generated upload keys only. `IImageStorageService`
-    gained `EnumerateAsync` (a recorded amendment to the frozen interface).
+    references unfiltered, has a 24 h grace window, a dry-run first cycle and a per-cycle cap, and
+    acts store → DB only (D14). Build choices on top, marked *(derived)* in the rule: generated upload
+    keys only, a 100-delete cap, a kill switch, and a dry run at each process start with the first real
+    cycle an hour later (its review fixes: a day later, the sweep never ran for real on a process
+    restarted daily). `IImageStorageService` gained `EnumerateAsync` (a recorded amendment to the
+    frozen interface).
 
   The sub-ruling: **cover upload persists its own reference**, and `CoverArtRelativeUrl` left the
   story-update write path (`RemoveCoverArtAsync` clears a cover). Rule: `layer2-services.md`

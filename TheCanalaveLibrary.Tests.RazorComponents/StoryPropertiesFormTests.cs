@@ -159,6 +159,8 @@ public class StoryPropertiesFormTests : BunitContext
         cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover")
             .HasAttribute("disabled").Should().BeTrue();
         cut.Markup.Should().Contain("Uploading…");
+        cut.Find("button[type=submit]").HasAttribute("disabled").Should().BeTrue(
+            "a save must not start under a cover call that commits on its own (review fixes, 2026-10-13)");
     }
 
     [Fact]
@@ -169,6 +171,29 @@ public class StoryPropertiesFormTests : BunitContext
 
         cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeFalse();
         cut.Markup.Should().NotContain("Uploading…");
+        cut.Find("button[type=submit]").HasAttribute("disabled").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, false)]  // a save in flight
+    [InlineData(false, true)]  // another write on the page (the editor's status change)
+    public void ASaveOrAnotherWriteInFlight_DisablesThePickerRemoveAndSubmit(bool saving, bool otherWrite)
+    {
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.CoverArtRelativeUrl = "/uploads/stories/1/cover-11111111-1111-1111-1111-111111111111.png";
+        vm.IsLoading = saving;
+
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.OtherWriteInFlight, otherWrite);
+        });
+
+        cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeTrue();
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover")
+            .HasAttribute("disabled").Should().BeTrue();
+        cut.Markup.Should().NotContain("Uploading…", "nothing is uploading; the cover controls just wait");
+        cut.Find("button[type=submit]").HasAttribute("disabled").Should().BeTrue();
     }
 
     [Fact]

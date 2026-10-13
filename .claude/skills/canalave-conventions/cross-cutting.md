@@ -253,7 +253,8 @@ should be zeroed at deletion is owner-open (tracker **F19**).
 **The deletion page's copy is the compliance surface** (Art. 13/14 transparency).
 `DeletePersonalData.razor` enumerates this policy in the user's terms: what survives anonymized
 (stories with their cover images), what is destroyed (the profile with its picture), how to delete
-content first (and where that path does not exist or is closed: stories,
+content first (a cover through "Remove cover", since the story it sits on survives; and where that
+path does not exist or is closed: stories,
 blog posts, votes on a closed poll, a recommendation the author removed), that sent messages cannot be
 deleted and stay in the recipient's inbox, that server logs are not erased with the account, and that
 anonymization removes the name but not identifying details written into the content. **Change the

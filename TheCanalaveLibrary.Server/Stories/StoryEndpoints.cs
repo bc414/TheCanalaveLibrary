@@ -181,7 +181,9 @@ public static class StoryEndpoints
             .DisableAntiforgery();
 
         // Clearing a cover is its own operation (owner ruling D14), never a null in the update DTO.
-        // Bodiless, so no form binding and no antiforgery concern; author-only in the service (403).
+        // Author-only in the service (403). Bodiless, so it binds no form and the antiforgery middleware
+        // (which checks form-binding endpoints only) asks for no token. Its CSRF posture is the rest of
+        // the cookie-authenticated JSON API's, which worksheet D38 has yet to record as policy.
         group.MapDelete("/{storyId:int}/cover", (IStoryWriteService stories, int storyId) =>
                 EndpointHelpers.ExecuteAsync(async () =>
                 {

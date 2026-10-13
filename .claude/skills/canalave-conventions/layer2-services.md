@@ -211,7 +211,13 @@ Mechanics:
 - **The write context stays plain `AddDbContext` (scoped).** Writes are triggered by discrete user
   actions, effectively serialized per circuit, and a scoped `ApplicationDbContext` never collides
   with factory-created read contexts (different instances). Revisit only if a real write-vs-write
-  interleaving surfaces.
+  interleaving surfaces. **"Serialized" is the page's job, not the circuit's:** async handlers
+  interleave at every `await`, so a page with more than one independent write keeps them mutually
+  exclusive itself. Each control is disabled while another write is in flight, and each handler
+  re-checks, for an event that beat the re-render. `StoryEditorPage` is the case: its immediate-commit
+  cover calls, the save and the status change (WU-BlobCleanup review fixes, 2026-10-13). Two writes in
+  flight on one circuit share this context, which refuses a second operation mid-flight; a save that
+  reloads the page also aborts the other call.
 - **Set-based writes leave the circuit's tracked copies stale.** `ExecuteUpdateAsync` and
   `ExecuteDeleteAsync` bypass the change tracker, and the scoped write context lives as long as the
   circuit, so an entity an earlier call tracked (an `Add`, a tracked load) outlives a later set-based
@@ -340,12 +346,17 @@ wall) is deleted in this order, inside **one** `CreateExecutionStrategy().Execut
    `BlogPostDependentsAsync`, `BlogPostAsync`). The base → child CASCADE takes each child row; likes,
    poll options and poll votes cascade off the base rows.
 2. **Then the parent**, by EF `Remove` on a loaded entity or by the helper's own base-row `DELETE`
-   (`TptDelete.BlogPostAsync` deletes the post through `base_blog_posts`).
-3. **Commit, then `UserStats` counters and notifications** — outside the retried delegate (D22), so a
-   retry never double-counts or double-notifies. The one exception is the moderation resolve's
-   `ActiveReportCount` move, which runs inside its transaction because the report row lock needs one
-   (§"Resolve paths — lock, guard, then transition"); `ApplyHardDeleteAsync` sits inside that
-   transaction and moves no `UserStats` counter.
+   (`TptDelete.BlogPostAsync` deletes the post through `base_blog_posts`). **A parent whose rows name a
+   blob** (a story's cover, on its `StoryListing`) has that path captured *before* this step, because
+   the cascade removes the row that names it (owner ruling D14).
+3. **Commit, then `UserStats` counters, notifications and blob deletes** — outside the retried delegate
+   (D22), so a retry never double-counts, double-notifies or re-deletes. The one exception is the
+   moderation resolve's `ActiveReportCount` move, which runs inside its transaction because the report
+   row lock needs one (§"Resolve paths — lock, guard, then transition"); `ApplyHardDeleteAsync` sits
+   inside that transaction and moves no `UserStats` counter. The captured blob is deleted best-effort in
+   its own `try` (a failed notification must not skip the erasure, nor the reverse): §"Image Storage —
+   blob ownership and cleanup", rule 2. Built at `ResolveWithRemovalAsync(hardDelete: true)`; D15's
+   author story delete inherits it.
 
 Why the order is forced, and why the FKs are RESTRICT: `layer1-data-model.md` §"Hard-deleting a content
 parent". Skip step 1 and the delete fails with 23001 (`restrict_violation` — Postgres reports an
@@ -620,24 +631,31 @@ rejected for every class:
 3. **The daily sweep is the fault-class backstop, never the mechanism of erasure.**
    `ImageOrphanSweeper` (worker: `ImageOrphanSweepWorker`) anti-joins the store against the database
    (`IImageStorageService.EnumerateAsync`, which streams the upload key space without materializing
-   it). Its constraints, all mandatory:
-   - **The reference read is unfiltered:** the write context plus `IgnoreQueryFilters()`. A filtered
-     read (takedown, draft status, rating, confidentiality) makes live covers look orphaned. This is
-     the one failure mode that destroys real user data.
-   - **Grace window:** a blob whose store-reported last-modified time is under 24 h old is never
+   it). Its constraints, all mandatory. Those marked *(D14)* are the owner's text; those marked
+   *(derived)* are WU-BlobCleanup's build choices: they bind as conventions, but a later WU may change
+   one with a stated reason and without an owner ruling.
+   - *(D14)* **The reference read is unfiltered:** the write context plus `IgnoreQueryFilters()`. A
+     filtered read (takedown, draft status, rating, confidentiality) makes live covers look orphaned.
+     This is the one failure mode that destroys real user data.
+   - *(D14)* **Grace window:** a blob whose store-reported last-modified time is under 24 h old is never
      deleted, so the sweep cannot race an upload whose column write has not landed yet.
-   - **Scope:** only the upload prefixes (`stories/`, `users/`), and only a key in the exact shape
-     `ImageUploadRules.BuildKey` emits (`ImageUploadRules.IsGeneratedKey`). Sprites may share the prod
-     bucket; anything else is counted as foreign and never deleted.
-   - **Blast radius:** the first cycle after each process start is log-only (dry run), and each real
-     cycle attempts at most `MaxDeletesPerCycle` (100) deletes.
-   - **Direction is store → DB only.** A row naming a missing blob is a different, non-destructive
-     defect: it is logged as a Warning (count plus samples) and never acted on.
-   - **Kill switch:** `ImageStorage:OrphanSweep:Enabled` (default `true`) is read every cycle. Turn it
-     off during and after a database restore until the restored rows and the live bucket are
-     reconciled: every blob written after the backup looks orphaned to a restored database.
-4. **One bucket per database.** Never point two databases (prod and a staging copy, two dev machines)
-   at one bucket or one upload folder: each one's sweep sees the other's blobs as orphans.
+   - *(derived)* **Scope:** only the upload prefixes (`stories/`, `users/`), and only a key in the exact
+     shape `ImageUploadRules.BuildKey` emits (`ImageUploadRules.IsGeneratedKey`). Sprites may share the
+     prod bucket; anything else is counted as foreign and never deleted.
+   - *(D14)* **Blast radius:** a log-only first cycle (dry run), and a per-cycle cap on deletes.
+     *(derived)* The cap is `MaxDeletesPerCycle` (100 attempts). The dry run runs at each process start
+     (5 s in), and the first real cycle follows it an hour later, then one every 24 h
+     (`ImageOrphanSweepWorker.DelayAfterCycle`). An hour, not a day: a process restarted at least
+     daily (a deploy, a crash, a reboot) would otherwise never delete anything and leave the backstop
+     inert (WU-BlobCleanup review fixes, 2026-10-13). A process restarted more often than hourly still
+     only dry-runs.
+   - *(D14)* **Direction is store → DB only.** A row naming a missing blob is a different,
+     non-destructive defect: it is logged as a Warning (count plus samples) and never acted on.
+   - *(derived)* **Kill switch:** `ImageStorage:OrphanSweep:Enabled` (default `true`) is read every
+     cycle. Turn it off during and after a database restore until the restored rows and the live bucket
+     are reconciled: every blob written after the backup looks orphaned to a restored database.
+4. *(derived)* **One bucket per database.** Never point two databases (prod and a staging copy, two dev
+   machines) at one bucket or one upload folder: each one's sweep sees the other's blobs as orphans.
 
 D14 also routes a launch item here: `/uploads/{**key}` is served `immutable` for a year, so deleting
 an object does not evict CDN copies. The illegal-content path needs a cache purge once Cloudflare sits

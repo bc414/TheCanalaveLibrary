@@ -20,7 +20,8 @@
    DTO-mapping. StoryPropertiesForm is a presentational child (no inject, bUnit-testable).
    The cover is never on a write DTO (owner ruling D14): in edit mode a picked file is uploaded and
    persisted at once (UploadCoverArtAsync) and "Remove cover" clears it (RemoveCoverArtAsync); in
-   create mode the picked file waits for CreateStoryAsync's id. Form-cancel does not revert a cover. *@
+   create mode the picked file waits for CreateStoryAsync's id. Form-cancel does not revert a cover.
+   Its three writes (a cover call, the save, a status change) never overlap (see CoverChangeBlocked). *@
 
 <PageTitle>@(StoryId.HasValue ? "Edit Story" : "New Story")</PageTitle>
 
@@ -59,7 +60,7 @@ else
                 <StoryLifecyclePanel CurrentStatus="_currentStatus"
                                      SavedPostApprovalStatus="_savedPostApprovalStatus"
                                      RejectionReason="@_rejectionReason"
-                                     IsBusy="_transitioning"
+                                     IsBusy="@(_transitioning || _coverUploadBusy || _viewModel.IsLoading)"
                                      OnTransition="HandleTransitionAsync" />
             </div>
         }
@@ -78,6 +79,7 @@ else
                              OnRequestLinkVerification="HandleRequestLinkVerification"
                              OnCoverSelected="HandleCoverSelectedAsync"
                              CoverUploadBusy="_coverUploadBusy"
+                             OtherWriteInFlight="_transitioning"
                              OnRemoveCover="HandleRemoveCoverAsync"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
@@ -136,6 +138,15 @@ else
     private const long MaxCoverBytes = 10 * 1024 * 1024; // ImageUploadRules.MaxBytes (server-side)
     private bool _coverUploadBusy;
     private IBrowserFile? _pendingCoverFile;
+
+    // The page's three writes (a cover call, the save, the status change) never overlap (WU-BlobCleanup
+    // review fixes, 2026-10-13; layer2-services.md, "the write context stays plain AddDbContext"): the
+    // save ends in a forceLoad reload that would abort an upload still streaming, and under
+    // InteractiveServer every write here shares the circuit's one scoped write context, which refuses a
+    // second operation mid-flight. Each write's controls are disabled while another runs (the form's
+    // CoverUploadBusy/OtherWriteInFlight/IsLoading, the lifecycle panel's IsBusy), and each handler
+    // re-checks, for an event that beat the re-render.
+    private bool CoverChangeBlocked => _coverUploadBusy || _viewModel.IsLoading || _transitioning;
 
     // Lifecycle state (WU-StoryLifecycle, D1), loaded from the edit DTO's read echoes. A new story
     // is always Draft. _savedPostApprovalStatus is the PERSISTED value — the form's select edits
@@ -247,7 +258,8 @@ else
     /// </summary>
     private async Task HandleTransitionAsync(StoryStatusEnum target)
     {
-        if (!StoryId.HasValue) return;
+        // Never start a second write under one in flight (see CoverChangeBlocked).
+        if (!StoryId.HasValue || _coverUploadBusy || _viewModel.IsLoading || _transitioning) return;
 
         bool wasPublished = StoryLifecycle.IsPublished(_currentStatus);
         _transitioning = true;
@@ -288,6 +300,9 @@ else
 
     private async Task HandleValidSubmit()
     {
+        // The submit is disabled while another write runs; this guards the click that beat the re-render.
+        if (_coverUploadBusy || _transitioning || _viewModel.IsLoading) return;
+
         _viewModel.IsLoading = true;
         _viewModel.ServerValidationErrors.Clear();
 
@@ -392,6 +407,9 @@ else
     /// </summary>
     private async Task HandleCoverSelectedAsync(IBrowserFile file)
     {
+        // The picker is disabled while another write runs; this guards a pick that beat the re-render.
+        if (CoverChangeBlocked) return;
+
         if (!StoryId.HasValue)
         {
             _pendingCoverFile = file;
@@ -410,7 +428,7 @@ else
     /// story has none). Commits at once, like the upload.</summary>
     private async Task HandleRemoveCoverAsync()
     {
-        if (!StoryId.HasValue) return;
+        if (!StoryId.HasValue || CoverChangeBlocked) return;
 
         await RunCoverChangeAsync(async () =>
         {

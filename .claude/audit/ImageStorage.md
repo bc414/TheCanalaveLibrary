@@ -51,17 +51,30 @@ sub-ruling moved cover persistence into the upload method (the avatar shape). Ru
 `layer2-services.md` §"Image Storage — blob ownership and cleanup"; built WU-BlobCleanup (2026-10-13).
 
 **Settled (owner ruling D14, answered 2026-08-07; settled for WU-BlobCleanup 2026-10-13). Do not
-revisit:**
+revisit — this list is D14's own text:**
 - A blob is referenced by exactly one row; the method that writes it persists its reference (write →
   persist → best-effort delete old). No write DTO carries a blob path.
 - Every terminal deletion path captures the paths before the row delete and deletes the blobs after the
   commit, outside the retry, best-effort with a Warning. D15's author story delete inherits this.
 - The sweep is the backstop, never the erasure mechanism: unfiltered reference read, 24 h grace window,
-  log-only first cycle, per-cycle cap, store → DB direction only, upload prefixes and generated key
-  shape only, rows naming a missing blob logged and never acted on, a kill switch. One bucket per
-  database.
+  log-only first cycle, a per-cycle cap, store → DB direction only, rows naming a missing blob logged
+  and never acted on.
 - Cover upload is an immediate commit, so form-cancel no longer reverts a cover (accepted; a revert
   action is not built).
+
+**Derived by WU-BlobCleanup, not owner text** (binding conventions, changeable by a later WU with a
+stated reason and no owner ruling; marked *(derived)* in `layer2-services.md` §"Image Storage — blob
+ownership and cleanup"):
+- `EnumerateAsync` yields `StoredImage` (path plus last-modified) rather than D14's bare string (the
+  interface amendment above).
+- The sweep's scope: the upload prefixes and the generated key shape only.
+- The cap's value: 100 delete attempts per cycle.
+- The cycle timing: a dry run at each process start, the first real cycle an hour after it, then one
+  every 24 h (review fixes, 2026-10-13 — before them the first real cycle came a day later, so a
+  process restarted at least daily never deleted anything).
+- The kill switch `ImageStorage:OrphanSweep:Enabled`, and one bucket per database.
+- A takedown (soft removal) never touches the blob, and a cover change stamps `LastUpdatedDate`
+  (`audit/Stories.md` F4).
 
 **Open, the owner's:** whether account deletion strips the covers of the user's surviving
 (anonymized) stories — D14's text says delete them, but its premise ("the cascade removes the rows
@@ -320,10 +333,12 @@ cleanup". No migration (only two columns name blobs, and no seed sets either).
   ten samples), never acted on. One summary log, a Warning when capped, the root span
   `ImageStorage.OrphanSweep` (`canalave.image.sweep.*` tags) and the counter
   `canalave.image.orphans.deleted`. The worker's first cycle per process is a dry run, set only once a
-  dry run has actually run; `ImageStorage:OrphanSweep:Enabled` is read every cycle. A dev server rarely
-  lives 24 h, so in dev the sweep effectively only ever dry-runs. **Dev-data note:** the WU12 fixture
-  `wwwroot/uploads/stories/999/cover-*.png` (and anything `/dev/wu12/upload-test-image` writes) is
-  unreferenced by design, so the first real Local-mode cycle deletes it.
+  dry run has actually run; `ImageStorage:OrphanSweep:Enabled` is read every cycle. *(As built, the
+  next cycle came 24 h later, so a dev server, or a prod process restarted at least daily, only ever
+  dry-ran; the review fixes below moved the first real cycle to an hour after the dry run.)*
+  **Dev-data note:** the WU12 fixture `wwwroot/uploads/stories/999/cover-*.png` (and anything
+  `/dev/wu12/upload-test-image` writes) is unreferenced by design, so the first real Local-mode cycle
+  deletes it — a dev server that runs past an hour.
 - **Inline sites.** `UserDeletionService` captures the avatar path inside the transaction and deletes it
   after the strategy returns (reset per attempt, so only the committed attempt counts).
   `ResolveWithRemovalAsync(hardDelete: true)` captures a Story's cover before the row delete
@@ -362,6 +377,26 @@ cleanup". No migration (only two columns name blobs, and no seed sets either).
   - The worker loop has no automated test, like every other worker, since `TestAppFactory` removes it.
   - **No browser was available to the build:** tracker **H31** holds the pass (the editor's cover flow
     on both render phases; a hard delete's cover URL 404ing on the Aspire/Garage path).
+- **Review fixes (2026-10-13) — L2 stays 5.**
+  - **The backstop was inert under daily restarts.** The dry run ran at each process start and the
+    first real cycle a full day later, so any process restarted at least daily (a dev server; prod
+    with a deploy, crash or reboot) never deleted anything, against D14's "orphans accepted is
+    rejected for any class". The worker now waits `FirstRealCycleDelay` (1 h) after a completed dry run
+    and 24 h after anything else (`DelayAfterCycle`, a public static seam); a skipped or failed dry run
+    is not the log-only cycle. Persisting the dry-run state was rejected: it would need a table for one
+    flag. Left: a process restarted more often than hourly only dry-runs (stated in the class doc and
+    `layer2-services.md`). **Unit** `ImageOrphanSweepWorkerTests` (3): a process that lives a day runs a
+    real cycle; a completed dry run is followed by the first real cycle; everything else waits 24 h.
+  - **The Settled note mixed owner text with build choices.** Split above into D14's list and the
+    derived list; `layer2-services.md` marks each sweep constraint *(D14)* or *(derived)*.
+  - **The trap test's comment overclaimed.** It said a swap to the read context fails it; it cannot,
+    because `StoryListing` and `User` carry no filter on either context (mutation-checked again: a
+    reference read routed through `Stories` without `IgnoreQueryFilters` fails only the mis-injected
+    read-context test). Both comments now say what each test catches, and the second test pins the
+    trap with a precondition (a cover read through `Story` on the read context finds none).
+  - **The hard-delete docs.** `layer2-services.md` §"Hard deletes of content parents" gains the blob
+    step (capture before the parent's delete, delete after the commit in its own `try`), and
+    `content-safety.md`'s escape hatch names the cover erasure and the Phase-7 CDN purge.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

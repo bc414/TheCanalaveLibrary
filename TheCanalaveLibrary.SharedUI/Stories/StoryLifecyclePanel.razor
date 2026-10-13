@@ -123,7 +123,8 @@
     /// <summary>The moderator's reason, shown while <see cref="CurrentStatus"/> is Rejected.</summary>
     [Parameter] public string? RejectionReason { get; set; }
 
-    /// <summary>True while the page's transition call is in flight — disables every button.</summary>
+    /// <summary>True while the page has a write in flight (its transition call, a save, or a cover upload or
+    /// removal, which commits on its own) — disables every button.</summary>
     [Parameter] public bool IsBusy { get; set; }
 
     /// <summary>Raised with the requested target status.</summary>

@@ -308,7 +308,10 @@ via a distinct `ApplyHardDeleteAsync(type, id)` path in `ServerModerationWriteSe
 default and is presented as a distinct moderator choice, not the same action as soft takedown. A hard
 delete of a story or blog post first clears the target's TPT dependents (chapter comments; a post's
 comments and polls) via `TptDelete`, in the same transaction — the content-parent FKs are RESTRICT
-(owner ruling D10; `layer2-services.md` §"Hard deletes of content parents").
+(owner ruling D10; `layer2-services.md` §"Hard deletes of content parents"). A hard-deleted story's
+cover image is erased too, after the commit (owner ruling D14; `layer2-services.md` §"Image Storage —
+blob ownership and cleanup"). Deleting the object does not evict CDN copies of it: the purge step is a
+Phase-7 item (`roadmap.md`, "CDN purge on a hard delete").
 
 **Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
 `HasQueryFilter` in `ReadOnlyApplicationDbContext.OnModelCreating` (composable alongside `"ContentRating"`

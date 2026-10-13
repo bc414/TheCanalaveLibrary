@@ -116,7 +116,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save; RazorComponents-tested (`StoryEditorPageTests`); see both Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save, and since its review fixes the same day its three writes (a cover call, the save, a status change) never overlap; RazorComponents-tested (`StoryEditorPageTests`); see both Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
   on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
@@ -128,7 +128,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   implements `IEditableStoryProperties` (decoupled from wire DTOs; mapping is at page layer).
   `Routes.razor` switched from `RouteView` to `AuthorizeRouteView` so `[Authorize]` attributes are
   enforced (was silently ignored with `RouteView`).
-- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; re-verified WU-BlobCleanup, 2026-10-13 — `StoryPropertiesForm` raises `OnCoverSelected`/`OnRemoveCover`, `CoverUploadBusy`, a "Remove cover" control; RazorComponents-tested (`StoryPropertiesFormTests`); see both Stage notes).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
+- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; re-verified WU-BlobCleanup, 2026-10-13 — `StoryPropertiesForm` raises `OnCoverSelected`/`OnRemoveCover`, `CoverUploadBusy`, a "Remove cover" control, and since its review fixes `OtherWriteInFlight` plus a submit disabled under a cover call; RazorComponents-tested (`StoryPropertiesFormTests`); see both Stage notes).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
   Tailwind, all 6 `TagSelector` instances wired with `OnSelectionChanged` + `InitialTagsByType` prefill,
   `EditorView @ref` pull-on-submit via public `GetLongDescriptionAsync()`, `InputFile` for cover art,
   `Rating`+`Status` selects, server validation error display, `IsLoading` disabled-submit guard). No
@@ -139,7 +139,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   `UnauthorizedAccessException` into `ViewModel.ServerValidationErrors`). Pattern 1 edit side (view
   side is WU25). Admin/edit controls: no named component — inline `@if` and edit-page links per the
   "Owner-Conditional Edit Affordances" convention (see `layer3.5-structure.md`).
-- **L4-Style — Stage 5.** **WU24 (2026-06-23):** all form markup uses Tailwind v4 design tokens
+- **L4-Style — Stage 5 (re-verified WU-BlobCleanup, 2026-10-13 — the "Remove cover" danger-text Control and the disabled picker and submit states use the role recipes; `check-design-tokens` passes; visual sign-off still waits for the Phase-3 pass).** **WU24 (2026-06-23):** all form markup uses Tailwind v4 design tokens
   (`--color-text`, `--color-surface`, `--color-border`, `--color-primary`, `--color-danger`), consistent
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
@@ -153,7 +153,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   story's editor 301'd to its story page on a full load, and the rejection reason rendered as
   "_rejectionReason". Detail: the browser-verification Stage note below. Not driven: the cover-art
   `InputFile` (the standing exception in the 2026-07-01 cluster note).
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`).** (History: the dead pre-WU12 `HttpStoryReadService`/
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`; the client impls Unit-tested (`ClientStoryCoverServiceTests`) since its review fixes).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
   InteractiveAuto; story CREATE with tags verified end-to-end in a real WASM runtime during the
@@ -418,7 +418,7 @@ arc on story 1 with start 3 and end 2 answers 400 "End chapter must not be befor
 and a lineage from story 1 to itself 400 "A story cannot have a lineage link to itself.". The service
 guards answer before the CHECKs can.
 
-### Feature 4 — WU-BlobCleanup Stage note (2026-10-13; owner ruling D14's sub-ruling) — F4 L4.5 5→1; L2/L3-Logic/L3.5/L5 stay 5
+### Feature 4 — WU-BlobCleanup Stage note (2026-10-13; owner ruling D14's sub-ruling) — F4 L4.5 5→1; L2/L3-Logic/L3.5/L4/L5 stay 5
 
 The Settled note at the top of this feature, built. Rule of record: `layer2-services.md` §"Image Storage
 — blob ownership and cleanup". No migration.
@@ -468,6 +468,37 @@ The Settled note at the top of this feature, built. Rule of record: `layer2-serv
     deferring the edit-mode upload to the save, and dropping the busy disable each fail a test.
   - **No browser was available:** F4 L4.5 5→1; tracker **H31** holds the pass on both render phases
     (edit-mode upload, remove, create-with-cover, a refused file).
+- **L4.** The "Remove cover" Control is danger-text (`text-(--color-danger)` with a danger-tinted hover
+  and the `disabled:` state), and the picker takes the same `disabled:` state; `check-design-tokens`
+  passes. No other style changed. Visual sign-off stays with the Phase-3 pass.
+- **Review fixes (2026-10-13) — no further flip.**
+  - **A cover call could overlap the save (L3-Logic).** The cover became its own immediate-commit call,
+    but nothing kept it apart from the save: the habit of the old flow (pick, then Save) started the
+    save while the upload streamed. The save's `forceLoad` reload aborted the upload with no error, and
+    on a circuit both calls shared the one scoped write context, which refuses a second operation
+    mid-flight (`layer2-services.md`, "the write context stays plain `AddDbContext`", which now says
+    keeping a page's writes apart is the page's job). The page's three writes — a cover call, the save,
+    the status change — are now mutually exclusive: each one's controls are disabled while another
+    runs (the form's submit under `CoverUploadBusy` or the new `OtherWriteInFlight`; the picker and
+    "Remove cover" under a save or a status change; the lifecycle panel's `IsBusy` under a cover call
+    or a save), and each handler re-checks, for an event that beat the re-render. The save-vs-status
+    pair predates this WU; it was closed in the same edit so the page states one rule.
+  - **Untested paths.** **RazorComponents** `StoryEditorPageTests` +4: a 403 on a cover upload renders
+    the forbidden state; while a cover call runs, the submit and the panel are disabled and neither a
+    save nor a status change starts; while a save runs, the cover controls and the panel are disabled
+    and no cover call or status change starts; while a status change runs, the cover controls and the
+    submit are disabled and neither starts. `StoryPropertiesFormTests` +2 (and two extended): the submit
+    is disabled under `CoverUploadBusy`; a save or another write in flight disables the picker, remove
+    and submit. **Unit** `ClientStoryCoverServiceTests` (7): `RemoveCoverArtAsync` sends a bodiless
+    `DELETE /api/stories/7/cover`, and 403/401/404 become `UnauthorizedAccessException` /
+    `SessionExpiredException` / `KeyNotFoundException`; `UploadCoverArtAsync` posts one multipart
+    `file` part and returns the stored path, and a 400 keeps the server's text; `GetStoryForEditAsync`
+    reads the cover echo into `StoryEditDTO` beside the polymorphic tag list.
+  - **Docs.** `layer5-wasm.md` and the endpoint comment no longer give "no body" as a CSRF rationale (it
+    is none): the DELETE carries no antiforgery token because the middleware checks only form-binding
+    endpoints, and its CSRF posture is the JSON API's, which worksheet D38 has yet to record.
+  - **Mutation-checked:** dropping the handler guards, or the form's cross-disables, fails the overlap
+    tests. No browser: tracker **H31** gains the overlap steps.
 
 ## Feature 5 — Story Browsing & Display
 

@@ -137,9 +137,12 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
         html.Should().NotContain("nothing links what remains back to you", "server logs can, until Phase 7 bounds them");
 
         // WU-BlobCleanup (owner ruling D14): the avatar's file goes with the account; covers stay with the
-        // surviving stories (decision row 25).
+        // surviving stories (decision row 25), so the page names the one way to delete a cover first —
+        // D13 rider (i): a cover can identify its author (its review fixes).
         html.Should().Contain("Your profile, including your profile picture");
         html.Should().Contain("Stories (with their cover images)");
+        html.Should().Contain("Cover images: use Remove cover in your story's editor.");
+        html.Should().Contain("The same goes for a cover image that shows you.");
     }
 
     /// <summary>

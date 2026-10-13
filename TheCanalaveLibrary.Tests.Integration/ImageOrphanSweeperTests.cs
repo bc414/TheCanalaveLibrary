@@ -98,9 +98,11 @@ public sealed class ImageOrphanSweeperTests(PostgresFixture postgres) : Integrat
     [Fact]
     public async Task ReferencedBlobs_Survive_EvenWhenNoReaderCanSeeTheirRows()
     {
-        // If the reference read ever goes through a filtered context or entity (the read context, or a
-        // query through Story instead of StoryListing without IgnoreQueryFilters), the taken-down,
-        // draft and M-rated covers look orphaned and this test fails.
+        // Fails if the reference read stops seeing a row no reader can see: a reference query that
+        // filters by takedown, status or rating itself (through a join, or a read service). It does NOT
+        // catch a swap to the read context on its own: StoryListing and User carry no query filter on
+        // either context, so that swap changes nothing here. A read routed through the filtered Story
+        // entity of the read context without IgnoreQueryFilters is what the next test catches.
         (string[] referenced, string orphan) = await SeedTheFilterTrapAsync();
 
         ImageOrphanSweepResult result = await BuildSweeper().SweepAsync(dryRun: false);
@@ -115,15 +117,19 @@ public sealed class ImageOrphanSweeperTests(PostgresFixture postgres) : Integrat
     [Fact]
     public async Task ReferencedBlobs_Survive_EvenOverAMisInjectedReadContext()
     {
-        // ReadOnlyApplicationDbContext IS an ApplicationDbContext, so a mis-injection compiles. The
-        // reference read must stay unfiltered anyway (StoryListing/User carry no filter, and
-        // IgnoreQueryFilters() is the second guard).
+        // ReadOnlyApplicationDbContext IS an ApplicationDbContext, so a mis-injection compiles. Over it,
+        // the reference read must stay unfiltered: today because it reads StoryListing and User, which
+        // carry no filter, and IgnoreQueryFilters() as the second guard. Rerouting it through the
+        // filtered Story entity without IgnoreQueryFilters fails this test (mutation-checked); the
+        // precondition pins that the trap is real.
         (string[] referenced, string orphan) = await SeedTheFilterTrapAsync();
         IServiceScope scope = Factory.Services.CreateScope();
         _scopes.Add(scope);
         await using ReadOnlyApplicationDbContext readDb = await scope.ServiceProvider
             .GetRequiredService<IDbContextFactory<ReadOnlyApplicationDbContext>>().CreateDbContextAsync();
         (await readDb.Stories.CountAsync()).Should().Be(0, "precondition: the read context hides all three stories");
+        (await readDb.Stories.Select(s => s.StoryListing.CoverArtRelativeUrl).ToListAsync()).Should().BeEmpty(
+            "precondition: a cover read through Story on this context misses every trap cover");
 
         ImageOrphanSweeper sweeper = new(readDb, _store.Create(scope.ServiceProvider), _log);
         ImageOrphanSweepResult result = await sweeper.SweepAsync(dryRun: false);

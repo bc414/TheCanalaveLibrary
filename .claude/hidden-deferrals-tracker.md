@@ -1531,8 +1531,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Source: `layer4-style.md` §"StoryDeck (WU14)" and §"Top bar (MainLayout)."
   - Context: (a) `StoryDeck` loading-skeleton upgrade (gray placeholder cards) is a deferred additive swap behind the `Stories is null` branch. (b) The click-driven flyout-open was never explicitly browser-verified; likely exercised incidentally by later browser passes but no note confirms it.
 
-- [ ] **H3 — Cover-art upload never browser-verified** `[test-gap · low · anytime]`
-  - Grid: F4 L4.5=5.
+- [ ] **H3 — Cover-art upload never browser-verified** `[test-gap · low · anytime]` — *Folded into **H31** 2026-10-13 (WU-BlobCleanup review fixes): H31's steps 1–5 drive the cover `InputFile` on both render phases, so closing H31 closes this item too.*
+  - Grid: F4 L4.5=1 since WU-BlobCleanup (2026-10-13), which changed the cover flow (it read 5 when this
+    item was filed).
   - Source: `audit/Stories.md` "L4.5-Browser verification (2026-07-01) … Coverage exception."
   - Context: The story cover-art `InputFile` → `IImageStorageService` path couldn't be driven during the F4 browser pass ("re-verify when a browser pass with working file upload is available"). No later wave records driving it — the L4.5=5 implies whole-feature browser verification that one path didn't get.
 
@@ -2005,9 +2006,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `PUT /api/polls/{id}` with the other mode answers 400 "Vote mode is locked once votes exist."
     5. Delete the poll: its options and votes go (`psql`).
 
-- [ ] **H31 — WU-BlobCleanup browser pass: the cover is an immediate commit, and the deletion paths erase blobs** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-BlobCleanup, which ran with no browser available.*
-  - Grid: F4 L4.5 went 5→1 (the editor's cover flow changed). F47 and F52 L4.5 stay 5 (no interactive
-    UI changed; the deletion page's two copy lines are asserted by `StaticSsrPageRenderTests`).
+- [ ] **H31 — WU-BlobCleanup browser pass: the cover is an immediate commit, and the deletion paths erase blobs** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-BlobCleanup, which ran with no browser available; extended by its review fixes the same day. Closing it closes **H3** (cover upload never browser-verified), which it absorbed.*
+  - Grid: F4 L4.5 went 5→1 (the editor's cover flow changed). F52 L4.5 went 5→1 at the review fixes
+    (the deletion page's copy changed again: four lines, asserted by `StaticSsrPageRenderTests` but not
+    read in a browser). F47 L4.5 stays 5 (no interactive UI changed).
   - Steps (server-only path unless noted; both render phases — circuit proven by `_blazor/negotiate`,
     WASM by the `/api/stories/…/cover` requests; `psql` on `story_listings.cover_art_relative_url` and a
     look at `wwwroot/uploads/stories/{id}/` after each write):
@@ -2025,16 +2027,25 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        the edit page opens showing the cover; `psql` holds it and the network shows one `POST …/cover` and
        no `PUT`.
     6. **The deletion page.** `/Account/Manage/DeletePersonalData` reads "Your profile, including your
-       profile picture" and "Stories (with their cover images)".
+       profile picture", "Stories (with their cover images)", "Cover images: use Remove cover in your
+       story's editor." and "The same goes for a cover image that shows you."
     7. **Aspire/Garage path (the owner's smoke).** No UI sends a hard delete (the queue's removal is the
        takedown), so drive it as a moderator over HTTP, as the WU-TptHardDelete pass did:
        `POST /api/moderation/reports/{id}/resolve-removal?removalReason=…&hardDelete=true` on a report
        about a covered story (204). Its cover URL then 404s, and `docker exec canalave-garage /garage
        bucket info canalave-images` shows one object fewer. A takedown (`hardDelete=false`) keeps the
        cover. Delete a test account that has an avatar: its avatar URL 404s.
-    8. **Orphan sweep, dry run.** Start the server and watch the log 5 s in: one "Orphan sweep finished
-       (dry run: True)" line, and a "would delete" line per orphan older than 24 h (the WU12 fixture
-       `uploads/stories/999/cover-*.png` is one, by design). Nothing is deleted.
+    8. **Orphan sweep, dry run then real.** Start the server and watch the log 5 s in: one "Orphan sweep
+       finished (dry run: True)" line, and a "would delete" line per orphan older than 24 h (the WU12
+       fixture `uploads/stories/999/cover-*.png` is one, by design). Nothing is deleted. Leave the server
+       up an hour (review fixes: the first real cycle follows the dry run by `FirstRealCycleDelay`): one
+       "Orphan sweep finished (dry run: False)" line, the fixture deleted, every referenced cover and
+       avatar still served.
+    9. **No overlapping writes (review fixes).** On `/story/{id}/edit`, pick a large cover (several MB, so
+       the upload takes a moment): while "Uploading…" shows, Save and the lifecycle buttons are disabled.
+       Once the cover renders, Save works and the reload keeps the new cover. During a Save, and during a
+       status change, the picker and "Remove cover" are disabled. Both render phases; the server log
+       shows no "A second operation was started on this context instance".
 
 ---
 

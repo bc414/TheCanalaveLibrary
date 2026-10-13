@@ -1,3 +1,4 @@
+using AngleSharp.Dom;
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components.Forms;
@@ -17,7 +18,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// a 403 renders the forbidden state. The transition itself is Integration-covered
 /// (<c>StoryLifecycleTests</c>). The 2026-09-30 browser pass added two page regressions: the rejection
 /// reason reaches the panel (it rendered the field's name), and a refused save leaves the Quill-owned
-/// editor markup alone (it killed the circuit).
+/// editor markup alone (it killed the circuit). Since WU-BlobCleanup (owner ruling D14): the cover is an
+/// immediate commit outside the save, a 403 on it renders the forbidden state, and (its review fixes) a
+/// cover call never overlaps a save or a status change, in either order.
 /// <para>
 /// Setup: the chapter-manager, arc-manager and chapter-import panels (each with services of its own)
 /// are bUnit stubs. <see cref="StoryPropertiesForm"/> and <see cref="DraftAutosave"/> render for real —
@@ -242,6 +245,106 @@ public class StoryEditorPageTests : BunitContext
     }
 
     [Fact]
+    public void EditMode_AForbiddenCoverUpload_RendersTheForbiddenState()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        _writes.CoverFailure = new UnauthorizedAccessException("You can only change the cover of your own stories.");
+
+        PickCover(cut);
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("You don't have permission to edit this story."));
+    }
+
+    // ── A cover call never overlaps a save or a status change (review fixes, 2026-10-13) ───────────
+
+    private static IElement SubmitButton(IRenderedComponent<StoryEditorPage> cut) =>
+        cut.Find("button[type=submit]");
+
+    [Fact]
+    public async Task EditMode_WhileACoverUploads_SaveAndStatusChanges_AreDisabled_AndASaveDoesNotStart()
+    {
+        // The pick-then-Save habit of the old flow: Save's forceLoad reload would abort the upload still
+        // streaming, and on a circuit both calls would share one scoped write context.
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+        _writes.CoverGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // bUnit's UploadFiles blocks until the handler finishes, and the handler waits on the gate.
+        Task pick = Task.Run(() => PickCover(cut));
+        try
+        {
+            cut.WaitForAssertion(() => SubmitButton(cut).HasAttribute("disabled").Should().BeTrue());
+            cut.FindAll("button").Single(b => b.TextContent.Trim() == "Submit for publication")
+                .HasAttribute("disabled").Should().BeTrue("a status change is a second write too");
+
+            await cut.Find("form").SubmitAsync(); // a click that beat the re-render
+            await cut.InvokeAsync(() => cut.FindComponent<StoryLifecyclePanel>().Instance
+                .OnTransition.InvokeAsync(StoryStatusEnum.PendingApproval));
+            _writes.Calls.Should().Equal([$"Upload:{StoryId}:image/png:{CoverBytes.Length}"],
+                "no save starts while the cover call runs");
+            _writes.Requested.Should().BeEmpty("no status change starts while the cover call runs");
+        }
+        finally
+        {
+            _writes.CoverGate.TrySetResult();
+        }
+        await pick;
+
+        cut.WaitForAssertion(() => cut.Find("img[alt='Current cover']").GetAttribute("src")
+            .Should().Be(_writes.UploadedPath));
+        SubmitButton(cut).HasAttribute("disabled").Should().BeFalse("the save is usable again once the cover settled");
+    }
+
+    [Fact]
+    public async Task EditMode_WhileASaveRuns_CoverAndStatusControlsAreDisabled_AndNeitherWriteStarts()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        _writes.SaveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task save = cut.Find("form").SubmitAsync();
+
+        cut.WaitForAssertion(() => cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeTrue());
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover")
+            .HasAttribute("disabled").Should().BeTrue();
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Submit for publication")
+            .HasAttribute("disabled").Should().BeTrue();
+
+        PickCover(cut); // events that beat the re-render
+        await cut.InvokeAsync(() => cut.FindComponent<StoryPropertiesForm>().Instance.OnRemoveCover.InvokeAsync());
+        await cut.InvokeAsync(() => cut.FindComponent<StoryLifecyclePanel>().Instance
+            .OnTransition.InvokeAsync(StoryStatusEnum.PendingApproval));
+        _writes.Calls.Should().Equal(["Update"], "no cover call starts under a save");
+        _writes.Requested.Should().BeEmpty("no status change starts under a save");
+
+        _writes.SaveGate.SetResult();
+        await save;
+    }
+
+    [Fact]
+    public async Task EditMode_WhileAStatusChangeRuns_CoverControlsAndSaveAreDisabled_AndNeitherWriteStarts()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        _writes.Result = StoryStatusEnum.PendingApproval;
+        _writes.TransitionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task transition = ClickAsync(cut, "Submit for publication");
+
+        cut.WaitForAssertion(() => cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeTrue());
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover")
+            .HasAttribute("disabled").Should().BeTrue();
+        SubmitButton(cut).HasAttribute("disabled").Should().BeTrue();
+
+        PickCover(cut);
+        await cut.InvokeAsync(() => cut.FindComponent<StoryPropertiesForm>().Instance.OnRemoveCover.InvokeAsync());
+        await cut.Find("form").SubmitAsync();
+        _writes.Calls.Should().BeEmpty("no cover call and no save starts under a status change");
+
+        _writes.TransitionGate.SetResult();
+        await transition;
+        cut.WaitForAssertion(() => cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeFalse());
+        SubmitButton(cut).HasAttribute("disabled").Should().BeFalse();
+    }
+
+    [Fact]
     public async Task CreateMode_APickedCover_WaitsForTheCreate_ThenUploadsToTheNewStory_WithNoUpdate()
     {
         IRenderedComponent<StoryEditorPage> cut = Render<StoryEditorPage>();
@@ -282,6 +385,13 @@ public class StoryEditorPageTests : BunitContext
         public Exception? Failure { get; set; }
         public Exception? SaveFailure { get; set; }
         public Exception? CoverFailure { get; set; }
+
+        /// <summary>When set, the matching call waits on it, so a test can act while that write is in
+        /// flight (the overlap tests).</summary>
+        public TaskCompletionSource? CoverGate { get; set; }
+        public TaskCompletionSource? SaveGate { get; set; }
+        public TaskCompletionSource? TransitionGate { get; set; }
+
         public List<StoryStatusEnum> Requested { get; } = [];
         public int CreatedStoryId { get; set; } = 42;
         public string UploadedPath { get; set; } = "/uploads/stories/7/cover-22222222-2222-2222-2222-222222222222.png";
@@ -290,10 +400,12 @@ public class StoryEditorPageTests : BunitContext
         /// in call order.</summary>
         public List<string> Calls { get; } = [];
 
-        public Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
+        public async Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
         {
             Requested.Add(targetStatus);
-            return Failure is null ? Task.FromResult(Result) : Task.FromException<StoryStatusEnum>(Failure);
+            if (TransitionGate is not null) await TransitionGate.Task;
+            if (Failure is not null) throw Failure;
+            return Result;
         }
 
         public Task<int> CreateStoryAsync(CreateStoryDTO dto)
@@ -302,10 +414,11 @@ public class StoryEditorPageTests : BunitContext
             return Task.FromResult(CreatedStoryId);
         }
 
-        public Task UpdateStoryAsync(StoryUpdateDTO dto)
+        public async Task UpdateStoryAsync(StoryUpdateDTO dto)
         {
             Calls.Add("Update");
-            return SaveFailure is null ? Task.CompletedTask : Task.FromException(SaveFailure);
+            if (SaveGate is not null) await SaveGate.Task;
+            if (SaveFailure is not null) throw SaveFailure;
         }
 
         public async Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId)
@@ -313,6 +426,7 @@ public class StoryEditorPageTests : BunitContext
             using MemoryStream copy = new();
             await content.CopyToAsync(copy);
             Calls.Add($"Upload:{storyId}:{contentType}:{copy.Length}");
+            if (CoverGate is not null) await CoverGate.Task;
             if (CoverFailure is not null) throw CoverFailure;
             return UploadedPath;
         }

@@ -8,8 +8,10 @@
      - OnValidSubmit fires when EditForm validation passes; the page then calls GetLongDescriptionAsync()
        before mapping to the write DTO. The cover is NOT part of the submit (owner ruling D14): picking a
        file raises OnCoverSelected at once and "Remove cover" raises OnRemoveCover; the page uploads or
-       removes through the write service, which persists the change itself. CoverUploadBusy disables
-       both while an upload runs.
+       removes through the write service, which persists the change itself. The page's writes never
+       overlap: CoverUploadBusy disables the picker, "Remove cover" and the submit while a cover call
+       runs; a save in flight (ViewModel.IsLoading) disables the cover controls; OtherWriteInFlight (the
+       page's status change) disables both.
      - InitialTagsByType seeds TagSelectors on first render (edit mode). Null = create mode (empty).
      - InitialCharacters/SettingDetails/Pairings/GenrePriorities seed structured data in edit mode. *@
 
@@ -77,13 +79,13 @@
             <img src="@ViewModel.CoverArtRelativeUrl"
                  alt="Current cover"
                  class="h-32 w-24 rounded-md object-cover shadow-subtle" />
-            <button type="button" disabled="@CoverUploadBusy" @onclick="HandleRemoveCoverAsync"
+            <button type="button" disabled="@CoverControlsDisabled" @onclick="HandleRemoveCoverAsync"
                     class="self-start rounded-md px-2 py-1 text-sm text-(--color-danger) transition-colors hover:bg-(--color-danger)/10 disabled:cursor-not-allowed disabled:opacity-50">
                 Remove cover
             </button>
         }
         <InputFile id="story-cover-art" OnChange="HandleCoverSelectedAsync" accept="image/jpeg,image/png,image/webp"
-                   disabled="@CoverUploadBusy"
+                   disabled="@CoverControlsDisabled"
                    class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-action) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-(--color-text) file:transition-colors hover:file:bg-(--color-action-hover) disabled:cursor-not-allowed disabled:opacity-50" />
         @if (CoverUploadBusy)
         {
@@ -267,7 +269,7 @@
 
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
-            disabled="@ViewModel.IsLoading"
+            disabled="@(ViewModel.IsLoading || CoverUploadBusy || OtherWriteInFlight)"
             aria-label="Save story properties"
             class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
@@ -359,12 +361,21 @@
     /// through <c>ViewModel.CoverArtRelativeUrl</c>.</summary>
     [Parameter] public EventCallback<IBrowserFile> OnCoverSelected { get; set; }
 
-    /// <summary>True while the page uploads a cover: the file picker and "Remove cover" are disabled
-    /// and "Uploading…" shows.</summary>
+    /// <summary>True while the page uploads or removes a cover: the file picker, "Remove cover" and the
+    /// submit are disabled and "Uploading…" shows. A cover call commits on its own, so a save must not
+    /// start under it: the save's reload would abort it, and on a circuit both would share one write
+    /// context.</summary>
     [Parameter] public bool CoverUploadBusy { get; set; }
+
+    /// <summary>True while another write on the page is in flight (the editor's status change): the
+    /// picker, "Remove cover" and the submit are disabled. A save in flight disables the cover controls
+    /// too, through <c>ViewModel.IsLoading</c>.</summary>
+    [Parameter] public bool OtherWriteInFlight { get; set; }
 
     /// <summary>Raised by "Remove cover" (rendered only while a cover is set).</summary>
     [Parameter] public EventCallback OnRemoveCover { get; set; }
+
+    private bool CoverControlsDisabled => CoverUploadBusy || OtherWriteInFlight || ViewModel.IsLoading;
 
     /// <summary>Pull the current editor HTML. Called by the page on submit before building the DTO.</summary>
     public async Task<string> GetLongDescriptionAsync() =>

@@ -276,9 +276,11 @@ transport:
   `IImageStorageService` and called `SaveAsync` itself; the upload now goes through the write
   service, as avatars do. Since WU-BlobCleanup (2026-10-13, owner ruling D14) the method also
   **persists** the cover and deletes the old blob, so no follow-up `UpdateStoryAsync` is needed, and
-  clearing a cover is its own bodiless call: `RemoveCoverArtAsync` → `DELETE /api/stories/{id}/cover`
-  (no body, so no antiforgery concern). `IImageStorageService` stays server-only infra, never
-  client-implemented (see "Avoid").
+  clearing a cover is its own bodiless call: `RemoveCoverArtAsync` → `DELETE /api/stories/{id}/cover`.
+  It carries no antiforgery token, because the antiforgery middleware checks only endpoints that bind
+  a form; its CSRF posture is the rest of the cookie-authenticated JSON API's (worksheet D38, pending,
+  records that policy). `IImageStorageService` stays server-only infra, never client-implemented (see
+  "Avoid").
 
 ## The Error-Translation Contract
 
