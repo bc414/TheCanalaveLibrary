@@ -149,7 +149,8 @@ default on. Row 23 was added the same day by the WU-UserDeletion review fixes: i
 for a notification D5's own scope does not reach. Row 24 was added the same day by WU-PollVoteIntegrity,
 promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider did not rule. Row 25 was
 added the same day by WU-BlobCleanup, promoted out of **F22**: two owner rulings (D13, D14) disagree on
-one edge.
+one edge. Row 26 was added the same day by WU-ThrottleCoverage, promoted out of **F23**: three
+follow-ups of D20's throttle half that its text leaves to the owner.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -169,6 +170,7 @@ one edge.
 | 23 | **Should a group-admin assignment name the moderator who made it?** `GroupAdminAssigned` (62) tells a member that a site moderator made them the admin of an admin-less group (D13 edge (b)). | As built (the WU spec's pick, not owner text): null-sourced, no moderator parameter, actor-free copy ("You were made an admin of {group}"); the `Report` row keeps the moderator internally. | D5 says a moderator is never named "to the sanctioned or reporting user" and scopes itself to 70–82; the promoted member is neither, and 62 sits in the Groups band. D5's threat model (retaliation against volunteer moderators) argues for the default; an appointment is also good news a member may want to answer. Sibling of row 19 (type 90), whose source is kept. "Name them" needs a small build: a source parameter on `NotifyGroupAdminAssignedAsync` and an `{actor}` in the presenter arm. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". |
 | 24 | **Should a poll's anonymity mode be frozen by the database once votes exist, like its vote mode?** D23's `ConfigLocked` rider named `AllowMultiple`, and WU-PollVoteIntegrity froze it with an FK (`layer2-services.md` §"Check-then-act posture"). `AnonymityMode` (with `ResultsVisibility` and `DateOpened`) still freezes only through `UpdatePollAsync`'s `hasVotes` read, so an owner's edit that crosses the first vote can land: a vote cast under `Anonymous` is then named under `Public`. | As built (the status quo, not a ruling): the service check only. The window is one request wide. | D23's classification test reads two ways here: a reader publishes a name (a constraint), or the voter's intent is disappointed (a policy). The status quo works against the lock's own stated purpose: F37's Settled bullet says the freeze "prevents retroactive anonymity exposure", and that is the one-request window the default leaves open. D23's rider says "the first-vote-vs-config-edit boundary … needs the same treatment in the same WU". The build read that as `AllowMultiple` only, since the sentence is about the restructure depending on it; read as the whole boundary, it would cover this field too. The fix costs one column per vote row. Tracker **F21**. |
 | 25 | **When an account is deleted, do the covers of its stories go?** D14 says the account deletion collects "the cover paths of every story the user authored … since the cascade removes the rows that name them" and deletes those blobs. The premise does not hold: `stories.author_id` is `SET NULL`, and D13 (one day earlier) ratified stories as surviving anonymized, so those rows live on and still name their covers. | As built (non-destructive, reversible; not a ruling): the covers stay with the surviving stories. Only the avatar is deleted. D14's principle ("the blob is gone when the row is gone") does not reach a row that survives, and deleting the blobs would break live stories' covers and leave every such row naming a missing blob. | Read literally, D14 asks for erasure the D13 survival set does not need; read by its principle, it asks for nothing here. A cover is the author's upload, and could be personal (a photo, their art), so "strip them" is a defensible erasure choice: null `CoverArtRelativeUrl` on the user's stories inside the deletion transaction and delete the blobs post-commit (a small build in `UserDeletionService`, plus the deletion page's copy). Rule text: `layer2-services.md` §"Image Storage — blob ownership and cleanup". Tracker **F22**. |
+| 26 | **Three follow-ups of D20's throttle half.** **(a)** The `Vote` and `Reveal` bucket sizes: D20 requires a row for each new kind but names no number. **(b)** Group story-add (`IGroupWriteService.AddStoryAsync`): each add of a distinct story notifies every opted-in member (type 60) and the story's author (25). Since D16 both anchor on the new `GroupStory` row, so dedup never merges two adds, and a group admin's remove + re-add mints a new row and notifies again. Throttle it (under which kind, at what rate), or ratify it exempt? **(c)** `RepeatRequest` charges *every* notifying acknowledgment and lineage request, first requests included, so crediting a sixth collaborator in one sitting waits three minutes. | As built (not rulings): **(a)** both 10 burst / 10 per min, mirroring Comment/Message, the most generous ratified tier, and labelled provisional in code and in `security.md`. **(b)** Unthrottled; the bound today is that members opted in (`NotifyForNewStory`) and can leave, and a story can sit in a group once. **(c)** Every notifying request is charged: a revoke or delete followed by a fresh request leaves no trace of the repeat, so a state guard ("one re-request per decline", which D20 also allowed) would not close the vector. | **(a)** D20 sets limits by tier and left these two blank. **(b)** D20's enumeration needs a reason for every unthrottled surface, and the honest bound here is weaker than "dedup holds"; adding a bucket is a coverage call, which D20 reserved to you. **(c)** D20 rules that the vector closes, not the mechanism; the alternatives are a looser tier, or charging only the re-request branch and accepting the revoke/delete bypass. Rule text: `security.md` §"Write Throttling". Tracker **F23**. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -216,7 +218,9 @@ done.
 
 **Deliberately not reordered** — each already has an explicit gate and a stated reason; this
 reanalysis found no case for moving any of them up: A8 (post-mvp-mobile), B8 (post-beta), B9/B10
-(launch), E3/E5 (launch/post-launch), E6 (pre-launch — no rate-limit abuse signal exists yet), F8
+(launch), E3/E5 (launch/post-launch), E6 (pre-launch; its rate-limit clause is resolved — the
+signed-in reveal is throttled, the anonymous reveal and `/mature` ratified exempt, WU-ThrottleCoverage
+2026-10-13 — and its three remaining clauses keep their own gates), F8
 (post-launch). F2/F3/F4/F7 are already tracked above via the Decisions table and the Phase 7
 checklist, not re-listed here. H4's PDF-import half stays a deliberate future-format candidate.
 
@@ -232,6 +236,30 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Throttle coverage (worksheet D20, the throttle-coverage half only) — answered 2026-08-07, built
+  WU-ThrottleCoverage 2026-10-13.** No decision row: it came out of the service audit's §3.13/§2.5.
+  "Select by cost" stands; the rule was simply never run against the full surface list. Built:
+  - Three new kinds: **`Reveal`** (the signed-in content-gate reveal, now enum- and
+    existence-checked too), **`RepeatRequest`** (acknowledgment and lineage requests, report tier,
+    charged on every request that notifies — its placement exception and the revoke/delete bypass
+    that rules out a state guard are in the rule), **`Vote`** (poll votes).
+  - `ContentCreate` wired to custom-list create and clone, series create and story-arc create.
+  - An **`ExportGenerate`** concurrency limiter mirroring `ImportParse`.
+  - The **unthrottled-surface enumeration**: every remaining user-reachable write without a bucket,
+    with its reason, including the **conditional edit exemption** (void if the caps half is
+    descoped) and the **view-ping ratification** (anonymous, unthrottled, inflatable counts
+    accepted).
+  - Found by the build, decision-free: the WASM client rebuilt the throttle exception only for the
+    three services that named their kind, so every other throttled write showed "Something went
+    wrong" on WASM. The 429 now carries `writeActionKind` and the client reads it.
+
+  Rule: `security.md` §"Write Throttling" (and §"HTTP Edge Rate Limiting" for the edge policy set);
+  `layer5-wasm.md` §"The Error-Translation Contract". Narrative: `audit/AccessGate.md` F66,
+  `audit/Stories.md` F8/F9/F10/F45, `audit/Badges.md` F50, `audit/CustomLists.md` F51,
+  `audit/BlogPosts.md` F37, `audit/Export.md` F54, `audit/Import.md` F63. **Still open:** D20's bounds/caps half and the
+  §2.11 reading-progress clamp (D20 stays unticked; tracker D14), and decision row **26** (the
+  provisional `Vote`/`Reveal` numbers, group story-add, first-request friction).
 
 - **Blob cleanup ownership (worksheet D14) — answered 2026-08-07, built WU-BlobCleanup 2026-10-13.**
   No decision row: it came out of the service audit's §3.16 and §2.12. Blob cleanup has two owners on

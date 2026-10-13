@@ -316,6 +316,13 @@ uses (:48-50). All LOW, CONFIRMED, one-line-each.
 
 ### 2.5 Unbounded client-supplied inputs (systemic; mostly anonymous surfaces)
 
+> **Throttle rows built: WU-ThrottleCoverage (2026-10-13), owner ruling D20's throttle half.** The
+> signed-in reveal gains enum and existence validation and the `Reveal` bucket (`ContentRevealRecorder`);
+> exports carry the `ExportGenerate` concurrency limiter; the view ping is ratified unthrottled; chapter
+> edits stay exempt *conditionally* (void unless the caps half lands text caps). **Every bounds/caps row
+> is still open** — D20's caps half is pending (WU-BoundsAndCaps): page sizes, batch and id-list caps,
+> text caps, body-size caps, the per-user reveal row cap and the unpaged `GetMyRevealsAsync`.
+
 The single most repeated finding. Confirmed instances:
 
 | Surface | Evidence | Failure |
@@ -441,8 +448,10 @@ code change:
 > with a per-id cap rather than aborting the batch, which would have let one full mailbox stall every
 > later batch. Shutdown: `DrainAllAsync` drains to empty within a 15 s budget. Tiebreak: `OldestUnreadFirst` ends
 > in `NotificationId` (no DDL). Dedup: accepted as an advisory policy under D23's test (doc only, no
-> index). `StartConversationAsync` is one save. The lineage/acknowledgment bullet stays routed to
-> WU-ThrottleCoverage.
+> index). `StartConversationAsync` is one save. **The lineage/acknowledgment bullet built:
+> WU-ThrottleCoverage (2026-10-13)** — a `RepeatRequest` bucket (D20) on every request that notifies,
+> first requests included (revoke/delete erase the evidence of a repeat), and the false spam-guard
+> comment corrected.
 
 - **Group `AddStoryAsync` re-notifies on the idempotent duplicate path** (block sits outside
   `if (!alreadyAdded)`) — a repeatable spam primitive for any member. MEDIUM, CONFIRMED.
@@ -489,6 +498,10 @@ index, so the idempotent-add check is advisory only. One folder-integrity WU wit
 FK + `NULLS NOT DISTINCT` migration.
 
 ### 2.11 Reading-progress float hygiene
+
+> **Not built (2026-10-13).** WU-ThrottleCoverage left it: D20's own "Still open" sentence names "the
+> §2.11 reading-progress clamp", and NaN can only be dropped or refused, which is the open
+> clamp-vs-reject question. Ledger home: tracker D14 (with the `read_progress` CHECK it gates).
 
 `RecordProgressAsync` accepts NaN/∞/out-of-range; NaN is **sticky** (C# `Math.Max` propagates it;
 Postgres orders NaN above all numbers, so `GREATEST` keeps it forever). MEDIUM, CONFIRMED.
@@ -671,8 +684,10 @@ unless noted):
 **Load-bearing false code comments** found (fix with their defects, same WU — this is the exact
 class the repo's CORRECTION-note convention exists for): `DeleteFolderAsync`'s phantom SET-NULL
 (fixed WU-SchemaHardening, 2026-10-13);
-blog-delete's "cascades handle it" ×2 + interface docs; lineage-reject's phantom spam guard;
-Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb; `RejectLineageAsync`;
+blog-delete's "cascades handle it" ×2 + interface docs; lineage-reject's phantom spam guard
+(*fixed WU-ThrottleCoverage, 2026-10-13* — the `RepeatRequest` bucket is the real bound);
+Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb; `RejectLineageAsync`
+(*fixed WU-ThrottleCoverage, 2026-10-13*, the interface doc's same claim);
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —
 the explicit window now suppresses the author-exception, which must be said or a future
 simplification opens an author-draft leak); the USI "reject impossible combinations" comment (R3

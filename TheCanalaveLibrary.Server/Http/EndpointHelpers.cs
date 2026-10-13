@@ -11,6 +11,13 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public static class EndpointHelpers
 {
+    /// <summary>The 429 body's <c>ProblemDetails</c> extension carrying the seconds until a retry.</summary>
+    public const string RetryAfterSecondsExtension = "retryAfterSeconds";
+
+    /// <summary>The 429 body's <c>ProblemDetails</c> extension naming the throttled
+    /// <see cref="WriteActionKind"/> (its enum name).</summary>
+    public const string WriteActionKindExtension = "writeActionKind";
+
     public static async Task<IResult> ExecuteAsync(Func<Task<IResult>> action)
     {
         try
@@ -49,13 +56,16 @@ public static class EndpointHelpers
         {
             // security.md §"Write Throttling". RetryAfter surfaces in the body (extensions) rather
             // than a response header — the client-side translation reads it the same way it reads
-            // ProblemDetails.Detail, no header-plumbing needed.
+            // ProblemDetails.Detail, no header-plumbing needed. writeActionKind lets the WASM client
+            // rebuild the exception for ANY throttled write from the body alone
+            // (ClientHttpHelpers.ThrowIfWriteFailedAsync; WU-ThrottleCoverage).
             return Results.Problem(
                 detail: ex.Message,
                 statusCode: StatusCodes.Status429TooManyRequests,
                 extensions: new Dictionary<string, object?>
                 {
-                    ["retryAfterSeconds"] = Math.Ceiling(ex.RetryAfter.TotalSeconds)
+                    [RetryAfterSecondsExtension] = Math.Ceiling(ex.RetryAfter.TotalSeconds),
+                    [WriteActionKindExtension] = ex.Kind.ToString(),
                 });
         }
         catch (InvalidOperationException ex)

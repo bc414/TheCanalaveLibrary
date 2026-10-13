@@ -16,12 +16,14 @@ namespace TheCanalaveLibrary.Server;
 public class ServerCustomListWriteService(
     ApplicationDbContext writeDb,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
-    IActiveUserContext activeUser)
+    IActiveUserContext activeUser,
+    IWriteRateLimitService rateLimit)
     : ServerCustomListReadService(readDbFactory, activeUser), ICustomListWriteService
 {
     public async Task<int> CreateListAsync(string listName, bool isPublic)
     {
         int userId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         bool nameExists = await ListNameExistsAsync(userId, listName, excludeListId: null);
         int listCount = await writeDb.CustomLists.CountAsync(l => l.UserId == userId);
@@ -128,6 +130,7 @@ public class ServerCustomListWriteService(
     public async Task<int> CloneListAsync(int sourceListId)
     {
         int userId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId); // a clone is a list create (D20)
 
         var source = await writeDb.CustomLists
             .Where(l => l.CustomListId == sourceListId)

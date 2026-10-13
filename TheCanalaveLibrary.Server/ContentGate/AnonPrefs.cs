@@ -28,12 +28,12 @@ public sealed class AnonPrefs
 
     [JsonPropertyName("m")] public bool Mature { get; set; }
 
-    // Append order = consent order (oldest first) — the LRU trim removes from the front.
-    [JsonPropertyName("rs")] public List<int> RevealedStories { get; set; } = [];
-    [JsonPropertyName("rg")] public List<int> RevealedGroups { get; set; } = [];
-    [JsonPropertyName("rb")] public List<int> RevealedBlogPosts { get; set; } = [];
-
-    public static readonly AnonPrefs Empty = new();
+    // Append order = consent order (oldest first) — the LRU trim removes from the front. A cookie
+    // that sets a list to null ({"rs":null}) parses to an empty list: the setter is the parse path,
+    // and a null here would throw on the viewer's every page read.
+    [JsonPropertyName("rs")] public List<int> RevealedStories { get; set => field = value ?? []; } = [];
+    [JsonPropertyName("rg")] public List<int> RevealedGroups { get; set => field = value ?? []; } = [];
+    [JsonPropertyName("rb")] public List<int> RevealedBlogPosts { get; set => field = value ?? []; } = [];
 
     public bool HasRevealed(RevealedEntityType entityType, int entityId) => entityType switch
     {
@@ -71,20 +71,28 @@ public sealed class AnonPrefs
         }
     }
 
-    /// <summary>Parses the cookie from a request; malformed or absent → <see cref="Empty"/>.</summary>
+    /// <summary>
+    /// Parses the cookie from a request; malformed or absent → a new default instance. Always a
+    /// <b>fresh</b> instance the caller owns: the consent endpoints mutate what this returns
+    /// (<see cref="AddReveal"/>, <see cref="Mature"/>) before re-appending it. Until WU-ThrottleCoverage
+    /// (2026-10-13) the absent/malformed paths returned one shared static instance, so the first
+    /// cookieless visitor to click "Always show mature content" or "View this story" changed that
+    /// instance for every later cookieless visitor in the process (mature content shown, items
+    /// revealed) until restart.
+    /// </summary>
     public static AnonPrefs Read(HttpRequest request)
     {
         if (!request.Cookies.TryGetValue(CookieName, out string? raw) || string.IsNullOrEmpty(raw))
-            return Empty;
+            return new AnonPrefs();
         try
         {
-            return JsonSerializer.Deserialize<AnonPrefs>(raw) ?? Empty;
+            return JsonSerializer.Deserialize<AnonPrefs>(raw) ?? new AnonPrefs();
         }
         catch (JsonException)
         {
             // sanctioned-silent: a malformed preference cookie (hand-edited, truncated) simply
             // means default preferences — request input is never trusted to parse.
-            return Empty;
+            return new AnonPrefs();
         }
     }
 

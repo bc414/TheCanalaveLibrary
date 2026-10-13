@@ -13,6 +13,8 @@ public interface IStoryArcWriteService : IStoryArcReadService
     /// <exception cref="StoryArcValidationException">Range/title validation failed.</exception>
     /// <exception cref="KeyNotFoundException">Story not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    /// <exception cref="WriteRateLimitExceededException">The caller's <see cref="WriteActionKind.ContentCreate"/>
+    /// bucket is empty (owner ruling D20) — checked first, after the auth guard.</exception>
     Task<int> CreateArcAsync(CreateStoryArcDto dto);
 
     /// <exception cref="StoryArcValidationException">Range/title validation failed.</exception>

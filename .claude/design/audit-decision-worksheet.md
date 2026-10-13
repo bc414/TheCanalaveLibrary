@@ -2002,6 +2002,8 @@ endpoint body-size caps, the §2.11 reading-progress clamp, and the registration
 routed here from D1 (email verification, story-creation age/rate limits). Do not tick D20 until
 those are answered.
 
+**Built:** WU-ThrottleCoverage (2026-10-13), the throttle-coverage half only — rule now stated in `security.md` §"Write Throttling" (the three new kinds, the `ContentCreate` wiring, the `RepeatRequest` placement exception, `ExportGenerate`, and the unthrottled-surface enumeration with the conditional edit exemption and the view-ping ratification). D20 stays unticked: the bounds/caps half and the §2.11 clamp were not built. Routed to the owner (decision row 26): the provisional `Vote`/`Reveal` numbers, group story-add (a fan-out the enumeration could not classify as exempt), and the first-request friction of charging every notifying request.
+
 ## Block F — Counter & concurrency doctrine
 
 Gates WU-CounterSymmetry and defines the drift policy other WUs cite.

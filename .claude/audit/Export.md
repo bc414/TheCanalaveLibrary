@@ -13,7 +13,9 @@ generation: `IExportService` (Core) + `ServerExportService` + per-format writers
 - **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11; re-verified WU-StoryLifecycle,
   2026-09-30 — nullable publish date, "Not yet published" header; re-verified WU-DependencyCVEs,
   2026-10-12 — the `ExportDom` walks on AngleSharp 1.8.4, all six formats downloaded by its browser
-  pass the same day; see their Stage notes below).**
+  pass the same day; both download routes carry the `ExportGenerate` concurrency limiter since
+  WU-ThrottleCoverage, 2026-10-13, owner ruling D20 — Integration metadata test; see their Stage notes
+  below).**
 - **L3-Logic — N/A** (trigger lives in Stories components). **L3.5 — N/A** (no components).
 - **L4 — N/A. L4.5 — Stage 5. L5 — N/A. L6 — N/A. L8 — N/A.**
 
@@ -77,6 +79,21 @@ quote and hold no `img`/`svg`/`math`/`script`; the DOCX keeps the bold run; the 
 answered 404, as did a numeric format segment. Feeding the EPUB back in is `audit/Import.md` F63's
 round trip.
 
+### L2 Stage note (WU-ThrottleCoverage, 2026-10-13; owner ruling D20) — no cell flips; F54 L2 stays 5
+D20: "exports are the concurrency-limiter class, not the token bucket". Both `MapGet`s in
+`ExportEndpoints` now carry `.RequireRateLimiting("ExportGenerate")`, a server-wide concurrency limiter
+registered in `Program.cs` beside `"ImportParse"` and mirroring it (4 permits, queue 8, oldest first —
+the owner's "mirroring"). Generating a document is expensive (QuestPDF runs synchronously on the
+request) and never commits, so no token bucket sees it. Unpartitioned, so anonymous exporters are
+bounded too; export stays unauthenticated ("export = what you can read", settled below). A rejection
+is the edge limiters' plain-text 429, which an anchor download shows as text — accepted.
+**Verified:** Integration `ExportServiceTests` — `ExportRoutes_CarryTheExportGenerateLimiter` (both
+routes' `EnableRateLimitingAttribute` names the policy, read off `EndpointDataSource`), plus the
+same assertion for the three `ImportParse` routes and `/resplit`'s absence (an untested precedent
+until now). A behavioural concurrency test is timing-dependent and deliberately not attempted. The
+existing endpoint tests (200 with attachment, 404s) pass through the limiter unchanged. No UI changed;
+L4.5 stays 5. Service audit §2.5's export row is closed.
+
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under
   $1M revenue, license set at startup), HTML (string assembly), TXT + Markdown (string transforms
@@ -101,4 +118,5 @@ round trip.
   `audit/Chapters.md`.
 
 ### Open
-- None for this WU. PDF *import* is a different feature (see `audit/Import.md`).
+- None. The throttling gap (service audit §2.5's export row) closed with WU-ThrottleCoverage
+  (2026-10-13). PDF *import* is a different feature (see `audit/Import.md`).

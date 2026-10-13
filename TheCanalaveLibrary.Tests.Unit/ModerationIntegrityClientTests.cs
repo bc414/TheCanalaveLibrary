@@ -16,8 +16,8 @@ namespace TheCanalaveLibrary.Tests.Unit;
 ///   <item><see cref="ClientReportSubmissionService"/>, the WASM twin of the member-facing interface
 ///   split out of the mod surface: routes, 400 → <see cref="ModerationValidationException"/> (a duplicate
 ///   report's message reaches the reporter), and 429 → <see cref="WriteRateLimitExceededException"/>
-///   (submission sits behind the Report throttle; without <c>rateLimitedAction</c> a 429 would become a
-///   generic server fault).</item>
+///   (submission sits behind the Report throttle; the shared helper reads the kind off the 429 body —
+///   <c>WriteThrottleWireContractTests</c>).</item>
 ///   <item><see cref="ClientModerationWriteService.ReinstateUserAsync"/>'s route.</item>
 ///   <item><see cref="ClientModerationWriteService.AssignGroupAdminAsync"/>'s route, its JSON body and its
 ///   400 mapping (WU-UserDeletion review fixes, 2026-10-13).</item>
@@ -98,7 +98,10 @@ public class ModerationIntegrityClientTests
     [Fact]
     public async Task SubmitReportAsync_429_IsAWriteRateLimitExceededException_ForTheReportThrottle()
     {
-        var handler = new CannedHandler(HttpStatusCode.TooManyRequests, """{"detail":"Slow down.","retryAfterSeconds":30}""");
+        // The server's 429 names its kind (EndpointHelpers, WU-ThrottleCoverage); the client no longer
+        // supplies one, so a body without it is not a throttle (WriteThrottleWireContractTests).
+        var handler = new CannedHandler(HttpStatusCode.TooManyRequests,
+            """{"detail":"Slow down.","retryAfterSeconds":30,"writeActionKind":"Report"}""");
         ClientReportSubmissionService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.SubmitReportAsync(new SubmitReportRequest(ReportedEntityType.Story, 42, 2, null));

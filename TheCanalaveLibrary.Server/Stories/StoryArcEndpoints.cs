@@ -20,8 +20,8 @@ namespace TheCanalaveLibrary.Server;
 /// (<c>ServerStoryArcWriteService.RequireAuthenticatedUser</c>, throws
 /// <see cref="InvalidOperationException"/> otherwise, translated to 401), and additionally enforces
 /// story-author ownership via <see cref="UnauthorizedAccessException"/> (403). No
-/// <c>RequireRateLimiting(...)</c> — <see cref="ServerStoryArcWriteService"/> doesn't call an
-/// <c>IWriteRateLimitService</c> token bucket.
+/// <c>RequireRateLimiting(...)</c> — <c>CreateArcAsync</c> is throttled in the service
+/// (<c>WriteActionKind.ContentCreate</c>, owner ruling D20), which covers both transports.
 /// </para>
 /// </summary>
 public static class StoryArcEndpoints

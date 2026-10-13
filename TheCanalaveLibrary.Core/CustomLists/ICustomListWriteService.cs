@@ -6,9 +6,9 @@ namespace TheCanalaveLibrary.Core;
 /// (<see cref="UnauthorizedAccessException"/> otherwise). Domain failures throw
 /// <see cref="CustomListValidationException"/>. Adds are silent by design — no notification is sent
 /// to a story's author when their story is filed into a personal list (deliberately unlike
-/// <c>GroupStory</c> adds; part of the feature's private-shelf appeal). No rate limiting — creates
-/// are bounded by <see cref="CustomListValidations.MaxListsPerUser"/>, matching Saved Tag
-/// Selections (the structural precedent).
+/// <c>GroupStory</c> adds; part of the feature's private-shelf appeal). Creates — a new list and a
+/// clone — spend a <see cref="WriteActionKind.ContentCreate"/> token (owner ruling D20,
+/// WU-ThrottleCoverage); <see cref="CustomListValidations.MaxListsPerUser"/> still caps the total.
 /// </summary>
 public interface ICustomListWriteService : ICustomListReadService
 {
@@ -16,6 +16,8 @@ public interface ICustomListWriteService : ICustomListReadService
     /// Creates a list owned by the active user. Name is required, unique per user
     /// (case-insensitive), max <see cref="CustomListValidations.MaxListNameLength"/> chars; the
     /// <see cref="CustomListValidations.MaxListsPerUser"/> cap applies. Returns the new list id.
+    /// Throws <see cref="WriteRateLimitExceededException"/> (<see cref="WriteActionKind.ContentCreate"/>)
+    /// when the caller's bucket is empty — checked first, after the auth guard.
     /// </summary>
     Task<int> CreateListAsync(string listName, bool isPublic);
 
@@ -47,7 +49,9 @@ public interface ICustomListWriteService : ICustomListReadService
     /// <see cref="CustomListValidations.DisambiguateCloneName"/> on collision; entry
     /// <c>DateAdded</c> stamps are the clone time, not the source's. Self-cloning is allowed.
     /// Throws <see cref="CustomListValidationException"/> when the source doesn't exist or is
-    /// neither public nor owned by the caller, or when the cloner is at the list cap.
+    /// neither public nor owned by the caller, or when the cloner is at the list cap. A clone is a
+    /// list create: it throws <see cref="WriteRateLimitExceededException"/>
+    /// (<see cref="WriteActionKind.ContentCreate"/>) when the caller's bucket is empty — checked first.
     /// </summary>
     Task<int> CloneListAsync(int sourceListId);
 }

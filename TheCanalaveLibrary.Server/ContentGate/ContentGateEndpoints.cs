@@ -21,32 +21,35 @@ public static class ContentGateEndpoints
         RouteGroupBuilder group = app.MapGroup("/content-gate");
 
         // "View this story" / "View this group" / view-this-post — durable per-item consent.
-        // Signed-in → UserContentReveal row (cross-device, revocable in /settings);
-        // anonymous → prefs-cookie reveal list (180d sliding, LRU-capped).
-        group.MapPost("/reveal", async (
+        // Signed-in → UserContentReveal row (cross-device, revocable in /settings), recorded by
+        // ContentRevealRecorder, which validates the type and target and spends a Reveal token
+        // (owner ruling D20); anonymous → prefs-cookie reveal list (180d sliding, LRU-capped),
+        // exempt — it writes only the viewer's own cookie. Invalid input is a silent no-op either
+        // way, and the redirect is the same (no existence oracle).
+        group.MapPost("/reveal", async Task<IResult> (
             HttpContext http,
             IActiveUserContext activeUser,
-            ApplicationDbContext writeDb,
+            ContentRevealRecorder recorder,
             [FromForm] RevealedEntityType entityType,
             [FromForm] int entityId,
             [FromForm] string returnUrl) =>
         {
             if (activeUser.UserId is int userId)
             {
-                bool exists = await writeDb.UserContentReveals.FindAsync(userId, entityType, entityId) is not null;
-                if (!exists)
+                try
                 {
-                    writeDb.UserContentReveals.Add(new UserContentReveal
-                    {
-                        UserId = userId,
-                        EntityType = entityType,
-                        EntityId = entityId,
-                        DateRevealed = DateTime.UtcNow,
-                    });
-                    await writeDb.SaveChangesAsync();
+                    await recorder.RecordAsync(userId, entityType, entityId);
+                }
+                catch (WriteRateLimitExceededException ex)
+                {
+                    // A document flow, not a JSON API: the edge limiters' shape (Program.cs OnRejected)
+                    // — a plain-text body, which status-code pages skip, plus Retry-After.
+                    http.Response.Headers.RetryAfter =
+                        ((int)Math.Ceiling(ex.RetryAfter.TotalSeconds)).ToString();
+                    return Results.Text(ex.Message, "text/plain", statusCode: StatusCodes.Status429TooManyRequests);
                 }
             }
-            else
+            else if (Enum.IsDefined(entityType))
             {
                 AnonPrefs prefs = AnonPrefs.Read(http.Request);
                 prefs.AddReveal(entityType, entityId);

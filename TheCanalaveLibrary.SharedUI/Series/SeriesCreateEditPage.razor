@@ -6,6 +6,8 @@
 @inject IStoryReadService StoryService
 @inject IToastService Toasts
 @inject NavigationManager Nav
+@inject ILogger<SeriesCreateEditPage> Logger
+@using Microsoft.Extensions.Logging
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -356,9 +358,15 @@
         {
             _forbidden = true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _errors.Add("An unexpected error occurred. Please try again.");
+            // The ExceptionPresenter catch-site pattern: a typed refusal shows its own message —
+            // above all the create throttle's "wait N seconds" (ContentCreate, owner ruling D20) and
+            // an expired session — and only a genuinely unexpected failure is logged and shown as
+            // the generic message with its error id.
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving series {SeriesId} failed unexpectedly", SeriesId);
+            _errors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
         finally
         {

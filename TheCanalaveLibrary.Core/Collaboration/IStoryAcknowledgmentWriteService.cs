@@ -21,6 +21,12 @@ public interface IStoryAcknowledgmentWriteService : IStoryAcknowledgmentReadServ
     /// <c>(StoryId, AcknowledgedUserId, AcknowledgmentRoleId)</c> — a prior
     /// <see cref="StoryAcknowledgmentStatus.Declined"/> row for the same triple is updated back to
     /// Pending, not duplicate-inserted.</para>
+    ///
+    /// <para><b>Throttle (owner ruling D20):</b> every request notifies the credited user, so every
+    /// request throws <see cref="WriteRateLimitExceededException"/>
+    /// (<see cref="WriteActionKind.RepeatRequest"/>) when the caller's bucket is empty — first
+    /// requests included, since a revoked credit leaves no trace of a repeat. Checked after
+    /// validation, so a request that fails validation spends no token.</para>
     /// </summary>
     Task RequestAcknowledgmentAsync(CreateStoryAcknowledgmentDto dto);
 

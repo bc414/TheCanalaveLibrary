@@ -13,7 +13,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
   complete (placeholder comment) but the shape is sound. Awaiting migration.
-- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note).**
+- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note; acknowledgment requests spend a `RepeatRequest` token, WU-ThrottleCoverage, 2026-10-13 — see its Stage note).**
   - Created `Core/Badges/`: `EarnedBadgeDto`, `IBadgeReadService`, `IBadgeWriteService`.
   - Created `Server/Badges/`: `ServerBadgeReadService`, `ServerBadgeWriteService` (primary-ctor chaining;
     CS9107-safe). Registered in `Server/Program.cs` (write service scoped, read forwarded).
@@ -112,6 +112,27 @@ empty for a stranger and anonymous, populated for the author; taken-down: empty 
 `StoryAcknowledgmentServiceTests.Revoke_NotStoryOwner_NoCredit_ThrowsUnauthorizedAccess` and
 `Revoke_NonexistentStory_ThrowsUnauthorizedAccess`; the existing revoke tests still green. All four
 fail against the pre-fix code. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+
+### Feature 50 L2 — WU-ThrottleCoverage Stage note (2026-10-13): acknowledgment requests are throttled (owner ruling D20)
+
+**No cell flips — F50 stays Stage 5.** `ServerStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync`
+now spends a `RepeatRequest` token (5 burst, 1 per 3 min — D20's report tier, "or tighter") on every
+request, because every request notifies the credited user. D20 allowed a state guard ("one
+re-request per decline") instead; it would not close the vector, since `RevokeAsync` deletes a
+Declined row from `MyAcknowledgmentsPage` and a fresh request then re-notifies with no trace of the
+repeat — so the bucket charges first requests too (owner friction note: decision row 26 (c)). The
+call sits after validation and **before the tracked mutation** (the Declined row's flip back to
+Pending): `security.md`'s placement exception for this kind. Validation failures spend nothing.
+`IStoryAcknowledgmentWriteService`'s doc states the throw. Accept/Decline/Revoke stay unthrottled
+(the respondent's answer and the author's own delete — `security.md`'s enumeration).
+
+**How verified:** Integration `WriteThrottleTests` (real limiter, tightened table) —
+`AcknowledgmentRevokeRerequestCycle_ThrottlesUnderRepeatRequest` (request/revoke ×3, the fourth
+request refused: the bypass is closed), `AcknowledgmentRequests_ThatFailValidation_SpendNoToken`, and
+`AThrottledReRequest_LeavesNoDirtyRowForTheScopesNextSave` (a refused re-request of a Declined credit,
+then an unrelated save on the same scope: the row is still Declined). Mutation-checked: moving the
+call after the mutation fails the third. Unit `WriteThrottleWireContractTests` covers the WASM client
+rebuilding the exception. No browser pass was run (tracker H33).
 
 ### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling, plus a spec-sourced `UserCard` rider)
 

@@ -14,7 +14,8 @@ public class ServerSeriesWriteService(
     ApplicationDbContext writeDb,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
-    IHtmlSanitizationService sanitizer)
+    IHtmlSanitizationService sanitizer,
+    IWriteRateLimitService rateLimit)
     : ServerSeriesReadService(readDbFactory, activeUser), ISeriesWriteService
 {
     // ── Series CRUD ───────────────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ public class ServerSeriesWriteService(
     public async Task<int> CreateSeriesAsync(CreateSeriesDto dto)
     {
         int creatorId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, creatorId);
 
         List<string> errors = dto.CanSave();
 

@@ -156,7 +156,14 @@ with "clean state per test":
 **A test that needs its own host builds its own `TestAppFactory`** (never disposes or mutates the
 shared one — that poisons the rest of the run). Three do, and each documents why:
 - `WriteThrottleTests` — re-registers the *real* `ServerWriteRateLimitService` (the shared host
-  uses the pass-through fake).
+  uses the pass-through fake). A new throttled surface adds a test here that fills the bucket and
+  asserts the refused call's `Kind`; when the call sits anywhere but method entry (the
+  `RepeatRequest` exception, `security.md`), it also proves the placement — failed validation
+  spends nothing, and a refusal leaves no tracked mutation for the scope's next save
+  (`AThrottledReRequest_LeavesNoDirtyRowForTheScopesNextSave`). An edge **concurrency** limiter is
+  pinned by endpoint metadata (`EnableRateLimitingAttribute.PolicyName` off `EndpointDataSource`,
+  `ExportServiceTests`), never by racing requests — that is timing-dependent (WU-ThrottleCoverage,
+  2026-10-13).
 - `HttpRateLimitTests` — the HTTP edge rate limiter is stateful middleware whose per-partition
   windows don't replenish within a run, so each test needs a fresh window.
 - `DataProtectionPersistenceTests` — deliberately disposes a host mid-test to prove keys survive

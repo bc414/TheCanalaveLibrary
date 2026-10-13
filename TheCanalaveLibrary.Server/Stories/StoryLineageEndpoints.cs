@@ -23,8 +23,8 @@ namespace TheCanalaveLibrary.Server;
 /// "Every method requires an authenticated user," and each method additionally enforces ownership of
 /// the relevant side of the link (source for request/delete, target for approve/reject) via
 /// <see cref="UnauthorizedAccessException"/>, translated to 403. No <c>RequireRateLimiting(...)</c> —
-/// <see cref="ServerStoryLineageWriteService"/> doesn't call an <c>IWriteRateLimitService</c> token
-/// bucket.
+/// a request that notifies is throttled in the service (<c>WriteActionKind.RepeatRequest</c>, owner
+/// ruling D20), which covers both transports.
 /// </para>
 /// </summary>
 public static class StoryLineageEndpoints

@@ -922,6 +922,13 @@ unless noted. All sit under Stage-5 cells.
     `RecordProgressAsync`, plus the buffer contract) adds the CHECK in the same migration, declared in
     the model (`layer1-data-model.md` §"CHECK constraints", which lists it under "Considered and not
     added"), and a row in `SchemaConstraintTests`' inventory.
+  - **This item is also the ledger home of §2.11 itself** (annotated 2026-10-13 by
+    WU-ThrottleCoverage, whose task named §2.11 as a source). Not built there either: D20's own
+    "Still open" sentence lists "the §2.11 reading-progress clamp", and NaN has no clamp — it can only
+    be dropped or refused, which is the open clamp-vs-reject question. The defect stands as the
+    service audit found it: `RecordProgressAsync` passes any float to `ReadingProgressBuffer`, whose
+    `Math.Max` keeps a NaN, and the flusher's `GREATEST` keeps it in the row for good (Postgres
+    orders NaN above every number). Owner: the WU that consumes D20's bounds half (WU-BoundsAndCaps).
 - [ ] **D15 — A natural-keyed row deleted set-based and then re-created on one circuit throws "already being tracked"** `[latent-risk · low · beta]` — *Filed 2026-10-13 by the WU-SchemaHardening review fixes, which fixed the site that WU made reachable.*
   - Grid: no cell moves; each site sits under a Stage-5 L2 cell.
   - **The rule:** `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" → "Set-based
@@ -942,6 +949,30 @@ unless noted. All sit under Stage-5 cells.
     this at the sites it shares, so the two belong in one WU.
   - **Fix shape:** per site, an `ON CONFLICT` insert or a delete through the tracker, plus an
     Integration test that runs the sequence through one scope.
+- [ ] **D16 — An import of more than five chapters commits five and then refuses** `[latent-risk · med · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage (its spec's T1); found while classifying the import surface, not fixed — the fix needs a design choice.*
+  - Grid: F63 (Import) cells stay 5; the throttle behaves as specified, the commit loop does not fit it.
+  - Source: `SharedUI/Import/StoryChapterImport.razor` `CommitAsync` calls
+    `IChapterWriteService.CreateChapterAsync` once per draft, and each call spends a `ContentCreate`
+    token (5 burst, then 1 per 2 min — `security.md` §"Write Throttling"). `ImportLimits` allows up to
+    100 files or 500 EPUB/split chapters per import.
+  - Failure: the sixth create throws `WriteRateLimitExceededException`; the first five chapters stay
+    committed, the page shows "wait N seconds", and the drafts list is kept — so committing again
+    re-creates the first five as duplicates. `ImportCommitTests` (2 chapters) runs on the pass-through
+    fake and cannot see it.
+  - Fix shape (a design choice, hence not built): a bulk commit that charges the bucket once per
+    import, with a per-commit chapter cap from D20's caps half; or commit progress the page can resume
+    from (drop committed drafts as it goes). Either way an Integration test on the real limiter.
+- [ ] **D17 — Saved tag selections have no per-user count cap and no throttle** `[latent-risk · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage (its spec's T2).*
+  - Grid: the Tags/Discovery saved-selection cells stay 5.
+  - Source: `ServerSavedTagSelectionWriteService` (`CreateAsync`, `CopyPublicSelectionAsync`).
+    `SavedTagSelectionValidations.CanSave` takes no count, so unlike custom lists
+    (`MaxListsPerUser` = 100) a user can save selections without limit. The custom-list audit note
+    that called Saved Tag Selections its "bounded by the cap" precedent was wrong on this point.
+  - Owner ruling D20 classifies the surface as covered by **the caps half's per-selection entry cap**
+    (pending), not by a bucket — so it is recorded as exempt in `security.md`'s enumeration, and the
+    missing count cap is the gap that ruling does not reach.
+  - Fix shape: when D20's caps half is answered, the WU that builds it (WU-BoundsAndCaps) adds the
+    entry cap and either a per-user selection-count cap or a `ContentCreate` call — the owner's call.
 
 ---
 
@@ -1011,8 +1042,13 @@ unless noted. All sit under Stage-5 cells.
     wording is a counsel item (row 10), hard mode is "optional future, not demanded"
     (`audit/AccessGate.md` Open), and the pool floor is an operational knob deferred by ruling
     (WU-AccessGate2). **Do not tick E6** until all four have an owner answer or ship.
+  - **Clause 1 resolved 2026-10-13 (WU-ThrottleCoverage, owner ruling D20):** the signed-in reveal
+    is throttled under the new `Reveal` kind (`ContentRevealRecorder`, which also drops an undefined
+    type or a missing target); the anonymous reveal, `/mature` and `/refresh-claims` are ratified
+    exempt with reasons (`security.md` §"Write Throttling", the enumeration). Clauses 2–4 are
+    unchanged, so E6 stays open.
 
-- [ ] **E7 — The author status-transition endpoint has no write-throttle classification** `[off-grid · low · pre-launch]` — *Filed 2026-09-30 by the WU-StoryLifecycle review fixes; routed, not an oversight.*
+- [x] **E7 — The author status-transition endpoint has no write-throttle classification — CLOSED (2026-10-13, WU-ThrottleCoverage)** `[off-grid · low · pre-launch]` — *Filed 2026-09-30 by the WU-StoryLifecycle review fixes; routed, not an oversight.*
   - Grid: F4 L2/L5=5 (unchanged).
   - Source: `IStoryWriteService.TransitionStatusAsync` / `POST /api/stories/{id}/status`
     (WU-StoryLifecycle); `security.md` §"Write Throttling".
@@ -1023,6 +1059,11 @@ unless noted. All sit under Stage-5 cells.
     purpose" is a legitimate outcome — it just has to be recorded). The sibling moderator surface,
     `POST /api/moderation/users/{id}/auto-approve`, needs nothing: moderator actions are unthrottled by
     the existing `security.md` rule.
+  - **Closed 2026-10-13 (WU-ThrottleCoverage):** classified **unthrottled on purpose** in
+    `security.md`'s unthrottled-surface enumeration (row "Story status moves"): a move updates one row
+    in place through the transition table, notifies nobody, and never re-stamps `PublishedDate` or
+    `LastUpdatedDate`, so a loop cannot bump the story; a submit/withdraw loop re-stamps one queue row
+    and never adds one. The auto-approve control is listed with the moderator-gated surfaces.
 
 - [ ] **E8 — Malformed or out-of-range API request bodies answer 500, not 400** `[off-grid · low · pre-launch]` — *Observed 2026-09-30 by the WU-ModerationIntegrity browser pass, with hand-built requests.*
   - Grid: no cell moves. The app's own clients cannot send either body: they serialize enums as numbers,
@@ -1492,6 +1533,22 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     beside the avatar; add the covers to `DeletePersonalData.razor`'s "Permanently deleted" list.
     Integration test: the D14 test as worded ("an avatar and two covered stories → all three blobs gone,
     and a later sweep finds nothing").
+- [ ] **F23 — Three follow-ups of D20's throttle half that its text leaves to the owner** `[decision · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage. Promoted the same day to `roadmap.md` decision row 26.*
+  - Grid: no cell moves (F37, F39, F8–F10, F50, F66 stay 5).
+  - (a) **The `Vote` and `Reveal` numbers.** D20 requires a `DefaultLimits` row per new kind but gives
+    no number. Built provisional: 10 burst / 10 per min each (the Comment/Message tier, the most
+    generous ratified one), labelled provisional in `ServerWriteRateLimitService` and `security.md`.
+  - (b) **Group story-add.** `ServerGroupWriteService.AddStoryAsync` is unthrottled, and the bound the
+    spec assumed ("deduped per adder and group while unread") no longer holds: since D16 the
+    member fan-out (60) and the author's 25 anchor on the new `GroupStory` row, so each distinct story
+    added notifies every opted-in member, and an admin's remove + re-add mints a new row and notifies
+    again. Recorded in the enumeration as flagged, not exempt. Options: a bucket (an existing kind or
+    a new one, at a rate), or ratify it exempt on the opt-in/leave bound.
+  - (c) **First-request friction.** `RepeatRequest` charges every notifying acknowledgment and lineage
+    request, because revoke/delete followed by a fresh request erases the evidence of a repeat. A
+    sixth credit in one sitting waits three minutes; a sixth arc, list or series waits two
+    (`ContentCreate`). Alternatives: a looser tier, or the re-request branch only with the bypass
+    accepted.
 
 ---
 
@@ -2072,6 +2129,30 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. **A status change leaves an old cover refusal on screen.** "Moved back to draft." showed beside
        the earlier "This file isn't…" alert, because a transition does not clear the form's error
        list. Cosmetic.
+- [ ] **H33 — WU-ThrottleCoverage browser pass: the throttle messages on both render phases, the reveal paths, and the consent leak fix** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage; no browser was available to it.*
+  - Grid: no cell moved — the throttles and the catch-site fix sit beneath Stage-5 cells (F8–F10, F37,
+    F50, F51, F54, F66), and the only markup-adjacent change is the series page's error text. This item
+    is the pass that confirms them in a real browser. Real limits: `ContentCreate` and `RepeatRequest`
+    refuse the sixth call in a burst, `Vote` and `Reveal` the eleventh.
+  - Steps (each on the circuit, then again on a WASM revisit):
+    1. `/my-lists`: create six lists quickly; the sixth shows "please wait N seconds", not "Something
+       went wrong". Then clone a public list: refused the same way until the bucket refills.
+    2. `/series/new`: the sixth series in a burst shows the wait message (the page used to show a fixed
+       "An unexpected error occurred").
+    3. `/story-lineages`: six requests to another author's stories, the sixth refused; self-owned links
+       never are. `/acknowledgments` (the credits page): request, revoke, request … the sixth request is
+       refused. `psql`: no Pending row was written by a refused call.
+    4. A poll: vote, change, retract eleven times quickly; the eleventh shows the wait message in
+       `PollView`.
+    5. Export: download a story in every format, anonymously and signed in; each still answers 200.
+    6. **The consent leak fix (two browser profiles, both with no `canalave.prefs` cookie):** in A, open an
+       M story's interstitial and press "Always show mature content"; in B, M stories must still be
+       gated and absent from discovery. Repeat with "View this story" in A: B stays gated.
+    7. Signed in: "View this story" on an M story still lands on the story and writes one
+       `user_content_reveals` row; posting the reveal form with a hand-edited `entityType` (say 9) or a
+       missing id redirects normally and writes nothing.
+    8. Optional: an import of seven chapters reproduces tracker **D16** (five committed, then the wait
+       message).
 
 ---
 

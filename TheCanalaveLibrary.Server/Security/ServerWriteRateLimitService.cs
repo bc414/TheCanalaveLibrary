@@ -28,6 +28,13 @@ public sealed class ServerWriteRateLimitService : IWriteRateLimitService, IDispo
         [WriteActionKind.ContentCreate] = BucketOf(tokenLimit: 5, replenishmentSeconds: 120),  // 5 burst, 1 per 2 min
         [WriteActionKind.ImageUpload] = BucketOf(tokenLimit: 10, replenishmentSeconds: 30),    // 10 burst, 1 per 30 s
         [WriteActionKind.VerificationRequest] = BucketOf(tokenLimit: 5, replenishmentSeconds: 120), // 5 burst, 1 per 2 min
+        // Owner ruling D20 (WU-ThrottleCoverage). RepeatRequest is owner-given: "5 burst / 1 per 3 min
+        // or tighter", the report tier. Reveal and Vote are PROVISIONAL — owner to confirm (roadmap
+        // decision row 26): D20 requires a row for each but names no number, so they mirror the most
+        // generous ratified tier (Comment/Message).
+        [WriteActionKind.Reveal] = BucketOf(tokenLimit: 10, replenishmentSeconds: 6),          // 10 burst, 10/min — provisional
+        [WriteActionKind.RepeatRequest] = BucketOf(tokenLimit: 5, replenishmentSeconds: 180),  // 5 burst, 1 per 3 min
+        [WriteActionKind.Vote] = BucketOf(tokenLimit: 10, replenishmentSeconds: 6),            // 10 burst, 10/min — provisional
     };
 
     private readonly IReadOnlyDictionary<WriteActionKind, TokenBucketRateLimiterOptions> _limits;

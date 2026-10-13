@@ -164,8 +164,12 @@ app.MapTagEndpoints();
   WASM API calls fail cleanly.
 - **Read auth is a per-endpoint judgment call, not mechanical.** Public iff the page(s) consuming
   the read are public (mirror the existing page's `[Authorize]`/anonymous status); otherwise
-  `RequireAuthorization()`. Write endpoints additionally take `RequireRateLimiting(...)` per
-  `security.md` "Write Throttling" wherever the underlying service enforces a token bucket.
+  `RequireAuthorization()`. **A write whose service enforces a token bucket takes no
+  `RequireRateLimiting(...)`**: the service bucket already covers both transports, and an edge
+  policy would limit WASM callers twice (corrected WU-ThrottleCoverage, 2026-10-13; this line used
+  to say the opposite while every endpoint's own doc said "no edge policy"). Edge policies are only
+  for plain-HTTP surfaces: the auth window, `TagWrites`, `Unsubscribe`, and the `ImportParse` /
+  `ExportGenerate` concurrency limiters (`security.md` §"HTTP Edge Rate Limiting").
 - **`CancellationToken` parameters are dropped at the client boundary.** A handful of read methods
   (`IManualTreeSearchReadService`, `ITreeSearchReadService`) take a `CancellationToken ct = default`
   for internal query cancellation. Endpoints may bind ASP.NET's own request-aborted token to the
@@ -296,7 +300,7 @@ service layer (audited 2026-07-12):
 | `UnauthorizedAccessException` | 403 (401 if unauthenticated — cookie handler emits it before the service runs) | none |
 | `MessagingPermissionException`, `ContentRatingExceededException` | 403 | `Detail` carries the message |
 | `KeyNotFoundException` | 404 — `Results.Problem(statusCode: 404)` | none |
-| `WriteRateLimitExceededException` | 429 | `Detail` carries the message; `retryAfterSeconds` rides in the `ProblemDetails.Extensions` body (no response header — see `security.md` "Write Throttling") |
+| `WriteRateLimitExceededException` | 429 | `Detail` carries the message; `retryAfterSeconds` and `writeActionKind` (the enum name, since WU-ThrottleCoverage) ride in the `ProblemDetails.Extensions` body (no response header — see `security.md` "Write Throttling"). The client rebuilds the exception, kind included, from the body alone |
 | `InvalidOperationException` | 401 | Auth safety net — reserve this type for the "...requires an authenticated user" guard only; every endpoint calling such a method also carries `RequireAuthorization()`, so the cookie handler's 401 normally wins the race first. `Detail` carries the message. **Caution (MA-123/MA-701):** never reuse this type for an *authenticated-but-forbidden* denial (signed-in non-mod, non-owner) — that's `UnauthorizedAccessException` → 403. **Caution (MA-505/MA-611, 2026-07-18):** never reuse it for an authenticated-but-rejected *business rule* either (self-follow, limit-reached, unowned key, unpinnable story) — that's a `{Feature}ValidationException` → 400 (the 400 row). Moderation once used this type for the non-mod branch and served the wrong status; the Following/Recommendations/Badges/Profiles clusters once used it for business rules and served 401 for what should have been 400. **Client reconstruction (WU-ErrorHandling2, 2026-07-30):** every 401 — this arm and the cookie handler's bare 401 alike — reconstructs client-side as `SessionExpiredException` (Core/Errors), not `InvalidOperationException`; a bare BCL type is not user-facing (`ExceptionPresenter.IsUserFacing` rejects it), which used to surface an expired session as the generic "something went wrong" message (tracker D5). See `error-handling.md` §"The API error envelope" for the full session-vs-authorization distinction. |
 | anything else (unhandled — e.g. the one domain-invariant `NotSupportedException`) | 500 | `AddProblemDetails()` + the `/api`-scoped `ApiExceptionHandler` (`Program.cs`) write a `ProblemDetails` body carrying a `traceId` extension — the client reads it and throws `ServerFaultException(traceId)` instead of the old bare `EnsureSuccessStatusCode()`/`HttpRequestException`, so the on-screen error id is the id of the failing request under both InteractiveServer and the WASM hop (`Activity.Current` is null in WASM). |
 
@@ -331,10 +335,19 @@ that reaches neither `ExecuteAsync` nor an explicit catch is a genuinely unhandl
 `ApiExceptionHandler`/`AddProblemDetails()` pair (`error-handling.md` §"The API error envelope")
 is the backstop, not a substitute for wrapping a read that's known to throw.
 
-**Client side:** detail-extraction is shared (`ClientHttpHelpers.ReadProblemDetailAsync`/
-`ReadRetryAfterSecondsAsync` in `Client/Http/ClientHttpHelpers.cs` — the private `ProblemPayload`
+**Client side:** detail-extraction is shared (`ClientHttpHelpers.ReadProblemDetailAsync` in
+`Client/Http/ClientHttpHelpers.cs` — the private `ProblemPayload`
 record MVC-free deserialization, so no class hand-rolls its own copy; extended with `TraceId` at
-WU-ErrorHandling2 for the 500 row). Exception **construction** stays per-class in each
+WU-ErrorHandling2 for the 500 row and `WriteActionKind` at WU-ThrottleCoverage for the 429 row).
+**The 429 arm is unconditional and needs nothing from the caller** (WU-ThrottleCoverage,
+2026-10-13): it parses the body tolerantly, and when `writeActionKind` names a `WriteActionKind`
+it throws `WriteRateLimitExceededException(kind, retryAfterSeconds ?? 60 s)`; any other 429 — an
+edge limiter's plain-text body (`TagWrites`, `ImportParse`, `ExportGenerate`) or a JSON body with
+no kind — falls to `EnsureSuccessStatusCode()`, an `HttpRequestException` (429). Before it, only
+the three clients that passed the since-retired `rateLimitedAction` argument rebuilt the exception; every
+other throttled write (story, chapter, blog post, poll, group, messaging, verification, avatar)
+showed "Something went wrong on our end" on WASM instead of "wait N seconds". The parameter is
+gone. Exception **construction** stays per-class in each
 `Client{Feature}WriteService`'s own `ThrowIfWriteFailedAsync(HttpResponseMessage)` — the
 `{Feature}ValidationException` constructor shapes differ too much to share (some take `string
 message`, others `List<string>`/`IReadOnlyList<string> errors`) — mirror the

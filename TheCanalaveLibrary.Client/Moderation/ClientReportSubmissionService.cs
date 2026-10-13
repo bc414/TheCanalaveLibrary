@@ -11,9 +11,9 @@ namespace TheCanalaveLibrary.Client;
 /// <para>Status mapping via <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 400 →
 /// <see cref="ModerationValidationException"/> (the allow-set, a duplicate open report — the message
 /// reaches the reporter verbatim); 404 → the target is gone or hidden; 401 →
-/// <see cref="SessionExpiredException"/>; and 429 → <see cref="WriteRateLimitExceededException"/>,
-/// because submission sits behind the <see cref="WriteActionKind.Report"/> throttle — without the
-/// <c>rateLimitedAction</c> argument a 429 would fall through to <c>ServerFaultException</c>.</para>
+/// <see cref="SessionExpiredException"/>; and 429 → <see cref="WriteRateLimitExceededException"/>
+/// (<see cref="WriteActionKind.Report"/>), rebuilt by the shared helper from the body's
+/// <c>writeActionKind</c> extension, as for every throttled write.</para>
 /// </summary>
 public sealed class ClientReportSubmissionService(HttpClient http) : IReportSubmissionService
 {
@@ -24,7 +24,6 @@ public sealed class ClientReportSubmissionService(HttpClient http) : IReportSubm
     {
         HttpResponseMessage response = await http.PostAsJsonAsync("api/moderation/reports", request);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            detail => new ModerationValidationException([detail]),
-            rateLimitedAction: WriteActionKind.Report);
+            detail => new ModerationValidationException([detail]));
     }
 }

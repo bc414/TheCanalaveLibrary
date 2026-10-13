@@ -9,9 +9,16 @@ namespace TheCanalaveLibrary.Server;
 /// §"File Downloads Bypass the Circuit"). No <c>[Authorize]</c>: the anchor navigation carries the
 /// auth cookie, and the read services' content-rating filter is the permission model
 /// ("export = what you can read") — invisible stories yield <c>null</c> → 404.
+/// <para>Both routes carry the <see cref="RateLimitPolicy"/> concurrency limiter (owner ruling D20,
+/// WU-ThrottleCoverage): generating a document is expensive and never commits, so no token bucket
+/// sees it (security.md §"Write Throttling", the cost classes). A rejection is the edge limiters'
+/// plain-text 429, which an anchor download shows as text.</para>
 /// </summary>
 public static class ExportEndpoints
 {
+    /// <summary>The server-wide concurrency limiter on both export downloads (registered in Program.cs).</summary>
+    public const string RateLimitPolicy = "ExportGenerate";
+
     public static void MapExportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/stories/{storyId:int}/export/{format}", async (
@@ -31,7 +38,8 @@ public static class ExportEndpoints
             return result is null
                 ? Results.NotFound()
                 : Results.File(result.Content, result.ContentType, result.FileName);
-        });
+        })
+        .RequireRateLimiting(RateLimitPolicy);
 
         // Per-chapter download (WU45) — same anchor-not-circuit rule, same permission model.
         app.MapGet("/api/stories/{storyId:int}/chapters/{chapterNumber:int}/export/{format}", async (
@@ -51,6 +59,7 @@ public static class ExportEndpoints
             return result is null
                 ? Results.NotFound()
                 : Results.File(result.Content, result.ContentType, result.FileName);
-        });
+        })
+        .RequireRateLimiting(RateLimitPolicy);
     }
 }

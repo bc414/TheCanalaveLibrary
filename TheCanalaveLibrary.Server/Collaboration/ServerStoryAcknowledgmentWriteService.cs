@@ -22,6 +22,7 @@ public class ServerStoryAcknowledgmentWriteService(
     IActiveUserContext activeUser,
     INotificationWriteService notifications,
     IBadgeWriteService badges,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerStoryAcknowledgmentWriteService> logger)
     : ServerStoryAcknowledgmentReadService(readDbFactory, activeUser), IStoryAcknowledgmentWriteService
 {
@@ -62,12 +63,19 @@ public class ServerStoryAcknowledgmentWriteService(
 
         StoryAcknowledgment? existing = await writeDb.StoryAcknowledgments
             .FindAsync(dto.StoryId, dto.AcknowledgedUserId, dto.AcknowledgmentRoleId);
+        if (existing is not null && existing.StatusId != StoryAcknowledgmentStatus.Declined)
+            throw new StoryAcknowledgmentValidationException(
+                ["A credit of this role for this user already exists."]);
+
+        // Owner ruling D20: every request notifies the credited user (there is no self case), so every
+        // request spends a RepeatRequest token — first requests too, because a revoke followed by a
+        // fresh request leaves no trace of the repeat. After validation (what is charged is the
+        // notification, known only here) and BEFORE the tracked mutation below: a refusal must not
+        // leave a dirty row for this circuit's next SaveChanges (security.md §"Write Throttling").
+        rateLimit.EnsureAllowed(WriteActionKind.RepeatRequest, userId);
+
         if (existing is not null)
         {
-            if (existing.StatusId != StoryAcknowledgmentStatus.Declined)
-                throw new StoryAcknowledgmentValidationException(
-                    ["A credit of this role for this user already exists."]);
-
             // Re-request after a prior decline reuses the row (composite PK) rather than
             // duplicate-inserting — see IStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync doc.
             existing.StatusId = StoryAcknowledgmentStatus.Pending;

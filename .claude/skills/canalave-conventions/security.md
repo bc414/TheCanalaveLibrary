@@ -105,36 +105,98 @@ retry-after seconds) when the per-user token bucket for that action kind is exha
 | `Comment` | 10 | 10/min | `ServerCommentWriteService.Post*CommentAsync` (all four contexts) |
 | `Message` | 10 | 10/min | `ServerMessagingWriteService.StartConversationAsync` / `SendMessageAsync` |
 | `Report` | 5 | 1 per 3 min | `ServerModerationWriteService.SubmitReportAsync` (reports only — mod actions never throttled) |
-| `ContentCreate` | 5 | 1 per 2 min | story / chapter / alternate-version / blog-post / group creates, recommendation submit |
+| `ContentCreate` | 5 | 1 per 2 min | story / chapter / alternate-version creates; blog-post creates (profile, group, site); group create; poll creates (site, blog-post); recommendation submit; custom-list create **and clone**, series create, story-arc create (the last three since WU-ThrottleCoverage, 2026-10-13 — owner ruling D20) |
 | `ImageUpload` | 10 | 1 per 30 s | `ImageUploadProcessor` (covers covers + avatars through the one seam) |
 | `VerificationRequest` | 5 | 1 per 2 min | `ServerExternalVerificationWriteService.SubmitAccountForVerificationAsync` / `RequestLinkVerificationAsync` (Feature 53, WU39 — mod approve/reject never throttled) |
+| `Reveal` | 10 | 10/min — **provisional, owner to confirm** (roadmap decision row 26) | `ContentRevealRecorder.RecordAsync` — the signed-in mature-content reveal behind `POST /content-gate/reveal` (D20; WU-ThrottleCoverage) |
+| `RepeatRequest` | 5 | 1 per 3 min (the report tier — D20: "5 burst / 1 per 3 min or tighter") | `ServerStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync` and `ServerStoryLineageWriteService.RequestLineageAsync`, on every request that **notifies** (see the placement exception below) |
+| `Vote` | 10 | 10/min — **provisional, owner to confirm** (roadmap decision row 26) | `ServerPollWriteService.VoteAsync` — every call: a vote, a change and a retraction are one method (D20) |
+
+The two provisional rows mirror the most generous ratified tier (Comment/Message): D20 requires a
+row for each kind but names no number.
 
 **Rules:**
 - The `EnsureAllowed` call goes **immediately after the method's auth guard** (userId is
   non-null there) and before any DB work.
+  - **One exception, `RepeatRequest`** (D20; WU-ThrottleCoverage, 2026-10-13). It is the one kind
+    whose harm is not load: it guards a *notification* — one user reaching a named other user's tray
+    after being told no — and whether a request notifies is known only after validation (a
+    self-owned lineage link auto-approves and notifies nobody). So its call sits on the notifying
+    branch, after validation and **before the first tracked mutation** (never between a mutation and
+    its save: a refused call would leave the dirty entity for the circuit's next `SaveChanges`). A
+    side benefit: failed validation never spends one of the five tokens.
+  - **Why the bucket charges *every* notifying request, first requests included.** D20 allowed a
+    state guard ("one re-request per decline") instead; it does not close the vector.
+    `RevokeAsync` deletes a Declined credit and `DeleteLineageAsync` deletes a Rejected link, both
+    from the UI, so revoke-then-request takes the fresh-insert branch and re-notifies with no
+    evidence of the repeat left. The service cannot tell a first request from a repeat, so it
+    charges both. Consequence the owner may revisit (decision row 26): crediting a sixth
+    collaborator in one sitting waits three minutes.
+  - **`Reveal` has one enforcement point, not one per transport.** The reveal is a full-document
+    form POST (`ContentGateEndpoints`) that the circuit and WASM never reach, so
+    `ContentRevealRecorder` (server-only, scoped) is the whole surface: enum check (no-op), then
+    the bucket, then an existence check on the unfiltered write context (no-op), then the
+    idempotent insert. Invalid input is a silent no-op plus the normal redirect — the endpoint
+    contract ("every consent action ends in a redirect") and `AnonPrefs`' "malformed input →
+    defaults, never throw" doctrine; the redirect is the same either way, so there is no existence
+    oracle. A rejection is a bodied plain-text **429 with a `Retry-After` header** (a document flow
+    like the edge limiters, not a JSON API).
 - **Select by cost, not by write-vs-read** (reframed 2026-07-18, BB-02/MA-309 — matches current
   MS rate-limiting guidance, which drives limiter choice from "the resources used: time, data
   access, CPU, I/O"). Two classes need protection:
   - *Abuse-prone writes* (creates content another user sees, or is unbounded): add an
     `EnsureAllowed` call under an existing kind, or add a kind + limit row above.
-  - *Expensive authenticated operations that never commit* (file parsing, heavy decode): the
-    token bucket never sees them — bound them with an edge **Concurrency Limiter** instead. Live
-    instance: the `"ImportParse"` policy (Program.cs) capping the three import parse routes
-    (Mammoth DOCX / EPUB decompression / AngleSharp DOM walks, up to 20 MB/file).
-- Edits/deletes and bounded toggles are **deliberately unthrottled**: interaction/follow/like
-  toggles (UX-hostile to limit; the 2s client debounce absorbs the frequency), vouches / Hidden
-  Gems (hard count limits already exist), tag writes (mod-only; HTTP policy covers).
-- L5 endpoint contract (live since the Global Flip, 2026-07-13): endpoints translate
-  `WriteRateLimitExceededException` → **429** with `Retry-After`, joining `layer5-wasm.md`'s
-  error-translation table.
+  - *Expensive operations that never commit* (file parsing, heavy decode, document generation):
+    the token bucket never sees them — bound them with an edge **Concurrency Limiter** instead.
+    Two live instances (Program.cs): `"ImportParse"`, capping the three import parse routes
+    (Mammoth DOCX / EPUB decompression / AngleSharp DOM walks, up to 20 MB/file), and
+    `"ExportGenerate"` (D20; WU-ThrottleCoverage), capping the two export downloads (QuestPDF and
+    the EPUB/DOCX writers run synchronously on the request). Both are server-wide and
+    unpartitioned, so they bound anonymous callers too — export stays unauthenticated ("export =
+    what you can read").
+- **Every user-reachable write without a bucket is enumerated below, with its reason** (D20:
+  "the rule was never run against the full surface list"). A new write surface joins the limits
+  table or this enumeration in the WU that adds it.
+- L5 endpoint contract (live since the Global Flip, 2026-07-13): `EndpointHelpers.ExecuteAsync`
+  translates `WriteRateLimitExceededException` → a bodied **429** whose `ProblemDetails` carries
+  the message in `Detail` and two extensions, `retryAfterSeconds` and `writeActionKind`
+  (WU-ThrottleCoverage) — **no `Retry-After` header** (`WriteRateLimitExceededException`'s own
+  doc; `layer5-wasm.md` §"The Error-Translation Contract"). The WASM client rebuilds the exception
+  from the body, so every client service gets the "wait N seconds" message with no per-class
+  wiring. The edge limiters' 429s are the other shape (plain text + `Retry-After`; see below).
 - Tests: `TestAppFactory` registers a pass-through `FakeWriteRateLimitService` by default
   (existing integration tests legitimately hammer write services in loops); throttle-behavior
   tests re-register the real service with a tightened limits table.
 
+### Unthrottled write surfaces — the enumeration (D20; WU-ThrottleCoverage, 2026-10-13)
+
+Each row was classified by reading the method, not by its name (D20 asked for exactly that for the
+admin/mod group, and four by-name classifications turned out wrong). "Bounded" names the bound
+that actually holds.
+
+| Surface | Why no bucket |
+|---|---|
+| **Edits** — `UpdateStoryAsync`, `UpdateChapterContentAsync`, the three blog-post updates, `EditCommentAsync`, `UpdatePollAsync`, `UpdateSeriesAsync`, `UpdateArcAsync`, list rename/visibility, `UpdateGroupAsync`, recommendation `EditAsync`, saved-selection `UpdateAsync`, folder rename/reorder | **Exempt, conditionally (D20).** Sound only once the D20 caps half lands text caps: today a chapter-body edit re-runs sanitize + word count on an uncapped body at exactly a create's cost. If the caps half is descoped, this exemption is **void and an `Edit` kind is required**. Until WU-BoundsAndCaps lands, the exemption stands inside its own void condition — recorded here, not papered over. |
+| **Deletes and removals** — every `Delete*`/`Remove*` (including `RemoveCoverArtAsync`, `RemoveVouchAsync`, reveal `RemoveAsync`), `RevokeAsync`, `DeleteLineageAsync`, `DismissHelpfulPromptAsync`, group `LeaveAsync`, chapter move / set-primary | Removes or reorders the caller's own rows; creates nothing another user sees. |
+| **Silent toggles** — `SetUserStoryInteractionStateAsync`, `SetReadItLaterFromRecommendationAsync`, `MarkStartedAsync`, `MarkCompletedAsync`, the three like toggles (no notification, §6.11), `SetReceiveAlertsAsync`, `SetHighlightedByAuthorAsync` (also capped per story), group `JoinAsync`, list/series membership and reorder, folder assign/unassign, poll close/archive, chapter read marks, messaging mark-read/archive, notification mark-read/settings, `SetOverrideAsync`, recommendation `RecordSuccessAsync` | Idempotent state on the caller's own rows; UX-hostile to limit (the 2 s client debounce absorbs click frequency). `ServerChapterReadMarkWriteService` is **not** buffered (its own doc) — a self-scoped per-chapter / per-story toggle with no fan-out. `RecordSuccessAsync` consumes the caller's one attribution per story; the consumption is the bound. |
+| **Notifying toggles** — `FollowAsync`, `SetHiddenGemAsync` (also capped at `MaxHiddenGemsPerUser`), recommendation `RequestRevisionAsync` / `UnblockAsync`, a profile blog post's publish (the false→true edge re-notifies followers), `ApproveLineageAsync` (Pending → Approved once per request) | The bound is `CreateCoreAsync`'s dedup: at most **one unread** notification per (type, source, related entity) per recipient (`ServerNotificationWriteService`). A toggle loop re-notifies only after the recipient reads the last one. Advisory (sequential callers; D23). This bounds the tray, not the churn. |
+| **Hard-capped** — `VouchAsync` (`MaxVouchesPerUser` = 5, idempotent), Spotlight `RedeemSlotAsync`, badge `SetDisplayOrderAsync`, `EnsureMyVerificationCodeAsync` | `RedeemSlotAsync` is user-facing, not mod-only: the consumed grant is the rate limit, and grants are mod-gated (`ServerSpotlightSlotAllocator`). `SetDisplayOrderAsync` is a self-scoped reorder over owned badges. The verification code is idempotent. |
+| **Story status moves** — `TransitionStatusAsync` (`POST /api/stories/{id}/status`; tracker E7) | Updates one row in place through the transition table and notifies nobody. It never re-stamps `PublishedDate` or `LastUpdatedDate`, so a loop cannot bump the story; a submit/withdraw loop re-stamps one queue row and never adds one. |
+| **Chapter publish** — `SetPublishedAsync` | The new-chapter fan-out fires once per chapter, on the `FirstPublishedDate` stamp, so it is bounded by chapter creates (`ContentCreate`); a republish never re-notifies. |
+| **Group curation** — `AddStoryAsync` | **Flagged, not exempt by ruling (decision row 26 / tracker F23).** Each add of a distinct story notifies every opted-in member (type 60) and the story's author (25), anchored on the new `GroupStory` row (D16), so dedup never merges two adds; an admin's remove + re-add mints a new row and re-notifies. What bounds it today: members opted in (`NotifyForNewStory`) and can leave, and each story can be in a group once. Folder CRUD is group-admin-only structural curation with no notification. |
+| **Saved tag selections** — `CreateAsync`, `UpdateAsync`, `CopyPublicSelectionAsync` | D20: covered by the caps half's per-selection entry cap (pending), not by a bucket. Unlike custom lists (100), **no per-user selection-count cap exists** (tracker D17). |
+| **Server-internal** — the `ServerNotificationWriteService` fan-out, badge `AwardAsync` | Never user-invoked: notification producers are classified at their callers; `AwardAsync` is deliberately unmapped (`BadgeEndpoints`) and runs server-side only. |
+| **Buffered loss-tolerant signals** — reading progress, user activity | In-process buffers keyed per (user, chapter) / per user; a loop overwrites one buffer slot (`layer2-services.md` §"Signal Buffering"). |
+| **View ping** — `RecordViewAsync` (anonymous) | **Ratified unthrottled (D20 sub-ruling).** Views are never sort keys, so inflation cannot distort discovery, and `ViewCountBuffer` is keyed by story id, so a bot loop grows a dictionary bounded by story count, not ping count. Accepted consequence, recorded rather than defended: displayed view counts are inflatable, and authors read them. No IP-partitioned limiter until a proxy-aware client-IP policy exists (Phase 7). |
+| **Content gate, the other two** — anonymous reveal, `/content-gate/mature`, `/refresh-claims` | The anonymous reveal writes only the viewer's own cookie (LRU-capped at 50); the mature flip is a self-scoped setting plus a cookie reissue; refresh is idempotent. |
+| **Moderator/admin-gated** — all of `IModerationWriteService` (including `AssignGroupAdminAsync`, story approve/reject, `SetCanAutoApproveAsync`), EV approve/reject, `SetIntAsync` (`RequireModerator`), tag writes (`RequireModerator` + the `TagWrites` edge policy), Fanon `LinkGroupAsync` / `NotifyNewAuthorsAsync` | Mod actions are never throttled. Confirmed per method. **Fanon's author half** (`AdoptAsync`, `AdoptAllAsync`, `SetDismissedAsync`) is user-facing, not mod-gated: self-scoped to the caller's own stories, no notification; HTTP carries `TagWrites`, the circuit path is unthrottled. |
+| **Self-scoped settings and account** — profile / reader / privacy / author / appearance settings, filter settings, self account deletion | Self-scoped. Avatar upload is covered by `ImageUpload`. |
+| **Import `/resplit`**; **unsubscribe** | `/resplit` re-splits an already-parsed result (bounded by `ImportLimits`, no decode). Unsubscribe carries the `Unsubscribe` edge policy (anonymous, per-IP). The import *commit* loops `CreateChapterAsync` under `ContentCreate`, so an import of more than five chapters partially commits and then refuses (tracker D16). |
+
 ## HTTP Edge Rate Limiting
 
 `AddRateLimiter`/`UseRateLimiter` covers the surfaces that are plain HTTP today and stay
-that way:
+that way. The policy set (Program.cs):
 
 - **Auth form posts** (`POST /Account/*` — login, register, forgot/reset password, resend
   confirmation): global partitioned limiter, **per-IP fixed window 10/min**, `QueueLimit = 0`.
@@ -142,11 +204,23 @@ that way:
   **lockout**, which is per-*account* — the two defend different axes.
 - **Tag write API** (`POST/PUT/DELETE /api/tags*`): named policy `"TagWrites"`, 30/min
   partitioned by authenticated user name (IP fallback).
+- **Unsubscribe** (`/unsubscribe/{token}`): named policy `"Unsubscribe"`, per-IP 20/min — the one
+  anonymous, antiforgery-exempt endpoint group that writes.
+- **Import parse** and **export generation**: the `"ImportParse"` and `"ExportGenerate"`
+  concurrency limiters (4 permits, queue 8, oldest first) — the never-commits cost class above.
+
+**An edge policy never doubles a service bucket.** A write whose service calls `EnsureAllowed`
+takes **no** `RequireRateLimiting(...)`: the bucket already covers both transports, and a second
+limit at the edge would bind WASM callers only. Edge policies are for plain-HTTP surfaces.
 
 **Rules:**
-- Rejections are **429 with a `Retry-After` header and a small plain-text body**. The body is
+- Rejections are **429 with a small plain-text body**, plus a `Retry-After` header when the
+  limiter knows one (the window limiters do; a concurrency limiter has no refill time, so its
+  429 carries none). The body is
   load-bearing: a body-less error response gets re-executed into `/not-found` by
-  `UseStatusCodePagesWithReExecute` (same trap documented in `TagEndpoints.cs`).
+  `UseStatusCodePagesWithReExecute` (same trap documented in `TagEndpoints.cs`). A WASM client
+  service that meets one of these plain-text 429s gets an `HttpRequestException` (429), never a
+  `JsonException` (`ClientHttpHelpers` parses 429 bodies tolerantly).
 - `app.UseRateLimiter()` sits after `UseStaticFiles()` (static assets exempt) and before
   `UseAntiforgery()`.
 - **Per-IP partitioning is meaningless in production until the Phase 7 ForwardedHeaders work

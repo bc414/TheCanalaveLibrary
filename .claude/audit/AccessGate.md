@@ -58,6 +58,16 @@ The model is fully specified outside this file — do not re-derive it here:
   verified bots do not bypass it. The sitemap lists only Public-visibility authors' profile posts.
   Since the review fixes, two more paths follow it: the reveal-management list's post titles, and
   the publish fan-out (a Private author's post notifies nobody).
+- **Consent-endpoint throttling (owner ruling D20's throttle half, answered 2026-08-07; built
+  WU-ThrottleCoverage, 2026-10-13).** The signed-in reveal (`POST /content-gate/reveal`) is a
+  throttled write under the `Reveal` kind, recorded through one server-only class,
+  `ContentRevealRecorder`: an undefined `RevealedEntityType` or a missing target is a silent no-op
+  that still redirects (no existence oracle), then the bucket, then the idempotent insert. A
+  rejection is a plain-text 429 with `Retry-After`. **Exempt, with reasons:** the anonymous reveal
+  writes only the viewer's own cookie (LRU-capped at 50; an undefined type is skipped, never a 500);
+  `/mature` is a self-scoped setting plus a cookie reissue; `/refresh-claims` is idempotent. Rule
+  and limits: `security.md` §"Write Throttling" (the `Reveal` row is provisional — decision row
+  26).
 
 **Open (deferred, tracked elsewhere):**
 - Interstitial *wording* (willingness assertion text) — interim AO3-style copy ships now; final
@@ -170,9 +180,12 @@ interface default members replaced with explicit implementations.
   target is its group; external-login signups verified to already reach `/welcome` via the
   confirm-email flow (no change needed); Phase-7 checklist lines added (`middle_plan_v2.md`);
   WU-AccountEnforcement pointer added (`workplan.md`).
-- **Deliberately deferred, recorded:** rate limiting on consent endpoints (cheap, self-scoped;
-  revisit on abuse); spotlight non-M pool floor (operational; a site-settings knob if it bites);
-  series derived rating (ruled: public metadata).
+- **Deliberately deferred, recorded:** ~~rate limiting on consent endpoints (cheap, self-scoped;
+  revisit on abuse)~~ — **resolved by owner ruling D20 (answered 2026-08-07; built
+  WU-ThrottleCoverage, 2026-10-13):** the signed-in reveal is throttled under the new `Reveal` kind
+  and gains enum and existence validation; the anonymous reveal, `/mature` and `/refresh-claims`
+  are ratified exempt (see the Settled-later bullet); spotlight non-M pool floor (operational; a
+  site-settings knob if it bites); series derived rating (ruled: public metadata).
 
 **How verified:** Integration (`StoryVisibilityTests`: hidden-status invisibility + author
 self-visibility + mod-queue bypass + listings exclusion + disclosure exclusion + personalScope
@@ -322,3 +335,43 @@ RazorComponents (+8).
 Mature-off is a cookie claim refreshed by the settings save (`RefreshSignInAsync`). A `psql` flip
 leaves the claim stale; a raise during that window succeeded, which is by design and was a test
 artifact.
+
+### Stage 5 — WU-ThrottleCoverage: consent-endpoint throttling (owner ruling D20) + a shared-default consent leak fixed (2026-10-13) — no flip
+
+All F66 cells stay 5. Built per the Settled-later bullet "Consent-endpoint throttling":
+- **The signed-in reveal** (`POST /content-gate/reveal`) records through the new server-only
+  `ContentRevealRecorder` (`Server/ContentGate/`, scoped, registered beside `IContentRevealService` and
+  deliberately not in the Client). Order: an undefined `RevealedEntityType` is a no-op; the `Reveal`
+  bucket (provisional 10 burst / 10 per min, decision row 26 (a)); an existence check against the
+  unfiltered write context (Story → `Stories`, Group → `Groups`, BlogPost → `ProfileBlogPosts`, the
+  `GetMyRevealsAsync` mapping — a group post reveals its group), where a missing target is a no-op; then
+  the idempotent insert. Before this WU the endpoint inserted any `(type, id)` pair with no check at all
+  (service audit §2.5's reveal row; the reveal-list title lookup had been compensating since
+  WU-AccessGateSweep2). Every no-op still redirects, so the response is no existence oracle. A refused
+  reveal answers a plain-text 429 with `Retry-After` — the edge limiters' document-flow shape, not
+  `ProblemDetails`.
+- **The anonymous reveal** skips an undefined type instead of throwing: `AnonPrefs.ListFor` threw
+  `ArgumentOutOfRangeException` on one, a 500 from form input, against the class's own "never throw on
+  request input" contract.
+- **Found while building it, and fixed — a cross-viewer consent leak.** `AnonPrefs.Read` returned one
+  static `Empty` instance for every request with no (or a malformed) prefs cookie, and both consent
+  endpoints mutate what `Read` returns before re-appending it. So the first cookieless visitor to press
+  "Always show mature content" set `Mature = true` on the shared instance, and from then until the
+  process restarted every cookieless visitor — crawlers included — read `ShowMatureContent = true`
+  through `ServerActiveUserContext`: M content in discovery, group audience widened. "View this story"
+  leaked the same way, item by item. A tester never sees it, because their own browser holds the
+  cookie after the first click. `Read` now returns a fresh instance on every path and the static is
+  gone; `ServerActiveUserContext`'s no-HttpContext fallback builds its own. While there, a cookie that
+  sets a list to `null` parses to an empty list rather than throwing on the viewer's every page. The
+  rule is in `identity-and-authorization.md` §"Viewer Consent State".
+- **Exempt, with reasons** (`security.md`'s enumeration): the anonymous reveal, `/mature`,
+  `/refresh-claims`. Tracker E6's clause 1 is resolved; its other three clauses are untouched.
+
+**How verified:** Integration `WriteThrottleTests` — `Reveals_ThrottleUnderReveal_AndSkipUndefinedOrMissingTargets`
+(undefined types spend nothing, a missing target spends a token and writes no row, the fourth call is
+refused) and `Reveals_MapEachTypeToItsOwnTable_AGroupPostIsNoProfilePost`. Unit `AnonPrefsTests` (5):
+a cookieless or malformed request gets its own instance, another viewer's context stays mature-off, a
+nulled list parses. Mutation-checked: restoring a shared default fails two of them; routing BlogPost
+reveals to `BlogPosts` fails the mapping test. **Not automated, by design:** the endpoint itself (the
+anonymous enum guard, the 429 shape) — a test of the form POST needs antiforgery plumbing no test has;
+it is a code-review item here and a step in tracker H33's browser pass. No browser pass was run.

@@ -81,6 +81,42 @@ public class SeriesCreateEditPageTests : BunitContext
 
         AccessibleNameAssertions.AllFieldsHaveAccessibleNames(cut);
     }
+
+    /// <summary>
+    /// WU-ThrottleCoverage (2026-10-13): series create spends a <c>ContentCreate</c> token (owner ruling
+    /// D20), and the page's catch-all used to answer every non-validation failure with a fixed "An
+    /// unexpected error occurred" — so a throttled author was never told to wait. The catch now follows
+    /// the <c>ExceptionPresenter</c> catch-site pattern.
+    /// </summary>
+    [Fact]
+    public void Create_Throttled_ShowsTheWaitMessage_NotTheGenericError()
+    {
+        _seriesService.CreateException =
+            new WriteRateLimitExceededException(WriteActionKind.ContentCreate, TimeSpan.FromSeconds(90));
+        IRenderedComponent<SeriesCreateEditPage> cut = Render<SeriesCreateEditPage>(p => p
+            .Add(c => c.SeriesId, (int?)null));
+
+        cut.Find("#series-name").Change("Fresh Series");
+        cut.Find("button[type=button]").Click();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("please wait 90 seconds"));
+        cut.Markup.Should().NotContain("An unexpected error occurred");
+        _seriesService.CreateCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void Create_AnUnexpectedFailure_ShowsTheGenericMessage()
+    {
+        _seriesService.CreateException = new NotSupportedException("developer text");
+        IRenderedComponent<SeriesCreateEditPage> cut = Render<SeriesCreateEditPage>(p => p
+            .Add(c => c.SeriesId, (int?)null));
+
+        cut.Find("#series-name").Change("Fresh Series");
+        cut.Find("button[type=button]").Click();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain(ExceptionPresenter.GenericMessage));
+        cut.Markup.Should().NotContain("developer text");
+    }
 }
 
 // ── Fakes ────────────────────────────────────────────────────────────────────────────────────
@@ -88,6 +124,11 @@ public class SeriesCreateEditPageTests : BunitContext
 internal sealed class FakeSeriesWriteService : ISeriesWriteService
 {
     public Dictionary<int, SeriesDetailDto> Series { get; } = [];
+
+    /// <summary>When set, <see cref="CreateSeriesAsync"/> throws it (WU-ThrottleCoverage).</summary>
+    public Exception? CreateException { get; set; }
+
+    public int CreateCalls { get; private set; }
 
     public Task<SeriesDetailDto?> GetSeriesByIdAsync(int seriesId) =>
         Task.FromResult(Series.GetValueOrDefault(seriesId));
@@ -98,7 +139,11 @@ internal sealed class FakeSeriesWriteService : ISeriesWriteService
     public Task<IReadOnlyList<StorySeriesMembershipDto>> GetMembershipsForStoryAsync(int storyId) =>
         Task.FromResult<IReadOnlyList<StorySeriesMembershipDto>>([]);
 
-    public Task<int> CreateSeriesAsync(CreateSeriesDto dto) => Task.FromResult(1);
+    public Task<int> CreateSeriesAsync(CreateSeriesDto dto)
+    {
+        CreateCalls++;
+        return CreateException is null ? Task.FromResult(1) : Task.FromException<int>(CreateException);
+    }
     public Task UpdateSeriesAsync(UpdateSeriesDto dto) => Task.CompletedTask;
     public Task DeleteSeriesAsync(int seriesId) => Task.CompletedTask;
     public Task AddStoryAsync(int seriesId, int storyId) => Task.CompletedTask;

@@ -2,6 +2,9 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -210,5 +213,44 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
         HttpResponseMessage response = await client.GetAsync("/api/stories/999999999/export/pdf");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    // ── Concurrency limiters (owner ruling D20, WU-ThrottleCoverage 2026-10-13) ──────────────────
+    // Expensive work that never commits is bounded at the edge, not by a token bucket (security.md
+    // §"Write Throttling", the cost classes). These pin the wiring by endpoint metadata: a behavioural
+    // test of a concurrency limiter would have to hold several requests open at once and race them,
+    // which is timing-dependent, so it is deliberately not attempted.
+
+    [Theory]
+    [InlineData("/api/stories/{storyId:int}/export/{format}")]
+    [InlineData("/api/stories/{storyId:int}/chapters/{chapterNumber:int}/export/{format}")]
+    public void ExportRoutes_CarryTheExportGenerateLimiter(string route)
+    {
+        RoutePolicyFor(route).Should().Be(ExportEndpoints.RateLimitPolicy).And.Be("ExportGenerate");
+    }
+
+    [Theory]
+    [InlineData("/api/content-import/single")]
+    [InlineData("/api/content-import/document")]
+    [InlineData("/api/content-import/epub")]
+    public void ImportParseRoutes_CarryTheImportParseLimiter(string route)
+    {
+        // The precedent ExportGenerate mirrors; untested before this WU.
+        RoutePolicyFor(route).Should().Be("ImportParse");
+    }
+
+    [Fact]
+    public void ImportResplit_CarriesNoLimiter()
+    {
+        // Bounded by ImportLimits and decodes no file (security.md's enumeration).
+        RoutePolicyFor("/api/content-import/resplit").Should().BeNull();
+    }
+
+    private string? RoutePolicyFor(string route)
+    {
+        EndpointDataSource endpoints = Factory.Services.GetRequiredService<EndpointDataSource>();
+        RouteEndpoint endpoint = endpoints.Endpoints.OfType<RouteEndpoint>()
+            .Single(e => e.RoutePattern.RawText == route);
+        return endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
     }
 }

@@ -24,6 +24,12 @@ public interface IStoryLineageWriteService : IStoryLineageReadService
     /// <c>(SourceStoryId, TargetStoryId, RelationshipTypeId)</c> — a prior
     /// <see cref="StoryLineageStatus.Rejected"/> row for the same triple is updated back to
     /// Pending/Approved (per the auto-approve rule above), not duplicate-inserted.</para>
+    ///
+    /// <para><b>Throttle (owner ruling D20):</b> a request that would notify the target's author
+    /// throws <see cref="WriteRateLimitExceededException"/> (<see cref="WriteActionKind.RepeatRequest"/>)
+    /// when the caller's bucket is empty — first requests included, since a deleted Rejected link
+    /// leaves no trace of a repeat. Checked after validation; a self-owned link never spends a
+    /// token.</para>
     /// </summary>
     Task RequestLineageAsync(CreateStoryLineageDto dto);
 
@@ -39,8 +45,11 @@ public interface IStoryLineageWriteService : IStoryLineageReadService
 
     /// <summary>
     /// Rejects a Pending request (kept as a <see cref="StoryLineageStatus.Rejected"/> row, not
-    /// deleted — prevents immediate re-request spam and preserves an audit trail). Caller must own
-    /// the <b>target</b> story. No notification (silent rejection, matching the moderation model).
+    /// deleted — an audit trail, and a later re-request reuses the composite key). The row is not a
+    /// spam guard (the source author can delete it and ask again); re-request notification spam is
+    /// bounded by <see cref="RequestLineageAsync"/>'s <see cref="WriteActionKind.RepeatRequest"/>
+    /// bucket (owner ruling D20). Caller must own the <b>target</b> story. No notification (silent
+    /// rejection, matching the moderation model).
     /// </summary>
     Task RejectLineageAsync(int sourceStoryId, int targetStoryId, short typeId);
 

@@ -27,8 +27,8 @@ namespace TheCanalaveLibrary.Server;
 /// (<c>ServerSeriesWriteService.RequireAuthenticatedUser</c>), and membership/edit/delete
 /// mutations additionally enforce ownership via <c>UnauthorizedAccessException</c>, translated to
 /// 403 by <see cref="EndpointHelpers.ExecuteAsync"/>. No <c>RequireRateLimiting(...)</c> —
-/// unlike Tags, <see cref="ServerSeriesWriteService"/> doesn't call an
-/// <c>IWriteRateLimitService</c> token bucket.
+/// <c>CreateSeriesAsync</c> is throttled in the service (<c>WriteActionKind.ContentCreate</c>, owner
+/// ruling D20), which covers both transports; an edge policy would limit WASM callers twice.
 /// </para>
 /// </summary>
 public static class SeriesEndpoints

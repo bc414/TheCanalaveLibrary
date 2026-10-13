@@ -27,6 +27,7 @@ public class ServerStoryLineageWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     INotificationWriteService notifications,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerStoryLineageWriteService> logger)
     : ServerStoryLineageReadService(readDbFactory, activeUser), IStoryLineageWriteService
 {
@@ -84,14 +85,25 @@ public class ServerStoryLineageWriteService(
             throw new StoryLineageValidationException(["The selected lineage type is not valid."]);
 
         bool selfOwned = target.AuthorId == userId;
+        // The same condition as the notification below: a self-owned link auto-approves, and an
+        // authorless target has nobody to tell.
+        bool notifies = !selfOwned && target.AuthorId is not null;
 
         StoryLineage? existing = await writeDb.StoryLineages.FindAsync(dto.SourceStoryId, dto.TargetStoryId, dto.TypeId);
+        if (existing is not null && existing.StatusId != StoryLineageStatus.Rejected)
+            throw new StoryLineageValidationException(
+                ["A lineage link of this type to this story already exists."]);
+
+        // Owner ruling D20: a request that notifies the target's author spends a RepeatRequest token —
+        // a first request too, because deleting a Rejected link and asking again leaves no trace of
+        // the repeat. Self-owned links never draw the bucket. After validation (what is charged is the
+        // notification, known only here) and BEFORE the tracked mutation below: a refusal must not
+        // leave a dirty row for this circuit's next SaveChanges (security.md §"Write Throttling").
+        if (notifies)
+            rateLimit.EnsureAllowed(WriteActionKind.RepeatRequest, userId);
+
         if (existing is not null)
         {
-            if (existing.StatusId != StoryLineageStatus.Rejected)
-                throw new StoryLineageValidationException(
-                    ["A lineage link of this type to this story already exists."]);
-
             // Re-request after a prior rejection reuses the row (composite PK) rather than
             // duplicate-inserting — see IStoryLineageWriteService.RequestLineageAsync doc.
             existing.StatusId = selfOwned ? StoryLineageStatus.Approved : StoryLineageStatus.Pending;
@@ -112,7 +124,7 @@ public class ServerStoryLineageWriteService(
         await writeDb.SaveChangesAsync();
 
         // Best-effort post-commit — never let a notification failure roll back the primary action.
-        if (!selfOwned && target.AuthorId is int targetAuthorId)
+        if (notifies && target.AuthorId is int targetAuthorId)
         {
             try
             {
@@ -190,8 +202,11 @@ public class ServerStoryLineageWriteService(
         // genuine Approved→Rejected transition, never a Pending→Rejected one (never counted).
         bool wasApproved = link.StatusId == StoryLineageStatus.Approved;
 
-        // Kept as a Rejected row (not deleted) — prevents immediate re-request spam and preserves
-        // an audit trail. No notification (silent rejection, matching the moderation model).
+        // Kept as a Rejected row (not deleted) for the audit trail and so a later re-request reuses
+        // the composite key. The row is NOT a spam guard: the source author can delete it and ask
+        // again. Re-request notification spam is bounded by the RepeatRequest bucket in
+        // RequestLineageAsync (owner ruling D20). No notification (silent rejection, matching the
+        // moderation model).
         link.StatusId = StoryLineageStatus.Rejected;
         await writeDb.SaveChangesAsync();
 

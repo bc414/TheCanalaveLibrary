@@ -14,12 +14,14 @@ namespace TheCanalaveLibrary.Server;
 public class ServerStoryArcWriteService(
     ApplicationDbContext writeDb,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
-    IActiveUserContext activeUser)
+    IActiveUserContext activeUser,
+    IWriteRateLimitService rateLimit)
     : ServerStoryArcReadService(readDbFactory, activeUser), IStoryArcWriteService
 {
     public async Task<int> CreateArcAsync(CreateStoryArcDto dto)
     {
         int userId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         // Write-context lookups see ground truth (no named query filters on ApplicationDbContext).
         Story? story = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);

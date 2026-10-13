@@ -55,10 +55,29 @@ read-only snapshot; this note is the authoritative record of the resolution.
   notifications on add** — filing a story into a personal list is silent, deliberately unlike
   `GroupStory` adds (part of the feature's appeal vs. solo groups).
 - **`ListName` max length 256** (keeps the existing schema; the design log's 100 is superseded).
-- **Rate limiting:** none — matches Saved Tag Selections (the closest precedent); creates are
-  bounded by the 100-list cap.
+- ~~**Rate limiting:** none — matches Saved Tag Selections (the closest precedent); creates are
+  bounded by the 100-list cap.~~ **Superseded by owner ruling D20 (worksheet, answered
+  2026-08-07; built WU-ThrottleCoverage, 2026-10-13):** custom-list create is wired to the existing
+  `ContentCreate` bucket, and `CloneListAsync` with it (a clone is a list create, gated by the same
+  cap). The cap still applies; the bucket bounds the rate. An owner decision overriding a settled
+  note, not a Stage-4 event. Rule: `security.md` §"Write Throttling". (The old precedent was also
+  wrong on its own terms: Saved Tag Selections have no per-user count cap — tracker D17.)
 
 ## Feature 51 — Custom Lists
+
+**WU-ThrottleCoverage Stage note (2026-10-13) — no flip (owner ruling D20, which supersedes the
+"Rate limiting: none" settled note above):** `CreateListAsync` and `CloneListAsync` call
+`EnsureAllowed(ContentCreate)` right after the auth guard (a clone is a list create, gated by the
+same 100-list cap). Rename, visibility, delete and entry add/remove stay unthrottled (`security.md`'s
+enumeration: edits are exempt conditionally on D20's caps half; the rest are owner-scoped toggles and
+deletes). `ICustomListWriteService`'s doc no longer claims "no rate limiting … matching Saved Tag
+Selections" — which was wrong twice over, since Saved Tag Selections have no count cap (tracker D17).
+The WASM client needed no change: every client service now rebuilds the throttle exception from the
+429 body. **Verified by:** Integration `WriteThrottleTests.CustomListCreates_ThrottleUnderContentCreate`
+and `CustomListClones_SpendTheSameContentCreateBucket`; Unit `WriteThrottleWireContractTests`
+(`CreateListAsync`/`CloneListAsync` over a canned 429). The existing UI catch sites (`MyListsPage`,
+`AddToCustomListMenuInner`, `CustomListPage`'s clone) already route the refusal through
+`ExceptionPresenter`, so they show "wait N seconds". No browser pass was run (tracker H33).
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
@@ -74,7 +93,7 @@ pre-existing in-flight finding):
   Sound; migration-verified; unchanged by the settled design (zero migration). Entities moved
   `Core/Models/` → `Core/CustomLists/` (legacy-folder retirement — no model change, verified by
   clean build + green Integration tier against the real migration).
-- **L2 — Stage 5** (shared auth guard since WU-ModerationIntegrity, 2026-09-30). `ICustomListReadService`/`ICustomListWriteService` +
+- **L2 — Stage 5** (shared auth guard since WU-ModerationIntegrity, 2026-09-30; create and clone spend a `ContentCreate` token since WU-ThrottleCoverage, 2026-10-13 — see its Stage note above). `ICustomListReadService`/`ICustomListWriteService` +
   `ServerCustomList{Read,Write}Service` (`Server/CustomLists/`), SavedTagSelections-shaped
   (both-interfaces DI registration). Covered by the **Integration** tier
   (`CustomListServiceTests`, ~28 tests): CRUD + owner-gating, case-insensitive duplicate-name,

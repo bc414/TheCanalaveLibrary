@@ -17,18 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-BlobCleanup (2026-10-13) — worksheet D14, both halves, plus its review fixes.
-  **Blob cleanup has two owners:** an inline post-commit delete at account deletion (the avatar) and the
-  moderation hard delete (the story cover), plus a daily `ImageOrphanSweeper` backstop (unfiltered
-  reference read, 24 h grace, a dry run at each start and the first real cycle an hour later, 100-delete
-  cap, store → DB only, generated keys only, kill switch); `IImageStorageService` gained
-  `EnumerateAsync`. **Cover upload persists its own reference:** `CoverArtRelativeUrl` left the write
-  DTOs, `RemoveCoverArtAsync` is new, the editor uploads on pick, and its cover, save and status writes
-  never overlap. No migration. F4 and F52 L4.5 went 5→1 with no browser, and its browser pass the same
-  day returned both to 5 (H31 and H3 closed, polish **H32** filed). The pass fixed one runtime bug:
-  `wwwroot/uploads/` was a build asset, so a swept upload's URL kept answering 200. Filed: **F22** →
-  **decision row 25** (covers kept on a deleted user's stories). `dotnet test`: Unit 1,235,
-  RazorComponents 811, Integration 1,540. **Pointer:** its DONE entry.
+- **Last landed:** WU-ThrottleCoverage (2026-10-13) — worksheet D20's throttle-coverage half only.
+  Three new kinds — `Reveal` (the signed-in reveal, now validated, through `ContentRevealRecorder`),
+  `RepeatRequest` (every acknowledgment/lineage request that notifies), `Vote` — plus `ContentCreate` on
+  list create/clone, series and arc creates, an `ExportGenerate` limiter, and `security.md`'s
+  enumeration of every unthrottled write with its reason (edits exempt only conditionally; the view
+  ping ratified). Found and fixed: the WASM client showed "something went wrong" for every throttle but
+  three (the 429 now names its kind), and **`AnonPrefs` shared one mutable default, so one cookieless
+  visitor's mature/reveal consent leaked to every later one**. Not built: D20's caps half and §2.11
+  (tracker D14). Filed: **decision row 26** (provisional `Vote`/`Reveal` numbers, group story-add,
+  first-request friction; tracker F23), **D16/D17**, browser pass **H33**; E7 closed. No cell flips.
+  `dotnet test`: Unit 1,258, RazorComponents 813, Integration 1,557. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-BlobCleanup — worksheet D14 (inline post-commit blob deletes plus a daily orphan sweep, cover upload persists its own reference; F22/row 25 filed, H31/H3 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
@@ -243,7 +243,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13); **WU-ThrottleCoverage** is next in the campaign's build order.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13); **WU-AuthorStoryDelete** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -258,8 +258,8 @@ references it, does not restate it.
   exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed, and
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
-  drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
-  WU-ThrottleCoverage; D6 was routed to WU-ModerationIntegrity, which left it open (a rejection files
+  drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 was closed by
+  WU-ThrottleCoverage, 2026-10-13; D6 was routed to WU-ModerationIntegrity, which left it open (a rejection files
   no `Report` row, so D8(b) does not cover it); **F10/H13** opened by WU-AccessGateSweep2,
   2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
   2026-09-30, which closed B20–B22 (its browser pass closed H14 the same day); **D9/H15** opened by the WU-StoryLifecycle browser pass,
@@ -272,7 +272,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**)),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -280,7 +280,7 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–25** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–26** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -291,7 +291,8 @@ references it, does not restate it.
   added the same day by the WU-UserDeletion review fixes; 24 — whether a poll's anonymity mode is
   frozen by the database like its vote mode — added the same day by WU-PollVoteIntegrity; 25 — whether
   account deletion strips the covers of the user's surviving stories — added the same day by
-  WU-BlobCleanup). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  WU-BlobCleanup; 26 — three follow-ups of D20's throttle half (the provisional `Vote`/`Reveal` numbers,
+  group story-add, first-request friction) — added the same day by WU-ThrottleCoverage). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -302,7 +303,9 @@ references it, does not restate it.
   blog-post page and delete paths, ran 2026-09-30 too, returned F36 L4.5 to 5 and closed — see
   WU-TptHardDelete's DONE entry. Tracker **H23**'s pass, WU-CounterSymmetry's badge display, ran
   2026-09-30 too and returned F50 L4.5 to 5; H23 stays open only for Brian's keep-or-revert call on
-  the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry.)
+  the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry. Tracker **H33**, WU-ThrottleCoverage's
+  browser pass — the throttle messages on both render phases and the two-profile check of the consent
+  leak fix — is owed; no browser was available to that WU.)
 
 ---
 
@@ -452,6 +455,77 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-ThrottleCoverage — the throttle-coverage enumeration: three new write kinds, `ContentCreate` wired to lists/series/arcs, an `ExportGenerate` limiter, every unthrottled surface named with its reason, and the WASM 429 rebuilt from the wire (worksheet D20, throttle half only; service audit §2.5's throttle rows, §2.8's re-request bullet, §4's lineage-reject comments; extends `Security/`, `ContentGate/`, `BlogPosts/`, `Collaboration/`, `Stories/`, `Series/`, `CustomLists/`, `Export/`, `Client/Http/`) — DONE ✓ (2026-10-13)
+
+- **Cells:** none flipped. Built beneath Stage-5 cells: F8 L2, F9 L2/L3-Logic, F10 L2, F37 L2, F50 L2,
+  F51 L2, F54 L2, F63 L2, F66 (all), plus the cross-cutting client 429 arm (every Client* write
+  service's L5 leg). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+- **Trigger:** worksheet D20's throttle-coverage half (answered 2026-08-07) and its spec
+  `wu-specs/WU-ThrottleCoverage.md`, with the amendment (a third `rateLimitedAction` caller,
+  `ClientReportSubmissionService`). Routed here by earlier WUs: tracker **E7** (story status moves),
+  **E6** clause 1 (consent throttling), the InertFeatures endpoints, `RemoveCoverArtAsync`.
+- **What landed:**
+  1. **Kinds:** `Reveal`, `RepeatRequest` (5 burst, 1 per 3 min — owner-given), `Vote`, appended to
+     `WriteActionKind` with `DefaultLimits` rows; `Vote`/`Reveal` at 10/10 per min are **provisional**
+     (decision row 26 (a)).
+  2. **Call sites:** `ContentCreate` in `CreateListAsync`, `CloneListAsync`, `CreateSeriesAsync`,
+     `CreateArcAsync`; `Vote` in `VoteAsync` (every call); `RepeatRequest` in
+     `RequestAcknowledgmentAsync` (every request) and `RequestLineageAsync` (only when it notifies),
+     placed after validation and before the tracked mutation — `security.md`'s placement exception.
+  3. **Reveal:** new server-only `ContentRevealRecorder` (enum check → bucket → unfiltered existence
+     check → idempotent insert; no-ops still redirect); the endpoint answers a refusal with a plain-text
+     429 + `Retry-After`; the anonymous branch skips an undefined type (was a 500).
+  4. **`ExportGenerate`** concurrency limiter (mirrors `ImportParse`) on both export routes.
+  5. **WASM leg (found by the spec, decision-free):** the 429 `ProblemDetails` carries
+     `writeActionKind`; `ClientHttpHelpers`' 429 arm is unconditional and tolerant (a plain-text edge
+     429 is an `HttpRequestException`, no longer a `JsonException`); `rateLimitedAction` and
+     `ReadRetryAfterSecondsAsync` retired (registered in `check-doc-hygiene.ps1`). Before, only three
+     clients showed "wait N seconds"; every other throttled write showed the generic error on WASM.
+  6. **Found while building, fixed — a cross-viewer consent leak (F66):** `AnonPrefs.Read` returned one
+     shared static instance for cookieless requests and the consent endpoints mutate it, so one visitor's
+     "Always show mature content" or "View this story" applied to every later cookieless visitor until
+     restart. `Read` now returns a fresh instance; a nulled cookie list parses to empty.
+  7. **`SeriesCreateEditPage`'s catch-all** used a fixed "unexpected error" string; it now follows the
+     `ExceptionPresenter` catch-site pattern, so the create throttle reads as a wait.
+  8. **Comments:** the lineage-reject "spam guard" claim (service + interface), the list interface's
+     "no rate limiting", the series/arc/lineage endpoint docs, `ContentImportEndpoints`' dead citation,
+     the `Program.cs` policy-set header, interface `throws` docs.
+  9. **Docs:** moment 1 — `security.md` §"Write Throttling" (limits rows, the placement exception, the
+     cost classes with `ExportGenerate`, the **unthrottled-surface enumeration** incl. the conditional
+     edit exemption and the view-ping ratification, the 429 contract corrected: no `Retry-After` header
+     on service throttles) and §"HTTP Edge Rate Limiting" (the full policy set; an edge policy never
+     doubles a bucket); `layer5-wasm.md` (its "write endpoints take `RequireRateLimiting`" rule was the
+     opposite of practice; the 429 row; the client arm); audit Settled notes (CustomLists' "no rate
+     limiting" superseded, AccessGate's deferral resolved, Stories F45 view ping); roadmap Resolved D20
+     (throttle half), **decision row 26**; tracker D16/D17/F23, E6 and D14 annotated; the worksheet
+     Built line. Moment 2 — `identity-and-authorization.md` (prefs parse is the caller's instance),
+     `testing.md` (throttle tests prove placement; limiters pinned by metadata), `layer2-services.md`
+     (the report client's 429). Moment 3 — Stage notes + headlines (Stories F8/F9/F10/F45, Badges F50,
+     CustomLists F51, BlogPosts F37, AccessGate F66, Export F54, Import F63, a Moderation annotation),
+     service audit §2.5/§2.8/§2.11/§4 annotated, tracker E7 closed, **H33** filed.
+- **Left alone:** D20's bounds/caps half and the **§2.11** reading-progress clamp (D20's own "Still
+  open"; the task text named §2.11 as a source, but the owner's text outranks it — ledger home tracker
+  **D14**, annotated); the `Edit` kind (owed only if the caps half is descoped); the import commit past
+  five chapters (tracker **D16**, a design choice); saved selections' missing count cap (**D17**);
+  group story-add's fan-out (flagged, not exempted — decision row 26 (b), tracker **F23**); a
+  `RepeatRequest` charge on first requests is the build's reading (row 26 (c)); D20's registration-side
+  throttles (still open); E6's clauses 2–4. The recorder keeps the endpoint's check-then-insert, so a
+  double-click race can still 500 (tracker D11's class).
+- **Verification:** build 0 errors, no new warnings in touched files (the three pre-existing C#
+  warnings only); **Unit 1,258** (+23: `WriteThrottleWireContractTests` 18, `AnonPrefsTests` 5; one
+  `ModerationIntegrityClientTests` body updated to the wire's real shape), **RazorComponents 813** (+2:
+  `SeriesCreateEditPageTests`), **Integration 1,557** (+17: `WriteThrottleTests` 11 — lists, clone,
+  series, arcs, the revoke/re-request cycle, validation spends nothing, no dirty row after a refusal,
+  lineage only-when-notifying, votes incl. retraction, reveals, the reveal type mapping;
+  `ExportServiceTests` 6 — the `ExportGenerate`/`ImportParse` metadata and `/resplit`'s absence), all
+  green. Mutation-checked, each failing its test: the client's pre-WU 429 fall-through (17 of 18 wire
+  tests), a shared `AnonPrefs` default, the acknowledgment call moved after the mutation, self-owned
+  lineage links charged, BlogPost reveals routed to `BlogPosts`. check-doc-hygiene (21 terms),
+  check-design-tokens, check-render-modes and check-a11y pass. No browser was available: tracker
+  **H33** holds the pass. No migration; no `status.md` cell changed.
+- **Pointers:** `security.md` §"Write Throttling"; decision row 26; tracker D14, D16, D17, E6, E7, F23,
+  H33; the Stage notes above.
 
 ## WU-BlobCleanup — blob cleanup owned twice (an inline post-commit delete at every terminal deletion path, a daily orphan sweep as the backstop) and cover upload persisting its own reference (worksheet D14, both halves; service audit §3.16 and §2.12; extends `Images/`, `Stories/`, `Moderation/`, `Identity/`) — DONE ✓ (2026-10-13)
 

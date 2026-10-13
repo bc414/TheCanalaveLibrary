@@ -227,6 +227,14 @@ started at `groups_joined` 1, a member of the standard group only.
 
 ## Feature 39 — Group Content & Folders
 
+**Open for the owner — group story-add throttling (WU-ThrottleCoverage, 2026-10-13; decision row 26
+(b), tracker F23).** D20's throttle half requires every unthrottled write to be named with its reason.
+`AddStoryAsync` could not honestly be called exempt: with the D16 anchor below, each add of a distinct
+story notifies every opted-in member, and an admin's remove + re-add mints a new `GroupStory` row, so
+dedup never merges two adds. It stays unthrottled (no code change) and is listed as *flagged* in
+`security.md`'s enumeration until the owner rules. Folder CRUD is listed exempt (group-admin-only,
+no notification). No cell moves.
+
 **Settled — group-story notifications (owner ruling D16, answered 2026-08-07, consumed
 WU-InertFeatures 2026-09-30; do not revisit).** `NewGroupStory` (60) and `YourStoryAddedToGroup` (25)
 both carry the **`GroupStory` junction row's id** — not the group id (which could never name the story,

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using TheCanalaveLibrary.Core;
 
@@ -33,20 +32,20 @@ internal static class ClientHttpHelpers
     /// "…requires an authenticated user" arm both land here — a session signal, not an
     /// authorization denial; error-handling.md §"The API error envelope"); 403 →
     /// <see cref="UnauthorizedAccessException"/>; 404 → <see cref="KeyNotFoundException"/>; 429 →
-    /// <see cref="WriteRateLimitExceededException"/> reconstruction when
-    /// <paramref name="rateLimitedAction"/> is set (write surfaces behind the write throttle —
-    /// security.md); anything else (an unhandled 5xx carrying the <c>ApiExceptionHandler</c>
-    /// envelope) → <see cref="ServerFaultException"/> with the server's <c>traceId</c>, falling
-    /// back to <c>EnsureSuccessStatusCode</c> for a genuinely non-<c>ProblemDetails</c> response
-    /// (e.g. a network-layer failure with no body at all). Services whose endpoint mapping
-    /// deviates from this shape (e.g. Messaging's 403 → MessagingPermissionException, Groups'
-    /// content-rating 403 disambiguation) keep their own private translation for that one arm and
-    /// delegate everything else here.
+    /// <see cref="WriteRateLimitExceededException"/>, rebuilt from the body's
+    /// <c>writeActionKind</c>/<c>retryAfterSeconds</c> extensions for every write behind the service
+    /// throttle (security.md §"Write Throttling"), and <c>EnsureSuccessStatusCode</c> for any other
+    /// 429 (an edge limiter's plain-text body); anything else (an unhandled 5xx carrying the
+    /// <c>ApiExceptionHandler</c> envelope) → <see cref="ServerFaultException"/> with the server's
+    /// <c>traceId</c>, falling back to <c>EnsureSuccessStatusCode</c> for a genuinely
+    /// non-<c>ProblemDetails</c> response (e.g. a network-layer failure with no body at all).
+    /// Services whose endpoint mapping deviates from this shape (e.g. Messaging's 403 →
+    /// MessagingPermissionException, Groups' content-rating 403 disambiguation) keep their own
+    /// private translation for that one arm and delegate everything else here.
     /// </summary>
     public static async Task ThrowIfWriteFailedAsync(
         HttpResponseMessage response,
-        Func<string, Exception> validationFactory,
-        WriteActionKind? rateLimitedAction = null)
+        Func<string, Exception> validationFactory)
     {
         if (response.IsSuccessStatusCode) return;
 
@@ -61,10 +60,9 @@ internal static class ClientHttpHelpers
                 throw new UnauthorizedAccessException("You don't have permission to perform this action.");
             case HttpStatusCode.NotFound:
                 throw new KeyNotFoundException("The requested content was not found.");
-            case HttpStatusCode.TooManyRequests when rateLimitedAction is not null:
-                double? retryAfterSeconds = await ReadRetryAfterSecondsAsync(response);
-                throw new WriteRateLimitExceededException(
-                    rateLimitedAction.Value, TimeSpan.FromSeconds(retryAfterSeconds ?? 60));
+            case HttpStatusCode.TooManyRequests:
+                await ThrowRateLimitedAsync(response);
+                return;
             default:
                 await ThrowServerFaultOrEnsureSuccessAsync(response);
                 return;
@@ -147,17 +145,52 @@ internal static class ClientHttpHelpers
     }
 
     /// <summary>
-    /// Reads the <c>retryAfterSeconds</c> extension a 429 <c>WriteRateLimitExceededException</c>
-    /// carries (see <c>EndpointHelpers.ExecuteAsync</c> on the server). Null if absent.
+    /// The 429 arm (WU-ThrottleCoverage, 2026-10-13). The service throttle's 429 is a
+    /// <c>ProblemDetails</c> whose <c>writeActionKind</c>/<c>retryAfterSeconds</c> extensions
+    /// (<c>EndpointHelpers.ExecuteAsync</c>) rebuild <see cref="WriteRateLimitExceededException"/>
+    /// with no help from the calling client class — before this, only callers that named their kind
+    /// got the "wait N seconds" message and every other throttled write fell through to
+    /// <see cref="ServerFaultException"/>. Any other 429 — an edge limiter's plain-text body
+    /// (<c>TagWrites</c>, <c>ImportParse</c>, <c>ExportGenerate</c>), or JSON naming no known kind —
+    /// becomes <c>EnsureSuccessStatusCode</c>'s <see cref="HttpRequestException"/> (429). The body is
+    /// read tolerantly: the strict reader would turn the edge limiters' plain text into a
+    /// <see cref="JsonException"/>.
     /// </summary>
-    public static async Task<double?> ReadRetryAfterSecondsAsync(HttpResponseMessage response)
+    private static async Task ThrowRateLimitedAsync(HttpResponseMessage response)
     {
-        ProblemPayload? problem = await response.Content.ReadFromJsonAsync<ProblemPayload>();
-        return problem?.RetryAfterSeconds;
+        ProblemPayload? problem = await ReadProblemTolerantlyAsync(response);
+        if (Enum.TryParse(problem?.WriteActionKind, ignoreCase: false, out WriteActionKind kind)
+            && Enum.IsDefined(kind))
+        {
+            throw new WriteRateLimitExceededException(
+                kind, TimeSpan.FromSeconds(problem!.RetryAfterSeconds ?? 60));
+        }
+
+        response.EnsureSuccessStatusCode(); // throws HttpRequestException carrying the 429
+    }
+
+    /// <summary>
+    /// <see cref="ReadNullableFromJsonAsync{T}"/> for a body that may not be JSON at all. A
+    /// malformed body is translated to "no payload" (null), and the caller then surfaces the status
+    /// itself, so nothing is swallowed: the failure still reaches the user as the status's exception.
+    /// </summary>
+    private static async Task<ProblemPayload?> ReadProblemTolerantlyAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await ReadNullableFromJsonAsync<ProblemPayload>(response.Content);
+        }
+        catch (JsonException)
+        {
+            return null; // translated: the caller throws for the status (see summary)
+        }
     }
 
     /// <summary>Just the ProblemDetails fields consumed client-side — MVC's type isn't referenced
     /// in WASM. <c>TraceId</c> is the <c>ApiExceptionHandler</c> envelope's extension
-    /// (WU-ErrorHandling2, 2026-07-30), present only on the unhandled-5xx path.</summary>
-    private sealed record ProblemPayload(string? Detail, double? RetryAfterSeconds, string? TraceId);
+    /// (WU-ErrorHandling2, 2026-07-30), present only on the unhandled-5xx path;
+    /// <c>RetryAfterSeconds</c> and <c>WriteActionKind</c> are the service throttle's 429
+    /// extensions (<c>EndpointHelpers</c>).</summary>
+    private sealed record ProblemPayload(
+        string? Detail, double? RetryAfterSeconds, string? TraceId, string? WriteActionKind);
 }

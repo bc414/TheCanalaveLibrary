@@ -63,7 +63,7 @@ public static class ContentImportEndpoints
         // file-parse routes — Mammoth/EPUB/AngleSharp work is the app's most expensive
         // attacker-influenced compute and parse-then-discard never reaches the commit-side
         // IWriteRateLimitService token bucket. Registered in Program.cs; selection by COST per
-        // security.md "Write & Expensive-Operation Throttling". /resplit stays unthrottled — it
+        // security.md "Write Throttling". /resplit stays unthrottled — it
         // re-splits an already-parsed result (bounded by ImportLimits, no file decode).
 
         group.MapPost("/single", (IContentImportService import, IFormFile file, ImportFormat format) =>

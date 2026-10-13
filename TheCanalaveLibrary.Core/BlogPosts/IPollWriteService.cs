@@ -61,5 +61,8 @@ public interface IPollWriteService : IPollReadService
     /// D23), and a lost race is never a 500: when the caller's votes already stand exactly as asked (their
     /// own double submit) the call succeeds, and otherwise it is this refusal.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    /// <exception cref="WriteRateLimitExceededException">The caller's <see cref="WriteActionKind.Vote"/>
+    /// bucket is empty (owner ruling D20). Every call spends a token, a retraction included, before
+    /// any other check.</exception>
     Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously);
 }

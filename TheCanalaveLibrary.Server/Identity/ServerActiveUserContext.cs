@@ -51,7 +51,7 @@ public class ServerActiveUserContext(
     // the scope. Circuit dispatches with no HttpContext keep the value captured at circuit start;
     // consent actions force a full-document navigation anyway (frozen-circuit rule).
     private AnonPrefs AnonPrefsValue => _anonPrefs ??=
-        httpContextAccessor.HttpContext is { } ctx ? AnonPrefs.Read(ctx.Request) : AnonPrefs.Empty;
+        httpContextAccessor.HttpContext is { } ctx ? AnonPrefs.Read(ctx.Request) : new AnonPrefs();
 
     public bool IsAuthenticated => Principal.Identity?.IsAuthenticated ?? false;
 

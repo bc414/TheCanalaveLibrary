@@ -288,6 +288,9 @@ public class ServerPollWriteService(
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Voting requires an authenticated user.");
+        // Owner ruling D20: every call spends one token — a vote, a change and a retraction are this
+        // one method. Before any DB work, so a vote on a missing or hidden poll spends one too.
+        rateLimit.EnsureAllowed(WriteActionKind.Vote, userId);
 
         var poll = await writeDb.Polls
             .Where(p => p.PollId == pollId)

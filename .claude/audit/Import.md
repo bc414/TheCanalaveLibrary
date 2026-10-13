@@ -23,7 +23,7 @@ Feature 53. *(As-built names corrected 2026-07-27; the build note below always h
 - **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
   1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12, and browser-driven on both render
   phases by its browser pass the same day — Stage note below; tracker H25 holds two pre-existing
-  editor defects that pass found).** **L4.5 —
+  editor defects that pass found; the three parse routes' `ImportParse` limiter is pinned by an Integration metadata test since WU-ThrottleCoverage, 2026-10-13, which also filed tracker D16 — an import of more than five chapters commits five and then refuses; Stage note below).** **L4.5 —
   Stage 5** (see note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
   service need a client impl).** Endpoints + client impl live (WU-L5Sweep), incl. the three
@@ -113,6 +113,17 @@ WU moved was driven through the real import UIs, with `psql` after each commit:
   The Markdown import's blockquote lost its quote and gained empty paragraphs once Quill loaded it.
   Saving the draft chapter then landed the author on "Page not found".
 
+### L2 Stage note (WU-ThrottleCoverage, 2026-10-13) — no cell flips; F63 stays 5
+- **Pinned, not changed:** `ExportServiceTests.ImportParseRoutes_CarryTheImportParseLimiter` (Integration)
+  asserts the three parse routes carry the `"ImportParse"` concurrency limiter and `/resplit` none — the
+  precedent owner ruling D20's `ExportGenerate` mirrors, untested until now. `ContentImportEndpoints`'
+  comment now cites `security.md` §"Write Throttling" (the section it named never existed).
+- **Found, not fixed (tracker D16, a design choice):** the commit loops `CreateChapterAsync`, and each
+  call spends a `ContentCreate` token (5 burst, then 1 per 2 min). An import of more than five
+  chapters commits five, then shows "wait N seconds" with the drafts still listed — so committing
+  again duplicates the first five. `ImportCommitTests` (2 chapters) runs on the pass-through limiter
+  and cannot see it.
+
 ### Settled (WU38d, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Reframe:** fundamentally *chapter* import / bulk chapter import, NOT "story import." Story
   shell is created via the normal `StoryEditorPage` flow first; import attaches chapters to a
@@ -153,5 +164,8 @@ WU moved was driven through the real import UIs, with `psql` after each commit:
   `TopAuthorsNote`/`BottomAuthorsNote` (too heuristic — authors cut/paste after import).
 
 ### Open
-- None blocking. Future candidates (not scheduled): PDF text-only import; Quill paste matcher
+- **Tracker D16** (WU-ThrottleCoverage, 2026-10-13): an import of more than five chapters partially
+  commits under the `ContentCreate` bucket — the fix needs a design choice (one charge per import, or
+  resumable progress).
+- Otherwise none blocking. Future candidates (not scheduled): PDF text-only import; Quill paste matcher
   (pending browser-pass verdict); author's-note detection.

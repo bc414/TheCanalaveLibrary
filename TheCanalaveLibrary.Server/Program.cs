@@ -215,11 +215,13 @@ else
 // after one, and the endpoints are mapped unconditionally too.
 builder.Services.AddSingleton<UnsubscribeTokenService>();
 
-// HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today:
-// per-IP window on the /Account/* auth form posts (credential-stuffing damping) and the
-// "TagWrites" policy on /api/tags writes. User writes (comments, uploads, …) are throttled at
-// the service layer instead — they travel over the SignalR circuit, which this middleware
-// never sees. Per-IP partitioning only becomes meaningful in production once Phase 7's
+// HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today. The
+// policy set: the per-IP window on the /Account/* auth form posts (credential-stuffing damping),
+// "TagWrites" on /api/tags writes, "Unsubscribe" on the anonymous one-click links, and the
+// "ImportParse" / "ExportGenerate" concurrency limiters on work that never commits. User writes
+// (comments, uploads, …) are throttled at the service layer instead — they travel over the
+// SignalR circuit, which this middleware never sees — and a service-throttled write takes no edge
+// policy. Per-IP partitioning only becomes meaningful in production once Phase 7's
 // ForwardedHeaders work lands (behind Cloudflare every request shares a handful of proxy IPs).
 // See security.md "HTTP Edge Rate Limiting".
 builder.Services.AddRateLimiter(options =>
@@ -289,6 +291,19 @@ builder.Services.AddRateLimiter(options =>
     // rate-limiting guidance; security.md "Write Throttling"). A small server-wide concurrency cap
     // bounds CPU/memory amplification while leaving normal single-user imports untouched.
     options.AddConcurrencyLimiter("ImportParse", o =>
+    {
+        o.PermitLimit = 4;
+        o.QueueLimit = 8;
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+
+    // "ExportGenerate" concurrency limiter (owner ruling D20, WU-ThrottleCoverage 2026-10-13): the two
+    // export downloads generate a document per request (QuestPDF runs synchronously on the request
+    // thread; EPUB/DOCX/HTML writers walk the whole story) and never commit, so the token bucket never
+    // sees them — the same cost class as ImportParse, and the numbers mirror it per the ruling.
+    // Server-wide and unpartitioned, so it also bounds anonymous exporters (export stays
+    // unauthenticated: "export = what you can read").
+    options.AddConcurrencyLimiter(ExportEndpoints.RateLimitPolicy, o =>
     {
         o.PermitLimit = 4;
         o.QueueLimit = 8;
@@ -530,6 +545,9 @@ builder.Services.AddScoped<IReportSubmissionService>(sp => sp.GetRequiredService
 builder.Services.AddScoped<IUserSettingsService, ServerUserSettingsService>();
 // ContentGate cluster (Feature 66, WU-AccessGate) — reveal management for /settings.
 builder.Services.AddScoped<IContentRevealService, ServerContentRevealService>();
+// The signed-in reveal's recorder (owner ruling D20's Reveal throttle). Server-only by design: the
+// reveal is a full-document form POST, never a circuit or WASM call — do not register it in the Client.
+builder.Services.AddScoped<ContentRevealRecorder>();
 builder.Services.AddScoped<IUserProfileReadService, ServerUserProfileReadService>();
 builder.Services.AddScoped<IThemeReadService, ServerThemeReadService>();
 // Badges (WU36) — L2 services (Feature 50). Synchronous inline award-checks; curation UI.

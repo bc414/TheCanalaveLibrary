@@ -73,7 +73,12 @@ anonymous viewers `ServerActiveUserContext` resolves `ShowMatureContent` from `c
 (lazily, same guarded pattern as its principal cache — never in the constructor; the
 `SecurityStampValidator` early-capture hazard applies to any constructor-time HttpContext read).
 The cookie also feeds the `GroupAudience` filter — an anon mature toggle widens group visibility
-too, by design. **WASM parity is deliberately not implemented** (refined at build time,
+too, by design. **Every parse is the caller's own instance** (`AnonPrefs.Read` returns a fresh
+object for an absent or malformed cookie too): the consent endpoints mutate what they read before
+re-appending it, so a shared default would carry one visitor's consent to every later cookieless
+visitor in the process. That bug shipped until WU-ThrottleCoverage (2026-10-13; regression net:
+Unit `AnonPrefsTests`); never reintroduce a static "empty" instance of a mutable prefs type. A list
+the cookie sets to `null` parses to an empty list (request input never throws). **WASM parity is deliberately not implemented** (refined at build time,
 2026-07-19): `WasmActiveUserContext` has no anon-cookie read because nothing consumes it there —
 SharedUI components never inject `IActiveUserContext` (the two-identity-source rule below), and
 every data read crosses HTTP to the server, where the cookie rides the request and the server

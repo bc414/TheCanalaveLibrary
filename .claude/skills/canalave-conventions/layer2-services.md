@@ -2318,9 +2318,9 @@ hard-delete/ban surface. It is a compile-time discipline, **not** a runtime cont
 below are the control. One concrete class, `ServerModerationWriteService`, implements all three; it is
 registered once and all three interfaces forward to it (§"Registering an inherited pair" — the
 `ISavedTagSelectionWriteService` shape). This follows the current registration rule; D36 (canonical DI
-shape) is pending and may revisit it. On WASM the twins are `ClientReportSubmissionService` (its
-`rateLimitedAction: WriteActionKind.Report` makes a 429 a `WriteRateLimitExceededException`) and
-`ClientModerationRead/WriteService`.
+shape) is pending and may revisit it. On WASM the twins are `ClientReportSubmissionService` (a 429 becomes a
+`WriteRateLimitExceededException` from the body's `writeActionKind`, the shared client helper's rule
+since WU-ThrottleCoverage) and `ClientModerationRead/WriteService`.
 
 **DAG position.** `ServerModerationWriteService` injects `INotificationWriteService` (the standard
 cross-feature dep), `IWriteRateLimitService`, `UserManager<User>` (the security-stamp bump) and

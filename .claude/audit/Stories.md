@@ -760,7 +760,7 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
   dropped; unique `(story_id, start_chapter_number)` added (ordering spine + non-overlap backstop).
   `StoryArc.cs` moved `Core/Models/` → `Core/Stories/` (legacy-folder rule). Verified: migration
   applies via the Integration suite's Testcontainers migrate; `dotnet build` green.
-- **L2 — Stage 5.** `IStoryArcReadService`/`IStoryArcWriteService` (`Core/Stories/`),
+- **L2 — Stage 5 (re-verified WU-ThrottleCoverage, 2026-10-13 — `CreateArcAsync` spends a `ContentCreate` token, owner ruling D20; Integration `WriteThrottleTests`; see its Stage note under Feature 10).** `IStoryArcReadService`/`IStoryArcWriteService` (`Core/Stories/`),
   `ServerStoryArcReadService`/`ServerStoryArcWriteService` (`Server/Stories/`, Series-template
   shape: factory-per-method reads, author-gated writes, `StoryArcValidationException`).
   Verified: Integration tier — `StoryArcServiceTests` (23 tests: CRUD, author/anon gates, range
@@ -890,7 +890,7 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
    test — `StoryPage` has no bUnit suite of its own even for its original F1 fix (WU-ComponentSoundness);
    covered by this L4.5 pass instead, consistent with that precedent.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5.** See test tiers below.
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (re-verified WU-ThrottleCoverage, 2026-10-13 — L2: `CreateSeriesAsync` spends a `ContentCreate` token, owner ruling D20, Integration `WriteThrottleTests`; L3-Logic: the create/edit page shows a throttle or session refusal through `ExceptionPresenter` instead of a fixed "unexpected error", RazorComponents `SeriesCreateEditPageTests`; see its Stage note under Feature 10).** See test tiers below.
 - **L4-Style — Stage 1** (visual sign-off pending, per WU8/WU13/WU23/WU28/WU37/WU42/WU43 precedent —
   functionally verified live, below, but no dedicated visual/token polish pass).
 - **L4.5-Browser — Stage 5 (2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
@@ -973,7 +973,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
    created already `Approved` with no self-notification (matches the notification drop-self
    invariant). Only cross-author links start `Pending`.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30, and L3-Logic's page reloads its list after a stale approve since that WU's browser pass — see its Stage note).** **L4-Style — Stage 1** (pending human
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30, and L3-Logic's page reloads its list after a stale approve since that WU's browser pass — see its Stage note; a request that notifies spends a `RepeatRequest` token and the reject comment no longer claims a spam guard, WU-ThrottleCoverage, 2026-10-13 — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
   close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
@@ -1141,6 +1141,40 @@ read from the network log. AuthorBeta requested three Inspired-By links into Aut
     `StoryLineageApproved`, because an unread one for the same target story (7) already existed: the
     notification service's existing dedup. The console was clean.
 
+### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — no flip
+
+D20 (answered 2026-08-07) ruled that every user-reachable write either spends a bucket or is
+enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
+- **F8 L2 (arcs) and F9 L2 (series):** `CreateArcAsync` and `CreateSeriesAsync` call
+  `EnsureAllowed(ContentCreate)` right after their auth guard (D20: "user-visible content creates that
+  shipped without the call"). Edits, deletes, membership and reorder stay unthrottled under the
+  enumeration (the edit exemption is conditional on D20's caps half). The endpoint docs
+  (`StoryArcEndpoints`, `SeriesEndpoints`) no longer say the service has no bucket.
+- **F9 L3-Logic:** `SeriesCreateEditPage`'s save catch-all showed a fixed "An unexpected error
+  occurred" for every non-validation failure, so a throttled author was never told to wait. It now
+  follows the `ExceptionPresenter` catch-site pattern (typed refusals show their own message; an
+  unexpected failure is logged and shown with its error id).
+- **F10 L2 (lineage):** `RequestLineageAsync` spends a `RepeatRequest` token (5 burst, 1 per 3 min —
+  D20's report tier) on every request that notifies the target's author. A self-owned link
+  auto-approves, notifies nobody and never draws the bucket; the call sits after validation and before
+  the tracked mutation (the placement exception — a refused re-request must not leave a dirty row on a
+  circuit's write context). First requests are charged too: `DeleteLineageAsync` removes a Rejected
+  row from the UI, so delete-then-request takes the fresh-insert branch with no trace of the repeat,
+  which is why D20's alternative state guard would not close the vector. The reject path's comment and
+  `IStoryLineageWriteService`'s doc claimed the kept Rejected row "prevents immediate re-request
+  spam"; both now say the row is an audit trail and the bucket is the bound (service audit §4).
+  The six-collaborator friction is routed to the owner (decision row 26 (c)).
+- **F45:** the view ping's anonymous, unthrottled posture is ratified (D20 sub-ruling) — the Settled
+  note under Feature 45. No code changed.
+- **Verified by:** Integration `WriteThrottleTests` (real `ServerWriteRateLimitService`, tightened
+  table): `StoryArcCreates_ThrottleUnderContentCreate`, `SeriesCreates_ThrottleUnderContentCreate`,
+  `LineageRequests_ThrottleOnlyWhenNotifying` (four self-owned links free, then the bucket). Unit
+  `WriteThrottleWireContractTests` pins the WASM leg for both clients (arc and series creates rebuild
+  `WriteRateLimitExceededException` from the 429 body). RazorComponents
+  `SeriesCreateEditPageTests` (+2: the throttle message, the generic message). Mutation-checked:
+  charging self-owned lineage links fails the lineage test. No browser pass was run (none available);
+  tracker H33 holds it. No `status.md` cell changes: these are defects beneath Stage-5 cells.
+
 ## Feature 45 — View Count Tracking
 
 **Built end-to-end (WU-SignalBuffering, 2026-07-06).** Divergence from spec (§7 `Story.ViewCount`
@@ -1154,8 +1188,16 @@ migration-managed raw DDL, no EF model — ground truth, NOT a rebuildable mart;
 `(story_id, stat_date)`, partition-ready; FK CASCADE cleans history on story delete). Migration:
 `R2_ViewCountToDailyStoryStats`.
 
+**Settled (owner ruling D20's view-ping sub-ruling, answered 2026-08-07; recorded WU-ThrottleCoverage,
+2026-10-13 — do not revisit):** the ping stays **anonymous and unthrottled**. Views are never sort
+keys, so inflation cannot distort discovery, and pings land in `ViewCountBuffer` keyed by story id,
+so a bot loop grows a dictionary bounded by story count, not by ping count. The accepted
+consequence — displayed view counts are inflatable, and authors read them — is recorded rather than
+defended. No IP-partitioned limiter: the proxy-aware client-IP policy it would need does not exist
+yet (Phase 7 ForwardedHeaders). Recorded in `security.md`'s unthrottled-surface enumeration.
+
 - **L1 — Stage 5.** `daily_story_stats` DDL applied + verified (Testcontainers migrate + live dev DB).
-- **L2 — Stage 5.** `IViewCountWriteService.RecordViewAsync` (anonymous counts — no auth gate) →
+- **L2 — Stage 5 (unthrottled by ratification — owner ruling D20, recorded WU-ThrottleCoverage, 2026-10-13; see the Settled note above).** `IViewCountWriteService.RecordViewAsync` (anonymous counts — no auth gate) →
   `ViewCountBuffer` (per-story sum, O(1)) → `ViewCountFlusher` (batched `unnest … ON CONFLICT`
   additive upsert into today's UTC row — the `+=` merge accepts a rare retry-replay over-count on
   a lossy metric, documented in-file; EXISTS guard vs deleted stories; restore-on-failure) →

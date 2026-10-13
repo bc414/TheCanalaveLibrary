@@ -8,7 +8,10 @@ namespace TheCanalaveLibrary.Core;
 /// layer and not (only) in the pipeline. See security.md §"Write Throttling".
 ///
 /// Contract: call immediately after the write method's auth guard (the caller is authenticated,
-/// so a real userId exists) and before any DB work.
+/// so a real userId exists) and before any DB work. The one exception is
+/// <see cref="WriteActionKind.RepeatRequest"/>, which guards a notification known only after
+/// validation: its call sits on the notifying branch, after validation and before the first tracked
+/// mutation (security.md §"Write Throttling").
 /// </summary>
 public interface IWriteRateLimitService
 {

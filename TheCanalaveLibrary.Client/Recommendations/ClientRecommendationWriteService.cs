@@ -13,8 +13,9 @@ namespace TheCanalaveLibrary.Client;
 /// exceptions so components behave identically on either side of the interface — the shared
 /// MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
 /// <see cref="RecommendationValidationException"/> and 429 reconstructs
-/// <see cref="WriteRateLimitExceededException"/> with <see cref="WriteActionKind.ContentCreate"/>
-/// (<c>SubmitAsync</c>'s only throttled write). The shared shape's 401 →
+/// <see cref="WriteRateLimitExceededException"/> (<see cref="WriteActionKind.ContentCreate"/> on
+/// <c>SubmitAsync</c>, this service's only throttled write) — the shared helper reads the kind off
+/// the wire. The shared shape's 401 →
 /// <see cref="InvalidOperationException"/> arm carries <c>ProblemDetails.Detail</c> through — see
 /// RecommendationEndpoints' class summary on that mapping also covering the Hidden-Gem/spotlight
 /// reject-at-limit business rules alongside genuine "not signed in".
@@ -108,5 +109,5 @@ public sealed class ClientRecommendationWriteService(HttpClient http)
     /// the shared MA-008 shape, including the 429 write-throttle reconstruction.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            msg => new RecommendationValidationException([msg]), WriteActionKind.ContentCreate);
+            msg => new RecommendationValidationException([msg]));
 }

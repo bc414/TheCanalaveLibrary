@@ -79,7 +79,8 @@ its audit file intends"). Lowered until H19's pass; nothing else in F46 changed.
 - **Interface split (D9):** `IReportSubmissionService` (reasons + submit) is its own interface;
   `ReportDialog` injects it. `ServerModerationWriteService` implements all three moderation interfaces
   and is registered once with three forwards; `ClientReportSubmissionService` is the WASM twin (its
-  `rateLimitedAction: Report` turns a 429 into `WriteRateLimitExceededException`).
+  `rateLimitedAction: Report` turns a 429 into `WriteRateLimitExceededException`; that argument was
+  retired by WU-ThrottleCoverage, 2026-10-13 — every client now reads the kind off the 429 body).
 - **Submission integrity (§2.4.4(b)(c)):** the row is saved before the counter moves (D22 order); one
   open report per reporter per target — the service checks first, and the partial unique index
   `ix_reports_open_reporter_target` refuses a race, both as the same 400 ("You've already reported

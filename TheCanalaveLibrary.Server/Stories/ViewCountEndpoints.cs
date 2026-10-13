@@ -13,7 +13,8 @@ namespace TheCanalaveLibrary.Server;
 /// (deliberately no auth gate)." Still wrapped in <see cref="EndpointHelpers.ExecuteAsync"/> for
 /// consistency with every other write handler, even though the buffer merge itself is not expected
 /// to throw. No <c>RequireRateLimiting(...)</c> — a view ping is loss-tolerant and unbounded by
-/// design (spec: "a view is a view"), not a token-bucket-guarded content write.
+/// design (spec: "a view is a view"), not a token-bucket-guarded content write. Ratified anonymous
+/// and unthrottled by owner ruling D20 (security.md's unthrottled-surface enumeration).
 /// </para>
 /// </summary>
 public static class ViewCountEndpoints

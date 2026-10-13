@@ -9,7 +9,9 @@ namespace TheCanalaveLibrary.Core;
 public interface ISeriesWriteService : ISeriesReadService
 {
     /// <summary>Creates a new series owned by the current user. Throws <see cref="SeriesValidationException"/>
-    /// on invalid input or a duplicate name for this author.</summary>
+    /// on invalid input or a duplicate name for this author, and <see cref="WriteRateLimitExceededException"/>
+    /// (<see cref="WriteActionKind.ContentCreate"/>, owner ruling D20) when the caller's bucket is empty —
+    /// checked first, after the auth guard.</summary>
     Task<int> CreateSeriesAsync(CreateSeriesDto dto);
 
     /// <summary>Renames/redescribes a series. Owner-only — throws <see cref="UnauthorizedAccessException"/>

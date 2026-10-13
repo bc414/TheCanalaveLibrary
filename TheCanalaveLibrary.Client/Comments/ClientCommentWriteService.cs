@@ -12,8 +12,8 @@ namespace TheCanalaveLibrary.Client;
 /// components behave identically on either side of the interface — the shared MA-008 shape
 /// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
 /// <see cref="CommentValidationException"/> and 429 reconstructs WriteRateLimitExceededException
-/// with <see cref="WriteActionKind.Comment"/> — the only action kind this service's writes ever
-/// throttle on.
+/// (<see cref="WriteActionKind.Comment"/>, this service's only throttled kind) — the shared helper
+/// reads the kind off the wire, so this class names none.
 /// </para>
 /// </summary>
 public sealed class ClientCommentWriteService(HttpClient http)
@@ -70,5 +70,5 @@ public sealed class ClientCommentWriteService(HttpClient http)
     /// shared MA-008 shape, including the 429 write-throttle reconstruction.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            msg => new CommentValidationException([msg]), WriteActionKind.Comment);
+            msg => new CommentValidationException([msg]));
 }
