@@ -13,8 +13,12 @@ public class FakeReportSubmissionService : IReportSubmissionService
 {
     public ReportReasonDto[] Reasons { get; set; } = [];
 
+    /// <summary>When set, <see cref="SubmitReportAsync"/> throws it (ReportDialogTests' refusal paths).</summary>
+    public Exception? SubmitException { get; set; }
+
     public Task<ReportReasonDto[]> GetReportReasonsAsync() => Task.FromResult(Reasons);
 
     public Task SubmitReportAsync(SubmitReportRequest request) =>
-        throw new NotImplementedException("FakeReportSubmissionService.SubmitReportAsync not expected in this test.");
+        throw SubmitException
+              ?? new NotImplementedException("FakeReportSubmissionService.SubmitReportAsync not expected in this test.");
 }

@@ -39,6 +39,7 @@
                             SubmitLabel="@(_editingPollId is null ? "Create Poll" : "Save Changes")"
                             IsBusy="@_saving"
                             Errors="@_editorErrors"
+                            ErrorsIsSessionExpired="@_editorErrorsIsSessionExpired"
                             OnSubmit="SaveEditorAsync"
                             OnCancel="CancelEditor" />
         </div>
@@ -113,6 +114,7 @@
     private bool _editingConfigLocked;
     private bool _saving;
     private IReadOnlyList<string>? _editorErrors;
+    private bool _editorErrorsIsSessionExpired;
 
     private PollDto[] ActivePolls => (Polls ?? []).Where(p => !p.IsArchived).ToArray();
     private PollDto[] ArchivedPolls => (Polls ?? []).Where(p => p.IsArchived).ToArray();
@@ -145,6 +147,7 @@
         _editingPollId = null;
         _editingConfigLocked = false;
         _editorErrors = null;
+        _editorErrorsIsSessionExpired = false;
         _editing = new PollEditDto
         {
             Options = [new PollOptionEditDto(null, ""), new PollOptionEditDto(null, "")],
@@ -156,6 +159,7 @@
         _editingPollId = poll.PollId;
         _editingConfigLocked = poll.ConfigLocked;
         _editorErrors = null;
+        _editorErrorsIsSessionExpired = false;
         _editing = new PollEditDto
         {
             PollName = poll.PollName,
@@ -177,6 +181,7 @@
         _editing = null;
         _editingPollId = null;
         _editorErrors = null;
+        _editorErrorsIsSessionExpired = false;
     }
 
     private async Task SaveEditorAsync()
@@ -184,6 +189,7 @@
         if (_editing is null || _saving) return;
         _saving = true;
         _editorErrors = null;
+        _editorErrorsIsSessionExpired = false;
 
         try
         {
@@ -207,6 +213,7 @@
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Saving site poll {PollId} failed unexpectedly", _editingPollId);
             _editorErrors = ExceptionPresenter.GetUserMessages(ex);
+            _editorErrorsIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

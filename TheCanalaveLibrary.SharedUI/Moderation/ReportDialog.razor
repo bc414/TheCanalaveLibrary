@@ -50,7 +50,7 @@
 
             @if (_errorMessage is not null)
             {
-                <p class="mb-3 text-sm text-danger">@_errorMessage</p>
+                <div class="mb-3"><ErrorAlert Message="@_errorMessage" ShowSignIn="@_errorIsSessionExpired" /></div>
             }
 
             @if (_submitted)
@@ -90,6 +90,7 @@
     private bool _submitting;
     private bool _submitted;
     private string? _errorMessage;
+    private bool _errorIsSessionExpired;
 
     /// <summary>Opens the dialog for the given target and loads reason options.</summary>
     public async Task OpenAsync(ReportedEntityType entityType, long entityId)
@@ -101,6 +102,7 @@
         _submitting = false;
         _submitted = false;
         _errorMessage = null;
+        _errorIsSessionExpired = false;
         _isOpen = true;
 
         if (_reasons is null)
@@ -121,6 +123,7 @@
 
         _submitting = true;
         _errorMessage = null;
+        _errorIsSessionExpired = false;
         StateHasChanged();
 
         try
@@ -138,6 +141,7 @@
                 Logger.LogError(ex, "Submitting a report for {EntityType} {EntityId} failed unexpectedly",
                     _entityType, _entityId);
             _errorMessage = ExceptionPresenter.GetUserMessage(ex);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

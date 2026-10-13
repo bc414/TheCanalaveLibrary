@@ -11,7 +11,7 @@
        the author has no published stories. Null = suppress the picker entirely.
    Mirrors StoryPropertiesForm (no tags, no cover). *@
 
-<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
+<ErrorAlert Messages="@ViewModel.ServerValidationErrors" ShowSignIn="@ViewModel.ServerErrorIsSessionExpired" />
 
 <EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="blog-post-properties-form"
           class="flex flex-col gap-6">

@@ -199,6 +199,20 @@ public class StoryEditorPageTests : BunitContext
             "a changed EditorContent is exactly the diff that crashes the renderer under real Quill");
     }
 
+    [Fact]
+    public async Task RefusedSave_AnExpiredSession_OffersSignIn_BesideTheForm()
+    {
+        // The editor's server error now renders through ErrorAlert (the WU-ErrorHandling2 follow-up,
+        // WU-TrackerFixes): an expired WASM session offers Sign in in place, keeping the draft.
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+        _writes.SaveFailure = new SessionExpiredException();
+
+        await cut.Find("form").SubmitAsync();
+
+        cut.Markup.Should().Contain("session has expired");
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(1);
+    }
+
     // ── Cover: an immediate commit, never part of the save (owner ruling D14, WU-BlobCleanup) ──────
 
     private static readonly byte[] CoverBytes = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];

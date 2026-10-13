@@ -381,7 +381,7 @@ else
         if (CoverChangeBlocked) return;
 
         _viewModel.IsLoading = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
 
         try
         {
@@ -469,7 +469,7 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Saving story {StoryId} failed unexpectedly", StoryId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {
@@ -520,7 +520,7 @@ else
     private async Task RunCoverChangeAsync(Func<Task> change, string operation)
     {
         _coverUploadBusy = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
         try
         {
             await change();
@@ -533,7 +533,7 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Cover {CoverOperation} for story {StoryId} failed unexpectedly", operation, StoryId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {
@@ -627,7 +627,7 @@ else
     {
         if (!StoryId.HasValue) return;
 
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
         try
         {
             await ExternalVerificationWriteService.RequestLinkVerificationAsync(storyExternalLinkId);
@@ -640,7 +640,7 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Requesting link verification failed unexpectedly for link {LinkId}", storyExternalLinkId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
     }
 

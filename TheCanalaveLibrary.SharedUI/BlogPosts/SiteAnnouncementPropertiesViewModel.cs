@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// (<c>IsLoading</c>, <c>ServerValidationErrors</c>) and keeps the form bUnit-testable with no
 /// dependencies. The page owns the ViewModel↔DTO mapping and the EditorView pull-on-submit call.
 /// </summary>
-public class SiteAnnouncementPropertiesViewModel
+public class SiteAnnouncementPropertiesViewModel : EditorFormViewModel
 {
     [Required(ErrorMessage = "Title is required.")]
     [MaxLength(256, ErrorMessage = "Title cannot exceed 256 characters.")]
@@ -37,6 +37,6 @@ public class SiteAnnouncementPropertiesViewModel
     /// </summary>
     public string? Content { get; set; }
 
-    public bool IsLoading { get; set; }
-    public List<string> ServerValidationErrors { get; set; } = new();
+    // IsLoading and the server-error state (ServerValidationErrors + its session flag) come from
+    // EditorFormViewModel: write them through ShowServerError/ClearServerErrors.
 }

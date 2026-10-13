@@ -293,6 +293,7 @@
         if (string.IsNullOrWhiteSpace(_actionNotes))
         {
             _actionError = "A removal reason is required.";
+            _actionErrorIsSessionExpired = false; // the flag travels with the message (error-handling.md)
             return;
         }
 

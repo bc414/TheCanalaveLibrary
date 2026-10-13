@@ -417,6 +417,33 @@ public class StoryPropertiesFormTests : BunitContext
 
         cut.FindAll("button[aria-label='Request verification']").Should().BeEmpty();
     }
+
+    // ── ErrorAlert adoption (the WU-ErrorHandling2 follow-up, WU-TrackerFixes) ────────────
+
+    private static int SignInLinks(IRenderedComponent<StoryPropertiesForm> cut) =>
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in");
+
+    [Fact]
+    public void ServerError_FromAnExpiredSession_OffersSignIn_AndALaterRefusalReplacesIt()
+    {
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.ShowServerError(new SessionExpiredException());
+
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p => p.Add(f => f.ViewModel, vm));
+        cut.Markup.Should().Contain("session has expired");
+        SignInLinks(cut).Should().Be(1, "an expired session offers the inline Sign in link");
+
+        // The next handler's refusal replaces the list and the flag together — never a stale Sign in.
+        vm.ShowServerError(new StoryValidationException(["Your story must have at least one Setting tag selected."]));
+        cut.Render(p => p.Add(f => f.ViewModel, vm));
+        cut.Markup.Should().NotContain("session has expired", "a failure replaces the previous one's messages");
+        cut.Markup.Should().Contain("at least one Setting tag");
+        SignInLinks(cut).Should().Be(0);
+
+        vm.ClearServerErrors();
+        cut.Render(p => p.Add(f => f.ViewModel, vm));
+        cut.Markup.Should().NotContain("at least one Setting tag");
+    }
 }
 
 file sealed class FakeTagReadServiceForForm : ITagReadService
@@ -433,4 +460,5 @@ file sealed class FakeTagReadServiceForForm : ITagReadService
     public Task<List<TagDirectoryGroupDto>> GetTagDirectoryAsync() =>
         Task.FromResult(new List<TagDirectoryGroupDto>());
     private static Task<List<TagDropDownDTO>> Empty() => Task.FromResult(new List<TagDropDownDTO>());
+
 }

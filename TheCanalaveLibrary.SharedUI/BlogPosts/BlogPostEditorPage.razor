@@ -82,6 +82,7 @@
                                                 SubmitLabel="@(_pollEditingId is null ? "Create Poll" : "Save Changes")"
                                                 IsBusy="@_pollSaving"
                                                 Errors="@_pollErrors"
+                                                ErrorsIsSessionExpired="@_pollErrorsIsSessionExpired"
                                                 OnSubmit="SavePollAsync"
                                                 OnCancel="CancelPollEditor" />
                             </div>
@@ -133,6 +134,7 @@
     private bool _pollEditingConfigLocked;
     private bool _pollSaving;
     private IReadOnlyList<string>? _pollErrors;
+    private bool _pollErrorsIsSessionExpired;
     private int? ResolvedUserId { get; set; }
 
     protected override async Task OnInitializedAsync()
@@ -196,6 +198,7 @@
         _pollEditingId = null;
         _pollEditingConfigLocked = false;
         _pollErrors = null;
+        _pollErrorsIsSessionExpired = false;
         _pollEditing = new PollEditDto
         {
             Options = [new PollOptionEditDto(null, ""), new PollOptionEditDto(null, "")],
@@ -207,6 +210,7 @@
         _pollEditingId = poll.PollId;
         _pollEditingConfigLocked = poll.ConfigLocked;
         _pollErrors = null;
+        _pollErrorsIsSessionExpired = false;
         _pollEditing = new PollEditDto
         {
             PollName = poll.PollName,
@@ -228,6 +232,7 @@
         _pollEditing = null;
         _pollEditingId = null;
         _pollErrors = null;
+        _pollErrorsIsSessionExpired = false;
     }
 
     private async Task SavePollAsync()
@@ -235,6 +240,7 @@
         if (_pollEditing is null || _pollSaving || !BlogPostId.HasValue) return;
         _pollSaving = true;
         _pollErrors = null;
+        _pollErrorsIsSessionExpired = false;
 
         try
         {
@@ -259,6 +265,7 @@
                 Logger.LogError(ex, "Saving poll {PollId} on blog post {BlogPostId} failed unexpectedly",
                     _pollEditingId, BlogPostId);
             _pollErrors = ExceptionPresenter.GetUserMessages(ex);
+            _pollErrorsIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -295,7 +302,7 @@
     private async Task HandleValidSubmit()
     {
         _viewModel.IsLoading = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
 
         try
         {
@@ -344,7 +351,7 @@
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Saving blog post {BlogPostId} failed unexpectedly", BlogPostId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {

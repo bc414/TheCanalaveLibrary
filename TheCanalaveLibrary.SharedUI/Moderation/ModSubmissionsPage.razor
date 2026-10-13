@@ -442,6 +442,7 @@
         if (string.IsNullOrWhiteSpace(_rejectReason))
         {
             _rejectError = "A rejection reason is required.";
+            _rejectErrorIsSessionExpired = false; // the flag travels with the message (error-handling.md)
             return;
         }
 
@@ -520,6 +521,7 @@
         if (string.IsNullOrWhiteSpace(_rejectAccountReason))
         {
             _rejectAccountError = "A rejection reason is required.";
+            _rejectAccountErrorIsSessionExpired = false;
             return;
         }
 
@@ -588,6 +590,7 @@
         if (string.IsNullOrWhiteSpace(_rejectLinkReason))
         {
             _rejectLinkError = "A rejection reason is required.";
+            _rejectLinkErrorIsSessionExpired = false;
             return;
         }
 

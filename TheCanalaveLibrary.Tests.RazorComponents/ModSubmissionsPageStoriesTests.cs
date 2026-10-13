@@ -124,6 +124,26 @@ public class ModSubmissionsPageStoriesTests : BunitContext
         cut.Markup.Should().Contain("Pending 1");
     }
 
+    [Fact]
+    public async Task Reject_AnExpiredSession_ThenAnEmptyReason_OffersNoStaleSignIn()
+    {
+        // The flag travels with the message (the WU-ErrorHandling2 follow-up, WU-TrackerFixes).
+        _moderation.Queue = [Row(1, DateTime.UtcNow)];
+        _moderation.RejectBehavior = () => throw new SessionExpiredException();
+
+        IRenderedComponent<ModSubmissionsPage> cut = Render<ModSubmissionsPage>();
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Reject").ClickAsync(new());
+        cut.Find("textarea").Change("Spam.");
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Confirm reject").ClickAsync(new());
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(1);
+
+        cut.Find("textarea").Change("");
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Confirm reject").ClickAsync(new());
+
+        cut.Markup.Should().Contain("A rejection reason is required.");
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(0);
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────────
 
     private sealed class ScriptedModerationWriteService : IModerationWriteService

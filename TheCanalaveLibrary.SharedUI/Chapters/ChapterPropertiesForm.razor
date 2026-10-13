@@ -11,7 +11,7 @@
      - IsPrimary locks the Rating picker to inherit/equal-story (primary invariant).
      - VersionCount drives progressive versioning disclosure. *@
 
-<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
+<ErrorAlert Messages="@ViewModel.ServerValidationErrors" ShowSignIn="@ViewModel.ServerErrorIsSessionExpired" />
 
 <EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="chapter-properties-form"
           class="flex flex-col gap-6">

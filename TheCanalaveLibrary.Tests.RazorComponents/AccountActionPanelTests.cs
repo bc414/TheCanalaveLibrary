@@ -129,4 +129,25 @@ public class AccountActionPanelTests : BunitContext
     // GroupFolderManagementPageTests/ConfirmDialogTests.
     private static AngleSharp.Dom.IElement FindButton(IRenderedComponent<AccountActionPanel> cut, string text) =>
         cut.FindAll("button").First(b => b.TextContent.Trim() == text);
+
+    [Fact]
+    public async Task ALocalValidationMessage_NeverShowsTheParentsSignIn()
+    {
+        // The parent's ErrorIsSessionExpired describes the parent's message; while the panel shows its
+        // own "A reason is required." the Sign in link must not ride along (WU-TrackerFixes).
+        IRenderedComponent<AccountActionPanel> cut = Render<AccountActionPanel>(p => p
+            .Add(c => c.TargetLabel, "SomeUser")
+            .Add(c => c.Action, ModeratorActionType.WarnUser)
+            .Add(c => c.ErrorMessage, "Your session has expired — sign in again to continue.")
+            .Add(c => c.ErrorIsSessionExpired, true)
+            .Add(c => c.OnConfirm, _ => { }));
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(1,
+            "the parent's own expired-session message offers Sign in");
+
+        await cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Confirm"))
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        cut.Markup.Should().Contain("A reason is required.");
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(0);
+    }
 }

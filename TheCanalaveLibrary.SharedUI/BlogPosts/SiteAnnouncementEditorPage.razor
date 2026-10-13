@@ -107,7 +107,7 @@
     private async Task HandleValidSubmit()
     {
         _viewModel.IsLoading = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
 
         try
         {
@@ -151,7 +151,7 @@
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Saving site announcement {BlogPostId} failed unexpectedly", BlogPostId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {

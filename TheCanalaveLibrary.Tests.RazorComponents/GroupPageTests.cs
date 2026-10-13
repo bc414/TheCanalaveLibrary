@@ -85,7 +85,8 @@ public class GroupPageTests : BunitContext
         Stories: [new GroupStoryDto(UnfiledGroupStoryId, UnfiledStoryId), new GroupStoryDto(FiledGroupStoryId, FiledStoryId)],
         AdminCount: adminCount);
 
-    private IRenderedComponent<GroupPage> RenderGroup(GroupRole? role, int adminCount = 1, bool asModerator = false)
+    private IRenderedComponent<GroupPage> RenderGroup(GroupRole? role, int adminCount = 1, bool asModerator = false,
+        bool signedInNonMember = false)
     {
         _groupService.Role = role;
         _groupService.GroupDetail = NewGroupDetail([NewFolderX(), NewFolderY()], adminCount);
@@ -94,7 +95,7 @@ public class GroupPageTests : BunitContext
         // (not <AuthorizeView>), but StoryCard's nested AddToCustomListMenu DOES use AuthorizeView —
         // bUnit's authorization double satisfies both simultaneously (same pattern as StoryCardTests).
         var auth = this.AddAuthorization();
-        if (role is not null || asModerator)
+        if (role is not null || asModerator || signedInNonMember)
             auth.SetAuthorized("test-user").SetClaims(new Claim(ClaimTypes.NameIdentifier, "1"));
         if (asModerator)
             auth.SetRoles("Moderator");
@@ -379,5 +380,41 @@ public class GroupPageTests : BunitContext
         cut.Markup.Should().Contain("Someone else's post");
         cut.FindAll("button").Where(b => b.TextContent.Trim() == "Report").Should().BeEmpty(
             "the report endpoint requires auth");
+    }
+
+    // ── Inline refusals, never toasts (the WU-ErrorHandling2 follow-up, WU-TrackerFixes) ───────
+
+    private static int SignInLinks(IRenderedComponent<GroupPage> cut) =>
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in");
+
+    [Fact]
+    public async Task Join_Refused_ShowsTheRefusalInline_WithSignInForAnExpiredSession()
+    {
+        _groupService.JoinException = new SessionExpiredException();
+        IRenderedComponent<GroupPage> cut = RenderGroup(role: null, signedInNonMember: true);
+
+        await FindButton(cut, "Join Group").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("session has expired",
+            "the refusal shows beside the membership controls, not in a toast");
+        SignInLinks(cut).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RemoveStory_Refused_ShowsTheRefusalInline_AndAFreshAttemptClearsIt()
+    {
+        _groupService.RemoveStoryException = new GroupValidationException(["That story is no longer in this group."]);
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Admin);
+
+        FindButton(cut, "Remove from group").Click();
+        await FindButton(cut, "Remove").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        cut.Markup.Should().Contain("That story is no longer in this group.");
+        SignInLinks(cut).Should().Be(0, "a validation refusal offers no Sign in");
+
+        _groupService.RemoveStoryException = null;
+        FindButton(cut, "Remove from group").Click();
+        await FindButton(cut, "Remove").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.Markup.Should().NotContain("That story is no longer in this group.");
     }
 }

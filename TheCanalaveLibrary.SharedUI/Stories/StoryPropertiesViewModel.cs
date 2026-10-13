@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// Structured tag collections are built by the form on every selection change and read by the
 /// page on submit. Does not implement IEditableStoryProperties: mapping lives at the page layer.
 /// </summary>
-public class StoryPropertiesViewModel
+public class StoryPropertiesViewModel : EditorFormViewModel
 {
     [Required(ErrorMessage = "Title is required")]
     [MaxLength(255, ErrorMessage = "Title cannot exceed 255 characters.")]
@@ -50,6 +50,6 @@ public class StoryPropertiesViewModel
     public DateOnly? OriginalPublishedDate { get; set; }
     public DateOnly? OriginalLastUpdatedDate { get; set; }
 
-    public bool IsLoading { get; set; }
-    public List<string> ServerValidationErrors { get; set; } = new();
+    // IsLoading and the server-error state (ServerValidationErrors + its session flag) come from
+    // EditorFormViewModel: write them through ShowServerError/ClearServerErrors.
 }

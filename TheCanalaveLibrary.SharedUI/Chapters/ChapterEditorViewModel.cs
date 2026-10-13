@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// server-only DTO fields (ChapterId, ChapterContentId, StoryId). Rating nullable = "Same as
 /// story (inherit)"; non-null = explicit override subject to floor invariant.
 /// </summary>
-public class ChapterEditorViewModel
+public class ChapterEditorViewModel : EditorFormViewModel
 {
     public string Title { get; set; } = string.Empty;
 
@@ -28,6 +28,6 @@ public class ChapterEditorViewModel
 
     public string? VersionName { get; set; }
 
-    public bool IsLoading { get; set; }
-    public List<string> ServerValidationErrors { get; set; } = [];
+    // IsLoading and the server-error state (ServerValidationErrors + its session flag) come from
+    // EditorFormViewModel: write them through ShowServerError/ClearServerErrors.
 }

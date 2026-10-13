@@ -7,7 +7,7 @@
    OnValidSubmit + pull-on-submit EditorView), minus the Rating/HasSpoilers/story-picker fields
    (not meaningful for staff announcements) and plus the NotifyAllUsers checkbox. *@
 
-<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
+<ErrorAlert Messages="@ViewModel.ServerValidationErrors" ShowSignIn="@ViewModel.ServerErrorIsSessionExpired" />
 
 <EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="site-announcement-properties-form"
           class="flex flex-col gap-6">

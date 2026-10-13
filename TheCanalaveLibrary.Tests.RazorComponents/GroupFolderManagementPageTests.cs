@@ -441,7 +441,11 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
 
     public Task<int> CreateGroupAsync(CreateGroupDto dto) => Task.FromResult(0);
     public Task UpdateGroupAsync(UpdateGroupDto dto) => Task.CompletedTask;
-    public Task JoinAsync(int groupId) => Task.CompletedTask;
+    /// <summary>GroupPage's inline refusals (WU-TrackerFixes): thrown by JoinAsync / RemoveStoryAsync when set.</summary>
+    public Exception? JoinException { get; set; }
+    public Exception? RemoveStoryException { get; set; }
+
+    public Task JoinAsync(int groupId) => JoinException is null ? Task.CompletedTask : throw JoinException;
     public Task LeaveAsync(int groupId)
     {
         LeaveCalls++;
@@ -452,7 +456,7 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public Task RemoveStoryAsync(int groupStoryId)
     {
         RemoveStoryCalls.Add(groupStoryId);
-        return Task.CompletedTask;
+        return RemoveStoryException is null ? Task.CompletedTask : throw RemoveStoryException;
     }
 
     public Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId)

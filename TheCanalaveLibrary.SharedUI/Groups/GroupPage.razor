@@ -4,7 +4,6 @@
 @inject IStoryReadService StoryService
 @inject IUserStoryInteractionReadService InteractionService
 @inject IBlogPostReadService BlogPostService
-@inject IToastService Toasts
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
 @inject ILogger<GroupPage> Logger
@@ -115,6 +114,10 @@ else
                 </div>
             </div>
 
+            @* Join/leave refusals, beside the controls that caused them (error-handling.md: a refusal is
+               never a toast). Self-hides when empty. *@
+            <ErrorAlert Message="@_membershipError" ShowSignIn="@_membershipErrorIsSessionExpired" />
+
             @if (!string.IsNullOrWhiteSpace(Group.Description))
             {
                 <p class="text-sm text-(--color-text) leading-relaxed max-w-2xl">@Group.Description</p>
@@ -164,6 +167,9 @@ else
                             </button>
                         }
                     </div>
+
+                    @* Add/remove/file refusals for the stories below. *@
+                    <ErrorAlert Message="@_storyError" ShowSignIn="@_storyErrorIsSessionExpired" />
 
                     @* ── Inline add-story form (members only) — WU42: title typeahead replaces the
                        old raw numeric Story ID input. *@
@@ -256,6 +262,8 @@ else
                                    class="text-xs text-(--color-action-ink) hover:underline">Manage</a>
                             }
                         </div>
+                        @* The tree's per-folder unassign refusals. *@
+                        <ErrorAlert Message="@_folderError" ShowSignIn="@_folderErrorIsSessionExpired" />
                         @if (Group.FolderTree.Count == 0)
                         {
                             <p class="text-xs text-(--color-text-muted)">No folders yet.</p>
@@ -305,6 +313,15 @@ else
     // The rescue panel's last refusal ("moved under the panel"), shown after the reload it triggered.
     // Any later load clears it (LoadGroupAsync), so it describes only the refusal just made.
     private string? _rescueRefusal;
+
+    // Inline refusals, each beside its controls (error-handling.md: a refusal is never a toast). The
+    // message and its Sign-in flag are always set together (Present, the Clear* helpers).
+    private string? _membershipError;
+    private bool _membershipErrorIsSessionExpired;
+    private string? _storyError;
+    private bool _storyErrorIsSessionExpired;
+    private string? _folderError;
+    private bool _folderErrorIsSessionExpired;
 
     // The sole admin's Leave confirm (D13's warn-on-last-admin-leave rider).
     private bool _confirmLastAdminLeaveOpen;
@@ -495,6 +512,7 @@ else
 
     private async Task HandleJoinAsync()
     {
+        ClearMembershipError();
         try
         {
             await GroupService.JoinAsync(GroupId);
@@ -502,7 +520,7 @@ else
         }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            (_membershipError, _membershipErrorIsSessionExpired) = Present(ex, "Joining");
         }
     }
 
@@ -523,6 +541,7 @@ else
 
     private async Task HandleLeaveAsync()
     {
+        ClearMembershipError();
         try
         {
             await GroupService.LeaveAsync(GroupId);
@@ -530,7 +549,7 @@ else
         }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            (_membershipError, _membershipErrorIsSessionExpired) = Present(ex, "Leaving");
         }
     }
 
@@ -699,6 +718,7 @@ else
     private async Task HandleFolderAssignmentChangedAsync(
         int groupStoryId, IReadOnlyList<int> currentFolderIds, int? newFolderId)
     {
+        ClearStoryError();
         try
         {
             foreach (int oldFolderId in currentFolderIds)
@@ -710,19 +730,18 @@ else
                 await GroupService.AssignStoryToFolderAsync(groupStoryId, folderId);
             await LoadGroupAsync();
         }
-        catch (ContentRatingExceededException ex)
-        {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
-        }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            // ContentRatingExceededException (a folder's rating cap) is user-facing like the rest.
+            (_storyError, _storyErrorIsSessionExpired) = Present(ex, "Filing a story");
         }
     }
 
     /// <summary>Per-folder × control in the tree — unassigns from exactly that one folder.</summary>
     private async Task HandleUnassignAsync(int groupStoryId, int groupFolderId)
     {
+        _folderError = null;
+        _folderErrorIsSessionExpired = false;
         try
         {
             await GroupService.UnassignStoryFromFolderAsync(groupStoryId, groupFolderId);
@@ -730,7 +749,7 @@ else
         }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            (_folderError, _folderErrorIsSessionExpired) = Present(ex, "Unfiling a story");
         }
     }
 
@@ -755,23 +774,22 @@ else
 
     private async Task HandleStoryAddedAsync(AddGroupStoryDto dto)
     {
+        ClearStoryError();
         try
         {
             await GroupService.AddStoryAsync(dto);
             await LoadGroupAsync();
         }
-        catch (ContentRatingExceededException ex)
-        {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
-        }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            // ContentRatingExceededException (the group's rating cap) is user-facing like the rest.
+            (_storyError, _storyErrorIsSessionExpired) = Present(ex, "Adding a story");
         }
     }
 
     private async Task HandleStoryRemovedAsync(int groupStoryId)
     {
+        ClearStoryError();
         try
         {
             await GroupService.RemoveStoryAsync(groupStoryId);
@@ -779,7 +797,32 @@ else
         }
         catch (Exception ex)
         {
-            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+            (_storyError, _storyErrorIsSessionExpired) = Present(ex, "Removing a story");
         }
+    }
+
+    // -- Inline refusals (the WU-ErrorHandling2 follow-up, WU-TrackerFixes 2026-10-13) --------------
+
+    private void ClearMembershipError()
+    {
+        _membershipError = null;
+        _membershipErrorIsSessionExpired = false;
+    }
+
+    private void ClearStoryError()
+    {
+        _storyError = null;
+        _storyErrorIsSessionExpired = false;
+    }
+
+    /// <summary>
+    /// The message and its Sign-in flag for a refused operation, set together. A failure that is not
+    /// user-facing logs at Error and shows the generic message with its trace id (error-handling.md).
+    /// </summary>
+    private (string Message, bool IsSessionExpired) Present(Exception ex, string operation)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+            Logger.LogError(ex, "{Operation} failed unexpectedly in group {GroupId}", operation, GroupId);
+        return (ExceptionPresenter.GetUserMessage(ex), ex is SessionExpiredException);
     }
 }

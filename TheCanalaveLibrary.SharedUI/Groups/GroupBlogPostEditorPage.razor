@@ -127,7 +127,7 @@
     private async Task HandleValidSubmit()
     {
         _viewModel.IsLoading = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
 
         try
         {
@@ -154,7 +154,7 @@
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Creating a group blog post failed unexpectedly for group {GroupId}", GroupId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {

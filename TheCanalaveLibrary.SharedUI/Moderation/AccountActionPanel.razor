@@ -41,7 +41,7 @@
 
     @if (DisplayedError is not null)
     {
-        <div class="mb-2"><ErrorAlert Message="@DisplayedError" ShowSignIn="@ErrorIsSessionExpired" /></div>
+        <div class="mb-2"><ErrorAlert Message="@DisplayedError" ShowSignIn="@(_localError is null && ErrorIsSessionExpired)" /></div>
     }
 
     <div class="flex gap-2">
@@ -88,6 +88,8 @@
     private DateTime? _suspendUntil;
     private string? _localError;
 
+    // A local validation string wins over the parent's error, and the parent's Sign-in flag shows only
+    // while the parent's message is the one on screen (error-handling.md: the flag travels with it).
     private string? DisplayedError => _localError ?? ErrorMessage;
 
     private string ActionVerb => Action switch

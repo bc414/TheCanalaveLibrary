@@ -33,9 +33,12 @@ public class ModReportsPageTests : BunitContext
         DateResolved: null,
         TargetActiveReportCount: 1);
 
-    private IRenderedComponent<ModReportsPage> RenderWithQueue(params ReportQueueItemDto[] queue)
+    private IRenderedComponent<ModReportsPage> RenderWithQueue(params ReportQueueItemDto[] queue) =>
+        RenderWithQueue(removalFailure: null, queue);
+
+    private IRenderedComponent<ModReportsPage> RenderWithQueue(Exception? removalFailure, params ReportQueueItemDto[] queue)
     {
-        Services.AddSingleton<IModerationWriteService>(new QueueOnlyModerationWriteService(queue));
+        Services.AddSingleton<IModerationWriteService>(new QueueOnlyModerationWriteService(queue, removalFailure));
         return Render<ModReportsPage>();
     }
 
@@ -61,6 +64,28 @@ public class ModReportsPageTests : BunitContext
         ButtonTexts(cut).Should().Contain("Hide content");
     }
 
+    [Fact]
+    public async Task HideContent_AnExpiredSession_ThenAnEmptyReason_OffersNoStaleSignIn()
+    {
+        // The flag travels with the message (the WU-ErrorHandling2 follow-up, WU-TrackerFixes): the
+        // early-return "A removal reason is required." used to inherit the previous failure's Sign in.
+        IRenderedComponent<ModReportsPage> cut = RenderWithQueue(
+            new SessionExpiredException(), Claimed(3, ReportedEntityType.Story, "A Story"));
+        FindButton(cut, "Act").Click();
+
+        cut.Find("#action-notes").Change("Spam.");
+        await FindButton(cut, "Hide content").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        SignInLinks(cut).Should().Be(1, "the removal failed on an expired session");
+
+        cut.Find("#action-notes").Change("");
+        await FindButton(cut, "Hide content").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.Markup.Should().Contain("A removal reason is required.");
+        SignInLinks(cut).Should().Be(0, "a validation message never carries the last failure's Sign in");
+    }
+
+    private static int SignInLinks(IRenderedComponent<ModReportsPage> cut) =>
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in");
+
     private static IEnumerable<string> ButtonTexts(IRenderedComponent<ModReportsPage> cut) =>
         cut.FindAll("button").Select(b => b.TextContent.Trim()).ToList();
 
@@ -69,14 +94,16 @@ public class ModReportsPageTests : BunitContext
         cut.FindAll("button").First(b => b.TextContent.Trim() == text);
 
     /// <summary>Serves a fixed queue; every action throws (none is expected here).</summary>
-    private sealed class QueueOnlyModerationWriteService(ReportQueueItemDto[] queue) : IModerationWriteService
+    private sealed class QueueOnlyModerationWriteService(ReportQueueItemDto[] queue, Exception? removalFailure = null)
+        : IModerationWriteService
     {
         public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) => Task.FromResult(queue);
         public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() => throw new NotImplementedException();
         public Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId) => throw new NotImplementedException();
         public Task ClaimReportAsync(long reportId) => throw new NotImplementedException();
         public Task ResolveNoActionAsync(long reportId, string? actionNotes) => throw new NotImplementedException();
-        public Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false) => throw new NotImplementedException();
+        public Task ResolveWithRemovalAsync(long reportId, string removalReason, bool hardDelete = false) =>
+            throw removalFailure ?? new NotImplementedException();
         public Task ApplyAccountActionAsync(long reportId, ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) => throw new NotImplementedException();
         public Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) => throw new NotImplementedException();
         public Task ReinstateUserAsync(int targetUserId, string reason) => throw new NotImplementedException();

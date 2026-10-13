@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// call, keeping the form bUnit-testable with no dependencies. Mirrors
 /// <see cref="StoryPropertiesViewModel"/>.
 /// </summary>
-public class BlogPostPropertiesViewModel
+public class BlogPostPropertiesViewModel : EditorFormViewModel
 {
     [Required(ErrorMessage = "Title is required.")]
     [MaxLength(256, ErrorMessage = "Title cannot exceed 256 characters.")]
@@ -38,6 +38,6 @@ public class BlogPostPropertiesViewModel
     /// </summary>
     public string? Content { get; set; }
 
-    public bool IsLoading { get; set; }
-    public List<string> ServerValidationErrors { get; set; } = new();
+    // IsLoading and the server-error state (ServerValidationErrors + its session flag) come from
+    // EditorFormViewModel: write them through ShowServerError/ClearServerErrors.
 }

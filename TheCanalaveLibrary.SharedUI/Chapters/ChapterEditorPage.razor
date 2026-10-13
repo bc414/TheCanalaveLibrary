@@ -348,7 +348,7 @@ else
     private async Task HandleValidSubmit()
     {
         _viewModel.IsLoading = true;
-        _viewModel.ServerValidationErrors.Clear();
+        _viewModel.ClearServerErrors();
         try
         {
             string chapterText = _form is not null ? await _form.GetChapterTextAsync() : string.Empty;
@@ -411,7 +411,7 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Saving chapter failed unexpectedly for story {StoryId}, content {ChapterContentId}", StoryId, _contentId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
         finally
         {
@@ -485,6 +485,7 @@ else
     private async Task AddImportAsVersionAsync()
     {
         if (_importedDraft is null || _chapterId is null) return;
+        _viewModel.ClearServerErrors();
         try
         {
             await ChapterService.AddAlternateVersionAsync(_chapterId.Value, new CreateChapterDto
@@ -502,13 +503,14 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Import-as-version failed for chapter {ChapterId}", _chapterId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
     }
 
     private async Task SetPublishedAsync(bool publish)
     {
         if (_chapterId is null) return;
+        _viewModel.ClearServerErrors();
         try
         {
             await ChapterService.SetPublishedAsync(_chapterId.Value, publish);
@@ -518,13 +520,14 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Setting publish state failed unexpectedly for chapter {ChapterId}", _chapterId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
     }
 
     private async Task SetAsPrimaryAsync()
     {
         if (_chapterId is null || _contentId is null || _currentVersion is null) return;
+        _viewModel.ClearServerErrors();
         try
         {
             await ChapterService.SetPrimaryVersionAsync(_chapterId.Value, _contentId.Value);
@@ -537,13 +540,14 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Setting primary version failed unexpectedly for chapter {ChapterId}", _chapterId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
     }
 
     private async Task AddAlternateAsync()
     {
         if (_chapterId is null) return;
+        _viewModel.ClearServerErrors();
         try
         {
             long altContentId = await ChapterService.AddAlternateVersionAsync(_chapterId.Value, new CreateChapterDto
@@ -565,7 +569,7 @@ else
         {
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Adding an alternate version failed unexpectedly for chapter {ChapterId}", _chapterId);
-            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _viewModel.ShowServerError(ex);
         }
     }
 

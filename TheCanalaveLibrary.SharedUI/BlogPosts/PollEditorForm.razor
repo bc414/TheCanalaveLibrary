@@ -3,16 +3,14 @@
 
 @* Presentational poll create/edit form (no @inject — bUnit-testable; mirrors
    BlogPostPropertiesForm). The owning page supplies the PollEditDto, invokes the service,
-   and feeds server validation errors back via Errors. Config fields disable when
+   and feeds server validation errors back via Errors (+ ErrorsIsSessionExpired, for ErrorAlert's
+   Sign in). Config fields disable when
    ConfigLocked (votes exist — the lock itself is service-enforced; this is affordance).
    Dates are entered as UTC; the page stamps DateTimeKind.Utc before submitting. *@
 
 <div class="flex flex-col gap-4">
 
-    @if (Errors is { Count: > 0 })
-    {
-        <InlineAlert Messages="@Errors" />
-    }
+    <ErrorAlert Messages="@Errors" ShowSignIn="@ErrorsIsSessionExpired" />
 
     <label class="flex flex-col gap-1 text-sm text-(--color-text)">
         <span class="font-medium">Question</span>
@@ -127,6 +125,10 @@
     [Parameter] public string SubmitLabel { get; set; } = "Save";
     [Parameter] public bool IsBusy { get; set; }
     [Parameter] public IReadOnlyList<string>? Errors { get; set; }
+
+    /// <summary>Set by the page when <see cref="Errors"/> came from a <c>SessionExpiredException</c>:
+    /// the form's <see cref="ErrorAlert"/> then offers Sign in.</summary>
+    [Parameter] public bool ErrorsIsSessionExpired { get; set; }
     [Parameter] public EventCallback OnSubmit { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
