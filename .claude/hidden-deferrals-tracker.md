@@ -1045,6 +1045,32 @@ unless noted. All sit under Stage-5 cells.
     was refused in about a second on both render phases, with nothing written. That pass also made
     the refusal readable (`ImageUploadValidationException`, `audit/ImageStorage.md` L2).
 
+- [ ] **E10 — A constraint violation the service catches and handles still writes two EF Core `fail:` log lines** `[off-grid · low · pre-launch]` — *Observed 2026-10-13 by the WU-SchemaHardening browser pass.*
+  - Grid: no cell moves. The behaviour is correct; only the log level is wrong.
+  - **Seen:** four concurrent `POST /api/groups/stories` for one story all answered 204 and left one
+    `group_stories` row: `AddStoryAsync` catches the losers' 23505 on
+    `ix_group_stories_group_id_story_id` and treats each add as already done. EF Core had already logged
+    each loser as `fail: Microsoft.EntityFrameworkCore.Database.Command[20102]` and
+    `fail: Microsoft.EntityFrameworkCore.Update[10000]`, with the full stack.
+  - **Why it matters:** `logging.md` §"Level semantics" keeps Error for "an operation the caller asked
+    for failed and wasn't swallowed by design". A handled race is by design, yet each one is an Error
+    line that an alerting rule would watch (the same concern as **E8**).
+  - **Sites** (every catch of a named constraint violation; enumerate again before building, per the
+    audit-before-cross-cutting-build rule):
+    - `ServerGroupWriteService`: `AddStoryAsync`, `CreateFolderAsync` (name index and parent FK),
+      `RenameFolderAsync`, `DeleteFolderAsync` (WU-SchemaHardening);
+    - `ServerModerationWriteService.SubmitReportAsync`'s duplicate open report (WU-ModerationIntegrity);
+    - `ServerRecommendationWriteService`'s duplicate recommendation (string match, not a constraint
+      name).
+  - **Fix shape, an owner-level trade-off:**
+    - For a race whose answer is "already done", `INSERT … ON CONFLICT DO NOTHING` raises no exception
+      at all. That is D11's insert shape, so the `AddStoryAsync` site belongs with D11.
+    - For a race whose answer is a refusal, EF's two events can be lowered with
+      `ConfigureWarnings(w => w.Log((RelationalEventId.CommandError, …), (CoreEventId.SaveChangesFailed, …)))`.
+      That lowers every failure, so first confirm that each unhandled path logs Error on its own
+      (`ApiExceptionHandler`, `CanalaveErrorBoundary`, the workers).
+    - Or accept the lines, and document them in `logging.md` as expected noise for a rare race.
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -1736,10 +1762,17 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - **Fix shape:** a gap (or a hollow marker) for a NULL day in the sparkline, per the `dataviz`
     skill's missing-data rule, and a bUnit test that a NULL day is not rendered as 0. L4 work, so it
     belongs with the Phase-3 sweep or any `/mod/stats` change.
-- [ ] **H28 — WU-SchemaHardening browser pass: the folder-management page's delete and refusals** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-SchemaHardening, which ran with no browser available.*
-  - Grid: **F39 L4.5 went 5→1** at this WU (the campaign's no-browser precedent): the page's delete now
-    moves sub-folders up, and it has three new refusal paths.
-  - **Steps** (both render phases; `psql` on `group_folders` / `group_folder_group_story` as ground
+- [x] **H28 — WU-SchemaHardening browser pass: the folder-management page's delete and refusals: browser-verified 2026-10-13 (CLOSED)** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-SchemaHardening, which ran with no browser available. Closed 2026-10-13 by its browser pass.*
+  - Grid: **F39 L4.5 is back at 5.** It went 5→1 at the WU (the campaign's no-browser precedent): the
+    page's delete now moves sub-folders up, and it has three new refusal paths.
+  - **Closed:** all four steps below ran on the server-only path, on the circuit and on WASM, with
+    `psql` after every write. No runtime bug was found. Beyond the listed steps: the rename and reorder
+    "no longer exists" refusals and a delete-delete from a stale tab; rename-to-self as a no-op; the
+    blank, over-100 and missing-parent refusals over HTTP (the page disables its buttons for a blank
+    name); member and anonymous access; and four concurrent story adds collapsing to one row. That last
+    check found EF Core's `fail:` log lines for a handled race, filed as **E10**. Narrative:
+    `audit/Groups.md`, the WU-SchemaHardening browser verification Stage note.
+  - **Steps as filed** (both render phases; `psql` on `group_folders` / `group_folder_group_story` as ground
     truth), on `/group/{id}/folders` as the group's admin:
     1. Create a top-level "A" with a sub-folder "B" (file a story into "B" from the group page).
        Delete "A": the confirm text says sub-folders move to the top level; "B" appears last among the

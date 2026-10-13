@@ -262,7 +262,8 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   handlers); Integration `GroupServiceTests` and `GroupFolderIntegrityTests` (the server-side checks).
 - **L3.5-Structure — Stage 5 (2026-06-24, WU32; folder-management page built WU-GroupsL5,
   2026-07-24; delete copy and the new refusals handled WU-SchemaHardening, 2026-10-13 — stays Stage 5,
-  but L4.5 went 5→1 pending tracker H28's browser pass; Stage note at the end of this feature).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
+  and L4.5 went 5→1 at the WU and back to 5 at its browser pass the same day, tracker H28 closed;
+  Stage note and browser verification note at the end of this feature).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
   `RenderFragment` helper (read-only display, deliberate M-badge zero-trace suppression for
   non-consenting viewers — WU-AccessGate). Inline add-story form (StoryId text field) with
   `ContentRatingExceededException` surfaced as error toast. The admin "Manage" link to
@@ -373,7 +374,8 @@ cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-trac
 
 ### WU-SchemaHardening Stage note (2026-10-13) — Feature 39: folder integrity, `group_stories` as a set
 
-**No L1/L2/L3-Logic/L3.5 flip; F39 L4.5 5→1.** Schema audit §2.4 and service audit §2.10 found the folder model
+**No L1/L2/L3-Logic/L3.5 flip; F39 L4.5 5→1, and back to 5 at the browser pass the same day (note
+below).** Schema audit §2.4 and service audit §2.10 found the folder model
 sound in shape but unguarded. These defects sat beneath Stage-5 cells:
 - `parent_folder_id` had no FK: a deleted folder's sub-folders kept a dangling parent id and vanished
   from the tree, while `DeleteFolderAsync`'s comment claimed a SET NULL configured nowhere.
@@ -443,7 +445,54 @@ the suite green:
 
 **Browser:** this WU ran with no browser available, so F39 L4.5 went 5→1 (the campaign's no-browser
 precedent: the page's delete behaves differently and has new refusals). Tracker **H28** lists the
-steps that return it to 5.
+steps that return it to 5. (It ran the same day: the browser verification note below.)
+
+### WU-SchemaHardening browser verification Stage note (2026-10-13) — F39 L4.5 1→5; tracker H28 closed
+
+Tracker H28's four steps on the server-only path, as AuthorAlpha (the seed group's admin) on
+`/group/1/folders`, on both render phases. The circuit pass shows `_blazor/negotiate` and no `/api`
+call for the action; the WASM pass shows no negotiate and the action's `/api/groups/folders…` request.
+`psql` on `group_folders` and `group_folder_group_story` after every write. The browser console showed
+no errors. The server log's only `fail:` lines are the documented stale-antiforgery line on the first
+request and EF Core's own lines for a handled race (last bullet). **No runtime bug was found in the
+WU's code.**
+- **Step 1: delete moves sub-folders up.** Circuit: "A" with sub-folder "B"; "Seed Story: Completed
+  One-Shot (E)" filed into "B" from the group page. The confirmation reads "… Any sub-folders move to
+  the top level. This can't be undone." After the delete, "B" is top-level (`parent_folder_id` NULL)
+  with `sort_order` 2, after the existing top level, and its story stayed filed. WASM: the same with
+  "G"/"H" and "Seed Story: Five Chapters + Alt Version (T)"; `DELETE` 204, "H" got `sort_order` 4, after
+  the top level's highest 3.
+- **Step 2: the clash refusal.** "C" with sub-folder "D", plus a top-level "D". Deleting "C" shows
+  "Can't delete "C": its sub-folder "D" would move to the top level, where a folder named "D" already
+  exists. Rename one of them first." on both phases (WASM `DELETE` 400), and `psql` shows nothing
+  deleted. With two clashes the circuit shows one line per clash; WASM shows them joined in one
+  paragraph, because the 400 carries one `Detail` (`ClientHttpHelpers`' documented contract: per-item
+  errors do not round-trip). Both read.
+- **Step 3: names.** A padded "  B " beside "B" answers "A folder named "B" already exists here.";
+  renaming a top-level "D" to "C" answers the same shape and keeps the editor open; renaming "D" to
+  "D" is a no-op (WASM `PUT` 204, no message); "D" under another parent is accepted. Create and Save
+  are disabled for a spaces-only name on both phases, and the input's `maxlength` stops typing at 100,
+  so the server refusals were driven by same-origin `fetch`: a blank create and a blank rename answer
+  400 "A folder name is required.", 101 characters 400 "Folder names must be 100 characters or
+  fewer.", and a nonexistent parent 404.
+- **Step 4: a stale tab.** A second tab deleted folders out from under the first. Creating under the
+  gone parent shows "That parent folder no longer exists.", resets the parent select to (root) and
+  reloads the tree without it. Renaming a gone folder shows "That folder no longer exists.", closes the
+  editor and reloads; moving one and deleting one (a delete-delete) show the same and reload. Both
+  phases; on WASM each answered 404.
+- **Other actors.** TestUser (a member) sees "You must be an admin of this group to manage its
+  folders.", and the API answers 403 to its create and delete. Anonymous gets the sign-in page (401)
+  and 401 from the API.
+- **Beyond the steps: `AddStoryAsync`'s race backstop.** Four concurrent `POST /api/groups/stories` for
+  one story all answered 204. There is one `group_stories` row (three losing inserts hit
+  `ix_group_stories_group_id_story_id`), one folder assignment and one fan-out (two type-60 rows). EF
+  Core logs each caught violation as `fail: Microsoft.EntityFrameworkCore.Update[10000]` and
+  `…Database.Command[20102]` before the service handles it. That is a pre-existing logging class
+  shared with the moderation report dedup and recommendation backstops, so it is tracker **E10**, not
+  changed here.
+- **Tests:** none added, because no runtime defect was found.
+- **Cells:** F39 L4.5 goes 1→5. Tracker H28 is closed. The folders and the group story this pass made
+  were removed through the UI afterwards; the dev-DB state it left is listed in the workplan entry.
 
 ## Feature 40 — Group Display
 

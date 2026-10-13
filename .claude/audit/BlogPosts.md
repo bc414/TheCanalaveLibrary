@@ -549,6 +549,12 @@ dirtied dev-DB clone).
   blog-post create path's own copy of the check could be reverted with the suite green. **Integration**
   `PollServiceTests.CreateBlogPostPoll_CloseDateInThePast_WithNoOpenDate_ThrowsValidation` (+1) covers
   it; mutation-checked against that copy removed.
+- **Browser-driven 2026-10-13** by the WU's browser pass (server-only path, both render phases; no
+  flip). On `/polls` as ModUser, a site poll with Opens blank and Closes 2026-01-01 shows "The close
+  date must be after the open date." (WASM `POST /api/polls/site` 400). An edit that blanks Opens on a
+  poll stored to open 2026-12-01 and sets Closes 2026-11-01 shows the same (WASM `PUT /api/polls/1`
+  400), and `psql` shows the poll unchanged. On `/blog/3/edit` as AuthorAlpha, Add Poll with the same
+  past close date shows the same (WASM `POST /api/polls/blog-post/3` 400) and writes no row.
 
 **WU-TptHardDelete browser verification Stage note (2026-09-30) — no flip; L4.5 stays 5.** Owner
 ruling D11 end to end, `psql` after every write.
@@ -657,7 +663,7 @@ bullet below, 2026-07-13.)
 
 - **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock

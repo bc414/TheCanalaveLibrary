@@ -223,6 +223,9 @@ but nothing below it did. Migration `WU_SchemaHardening` adds `ck_fanon_links_no
 constraints"). The dev DB had no violating row, and SeedTool's `fanon_links` (distinct tags) loaded
 on a migrated scratch clone. Tests: **Integration** `SchemaConstraintTests` (the refusal by SQLSTATE
 23514 and name, two `Tag` rows seeded inline the `FanonPipelineTests` way; the catalog inventory).
+**HTTP-driven 2026-10-13** by the WU's browser pass (same-origin `fetch` as ModUser): `POST
+/api/fanon/links` with tag 1 as both base and target answers 400 "A group cannot be linked to its own
+base tag.", before the CHECK can.
 
 ## Feature 11 — Tag Administration
 

@@ -176,6 +176,11 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
   suspension is legal), so it is not encoded; a test pins that Suspended with no date is accepted.
 - Tests: **Integration** `SchemaConstraintTests` (a Warned row with a date refused by SQLSTATE 23514 and
   name; Suspended with and without a date accepted; the catalog inventory).
+- **Browser-driven 2026-10-13** by the WU's browser pass (no flip). On `/mod/users/7` as ModUser,
+  LurkerDelta was suspended to 2026-12-31 (`psql`: status 2 with the date), then reinstated (status 0,
+  date NULL), suspended again and banned (status 3, date NULL), and reinstated. Warn on a suspended
+  account is refused by WU-ModerationIntegrity's rule, with its readable message. No write reached the
+  CHECK.
 
 **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip; L2 stays 5.** The illegal-content
 hard delete (`ResolveWithRemovalAsync(…, hardDelete: true)` → `ApplyHardDeleteAsync`) orphaned TPT base
@@ -1143,6 +1148,9 @@ nullable flow columns had "accidental nullability semantics" in an append-only g
   `_now` (its day is now the `Day` property derived from it) and passes it, and the worker's daily run
   and gap-fill each pass the reading they chose their days from. Tier: Integration
   `SiteDailyStatAggregatorTests` (unchanged assertions; a midnight flake has no deterministic test).
+- **Browser-driven 2026-10-13** by the WU's browser pass (no flip): `/mod/stats` renders for ModUser on
+  both render phases with the `int` `NewUsers`, and the console shows no errors. The dev DB's days all
+  hold measured or pre-WU values, so H27's NULL-as-0 drawing was not observable there.
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** D9's sweep: `GetLatestAsync` and
 `GetSeriesAsync` are moderator-only, so `ServerSiteDailyStatReadService` now takes `IActiveUserContext`

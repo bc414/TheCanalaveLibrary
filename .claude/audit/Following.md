@@ -207,6 +207,11 @@ and a SeedTool re-run on a migrated scratch clone loaded 1,519 vouches.
 Tests: **Integration** `SchemaConstraintTests` (each refusal by SQLSTATE 23514 and name; the catalog
 inventory).
 
+**HTTP-driven 2026-10-13** by the WU's browser pass (same-origin `fetch` as AuthorAlpha; no flip):
+`POST /api/following/4` answers 400 "A user cannot follow themselves." and `POST
+/api/following/vouches/4` 400 "A user cannot vouch for themselves.". The service guard answers before
+the CHECK can.
+
 ## L4.5-Browser verification (2026-07-01) — F18 + F19 → Stage 5
 
 As TestUser on ModUser's profile: Follow button → active "Following" + alerts-bell toggle appears;

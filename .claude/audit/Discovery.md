@@ -235,7 +235,8 @@ re-seed guard from the start.
   WU28 closed random preload / "give me more" — see the WU28 Stage note below; WU-SelectionPermalink
   added the permalink read, 2026-07-28; the override write `SetOverrideAsync` is one
   `INSERT … ON CONFLICT` since the WU-SchemaHardening review fixes, 2026-10-13 — stays Stage 5,
-  Integration `DiscoveryFilterSettingsServiceTests`, Stage note at the end of this feature).
+  Integration `DiscoveryFilterSettingsServiceTests`, browser-driven by its browser pass the same day,
+  Stage note at the end of this feature).
   **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
   **L4 — Stage 1.**
@@ -520,6 +521,13 @@ class (`ToggleLikeAsync` on blog posts) and the unswept rest are tracker **D15**
 **Integration** `DiscoveryFilterSettingsServiceTests.SetOverrideAsync_OnOffOn_ThroughOneScope_LeavesOneRowWithTheFinalValue`
 runs the three toggles through one scope, which models the circuit. It failed with that exception
 before the fix. The other tests open a scope per call, so they could not see it.
+
+**Browser-driven 2026-10-13** by the WU's browser pass (server-only path; no flip). On `/settings` →
+Discovery Defaults as AuthorAlpha, "Hide stories I've favorited" under Search Page was toggled on,
+off, on and off on one circuit (the sequence that threw before the review fix), and the same on WASM
+(`PUT /api/discovery-defaults/my-matrix/SearchPage/Favorited`). Every toggle read "Discovery default
+saved.", and `psql` showed the row `(4, SearchPage, Favorited, true)` after each "on" and no row after
+each "off".
 
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',

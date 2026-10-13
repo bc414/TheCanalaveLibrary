@@ -17,20 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-SchemaHardening (2026-10-13) — schema audit §2.4/§2.6/§2.7, service audit §2.10,
-  D23's `group_stories` row, and WU-StoryLifecycle's two publish-anchor CHECKs. Migration
-  `WU_SchemaHardening` (rehearsed Up/Down/Up on a dirtied dev-DB clone) is applied to the server-only
-  dev DB; the Aspire DB picks it up on its next start. **F39 L4.5 5→1** (no browser; tracker **H28**).
+- **Last landed:** WU-SchemaHardening (2026-10-13; review fixes and browser pass the same day) — schema
+  audit §2.4/§2.6/§2.7, service audit §2.10, D23's `group_stories` row and WU-StoryLifecycle's two
+  publish-anchor CHECKs. Migration `WU_SchemaHardening` is on the server-only dev DB (the Aspire DB takes
+  it on its next start). **F39 L4.5** went 5→1 and back to 5 at the browser pass, which found no bug.
   - **Folders:** a real self-FK (SET NULL), unique top-level names, validated names, same-group parents;
     delete moves sub-folders to the top level and refuses a name clash (a default: decision **row 22**).
-  - **`group_stories`** is unique; a racing add counts as already added. **Ten CHECKs**, declared in the
-    model (the new rule in `layer1-data-model.md`), guarded by a catalog inventory test.
-  - **Smaller:** the poll close date is checked against the effective open date; `new_users` NOT NULL
-    and `active_users` written only for a measurable day; the filter overrides' natural key.
-  - **Review fixes (2026-10-13):** a re-toggled discovery setting threw on a circuit (now one
-    `ON CONFLICT` upsert; a new `layer2-services.md` rule; tracker **D15** for the rest of the class).
-  - **Tracker:** **D14**, **H27**, **H28**, **D15**. `dotnet test`: Unit 1,182, RazorComponents 776,
-    Integration 1,459. **Pointer:** its DONE entry.
+  - **`group_stories`** is unique (a racing add counts as already added); **ten CHECKs** declared in the
+    model (`layer1-data-model.md`); the poll close date checked against the effective open date;
+    `site_daily_stats` and the filter overrides' key fixed. Review fixes: a re-toggled discovery
+    setting no longer throws on a circuit (a new `layer2-services.md` rule).
+  - **Tracker:** **D14**, **H27**, **D15** filed; **H28** filed and closed; **E10** filed by the browser
+    pass. `dotnet test`: Unit 1,182, RazorComponents 776, Integration 1,459. **Pointer:** its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
@@ -270,7 +268,8 @@ references it, does not restate it.
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
-  WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15**),
+  WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
+  pass closed H28 the same day and opened **E10**)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -285,8 +284,7 @@ references it, does not restate it.
   fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
   2026-09-30; 21 — ImageSharp licensing (tracker **E9**: a Six Labors key, a library swap or
   standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes; 22 — the folder-delete
-  name-clash default — added 2026-10-13 by WU-SchemaHardening). Tracker **H28**, WU-SchemaHardening's
-  folder-page browser pass, returns F39 L4.5 to 5. Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  name-clash default — added 2026-10-13 by WU-SchemaHardening). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -451,9 +449,11 @@ is pending except where a bullet says so.
 ## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)
 
 - **Cells:** F39 L4.5 **5→1** (the folder page's delete and refusals changed; no browser was
-  available; tracker **H28**). Every other touched cell stays 5: F4/F6/F8/F10/F11/F18/F19/F37/F39/F47/F62
+  available; tracker **H28**), and **1→5** at the browser pass the same day, which closed H28. Every
+  other touched cell stays 5: F4/F6/F8/F10/F11/F18/F19/F37/F39/F47/F62
   L1, F31/F37/F39 L2, F39 L3-Logic and L3.5, F62 L8 (F31 L2 by the review fixes). Dated 2026-10-13 (the
-  session's `currentDate`, as the two WUs before it), not the template's 2026-09-30.
+  session's `currentDate`, as the two WUs before it), not the template's 2026-09-30; the review fixes
+  and the browser pass are dated the same way.
 - **Trigger:** the WU spec plus orchestrator amendment (WU-StoryLifecycle's two CHECKs, and fixing every
   test that seeds a published chapter or story without its date).
 - **What landed:**
@@ -534,9 +534,34 @@ is pending except where a bullet says so.
     was reverted in turn and its tests failed: the `ON CONFLICT` upsert (the old code threw the
     tracking exception), the rename catch's reload and its editor close, the reorder catch's reload,
     the 0-row delete check and the blog-post poll check. No UI behavior changed, so H28's steps stand.
+  - **Browser pass (2026-10-13), server-only path, both render phases, `psql` after every write. No
+    runtime bug in the WU's code; F39 L4.5 1→5; H28 closed.**
+    - Folder page as AuthorAlpha: H28's four steps (delete moves sub-folders up after the top level
+      with their stories still filed; the clash refusal deletes nothing; duplicate, padded and
+      rename-to-sibling names refused, rename-to-self a no-op; from a stale tab, create under a gone
+      parent, rename, move and delete each refuse and reload). Blank, 101-character and
+      missing-parent refusals over HTTP (the page disables its buttons for a blank name). A member
+      gets the admin gate and 403; anonymous gets 401.
+    - Four concurrent story adds: all 204, one `group_stories` row, one fan-out. EF Core still logs
+      each caught violation at `fail:`: tracker **E10** (pre-existing class, not changed here).
+    - Polls (`/polls` as ModUser, `/blog/3/edit` as AuthorAlpha): a past close date with Opens blank
+      on create, and an edit that blanks Opens with a close date before the stored open date, all
+      read "The close date must be after the open date." (WASM 400s), with no row written.
+    - `/settings` Discovery Defaults toggled on, off, on, off on one circuit and on WASM, `psql` after
+      each; `/mod/stats` renders on both phases; LurkerDelta suspended, reinstated, suspended, banned
+      and reinstated (the date clears each time); the self-follow, self-vouch, inverted-arc,
+      self-lineage and self-fanon-link requests answer 400 from their service guards.
+    - Tests after the pass (no code changed): build 0 errors, 31 warnings; **Unit 1,182**,
+      **RazorComponents 776**, **Integration 1,459**, all green; the four gates pass.
+    - **Dev-DB state it left** (server-only DB): the folders and the group story it made were
+      removed through the UI, so group 1's folders and story list are as seeded. Left: site poll 1
+      ("Verifier poll: past close date", ModUser, opens 2026-12-01); notifications 40018–40019 (type 60
+      for the removed group story) and 40020–40022 (LurkerDelta's account actions); LurkerDelta's
+      account-action history (Suspend, Reinstate, Suspend, Ban, Reinstate; Active at the end).
 - **Pointers:** `layer2-services.md` §"Group Folder Integrity" and §"Read-Context Concurrency: Factory
-  Per Method"; `layer1-data-model.md` §"CHECK constraints"; `audit/Groups.md` F39 Stage note;
-  `audit/Discovery.md` F31's WU-SchemaHardening note; `roadmap.md` §Resolved and row 22; tracker D15.
+  Per Method"; `layer1-data-model.md` §"CHECK constraints"; `audit/Groups.md` F39 Stage note and its
+  browser verification note; `audit/Discovery.md` F31's WU-SchemaHardening note; `roadmap.md` §Resolved
+  and row 22; tracker D15, E10.
 
 ---
 

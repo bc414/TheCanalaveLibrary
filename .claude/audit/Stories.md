@@ -396,6 +396,11 @@ Tests: **Integration** `SchemaConstraintTests` asserts each constraint by SQLSTA
 an unpublished story may keep or lack its date, and that the catalog's CHECK set equals the documented
 one.
 
+**HTTP-driven 2026-10-13** by the WU's browser pass (same-origin `fetch` as AuthorAlpha; no flip): an
+arc on story 1 with start 3 and end 2 answers 400 "End chapter must not be before the start chapter.",
+and a lineage from story 1 to itself 400 "A story cannot have a lineage link to itself.". The service
+guards answer before the CHECKs can.
+
 ## Feature 5 — Story Browsing & Display
 
 ### WU-RecLifecycle Stage note (2026-07-25) — empty candidate set no longer means "no narrowing"
