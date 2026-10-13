@@ -791,8 +791,10 @@ Groups are **not gated communities.** The membership and role model is deliberat
     post comments.
   - `GroupRole.Admin` — additionally can remove stories, manage folders (create/rename/delete/reorder,
     set `MaxRating ≤ group.MaxContentRating`), and edit the group's name/description/audience type.
-  - The group creator is automatically inserted as Admin on group creation. There is currently no
-    way to transfer Admin status — that is post-MVP if ever needed.
+  - The group creator is automatically inserted as Admin on group creation. **Member-to-member
+    transfer of a living admin role is permanently absent** (owner ruling D13): no admin hands the
+    role on, and nothing promotes while an admin exists. The one way a member becomes an admin after
+    creation is the moderator rescue below.
 - **No `GroupRole.Moderator` category.** Do not add one — the decision is permanent, not a
   deferral. Site moderators handle group-level misconduct.
 
@@ -801,9 +803,30 @@ Groups are **not gated communities.** The membership and role model is deliberat
 management, remove-story buttons) are visibility-only `@if` wired to a page-computed `bool IsAdmin`
 passed down from the dispatcher — not a security gate.
 
-**Leave:** any member may leave. The `GroupMember` row is deleted. If the last admin leaves, the
-group remains but has no admin — currently acceptable (post-MVP: warn on last-admin leave or
-auto-promote).
+**Leave:** any member may leave. The `GroupMember` row is deleted (`LeaveAsync` is unchanged by D13).
+
+**An admin-less group is a waiting state, not an end state** (owner ruling D13 edge (b), 2026-08-06;
+built WU-UserDeletion 2026-10-13). A group loses its last admin two ways: that admin leaves, or
+deletes their account (the `group_members` row cascades and `creator_id` goes NULL). The rule covers
+both routes. The group survives unadministered until a site moderator assigns a new admin on request.
+- **Rejected:** auto-promoting a member (it conscripts someone who never asked) and member self-claim
+  (a race that rewards whoever is watching). Permanent dormancy is rejected too: there is no
+  group-deletion path, so a dormant group whose name turns inappropriate would have no remedy (D47).
+- **The remedy is `IModerationWriteService.AssignGroupAdminAsync(groupId, targetUserId, notes)`,
+  with exactly three guards.** (1) The caller is a moderator (`RequireModerator()`). (2) The group has
+  zero `GroupMember` rows with `Role == Admin`; otherwise `ModerationValidationException` — without it
+  the method would override a functioning group's leadership. (3) The target is already a member;
+  otherwise `ModerationValidationException` — a rescue does not invent a membership. Input checks: an
+  unknown group is `KeyNotFoundException`; `notes` is required and fits `Report.ActionTaken` (1,024).
+  It sets the member's `Role = Admin` and files the ledger row (§"Account actions" — the Group shape)
+  in one save, then notifies the promoted user (`GroupAdminAssigned`, 62, null-sourced — D5). **No
+  counter moves:** a role change on an existing row is not a membership change, so `GroupsJoined`
+  stays put and the recompute agrees by construction (D24). Two moderators racing can both promote
+  someone, leaving two admins: benign, so no lock (D23's posture).
+- **The UI warns on last-admin leave** (D13's recommended rider): the sole admin's Leave opens a
+  confirm saying the group will have no admin until a site moderator assigns one. A moderator viewing
+  an admin-less group sees an "Assign an admin" panel (`GroupAdminRescuePanel`). The request channel
+  for "on request" is out of band (message a moderator) until D47.
 
 ## Notification Generation
 
@@ -913,7 +936,13 @@ would itself say "you're fine". `SpotlightSlotGranted` (90) sits outside D5's st
 granting-moderator source (unruled — roadmap decision row 19). Until the row is ruled, no surface
 renders that name: `NotificationPresenter`'s 90 arm is actor-free, so the copy pre-empts neither
 answer (WU-NotificationCorrectness review fixes, 2026-10-13). A presenter arm must not settle an
-open attribution question by itself.
+open attribution question by itself. **`GroupAdminAssigned` (62)** sits in the Groups band but is a
+moderator act, so D5's principle applies by its own wording ("moderator identity is never disclosed
+through a notification"): `NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` takes no moderator
+parameter and writes a null source; `RelatedEntityId` is the group (D16's single most specific anchor),
+and the presenter arm is actor-free (WU-UserDeletion, 2026-10-13). A moderator who is a member may
+assign themselves (D13 lists exactly three guards, and a self-target is not one of them); the call
+site then skips the notification, per the general rule above.
 
 **Dedup.** The cross-existing key is `(type, source, related entity, unread)`: a recipient who already
 holds an unread row with that key is skipped. A null source matches a null source (EF's C# null
@@ -2280,8 +2309,10 @@ the report was filed.** Nullable FK → `AspNetUsers`, `ON DELETE SET NULL` (rep
 they name). Populated at write time **for every target type**: `User` → that user; `Message` → the
 sender; `Story`/`Comment`/`BlogPost`/`Recommendation` → the author. It is a **snapshot, never
 re-resolved** — nothing that reassigns ownership rewrites report history, and a later session must not
-"correct" it as drift. NULL means unknown, anonymized or deleted, never "has no owner" (a founderless
-`Group`, once D13 adds that target, is the one designed NULL — WU-UserDeletion adds its resolver arm).
+"correct" it as drift. NULL means unknown, anonymized or deleted, never "has no owner" — with one
+designed exception: a `Group` target resolves to `groups.creator_id` (D8's seventh-type amendment;
+the resolver arm since WU-UserDeletion, 2026-10-13), never to a lookup of current admins, and is NULL
+whenever the founder deleted their account. A NULL Group row is expected, not a broken producer.
 Every producer sets it: submission (resolved), and the moderator-filed rows (`ApplyAccountActionToUserAsync`,
 `SetCanAutoApproveAsync`, `ReinstateUserAsync`), which set it to their target.
 - **One resolver, two forms.** `ResolveAnswerableUserIdAsync(type, id)` returns `int?`; its default arm
@@ -2386,6 +2417,18 @@ consequences bind all new work:
    `ModerationValidationException`, unknown user → `KeyNotFoundException`); an unchanged value is a no-op
    that writes no row. No notification (owner silent). Restore exists because a one-way moderator lever is
    the "irreversible in-app" defect class. See §"Story Lifecycle" for what the flag gates.
+   **The second row shape — a moderator action on a group (owner ruling D13; WU-UserDeletion
+   2026-10-13).** `AssignGroupAdminAsync` (§"Group Membership and Role Model") files the same
+   opened-and-resolved row with a `Group` target: `ReportedEntityType.Group`, `ReportedEntityId =
+   groupId`, `ReportedUserId = groups.creator_id` (the resolver's Group arm; usually NULL in the
+   scenario that motivates the action), reason **Other** (seeded id 1 — no misconduct reason fits an
+   administrative assignment) with **mandatory notes**, `Notes = ActionTaken = notes`,
+   `ReporterUserId == ModeratorUserId`, `ResolvedActionTaken`. No `ActiveReportCount` call: groups have
+   no counter. **`Group` is a ledger-only `ReportedEntityType` until D47:** it is not in
+   `SubmitReportAsync`'s allow-set and no "report this group" control exists, because nothing defines
+   what a moderator could do with a member-filed Group report (D47(b), pending) and such rows would be
+   queue zombies. D47(a)'s floor holds by construction: every Group row is born resolved, so the queue
+   offers no action on it. The queue labels it with the group's name and links `/group/{id}`.
 2. **The action's target user is resolved from the report, not assumed to be the report's target.**
    `ResolveActionTargetUserIdAsync` maps `User` → the reported user; `Story`/`Comment`/`BlogPost`/
    `Recommendation` → the reported content's author; `Message` → the message's sender (the throwing form

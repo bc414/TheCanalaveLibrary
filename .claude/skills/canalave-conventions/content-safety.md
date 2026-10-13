@@ -418,6 +418,11 @@ dead-man-walking session with no explanation, which contradicts this section's o
 PrivateMessage. `Report.ReportedEntityId` is `long` (widened from `int` in WU34 migration). `ReportedEntityType`
 enum value `Message = 5` added.
 
+**`ReportedEntityType.Group = 6` is ledger-only** (owner ruling D13 and D47's floor; WU-UserDeletion,
+2026-10-13). Only the moderator assign-admin action writes it, as an opened-and-resolved audit row; it is
+**not** in the reportable set above, and no user-facing "report this group" control exists until D47(b)
+decides what a moderator can do with one (`layer2-services.md` §"Account actions" — the Group shape).
+
 **`ActiveReportCount` exists on:** Story, BaseComment, BaseBlogPost, Recommendation, **and User** (added WU34
 for symmetry). **`PrivateMessage` has no counter** — DMs are 1:1 sensitive; no surface would display a
 per-message report count.

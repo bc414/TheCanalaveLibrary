@@ -13,7 +13,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// poll's content. The component must hand that null to its parent — which drops the poll, exactly
 /// as after a delete — instead of dereferencing it. L3 <c>@code</c> EventCallback logic, so this tier
 /// (<c>testing.md</c>). The service behavior itself is Integration
-/// (<c>ParentVisibilityContractTests</c>).
+/// (<c>ParentVisibilityContractTests</c>). Also the voter list's rendering: live voters link to their
+/// profile, and an anonymized vote (owner ruling D13 — the voter deleted their account) reads
+/// "[deleted user]" as plain text.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
 public class PollViewTests : BunitContext
@@ -96,6 +98,35 @@ public class PollViewTests : BunitContext
 
         cut.FindAll("a").Single(a => a.TextContent.Trim() == "voter")
             .GetAttribute("href").Should().Be("/user/12");
+    }
+
+    [Fact]
+    public void AnonymizedVoter_RendersDeletedUser_AsPlainText_AndKeepsTheCount()
+    {
+        // Owner ruling D13 (WU-UserDeletion): a deleted account's vote survives with a null UserId. The
+        // voter list renders it as "[deleted user]" rather than omitting it, so the list's length keeps
+        // matching the option's count — and it is never a link (there is no profile to go to).
+        PollDto poll = VotedPoll(70) with
+        {
+            TotalVoterCount = 2,
+            Options =
+            [
+                new PollOptionResultDto(70, "Sinnoh", 0, 2,
+                    [new PollVoterDto(12, "voter"), new PollVoterDto(null, null)]),
+                new PollOptionResultDto(71, "Johto", 1, 0, []),
+            ],
+        };
+        IRenderedComponent<PollView> cut = Render<PollView>(p => p
+            .Add(c => c.Poll, poll)
+            .Add(c => c.CurrentUserId, 5));
+
+        cut.Markup.Should().Contain("[deleted user]");
+        cut.FindAll("a").Should().ContainSingle(a => a.GetAttribute("href")!.StartsWith("/user/"),
+            "only the live voter links to a profile");
+        cut.FindAll("a").Should().NotContain(a => a.TextContent.Contains("[deleted user]"));
+        cut.FindAll("span").Should().Contain(s => s.TextContent.Trim() == "2",
+            "the option's count is rendered unchanged");
+        cut.Markup.Should().Contain("2 voters");
     }
 
     /// <summary>Records the last vote and returns a scripted result; every other member is unused.</summary>

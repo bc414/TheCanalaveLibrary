@@ -96,6 +96,36 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
     }
 
     /// <summary>
+    /// Owner ruling D13 (WU-UserDeletion): the page is the Art. 13/14 compliance surface, so it must
+    /// enumerate the whole survival set (poll votes and sent messages included), the destroyed set, the
+    /// delete-it-yourself-first paths, that sent messages cannot be deleted, and that removing a name
+    /// does not remove identifying details. A policy change that forgets the copy fails here.
+    /// </summary>
+    [Fact]
+    public async Task DeletePersonalDataPage_EnumeratesTheSurvivalSet_AndTheDeleteFirstPaths()
+    {
+        int userId = await SeedUserAsync("deletion-policy-viewer");
+        SetActiveUser(userId);
+        using HttpClient client = Factory.CreateClient();
+
+        using HttpResponseMessage response = await client.GetAsync("/Account/Manage/DeletePersonalData");
+        string html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        html.Should().Contain("Kept, without your name");
+        html.Should().Contain("Your votes on polls", "poll votes survive anonymized (D13's correction)");
+        html.Should().Contain("Private messages you sent. The other person keeps the conversation");
+        html.Should().Contain("Groups you founded");
+        html.Should().Contain("Permanently deleted");
+        html.Should().Contain("linked sign-in providers", "account-level fields go unconditionally (D13 (iii))");
+        html.Should().Contain("Comments other people left on your profile");
+        html.Should().Contain("Delete it first");
+        html.Should().Contain("Private messages you sent can't be deleted");
+        html.Should().Contain("Removing your name does not remove what you wrote");
+        html.Should().Contain($"href=\"/user/{userId}/series\"");
+    }
+
+    /// <summary>
     /// <c>ContentGate/StatusCodePage.razor</c> is the other static-SSR page that opts into the
     /// SharedUI chrome — explicitly, via <c>@layout TheCanalaveLibrary.SharedUI.MainLayout</c>, while
     /// its folder <c>_Imports</c> carries <c>[ExcludeFromInteractiveRouting]</c>. It is reached two

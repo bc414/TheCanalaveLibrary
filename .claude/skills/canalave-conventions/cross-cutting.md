@@ -134,7 +134,8 @@ context, since even a genuine replica would trail the primary slightly.
 - **Content parent → TPT child** (chapter → chapter comments, blog post → its comments and polls,
   group → group comments and group posts): RESTRICT. The service deletes the base rows first through
   `TptDelete` (owner ruling D10; `layer1-data-model.md` §"Hard-deleting a content parent").
-- **Interaction data** (follows, interactions, badges, settings): CASCADE on user.
+- **Interaction data** (follows, interactions, badges, settings): CASCADE on user. **Poll votes are
+  the one exception** (owner ruling D13): see "Account deletion" below.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
 - **Comment deletion** (owner ruling D12, 2026-08-06): a hard delete. Replies are reparented to top
   level by `base_comments.parent_comment_id` `ON DELETE SET NULL`. There is no tombstone row, no
@@ -149,6 +150,82 @@ context, since even a genuine replica would trail the primary slightly.
   names are unique too (NULLS NOT DISTINCT), so a delete whose promoted sub-folder would duplicate a
   top-level name is rejected by the service before anything is deleted (`layer2-services.md` §"Group
   Folder Integrity"; a default, roadmap decision row 22).
+
+### Account deletion — the ratified survival set (owner ruling D13, 2026-08-06; built WU-UserDeletion 2026-10-13)
+
+Deleting an account is a **hard delete of the `User` row** (`UserDeletionService.DeleteUserAsync`,
+`Server/Identity/`). Schema audit §3.8's three lists are the site's erasure policy, ratified with one
+correction: poll votes moved from "destroyed" to "survives". Each list below was checked against the
+live FK graph (`pg_constraint`, 2026-10-13).
+
+- **Survives, anonymized (FK `SET NULL`):** stories, chapter contents, comments, blog posts,
+  recommendations, series, the polls the user created (D11), **the user's poll votes** (D13), the
+  private messages they sent (the other participant keeps the conversation), groups they founded,
+  stories they added to groups, Community Spotlight placements they sponsored and slots granted to or by
+  them, fanon links they made, external-identity reviews they performed as a moderator, and every
+  report they filed, resolved or were answerable for (the moderation ledger).
+- **Destroyed by cascade:** the login itself (the row carries email and password hash; Identity
+  claims, external sign-in logins, roles and tokens cascade), profile, stats, notification and
+  discovery-filter settings, story and chapter interactions (favorites, follows, read-later, reading
+  progress), likes, recommendation-success credits, custom lists, saved tag selections, badges, group
+  memberships, content reveals, the notifications they received, their conversation-participant rows,
+  the follows they made, the vouches they gave, co-author / beta-reader / acknowledgment credits,
+  tag-adoption states and verified external identities.
+- **Destroyed or nulled by the service** (the RESTRICT edges, resolved before the delete): comments
+  other people left on their profile (through `TptDelete`), follows and vouches they received, and the
+  source of the notifications they caused (nulled; the recipient keeps the notification).
+- **Closed by the service** (`ReportLedger`, D7's sub-edge): open reports on the account itself, on the
+  destroyed profile comments, and on the messages of a conversation the deletion leaves empty.
+
+**Why poll votes survive when favorites cascade.** Interaction data whose only expression is a live
+aggregate cascades: a favorite count measures a story's standing and *should* track the live user
+population. A poll vote is a point-in-time record ("in June 2026, 37 people said X"), and nothing
+denormalizes the tally, so cascading it rewrites a closed poll's published result. It survives
+anonymized: `poll_votes.user_id` is nullable `ON DELETE SET NULL` behind a surrogate key
+(`layer1-data-model.md` §"Column Conventions"), and the public voter list renders the row as
+"[deleted user]" so the list keeps the tally's length. D12 (comments deleted silently) reached the
+opposite answer **on cost, not on principle**: its price was a permanent third comment state on the
+hottest read path; here the price is a nullable column on a small table and a render branch that
+already exists.
+
+**Conversations (D13 edge (a)).** With one participant left, the conversation survives intact: the
+remaining participant keeps her row, the conversation and every message, and the deleted sender's
+messages read "[deleted user]". With **no** participant left, `DeleteUserAsync` deletes the
+conversation in the same transaction, after the save that cascades the participant rows (one
+`ExecuteDeleteAsync`, scoped to the conversations the user was in; messages cascade). It first closes
+open reports on those messages. No sweeper and no worker: account deletion is the only *designed*
+producer of an empty conversation, so cleaning up at the source is exhaustive. A crash between two
+saves was a second, undesigned producer; `StartConversationAsync` is one save since
+WU-NotificationCorrectness, which closed it.
+
+**Groups (D13 edge (b)).** A group whose last admin deletes their account (or leaves) survives with no
+admin, `creator_id` NULL. That is a waiting state; a moderator assigns a new admin on request
+(`layer2-services.md` §"Group Membership and Role Model").
+
+**GDPR posture.** Erasure (Art. 17) attaches to personal data, not to content: a comment's text is
+personal data because it is linked to its author, and once the link is severed the record is anonymous
+data (Recital 26). Anonymizing in place is therefore not retention under an exception. Three things
+bind every future change:
+1. **The anonymization must be genuine.** The user must be able to delete their own content before
+   deleting the account, and the deletion page must say so. Severing the FK does nothing for content
+   whose text identifies its author.
+2. **No retained mapping, ever.** No `deleted_user → old_user_id` table, for support or any other
+   purpose, and no softening of the hard delete into an anonymize-in-place. Either converts
+   anonymization into pseudonymization and collapses the analysis.
+3. **Account-level fields go unconditionally:** email, password hash, external sign-in links,
+   settings.
+
+*Boundary, not ruled:* application logs carry user ids (the deletion itself logs one), and two
+polymorphic id columns keep the bare integer of a deleted account (`reports.reported_entity_id` on a
+`User` report; `notifications.related_entity_id` on the user-anchored types). Neither maps the id to
+the anonymized content, so rule 2 holds; whether log retention or those columns need more is open
+(tracker **F19**).
+
+**The deletion page's copy is the compliance surface** (Art. 13/14 transparency).
+`DeletePersonalData.razor` enumerates this policy in the user's terms: what survives anonymized, what
+is destroyed, how to delete content first, that sent messages cannot be deleted and stay in the
+recipient's inbox, and that anonymization removes the name but not identifying details written into
+the content. **Change the policy, change the copy, in the same WU.**
 
 ## Dev-Only Diagnostic Endpoints
 

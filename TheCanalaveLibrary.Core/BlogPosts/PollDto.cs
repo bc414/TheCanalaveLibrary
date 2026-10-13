@@ -10,8 +10,13 @@ public enum PollStatus : short
     Closed = 2,
 }
 
-/// <summary>A voter shown in a poll's public voter list (Public / opted-in VoterChoice modes).</summary>
-public record PollVoterDto(int UserId, string UserName);
+/// <summary>
+/// A voter shown in a poll's public voter list (Public / opted-in VoterChoice modes).
+/// <see cref="UserId"/> and <see cref="UserName"/> are both <c>null</c> for an anonymized vote — the
+/// voter deleted their account and the vote survived (owner ruling D13). The list renders it as
+/// "[deleted user]" rather than omitting it, so its length keeps matching the option's count.
+/// </summary>
+public record PollVoterDto(int? UserId, string? UserName);
 
 /// <summary>
 /// One option with its tally. When the poll's results are not visible to the viewer

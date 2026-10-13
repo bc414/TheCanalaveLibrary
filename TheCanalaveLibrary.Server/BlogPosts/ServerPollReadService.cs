@@ -9,6 +9,12 @@ namespace TheCanalaveLibrary.Server;
 /// here — when not visible to the viewer, tallies are zeroed and voter names emptied
 /// <b>server-side</b>, so the UI never receives numbers it shouldn't show. Voter names are
 /// likewise blanked for <c>Anonymous</c>-mode polls regardless of what the votes carry.
+/// <para><b>Anonymized votes (owner ruling D13).</b> A deleted account's votes survive with a NULL
+/// <c>UserId</c>. They count in every tally, lock the config like any vote, appear in the public voter
+/// list as a null-id entry (after the live names) so the list's length matches the count, and count
+/// one voter each in <see cref="PollDto.TotalVoterCount"/> — exact for single-choice polls, an upper
+/// bound for <c>AllowMultiple</c> (tracker F17). "Has the viewer voted" compares
+/// <c>UserId == viewerId</c>, which never matches NULL.</para>
 /// </summary>
 public class ServerPollReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -79,8 +85,12 @@ public class ServerPollReadService(
                 OwnerUserName = p.Owner != null ? p.Owner.UserName : null, // null = owner deleted (D11)
                 IsArchived = p is SitePoll && ((SitePoll)p).IsArchived,
                 BlogPostId = p is BlogPostPoll ? (int?)((BlogPostPoll)p).BlogPostId : null,
+                // Distinct live voters plus one per anonymized row (D13). A bare Distinct over the
+                // nullable column would fold every deleted voter into a single NULL "voter".
                 TotalVoterCount = p.PollOptions
-                    .SelectMany(o => o.Votes).Select(v => v.UserId).Distinct().Count(),
+                        .SelectMany(o => o.Votes).Where(v => v.UserId != null)
+                        .Select(v => v.UserId).Distinct().Count()
+                    + p.PollOptions.SelectMany(o => o.Votes).Count(v => v.UserId == null),
                 ViewerVotedOptionIds = p.PollOptions
                     .SelectMany(o => o.Votes)
                     .Where(v => v.UserId == viewerId)
@@ -94,10 +104,13 @@ public class ServerPollReadService(
                     {
                         o.PollOptionId, o.Text, o.SortOrder,
                         VoteCount = o.Votes.Count(),
+                        // Live names first, then anonymized votes (D13: rendered, never omitted).
+                        // IsAnonymous hides a vote whatever its UserId.
                         PublicVoters = o.Votes
                             .Where(v => !v.IsAnonymous)
-                            .OrderBy(v => v.User.UserName)
-                            .Select(v => new { v.UserId, v.User.UserName })
+                            .OrderBy(v => v.UserId == null)
+                            .ThenBy(v => v.User!.UserName)
+                            .Select(v => new { v.UserId, UserName = v.User != null ? v.User.UserName : null })
                             .ToArray(),
                     }).ToArray(),
             })
@@ -132,7 +145,7 @@ public class ServerPollReadService(
                     o.PollOptionId, o.Text, o.SortOrder,
                     VoteCount: resultsVisible ? o.VoteCount : 0,
                     PublicVoters: showNames
-                        ? o.PublicVoters.Select(v => new PollVoterDto(v.UserId, v.UserName ?? "")).ToArray()
+                        ? o.PublicVoters.Select(v => new PollVoterDto(v.UserId, v.UserName)).ToArray()
                         : [])).ToArray());
         }).ToArray();
     }

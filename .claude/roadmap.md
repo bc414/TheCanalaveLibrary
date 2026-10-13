@@ -217,6 +217,22 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **User-deletion survival set (worksheet D13) — answered 2026-08-06, built WU-UserDeletion
+  2026-10-13.** No decision row: it came out of the schema audit's §3.8. Schema §3.8's three lists are
+  the erasure policy, with **poll votes moved to "survives anonymized"** (a nullable `user_id` behind a
+  surrogate key; the voter list shows "[deleted user]"). The hard delete of the `User` row is
+  load-bearing and no `deleted_user → old_user_id` mapping may ever be kept; the deletion page's copy is
+  the compliance surface and now enumerates the whole policy. **Edge (a):** a conversation with one
+  participant left survives intact; one with none left is deleted at the source, in the deletion's own
+  transaction. **Edge (b)** (the WU's second commit): an admin-less group is a waiting state that a
+  moderator ends with `AssignGroupAdminAsync` (three guards; a ledger-only `Group` report row; type 62
+  to the promoted user); the sole admin's Leave warns first. Rule: `cross-cutting.md` §"Delete Policy Summary" →
+  "Account deletion"; `layer2-services.md` §"Group Membership and Role Model" and §"Account actions"
+  (the Group shape). Narrative: `audit/Identity.md` F52, `audit/BlogPosts.md` F37,
+  `audit/Messaging.md` F49, `audit/Groups.md` F38, `audit/Moderation.md` F46/F47. Still open: an exact
+  multi-choice voter count after a deletion (tracker **F17**), a sender-side message delete (**F18**),
+  log retention and bare ids in polymorphic columns (**F19**), and D47(b).
+
 - **Schema hardening — folder integrity, `group_stories` as a set, the CHECK set (schema audit
   §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row) — built WU-SchemaHardening
   2026-10-13.** No decision row: these came out of the two audits, and D23 (answered 2026-08-08) routed

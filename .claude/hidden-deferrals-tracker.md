@@ -343,6 +343,10 @@ decision work that has no row at all.
   - Needs UX design that D10 did not rule on: where delete lives (post page, editor, profile Blog tab,
     group page), its confirmation, and a group-post editor (the create form exists:
     `GroupBlogPostEditorPage`). `BlogPostDto.Kind` (new) tells the page which subtype it shows.
+  - Since WU-UserDeletion (2026-10-13) the account-deletion page tells users plainly that "Stories and
+    blog posts can't be deleted on the site yet". Whoever builds the blog-post delete UI must update that
+    sentence and add the path to its delete-it-first list (`DeletePersonalData.razor` is D13's compliance
+    surface; `cross-cutting.md` §"Account deletion"). WU-AuthorStoryDelete owes the same for stories.
 
 - [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
   - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
@@ -1351,6 +1355,41 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     (F58)" → "Direction of authority" names this as the one open permanent disagreement, which nobody
     fixes under that rule alone.
 
+- [ ] **F17 — A multi-choice poll's voter count after a voter deletes their account is an upper bound** `[decision · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion (its spec's X1); a surfaced sub-edge D13 did not rule.*
+  - Grid: F37 L2 reads 5 (unchanged).
+  - Source: D13 keeps a deleted voter's votes as anonymized rows (`poll_votes.user_id` NULL).
+    `ServerPollReadService` counts `TotalVoterCount` as distinct live voters plus one per anonymized
+    row. For a single-choice poll that is exact. For an `AllowMultiple` poll, one deleted voter who
+    ticked k options counts as k voters, because nothing records which anonymized rows were one person.
+  - The question: is the upper bound acceptable, or should deletion keep a per-voter grouping (an
+    opaque group key stamped on the deleted voter's rows)? The second needs care against D13's "no
+    retained mapping" rule: the key must not be derivable from the old user id.
+
+- [ ] **F18 — Can a sender delete their own private messages before deleting their account?** `[decision · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion (its spec's X2); owner-open.*
+  - Grid: F49 and F52 read 5 (unchanged).
+  - Source: D13's GDPR rider (i) says authors must be able to delete their own content before deleting
+    the account. No sender-side message delete exists, and D13's edge (a) reasoning ("a message A sent
+    is equally B's received mail") argues against one. Whether rider (i) reaches private messages is
+    unruled.
+  - As built: `DeletePersonalData.razor` says plainly that sent messages cannot be deleted and stay in
+    the recipient's inbox, without your name.
+
+- [ ] **F19 — A deleted account's user id survives in logs and in two polymorphic id columns** `[decision · low · launch]` — *Filed 2026-10-13 by WU-UserDeletion (its spec's X12, extended); a boundary of D13's GDPR posture, not ruled.*
+  - Grid: F52 reads 5 (unchanged).
+  - Source: D13 (iii) says account-level fields "and any auth/IP logs" go unconditionally, and (ii)
+    forbids a retained `deleted_user → old_user_id` mapping. Three places keep the bare integer:
+    1. **Application logs.** `DeletePersonalData` logs "User with ID '{UserId}' deleted themselves", and
+       request logs and traces carry user ids throughout. Retention is an operational (Phase 7) setting
+       with no rule.
+    2. **`reports.reported_entity_id`** on a `User`-type report (the moderation ledger; the row
+       survives, closed).
+    3. **`notifications.related_entity_id`** on the user-anchored types (30 follower, 32 voucher, 23
+       hidden-gem recommender) in other users' inboxes.
+  - None maps the id to the anonymized content (every content FK is nulled), so rule (ii) holds as
+    written. The question is whether log retention needs a bound before launch, and whether the two
+    columns should be zeroed at deletion. Owner call; no code changed.
+  - Recorded as a boundary in `cross-cutting.md` §"Account deletion".
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1784,6 +1823,28 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        is refused too.
     4. Open the page in two tabs; delete a folder in one, then create a sub-folder under it from the
        other: "That parent folder no longer exists." and the tree reloads without it.
+
+- [ ] **H29 — WU-UserDeletion browser pass: account deletion's survival set, the deletion copy, the anonymized voter and messaging label** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion, which ran with no browser available.*
+  - Grid: **F37, F49 and F52 L4.5 went 5→1** (the campaign's no-browser precedent): the poll voter
+    list gained a "[deleted user]" branch, the messaging pages read "[deleted user]" for a deleted
+    participant, and the deletion page's copy was rewritten.
+  - **Steps** (server-only path; both render phases where the page is interactive; `psql` on
+    `poll_votes`, `conversations`, `private_messages`, `conversation_participants`, `reports`,
+    `group_members` as ground truth). Register two throwaway accounts (the NoOp sender's on-page
+    confirm link), then:
+    1. As account X, read `/Account/Manage/DeletePersonalData` (static SSR): the four sections read as
+       written, and the "your profile" link opens X's Series tab.
+    2. On a seeded profile post with a **Public**, results-always poll, vote as X and as TestUser on the
+       same option. Start a conversation between X and TestUser and exchange a message each way. Start a
+       second conversation between X and Y, and as Y report one of X's messages in it.
+    3. Delete X through the page. `psql`: X's vote row has `user_id` NULL; the X–TestUser conversation,
+       TestUser's participant row and both messages survive; the X–Y conversation survives (Y remains),
+       and Y's report stays Open.
+    4. As TestUser: the poll shows the option's count unchanged and "[deleted user]" (not a link) after
+       TestUser's own name; "N voters" unchanged. `/messages` lists the X conversation with
+       "[deleted user]" as the other participant, and the thread shows X's message from "[deleted user]".
+    5. Delete Y. `psql`: the X–Y conversation and its messages are gone, and Y's open report on the
+       message is `ResolvedNoAction` with no moderator and the "both participants" note.
 
 ---
 

@@ -417,6 +417,14 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
       `TagUpdateSuggestion` (26 — D5's routed sub-edge, taken per the owner's recommendation). No
       band method takes a moderator id. `SpotlightSlotGranted` (90) is outside the stated band — its
       source stays (unruled — roadmap decision row 19).
+    - **`GroupAdminAssigned` (62), settled for WU-UserDeletion 2026-10-13 (owner ruling D13: "the
+      promoted user is notified").** A Groups-band type a moderator act produces, so it takes D5's
+      principle by its own wording: `NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` has no
+      moderator parameter and writes a null source; `RelatedEntityId` = the group (D16), resolved by
+      the existing `Group` enricher kind; the presenter arm is actor-free. Seed row: category Groups,
+      `DefaultEmailEnabled = true` (the user did not ask for this and must be able to find out),
+      `DefaultCollapsed = false`. The acting moderator assigning themselves gets no notification (the
+      generalized guardrail above).
     - **D16 — one anchor per event.** 60 and 25 carry the `GroupStory` row's id (new
       `RelatedEntityKind.GroupStory`); a second id column is never added; the re-point backlog is
       recorded as a conformance list (tracker B23), not built. Riders: the story's author is excluded

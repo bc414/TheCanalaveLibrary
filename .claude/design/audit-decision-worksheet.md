@@ -1299,6 +1299,8 @@ resolved `Report` row naming the group; promoting on a group that still has an a
 non-member, and calling as a non-moderator each throw. *(RazorComponents tier.)* The poll voter list
 renders an anonymized row as "[deleted user]" with the tally unchanged.
 
+**Built:** WU-UserDeletion (2026-10-13), Part A (the survival set, edge (a), the GDPR posture and the copy) — rule now stated in `cross-cutting.md` §"Delete Policy Summary" → "Account deletion" (poll votes' key in `layer1-data-model.md` §"Column Conventions"). Two sub-edges this answer did not rule are filed for the owner: an exact multi-choice voter count after a deletion (tracker F17) and a sender-side message delete under rider (i) (F18); log retention and bare ids in polymorphic columns are F19.
+
 ### D14. Blob cleanup ownership
 
 *Source: service §3.16; defect §2.12 (avatar/cover blobs never deleted).*

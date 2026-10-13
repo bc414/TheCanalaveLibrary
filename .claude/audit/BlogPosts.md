@@ -530,6 +530,32 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
+**WU-UserDeletion Stage note (2026-10-13; owner ruling D13) — L4.5 5→1; L1/L2/L3/L3.5 stay 5.** A
+deleted voter's votes now survive anonymized (the Settled bullet "Voter deletion" below).
+- **L1.** `PollVote` is keyed by a surrogate `PollVoteId`; `UserId` is `int?` with `ON DELETE SET
+  NULL`; the unique index `ix_poll_votes_poll_option_id_user_id` keeps NULLS DISTINCT (a comment says
+  never `AreNullsDistinct(false)`); `ix_poll_votes_user_id` stays for the SET NULL scan. The false entity
+  doc ("the PK deliberately permits multi-select rows") is rewritten. Migration and rehearsal:
+  `audit/Identity.md` F52's Stage note.
+- **L2.** `ServerPollReadService`: `TotalVoterCount` is distinct live voters plus one per anonymized
+  row (the old `Distinct` over the nullable column folded every deleted voter into one); the voter list
+  orders live names first, then anonymized rows, and maps them through as nulls (`PollVoterDto` is now
+  `(int? UserId, string? UserName)`; the `?? ""` is gone). `PollEditNotificationSweeper` notifies live
+  voters only. **Verified, unchanged:** every "has voted" read and the vote write compare
+  `UserId == userId` with a non-null parameter (the read's anonymous viewer is `-1`), so none infers
+  "not voted" from a NULL; `UpdatePollAsync`'s `hasVotes` counts anonymized rows, which is right
+  (`ConfigLocked` stays true while the result exists); `VoteAsync`'s remove-by-loaded-entity works on
+  the new key.
+- **L3/L3.5.** `PollView` renders a null-id voter as plain muted "[deleted user]" (no link; the
+  `CommentItem` shape). The class docs of `ServerPollReadService` and `PollVoterDto` say so.
+- **Tests.** Integration: `UserDeletionServiceTests` (votes survive with tally, list length and
+  `TotalVoterCount` — two deleted voters; the index's NULLS DISTINCT; see F52's note), `PollServiceTests`
+  +2 (the sweep notifies only the live voter and stamps; a deleted multi-choice voter with two picks
+  counts two voters, pinning tracker **F17**'s upper bound). RazorComponents `PollViewTests` +1 (the
+  anonymized voter reads "[deleted user]" without a link, the count is unchanged). Mutation-checked:
+  the old voter-count formula and an unfiltered sweep each fail their test.
+- **L4.5 5→1.** The voter list gained a branch no browser has seen; tracker **H29**.
+
 **WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip.** Migration
 `WU_SchemaHardening` adds `ck_base_polls_dates` (`date_closed IS NULL OR date_closed >= date_opened`)
 on `base_polls`, declared on the TPT base's `ToTable` (`layer1-data-model.md` §"CHECK constraints"). A
@@ -643,6 +669,21 @@ detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled —
   owner. **Open, not decided here:** whether an ownerless poll stays votable (worksheet D42, pending —
   as built, it does). A blog post's polls are RESTRICT on the post and are deleted with it through
   `TptDelete` (owner ruling D10).
+- **Voter deletion (owner ruling D13, 2026-08-06; settled for WU-UserDeletion 2026-10-13).** A deleted
+  account's votes **survive anonymized**: `poll_votes.user_id` is nullable `ON DELETE SET NULL`
+  behind a surrogate `poll_vote_id` key, with a unique `(poll_option_id, user_id)` index that keeps
+  NULLS DISTINCT so anonymized rows coexist (`layer1-data-model.md` §"Column Conventions"). A poll is a
+  point-in-time record, and cascading the votes rewrote a closed poll's result.
+  - **Rendering.** The public voter list shows an anonymized vote as plain "[deleted user]" (no link),
+    so in `Public` mode the list's length equals the option's count. `IsAnonymous` still hides a vote
+    whatever its `user_id`.
+  - **`TotalVoterCount`** is distinct live voters plus one per anonymized row. Exact for single-choice
+    polls; an upper bound for `AllowMultiple` (one deleted voter who ticked k options counts k).
+    Anonymized votes still lock the config (`ConfigLocked`), since the result they belong to exists.
+  - "Has the viewer voted" and "retract my vote" compare `user_id = @me`, which never matches NULL.
+  - **Open, not decided here:** an exact multi-choice voter count after a deletion would need a
+    per-voter grouping kept at deletion time, which brushes D13's "no retained mapping" (tracker
+    **F17**).
 
 ### L1 reconcile note (2026-07-12)
 
@@ -661,9 +702,9 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
 bullet below, 2026-07-13.)
 
-- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; `poll_votes` surrogate key + nullable SET NULL `user_id` since WU-UserDeletion, 2026-10-13 — Stage note at this feature's top; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; anonymized votes counted and listed, the sweep notifies live voters only, since WU-UserDeletion, 2026-10-13 — Integration-tested, Stage note at this feature's top; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock
@@ -678,14 +719,14 @@ bullet below, 2026-07-13.)
 - **L3/L3.5 — Stage 5** (`PollView` self-contained vote composite — follow-button precedent for
   the service injection; `PollEditorForm` presentational no-inject; `PollsPage` `/polls` with
   inline mod management; `BlogPostPage` poll blocks after content; `BlogPostEditorPage` Polls
-  manage section). Page/dispatcher logic covered by Integration + the browser band (components
-  inject services — no bUnit tier, same posture as `BlogPostPage`).
+  manage section; an anonymized voter reads "[deleted user]" since WU-UserDeletion, 2026-10-13). Page/dispatcher logic covered by Integration + the browser band (components
+  inject services; `PollView`'s vote-result and voter-list rendering is RazorComponents — `PollViewTests`).
 - **L4 — Stage 5** (element-role compliant: Container card, semantic-tint status badges,
   Indicator progress bars in `--color-progress`, action-vs-mission button split, ConfirmDialog
   destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
   Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
   design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
-- **L4.5 — Stage 5 (browser band, 2026-07-12, server-only path, standing dev DB kept).**
+- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13: the anonymized-voter branch is undriven — tracker H29).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
   As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
   New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
   names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while

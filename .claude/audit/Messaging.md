@@ -76,6 +76,21 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
 
 ## Feature 49 — Private Messaging
 
+**Settled — a deleted participant (owner ruling D13 edge (a), answered 2026-08-06; settled for
+WU-UserDeletion 2026-10-13). Do not revisit:**
+- **One participant left: the conversation survives intact.** The remaining participant keeps her
+  participant row, the conversation and every message. The deleted sender's messages keep their text
+  with a NULL `sender_user_id` and read **"[deleted user]"**, the site-wide placeholder (it replaces
+  messaging's own "[deleted]" and "[unknown]"). Deleting the conversation would destroy the other
+  person's data; purging only the leaver's messages would leave her replies answering holes.
+- **No participant left: deleted at the source.** `UserDeletionService` deletes the conversations the
+  deletion leaves with no participant, in its own transaction, after the save (messages cascade), and
+  closes open reports on their messages first (`ReportLedger`). No sweeper, no worker.
+- **Not decided here:** whether a sender can delete their own sent messages before deleting the
+  account (GDPR rider (i) read onto messages; tracker **F18**). No sender-side delete exists; the
+  deletion page says so.
+Rule: `cross-cutting.md` §"Account deletion".
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
 `RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
@@ -87,7 +102,7 @@ shared one.
 - **L1 — Stage 5.** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`. No further L1 work needed.
-- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (4 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`) and
   `IMessagingWriteService : IMessagingReadService` (4 mutations: `StartConversationAsync` [gated],
@@ -127,11 +142,13 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 5.** It went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13): the
-  compose modal now gets a 400 ("Subject must be 2048 characters or fewer.") where it got a 500. It
-  went 1→5 at that WU's browser pass the same day, which drove the refusal on both render phases
-  (tracker **H26** step 4; the WU-NotificationCorrectness note below). The browser verification of
-  2026-07-02 below covers everything else.
+- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13).** A deleted participant now reads "[deleted
+  user]" in the list, the thread header and on their messages, and no browser has seen it (tracker
+  **H29**; the WU-UserDeletion note below). Before that it went 5→1 at the WU-NotificationCorrectness
+  review fixes (2026-10-13): the compose modal now gets a 400 ("Subject must be 2048 characters or
+  fewer.") where it got a 500. It went 1→5 at that WU's browser pass the same day, which drove the
+  refusal on both render phases (tracker **H26** step 4; the WU-NotificationCorrectness note below).
+  The browser verification of 2026-07-02 below covers everything else.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A).** The flip makes every
   injected service need a client impl, so the old "no REST endpoints to wasm-enable" N/A no longer
   holds: endpoints + client impl live (WU-L5Sweep), and messaging read+send verified in a real WASM
@@ -400,6 +417,24 @@ re-save (or `reset-dev-db.ps1`).
 **Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass):** with "Off" saved through the form,
 starting a conversation was refused with "This user does not accept private messages." on WASM (a
 403 on `POST /api/messaging/conversations`) and on the circuit. No `conversations` row was written.
+
+### WU-UserDeletion note (2026-10-13) — F49 L2 stays 5; L4.5 5→1 (owner ruling D13 edge (a))
+
+- **The survive case is current behavior, ratified** (the Settled note at this feature's top). Only
+  the placeholder changed: `ServerMessagingReadService.DeletedUserLabel = "[deleted user]"` replaces
+  "[deleted]" (a sender, and a participant with no username) and "[unknown]" (a vanished other
+  participant) at all seven sites, and the write service's send echo uses the same constant. The
+  `MessageDto` doc says so. Account deletion is the only way a participant vanishes.
+- **The orphan case is new:** `UserDeletionService` deletes a conversation the deletion leaves with no
+  participant, after its save and in its transaction, and first closes open reports on its messages
+  (`audit/Identity.md` F52's Stage note). The other producer of an empty conversation, a crash between
+  `StartConversationAsync`'s two saves, closed with WU-NotificationCorrectness's one-save rewrite.
+- **Tier: Integration** — `UserDeletionServiceTests`: one participant deleted keeps the participant
+  row, the conversation, every message (sender NULL) and the open message report, and
+  `GetConversationThreadAsync`/`GetConversationsAsync` as the survivor read "[deleted user]" for the
+  other participant and the deleted sender's messages; both deleted removes the conversation and its
+  messages and closes the message report. No messaging test asserted the old strings.
+- **L4.5 5→1:** the new label is undriven in a browser (tracker **H29**).
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

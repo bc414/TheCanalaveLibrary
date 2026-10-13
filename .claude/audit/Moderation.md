@@ -165,6 +165,22 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**Settled — `Group` targets and the assign-admin action, F46/F47 (owner ruling D13 edge (b), D8's
+seventh-type amendment and D47's floor; settled for WU-UserDeletion 2026-10-13). Do not revisit:**
+- **`ReportedEntityType.Group = 6` is ledger-only** until D47(b) rules. It is not added to
+  `SubmitReportAsync`'s allow-set (a member-filed Group report would be a queue row nobody can act
+  on), and no "report this group" control exists. No lookup table backs the enum, so no migration.
+- **`AssignGroupAdminAsync`** is the second moderator-initiated row shape: opened and resolved in one
+  save, `Group` target, `ReportedUserId = groups.creator_id` (the resolver's new Group arm; NULL is
+  expected), reason Other with mandatory notes, `ReporterUserId == ModeratorUserId`. No counter call.
+  It is a moderator work-surface write, so it is not enrolled in `ParentVisibilityContractTests`.
+- **D47(a)'s floor is met by construction:** every Group row is born resolved, and `/mod/reports`
+  offers actions only on Open/UnderReview rows. The queue's batch enrichment gains a Group arm (the
+  group's name, `/group/{id}`, count 0, an elevated `GroupAudience`-bypassing read), without which
+  "Show resolved" would silently drop the row.
+- **Open:** D47(b), what a moderator can do about a group that still has an admin.
+Rule: `layer2-services.md` §"Account actions" (the Group shape) and §"Group Membership and Role Model".
+
 **WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip; L1 stays 5.** Migration
 `WU_SchemaHardening` adds `ck_users_suspension` on `AspNetUsers`:
 `account_status = Suspended OR suspended_until_utc IS NULL`, with Suspended interpolated from

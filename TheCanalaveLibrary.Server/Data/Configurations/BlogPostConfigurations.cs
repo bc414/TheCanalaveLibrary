@@ -134,10 +134,23 @@ public sealed class PollVoteConfiguration : IEntityTypeConfiguration<PollVote>
 {
     public void Configure(EntityTypeBuilder<PollVote> builder)
     {
-        builder.HasKey(e => new { e.PollOptionId, e.UserId });
+        // Surrogate key (owner ruling D13, WU-UserDeletion 2026-10-13): user_id is nullable so a deleted
+        // account's votes survive anonymized, and a nullable column cannot be part of a PK.
+        builder.HasKey(e => e.PollVoteId);
+
+        // One live vote per (option, user). NULLS DISTINCT is deliberate — the opposite of group_folders'
+        // name index: any number of anonymized (NULL-user) rows must coexist on one option. Never
+        // AreNullsDistinct(false) here (layer1-data-model.md §"Column Conventions").
+        builder.HasIndex(e => new { e.PollOptionId, e.UserId })
+            .IsUnique()
+            .HasDatabaseName("ix_poll_votes_poll_option_id_user_id");
+
         builder.HasOne(pv => pv.PollOption).WithMany(o => o.Votes)
             .HasForeignKey(pv => pv.PollOptionId).OnDelete(DeleteBehavior.Cascade);
+        // SET NULL, not CASCADE (D13): a poll is a point-in-time record, and nothing denormalizes its
+        // tally, so cascading a voter's rows rewrote a closed poll's published result. The FK's own
+        // index (ix_poll_votes_user_id) backs this SET NULL scan and "my votes".
         builder.HasOne(pv => pv.User).WithMany(u => u.PollVotes)
-            .HasForeignKey(pv => pv.UserId).OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(pv => pv.UserId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
     }
 }

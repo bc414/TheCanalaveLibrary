@@ -98,7 +98,17 @@
                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--color-text-muted)">
                             @foreach (PollVoterDto voter in option.PublicVoters)
                             {
-                                <a href="/user/@voter.UserId" class="text-(--color-action-ink) hover:underline">@voter.UserName</a>
+                                @* A null UserId is an anonymized vote: the voter deleted their account
+                                   and the vote survived (owner ruling D13). Rendered, never omitted, so
+                                   the list keeps the count's length — plain text, CommentItem's shape. *@
+                                @if (voter.UserId is int voterId)
+                                {
+                                    <a href="/user/@voterId" class="text-(--color-action-ink) hover:underline">@voter.UserName</a>
+                                }
+                                else
+                                {
+                                    <span class="text-(--color-text-muted)">[deleted user]</span>
+                                }
                             }
                         </div>
                     }

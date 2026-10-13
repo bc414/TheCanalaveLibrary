@@ -16,6 +16,14 @@ public partial class ServerMessagingReadService(
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
 
     /// <summary>
+    /// How a participant whose account was deleted reads: the site-wide "[deleted user]" placeholder
+    /// (owner ruling D13 edge (a); was "[deleted]" for a sender and "[unknown]" for a vanished other
+    /// participant until WU-UserDeletion, 2026-10-13). Account deletion is the only way a participant
+    /// vanishes. Internal so the write service's send echo reads the same.
+    /// </summary>
+    internal const string DeletedUserLabel = "[deleted user]";
+
+    /// <summary>
     /// Exposed as a protected property so the derived write service can access the user context
     /// without double-capturing the constructor parameter (eliminates CS9107/CS9124 warnings).
     /// </summary>
@@ -116,10 +124,10 @@ public partial class ServerMessagingReadService(
                 r.ConversationId,
                 r.Subject,
                 r.OtherParticipant is null
-                    ? new MessagingParticipantDto(0, "[unknown]", DefaultAvatarUrl)
+                    ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
                     : new MessagingParticipantDto(
                         r.OtherParticipant.UserId,
-                        r.OtherParticipant.Username ?? "[deleted]",
+                        r.OtherParticipant.Username ?? DeletedUserLabel,
                         r.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl),
                 r.LastMessageHtmlPrefix is null ? null : MakePreview(r.LastMessageHtmlPrefix),
                 r.LastMessageDate,
@@ -177,10 +185,10 @@ public partial class ServerMessagingReadService(
                 conversationId,
                 header.Subject,
                 header.OtherParticipant is null
-                    ? new MessagingParticipantDto(0, "[unknown]", DefaultAvatarUrl)
+                    ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
                     : new MessagingParticipantDto(
                         header.OtherParticipant.UserId,
-                        header.OtherParticipant.Username ?? "[deleted]",
+                        header.OtherParticipant.Username ?? DeletedUserLabel,
                         header.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl),
                 [],
                 totalMessageCount,
@@ -195,7 +203,7 @@ public partial class ServerMessagingReadService(
                 m.MessageId,
                 m.ConversationId,
                 m.SenderUserId,
-                m.SenderUser != null ? m.SenderUser.UserName! : "[deleted]",
+                m.SenderUser != null ? m.SenderUser.UserName! : DeletedUserLabel,
                 m.SenderUser != null
                     ? (m.SenderUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl)
                     : DefaultAvatarUrl,
@@ -205,10 +213,10 @@ public partial class ServerMessagingReadService(
             .ToListAsync();
 
         var otherParticipantDto = header.OtherParticipant is null
-            ? new MessagingParticipantDto(0, "[unknown]", DefaultAvatarUrl)
+            ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
             : new MessagingParticipantDto(
                 header.OtherParticipant.UserId,
-                header.OtherParticipant.Username ?? "[deleted]",
+                header.OtherParticipant.Username ?? DeletedUserLabel,
                 header.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl);
 
         return new ConversationThreadDto(

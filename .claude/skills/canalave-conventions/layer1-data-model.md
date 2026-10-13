@@ -243,6 +243,13 @@ independently. The service layer rejects logically impossible write combinations
 
 - **Keys:** single-column `int` identity where possible; `long` for event tables (comments,
   notifications, messages, chapter contents); composite keys for junction/interaction tables.
+  **`poll_votes` is the sanctioned exception** (owner ruling D13; WU-UserDeletion 2026-10-13): a
+  surrogate `poll_vote_id` identity PK plus a **unique** index `ix_poll_votes_poll_option_id_user_id`
+  on `(poll_option_id, user_id)`, because `user_id` is nullable (`ON DELETE SET NULL` — a deleted
+  account's votes survive anonymized, `cross-cutting.md` §"Account deletion"), and a nullable column
+  cannot sit in a PK. The index keeps the default **NULLS DISTINCT** on purpose, the opposite of
+  `group_folders`' NULLS NOT DISTINCT: anonymized rows on one option must coexist, while the live
+  one-vote-per-(option, user) rule is unchanged. Do not "fix" it with `AreNullsDistinct(false)`.
 - **Timestamps:** all `DateTime` → `timestamp(2) with time zone` (8 bytes); all `DateOnly` → `date` (4 bytes).
   Creation timestamps use `.HasDefaultValueSql("CURRENT_TIMESTAMP")`.
 - **Strings:** `[Required]` + non-nullable `string` for mandatory; `string?` for optional;

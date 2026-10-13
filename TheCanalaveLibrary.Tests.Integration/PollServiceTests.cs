@@ -768,6 +768,65 @@ public class PollServiceTests(PostgresFixture postgres) : IntegrationTestBase(po
     }
 
     [Fact]
+    public async Task Sweeper_WithAnAnonymizedVote_NotifiesOnlyLiveVoters_AndStamps()
+    {
+        // Owner ruling D13 (WU-UserDeletion): a deleted voter's vote survives with user_id NULL. The
+        // sweep must not try to notify it (a NULL recipient fails the insert, and the poll would retry
+        // forever) — the live voter alone is told.
+        int blogPostId = await SeedBlogPostAsync(_authorId);
+        int pollId = await CreateBlogPollAsync(blogPostId);
+        PollDto seeded = await GetPollAsync(pollId, _authorId);
+        await VoteAsync(pollId, _voterId, [seeded.Options[0].PollOptionId]);
+        await VoteAsync(pollId, _voter2Id, [seeded.Options[0].PollOptionId]);
+        using (IServiceScope scope = NewScope())
+            (await scope.ServiceProvider.GetRequiredService<UserDeletionService>().DeleteUserAsync(_voter2Id))
+                .Should().BeTrue();
+
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.PollVotes.CountAsync(v => v.UserId == null)).Should().Be(1, "the deleted voter's vote survived");
+            await db.Polls.Where(p => p.PollId == pollId)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.LastEditedAt, DateTime.UtcNow - PollEditNotificationSweeper.QuietPeriod - TimeSpan.FromMinutes(1)));
+        }
+
+        using (IServiceScope scope = NewScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<PollEditNotificationSweeper>().SweepAsync()).Should().Be(1);
+
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Notifications
+                    .Where(n => n.NotificationTypeId == NotificationTypeEnum.PollUpdated)
+                    .Select(n => n.RecipientUserId).ToListAsync())
+                .Should().Equal([_voterId]);
+            (await db.Polls.Where(p => p.PollId == pollId).Select(p => p.EditNotifiedAt).SingleAsync())
+                .Should().NotBeNull("the poll is stamped, not left to rescan");
+        }
+    }
+
+    [Fact]
+    public async Task MultiChoicePoll_ADeletedVoterWithTwoPicks_CountsTwoVoters_TheDocumentedUpperBound()
+    {
+        // Pins the behavior tracker F17 records for the owner: nothing groups an anonymized voter's
+        // rows, so on an AllowMultiple poll one deleted voter who ticked k options counts k voters.
+        int pollId = await CreateBlogPollAsync(await SeedBlogPostAsync(_authorId), NewDto(allowMultiple: true));
+        PollDto seeded = await GetPollAsync(pollId, _authorId);
+        int[] both = [seeded.Options[0].PollOptionId, seeded.Options[1].PollOptionId];
+        await VoteAsync(pollId, _voterId, both);
+        await VoteAsync(pollId, _voter2Id, [both[0]]);
+        (await GetPollAsync(pollId, _authorId)).TotalVoterCount.Should().Be(2, "two live voters, counted distinctly");
+
+        using (IServiceScope scope = NewScope())
+            await scope.ServiceProvider.GetRequiredService<UserDeletionService>().DeleteUserAsync(_voterId);
+
+        PollDto after = await GetPollAsync(pollId, _authorId);
+        after.TotalVoterCount.Should().Be(3, "one live voter plus one per anonymized row (an upper bound)");
+        after.Options[0].VoteCount.Should().Be(2);
+        after.Options[1].VoteCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Sweeper_OnAnOwnerlessEditedPoll_NotifiesVotersNullSourced_AndStamps()
     {
         // The owner edited, then deleted their account before the quiet period ran out (D11). The

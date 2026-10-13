@@ -141,6 +141,60 @@ from now is caught without anyone remembering the rule.
 
 ## Feature 52 — User Account Deletion
 
+**Settled — the survival set is the erasure policy (owner ruling D13, answered 2026-08-06; settled
+for WU-UserDeletion 2026-10-13). Do not revisit:**
+- Schema audit §3.8's three lists (survives anonymized / destroyed by cascade / destroyed by the
+  service) are ratified, with poll votes moved to "survives". The lists, checked against the live FK
+  graph, are in `cross-cutting.md` §"Account deletion".
+- **The hard delete of the `User` row is load-bearing.** Never soften it into an anonymize-in-place,
+  and never keep a `deleted_user → old_user_id` mapping: either would turn anonymization into
+  pseudonymization (GDPR posture, same section).
+- **The copy is the compliance surface.** `DeletePersonalData.razor` must enumerate the survival set,
+  the destroyed set, the delete-it-yourself-first paths, that sent messages cannot be deleted, that
+  anonymization removes the name but not identifying details in the text, and the sole-admin
+  consequence. Change the policy and the copy changes in the same WU. The story self-delete link
+  waits for WU-AuthorStoryDelete (D15), which must add it.
+- **Open, not decided here:** a sender-side message delete (tracker **F18**); log retention of user
+  ids and the bare ids left in polymorphic columns (tracker **F19**).
+
+**WU-UserDeletion Stage note (2026-10-13; owner ruling D13, Part A: the survival set) — L4.5 5→1;
+L1/L2/L4 stay 5.**
+- **L1.** Migration `WU_UserDeletion_SurvivalSet`: `poll_votes` gets a surrogate `poll_vote_id`
+  identity PK, `user_id` goes nullable `ON DELETE SET NULL` (was CASCADE), and the old composite
+  uniqueness moves to the unique index `ix_poll_votes_poll_option_id_user_id` (NULLS DISTINCT). The
+  scaffold's `defaultValue: 0` on the identity column was removed by hand. `Down()` deletes the
+  anonymized votes first, since they cannot exist under the old key. Rehearsed Up, Down and Up again on
+  a dev-DB clone holding live and anonymized votes: the existing rows were numbered, a duplicate live
+  vote was refused (23505), two NULL-user rows on one option coexisted, and the sequence continued past
+  the existing ids. Applied to the server-only dev DB (which held no votes).
+- **L2.** `UserDeletionService` (already in `Server/Identity/` since WU-ModerationIntegrity; the empty
+  `Server/Services/` folder, never tracked, is gone) is a primary constructor now, and its class doc
+  describes the whole transaction instead of claiming the database handles everything else.
+  - It captures the user's conversation ids before the delete and, after the save, in the same
+    transaction, deletes the conversations left with no participant (one `ExecuteDeleteAsync`;
+    messages cascade). It closes open reports on those conversations' messages first
+    (`ReportLedger`, amendment U3). A conversation the other person is still in survives intact.
+  - The hard delete of the `User` row carries the D13 comment: load-bearing, never softened, and no
+    retained id mapping. The avatar-blob seam (WU-BlobCleanup) is marked after the strategy returns.
+- **L4 copy.** `DeletePersonalData.razor` is rewritten as the compliance surface: kept without your
+  name (poll votes and sent messages included), permanently deleted (account-level fields, comments on
+  your profile, credits, linked external accounts), the delete-it-first paths that exist today
+  (comments, chapters, recommendations, series with a link to the profile's Series tab, polls, poll
+  votes), the two that do not (stories, blog posts — tracker B25 and WU-AuthorStoryDelete must update
+  the copy when they land), that sent messages cannot be deleted, and that removing a name does not
+  remove what you wrote. Every claim was checked against `pg_constraint` on the dev DB.
+- **Tests.** Integration `UserDeletionServiceTests` +6: votes survive anonymized with the tally, the
+  voter-list length and `TotalVoterCount` intact (two deleted voters, so a bare `Distinct` would fail);
+  the unique index's NULLS DISTINCT by raw SQL (23505 for a duplicate live vote, two NULL rows allowed);
+  one participant deleted keeps the conversation, both messages and the open message report, and the
+  survivor reads "[deleted user]" in the thread and the list; both deleted removes the conversation and
+  its messages and closes the message report, leaving an unrelated conversation alone; a sole admin's
+  group survives with NULL `creator_id` and no admin; external logins and notification settings go.
+  `StaticSsrPageRenderTests` +1 asserts the copy's enumerations. Mutation-checked: removing the
+  conversation delete, or the message-report closure, fails the both-participants test.
+- **L4.5 5→1.** The page's copy changed and no browser was available, so tracker **H29** carries the
+  pass.
+
 **WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.**
 - **L1.** A deleted user's polls now survive anonymized: `base_polls.owner_id` is nullable `ON DELETE
   SET NULL` (it was a convention-only CASCADE, so deleting an account destroyed every poll they owned —
@@ -210,11 +264,11 @@ history (`ReportedUserId`) is where a moderator reads it. It now reads "the repo
 profile whose account was deleted"; the same Integration test asserts the wording and the commenter as
 `ReportedUserId`. The move also closed the `UserDeletionService` part of tracker H8's org-move bundle.
 
-- **L1 — Stage 5 (polls survive their owner, SET NULL, since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — Stage notes above).** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
+- **L1 — Stage 5 (polls survive their owner, SET NULL, since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day; poll votes survive their voter anonymized — surrogate key, SET NULL — since WU-UserDeletion, 2026-10-13, migration rehearsed and applied — Stage notes above).** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13 — Integration-tested, not yet browser-driven, Stage note above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
@@ -247,7 +301,9 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
-  D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day — Stage notes above). L5 — N/A.**
+  D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes — Stage notes above). L5 — N/A.**
+  **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13):** the rewritten copy has not been read in a
+  browser; tracker **H29** owes the pass (it was 5 since the 2026-07-01 pass below).
 
 ## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
 

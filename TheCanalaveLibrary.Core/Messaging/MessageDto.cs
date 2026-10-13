@@ -9,7 +9,8 @@ namespace TheCanalaveLibrary.Core;
 /// <para>
 /// <see cref="SenderUserId"/> is <c>null</c> when the original sender has been deleted
 /// (SetNull FK policy on <c>PrivateMessage.SenderUserId</c>); in that case
-/// <see cref="SenderUsername"/> will be "[deleted]" and <see cref="IsOwnMessage"/> false.
+/// <see cref="SenderUsername"/> is "[deleted user]" and <see cref="IsOwnMessage"/> false. The message
+/// itself survives: it is equally the other participant's received mail (owner ruling D13 edge (a)).
 /// </para>
 /// </summary>
 public record MessageDto(

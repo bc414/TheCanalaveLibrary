@@ -17,18 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-SchemaHardening (2026-10-13; review fixes and browser pass the same day) — schema
-  audit §2.4/§2.6/§2.7, service audit §2.10, D23's `group_stories` row and WU-StoryLifecycle's two
-  publish-anchor CHECKs. Migration `WU_SchemaHardening` is on the server-only dev DB (the Aspire DB takes
-  it on its next start). **F39 L4.5** went 5→1 and back to 5 at the browser pass, which found no bug.
-  - **Folders:** a real self-FK (SET NULL), unique top-level names, validated names, same-group parents;
-    delete moves sub-folders to the top level and refuses a name clash (a default: decision **row 22**).
-  - **`group_stories`** is unique (a racing add counts as already added); **ten CHECKs** declared in the
-    model (`layer1-data-model.md`); the poll close date checked against the effective open date;
-    `site_daily_stats` and the filter overrides' key fixed. Review fixes: a re-toggled discovery
-    setting no longer throws on a circuit (a new `layer2-services.md` rule).
-  - **Tracker:** **D14**, **H27**, **D15** filed; **H28** filed and closed; **E10** filed by the browser
-    pass. `dotnet test`: Unit 1,182, RazorComponents 776, Integration 1,459. **Pointer:** its DONE entry.
+- **Last landed:** WU-UserDeletion Part A (2026-10-13) — worksheet D13's survival set, edge (a) and
+  the GDPR copy. Migration `WU_UserDeletion_SurvivalSet` is on the server-only dev DB (the Aspire DB
+  takes it on its next start). A deleted account's **poll votes survive anonymized** (surrogate key,
+  `SET NULL`; the voter list shows "[deleted user]"), account deletion **deletes the conversations it
+  leaves empty** and closes their message reports, messaging reads "[deleted user]", and the deletion
+  page enumerates the policy (`cross-cutting.md` §"Account deletion"). **F37, F49, F52 L4.5 5→1**
+  (no browser; tracker **H29**). Tracker **F17/F18/F19** filed for the owner. `dotnet test`: Unit
+  1,182, RazorComponents 777, Integration 1,468. **Pointer:** its DONE entry. Part B (the admin-less
+  group rescue, D13 edge (b)) is the WU's second commit.
+  Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
@@ -240,7 +238,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13); **WU-UserDeletion** is next in the campaign's build order.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion Part A (D13, 2026-10-13); **WU-UserDeletion Part B** (D13 edge (b)) is next, then WU-PollVoteIntegrity.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -269,7 +267,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**)),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29**),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -445,6 +443,54 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-UserDeletion — the account-deletion survival set ratified and built: poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface (worksheet D13, schema audit §3.8; extends `Identity/`, `BlogPosts/`, `Messaging/`, `Data/`) — Part A DONE ✓ (2026-10-13); Part B (edge (b), the admin-less group rescue) is its second commit
+
+- **Cells:** F37, F49 and F52 L4.5 **5→1** (the voter list's "[deleted user]" branch, messaging's
+  label and the deletion copy changed with no browser available; tracker **H29**). Every other touched
+  cell stays 5: F37 L1/L2/L3/L3.5, F49 L2, F52 L1/L2/L4. Dated 2026-10-13, the session's
+  `currentDate`, as the WUs before it.
+- **Trigger:** the WU spec plus orchestrator amendments U3 (close open Message reports inside the
+  orphan-conversation cleanup) and "compose with D23's poll shape" (WU-PollVoteIntegrity follows).
+- **What landed (Part A):**
+  1. **Migration `WU_UserDeletion_SurvivalSet`:** `poll_votes` surrogate `poll_vote_id` PK, nullable
+     `user_id` `ON DELETE SET NULL`, unique `ix_poll_votes_poll_option_id_user_id` (NULLS DISTINCT).
+     Scaffolded `defaultValue: 0` removed; `Down()` deletes anonymized votes first. Rehearsed Up/Down/Up
+     on a dirtied dev-DB clone; applied to the server-only dev DB.
+  2. **Poll reads:** `TotalVoterCount` = distinct live voters + one per anonymized row; the voter list
+     keeps anonymized rows (live names first) as `PollVoterDto(null, null)`; `PollView` renders them as
+     plain "[deleted user]"; the edit sweep notifies live voters only. "Has voted" sites verified
+     NULL-safe, unchanged.
+  3. **`UserDeletionService`:** primary ctor, rewritten class doc, the load-bearing hard-delete comment;
+     after its save it deletes the conversations it left with no participant (scoped to the user's
+     captured ids, one `ExecuteDeleteAsync`) and first closes their open message reports. A
+     conversation the other person is still in survives intact.
+  4. **Messaging** reads "[deleted user]" (one `DeletedUserLabel` constant replaces "[deleted]" and
+     "[unknown]" at eight sites).
+  5. **`DeletePersonalData.razor`** enumerates the survival set, the destroyed set, the delete-it-first
+     paths (and the two that do not exist yet: stories, blog posts), that sent messages cannot be
+     deleted, and that a removed name is not removed text. Checked against `pg_constraint`.
+  6. **Docs, moment 1:** `cross-cutting.md` §"Account deletion" (new), `layer1-data-model.md` Keys,
+     `layer2-services.md` (§"Group Membership and Role Model", the Group row shape, the `ReportedUserId`
+     Group arm, type 62), `content-safety.md`, Settled notes in Identity F52, BlogPosts F37, Messaging
+     F49, Groups F38 (plus WU32 Decision 3's amendment), Moderation F47 and Notifications F41,
+     `roadmap.md` Resolved, `grid_axes.md` F52's service name, tracker F17/F18/F19. Moment 3: Stage notes
+     and headlines in Identity F52, BlogPosts F37, Messaging F49; tracker H29 and the B25 annotation;
+     the worksheet D13 Built line.
+- **Left alone:** an exact `AllowMultiple` voter count after a deletion (owner-open, tracker **F17**;
+  the upper bound is pinned by a test); a sender-side message delete (**F18**); log retention and the
+  bare ids in `reports.reported_entity_id` / `notifications.related_entity_id` (**F19**); the story
+  self-delete link (WU-AuthorStoryDelete must add it to the copy) and the blog-post delete UI (**B25**);
+  avatar blobs (WU-BlobCleanup — the post-commit seam is marked); `ServerModerationReadService`'s
+  `"[deleted]"` submissions label (not D13's scope); D23's `PollId`/guard columns
+  (WU-PollVoteIntegrity, whose migration must come after this one).
+- **Verification:** `dotnet build` 0 errors, no new warnings in touched files. `dotnet test`: Unit
+  1,182, RazorComponents 777 (+1), Integration 1,468 (+9). Mutation-checked: the old voter-count
+  formula, an unfiltered sweep, the old messaging label, the conversation delete and the message-report
+  closure each fail their test. check-doc-hygiene, check-design-tokens, check-render-modes and check-a11y
+  pass. No browser was available (tracker **H29**).
+- **Pointers:** `audit/Identity.md` F52, `audit/BlogPosts.md` F37, `audit/Messaging.md` F49 (Stage
+  notes); `cross-cutting.md` §"Account deletion"; tracker F17/F18/F19/H29.
 
 ## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)
 

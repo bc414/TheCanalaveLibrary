@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -18,7 +19,11 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <c>Notification.SourceUserId</c>, <c>FollowedUser.FollowedUserId</c>, and
 /// <c>Vouch.VouchedUserId</c> — plus the <c>UserStat</c> Cascade that the database handles, and
 /// (owner ruling D11, WU-TptHardDelete) a poll surviving its owner with NULL <c>owner_id</c>, its
-/// options and the other users' votes.
+/// options and the other users' votes. Owner ruling D13's survival set (WU-UserDeletion): a voter's
+/// votes survive anonymized and the poll read keeps its tally and voter-list length; the
+/// <c>poll_votes</c> unique index's NULLS DISTINCT; a conversation survives one participant's deletion
+/// and is deleted (its open message reports closed) with the last; a sole admin's group survives
+/// admin-less; external logins and notification settings go.
 ///
 /// <b>What stays manual</b> (per testing.md "What stays manual"): auth-cookie claim baking,
 /// <c>SecurityStampValidator</c> timing, and SignalR circuit teardown. This test exercises the pure
@@ -260,6 +265,206 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         await AssertPollSurvivedAnonymizedAsync(pollId, optionIds, [voterB, voterC]);
     }
 
+    // ── Poll votes survive anonymized (owner ruling D13, WU-UserDeletion) ─────────
+
+    [Fact]
+    public async Task DeleteUserAsync_Voters_VotesSurviveAnonymized_TallyAndVoterListKeepTheirLength()
+    {
+        // FK parents: the author → their published profile post → a Public single-choice poll (owner =
+        // author) → its two options; then three voters. V1 and V3 delete their accounts, V2 stays.
+        int authorId = await SeedUserAsync("author");
+        int v1 = await SeedUserAsync("v1");
+        int v2 = await SeedUserAsync("v2");
+        int v3 = await SeedUserAsync("v3");
+        int postId = await SeedProfilePostAsync(authorId);
+        (int pollId, int[] optionIds) = await SeedPublicPollAsync(authorId, postId);
+        await SeedVoteAsync(optionIds[0], v1);
+        await SeedVoteAsync(optionIds[0], v2);
+        await SeedVoteAsync(optionIds[1], v3);
+
+        await DeleteUserViaServiceAsync(v1);
+        await DeleteUserViaServiceAsync(v3);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.PollVotes.Where(v => optionIds.Contains(v.PollOptionId)).Select(v => v.UserId).ToListAsync())
+            .Should().BeEquivalentTo(new int?[] { v2, null, null },
+                "a deleted voter's row survives with user_id NULL (D13) — it used to CASCADE away");
+        (await db.PollVotes.AnyAsync(v => v.UserId == v1 || v.UserId == v3))
+            .Should().BeFalse("the anonymized rows no longer point at the deleted accounts");
+
+        SetActiveUser(v2);
+        PollDto poll = (await scope.ServiceProvider.GetRequiredService<IPollReadService>().GetPollAsync(pollId))!;
+        poll.Options[0].VoteCount.Should().Be(2, "the published tally is unchanged");
+        poll.Options[1].VoteCount.Should().Be(1);
+        poll.Options[0].PublicVoters.Should().HaveCount(2, "the voter list keeps the count's length");
+        poll.Options[0].PublicVoters[0].UserId.Should().Be(v2, "live names come first");
+        poll.Options[0].PublicVoters[1].Should().Be(new PollVoterDto(null, null), "then the anonymized vote");
+        poll.Options[1].PublicVoters.Should().ContainSingle().Which.UserId.Should().BeNull();
+        poll.TotalVoterCount.Should().Be(3,
+            "one live voter plus one per anonymized row — a bare Distinct would fold both deleted voters into one");
+        poll.ConfigLocked.Should().BeTrue();
+        poll.ViewerVotedOptionIds.Should().Equal([optionIds[0]], "V2's own vote is unaffected");
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        PollDto asAnonymous = (await scope.ServiceProvider.GetRequiredService<IPollReadService>().GetPollAsync(pollId))!;
+        asAnonymous.ViewerVotedOptionIds.Should().BeEmpty(
+            "\"has voted\" compares user_id to the viewer and never matches an anonymized row");
+    }
+
+    [Fact]
+    public async Task PollVotes_UniqueIndex_RejectsADuplicateLiveVote_AndAllowsManyAnonymizedRows()
+    {
+        // Guards the index's NULLS DISTINCT: a future "fix" to NULLS NOT DISTINCT would make the second
+        // anonymized row fail, and dropping uniqueness would let the duplicate live vote in.
+        int authorId = await SeedUserAsync("author");
+        int voter = await SeedUserAsync("voter");
+        (_, int[] optionIds) = await SeedPublicPollAsync(authorId, await SeedProfilePostAsync(authorId));
+        int optionId = optionIds[0];
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.ExecuteSqlAsync(
+            $"INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({optionId}, {voter}, false)");
+
+        Func<Task> duplicate = () => db.Database.ExecuteSqlAsync(
+            $"INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({optionId}, {voter}, false)");
+        (await duplicate.Should().ThrowAsync<Npgsql.PostgresException>())
+            .Which.SqlState.Should().Be("23505");
+
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO poll_votes (poll_option_id, user_id, is_anonymous) VALUES ({0}, NULL, false), ({0}, NULL, false)",
+            optionId);
+        (await db.PollVotes.CountAsync(v => v.PollOptionId == optionId && v.UserId == null)).Should().Be(2);
+    }
+
+    // ── Conversations (owner ruling D13 edge (a), WU-UserDeletion) ────────────────
+
+    [Fact]
+    public async Task DeleteUserAsync_OneOfTwoParticipants_ConversationSurvives_ReadingDeletedUser()
+    {
+        int a = await SeedUserAsync("a");
+        int b = await SeedUserAsync("b");
+        (int conversationId, long[] messageIds) = await SeedConversationAsync(a, b);
+        long reportId = await SeedMessageReportAsync(messageIds[0], reporterId: b);
+
+        await DeleteUserViaServiceAsync(a);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Conversations.AnyAsync(c => c.ConversationId == conversationId)).Should().BeTrue();
+        (await db.ConversationParticipants.Where(p => p.ConversationId == conversationId).Select(p => p.UserId).ToListAsync())
+            .Should().Equal([b], "only the leaver's participant row cascades");
+        var messages = await db.PrivateMessages.Where(m => m.ConversationId == conversationId)
+            .OrderBy(m => m.DateSent).Select(m => new { m.MessageId, m.SenderUserId }).ToListAsync();
+        messages.Select(m => m.MessageId).Should().Equal(messageIds, "every message survives — it is B's received mail too");
+        messages.Select(m => m.SenderUserId).Should().Equal([null, b, null]);
+        (await db.Reports.Where(r => r.ReportId == reportId).Select(r => r.ReportStatusId).SingleAsync())
+            .Should().Be(ReportStatusEnum.Open, "the reported message still exists and can still be acted on");
+
+        SetActiveUser(b);
+        IMessagingReadService messaging = scope.ServiceProvider.GetRequiredService<IMessagingReadService>();
+        ConversationThreadDto thread = await messaging.GetConversationThreadAsync(conversationId, page: 1, pageSize: 20);
+        thread.OtherParticipant.Username.Should().Be("[deleted user]");
+        thread.Messages.Where(m => m.SenderUserId is null).Should().HaveCount(2)
+            .And.OnlyContain(m => m.SenderUsername == "[deleted user]" && !m.IsOwnMessage);
+        (await messaging.GetConversationsAsync()).Should().ContainSingle(c => c.ConversationId == conversationId)
+            .Which.OtherParticipant.Username.Should().Be("[deleted user]");
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_BothParticipants_ConversationAndMessagesGone_AndTheirOpenReportsClosed()
+    {
+        int a = await SeedUserAsync("a");
+        int b = await SeedUserAsync("b");
+        int bystander = await SeedUserAsync("bystander");
+        int c = await SeedUserAsync("c");
+        (int conversationId, long[] messageIds) = await SeedConversationAsync(a, b);
+        (int otherConversationId, _) = await SeedConversationAsync(bystander, c); // unrelated, must survive
+        long reportId = await SeedMessageReportAsync(messageIds[1], reporterId: bystander);
+
+        await DeleteUserViaServiceAsync(a);
+        await DeleteUserViaServiceAsync(b);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Conversations.AnyAsync(x => x.ConversationId == conversationId))
+            .Should().BeFalse("a conversation with no participant left is deleted at the source");
+        (await db.PrivateMessages.AnyAsync(m => m.ConversationId == conversationId))
+            .Should().BeFalse("its messages cascade with it");
+        (await db.Conversations.AnyAsync(x => x.ConversationId == otherConversationId)).Should().BeTrue();
+
+        var report = await db.Reports.Where(r => r.ReportId == reportId)
+            .Select(r => new { r.ReportStatusId, r.ModeratorUserId, r.ActionTaken, r.DateResolved }).SingleAsync();
+        report.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedNoAction,
+            "the reported message is gone, so its report would otherwise be a queue zombie (D7)");
+        report.ModeratorUserId.Should().BeNull();
+        report.DateResolved.Should().NotBeNull();
+        report.ActionTaken.Should().Contain("both participants");
+    }
+
+    // ── Groups (owner ruling D13 edge (b)) ───────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteUserAsync_SoleGroupAdmin_GroupSurvivesWithNoAdmin()
+    {
+        int creator = await SeedUserAsync("creator");
+        int member = await SeedUserAsync("member");
+        SetActiveUser(creator);
+        int groupId;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            groupId = await scope.ServiceProvider.GetRequiredService<IGroupWriteService>()
+                .CreateGroupAsync(new CreateGroupDto { GroupName = $"Group {Guid.NewGuid():N}" });
+        SetActiveUser(member);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().JoinAsync(groupId);
+
+        await DeleteUserViaServiceAsync(creator);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Groups.Where(g => g.GroupId == groupId).Select(g => new { g.CreatorId }).SingleAsync())
+                .CreatorId.Should().BeNull("the group survives its founder, anonymized");
+            var roles = await db.GroupMembers.Where(m => m.GroupId == groupId)
+                .Select(m => new { m.UserId, m.Role }).ToListAsync();
+            roles.Should().ContainSingle().Which.Should().Be(new { UserId = member, Role = GroupRole.Member },
+                "the group is admin-less — a waiting state a moderator ends (D13 edge (b))");
+        }
+    }
+
+    // ── Account-level data goes unconditionally (D13 GDPR (iii)) ─────────────────
+
+    [Fact]
+    public async Task DeleteUserAsync_DestroysExternalLoginsAndNotificationSettings()
+    {
+        int userId = await SeedUserAsync("leaver");
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            UserManager<User> users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            User user = (await users.FindByIdAsync(userId.ToString()))!;
+            (await users.AddLoginAsync(user, new UserLoginInfo("Discord", $"discord-{userId}", "Discord")))
+                .Succeeded.Should().BeTrue();
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.UserNotificationSettings.Add(new UserNotificationSetting
+            {
+                UserId = userId, NotificationTypeId = NotificationTypeEnum.NewFollowerOnYou, EmailEnabled = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await DeleteUserViaServiceAsync(userId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Database.SqlQuery<int>(
+                    $"SELECT COUNT(*)::int AS \"Value\" FROM \"AspNetUserLogins\" WHERE user_id = {userId}")
+                .SingleAsync()).Should().Be(0, "a linked sign-in provider is account-level data");
+            (await db.UserNotificationSettings.AnyAsync(s => s.UserId == userId)).Should().BeFalse();
+        }
+    }
+
     private async Task AssertPollSurvivedAnonymizedAsync(int pollId, int[] optionIds, int[] voterIds)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -386,6 +591,70 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         db.PollVotes.Add(new PollVote { PollOptionId = optionIds[1], UserId = voterTwo });
         await db.SaveChangesAsync();
         return (poll.PollId, optionIds);
+    }
+
+    /// <summary>A Public, results-always, single-choice blog-post poll with two options (FK parents: the
+    /// owner and their post).</summary>
+    private async Task<(int PollId, int[] OptionIds)> SeedPublicPollAsync(int ownerId, int blogPostId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        BlogPostPoll poll = new()
+        {
+            OwnerId = ownerId, BlogPostId = blogPostId, PollName = "Favorite region?",
+            DateOpened = DateTime.UtcNow.AddDays(-1),
+            ResultsVisibility = PollResultsVisibility.Always, AnonymityMode = PollAnonymityMode.Public,
+        };
+        poll.PollOptions.Add(new PollOption { Text = "Sinnoh", SortOrder = 0 });
+        poll.PollOptions.Add(new PollOption { Text = "Johto", SortOrder = 1 });
+        db.Polls.Add(poll);
+        await db.SaveChangesAsync();
+        return (poll.PollId, [..poll.PollOptions.OrderBy(o => o.SortOrder).Select(o => o.PollOptionId)]);
+    }
+
+    private async Task SeedVoteAsync(int pollOptionId, int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.PollVotes.Add(new PollVote { PollOptionId = pollOptionId, UserId = userId });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>A two-participant conversation with three messages, oldest first: A, B, A.</summary>
+    private async Task<(int ConversationId, long[] MessageIds)> SeedConversationAsync(int a, int b)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        DateTime start = DateTime.UtcNow.AddHours(-1);
+        Conversation conversation = new() { Subject = "Hello", DateCreated = start };
+        conversation.ConversationParticipants.Add(new ConversationParticipant { UserId = a });
+        conversation.ConversationParticipants.Add(new ConversationParticipant { UserId = b });
+        PrivateMessage[] messages =
+        [
+            new() { SenderUserId = a, MessageText = "<p>one</p>", DateSent = start.AddMinutes(1) },
+            new() { SenderUserId = b, MessageText = "<p>two</p>", DateSent = start.AddMinutes(2) },
+            new() { SenderUserId = a, MessageText = "<p>three</p>", DateSent = start.AddMinutes(3) },
+        ];
+        foreach (PrivateMessage m in messages) conversation.PrivateMessages.Add(m);
+        db.Conversations.Add(conversation);
+        await db.SaveChangesAsync();
+        return (conversation.ConversationId, [..messages.Select(m => m.MessageId)]);
+    }
+
+    /// <summary>An open member report on a message (reason 1 "Other" is migration-seeded).</summary>
+    private async Task<long> SeedMessageReportAsync(long messageId, int reporterId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Report report = new()
+        {
+            ReportedEntityType = ReportedEntityType.Message, ReportedEntityId = messageId,
+            ReportReasonId = 1, ReporterUserId = reporterId, ReportStatusId = ReportStatusEnum.Open,
+            DateReported = DateTime.UtcNow,
+        };
+        db.Reports.Add(report);
+        await db.SaveChangesAsync();
+        return report.ReportId;
     }
 
     private async Task DeleteUserViaServiceAsync(int userId)

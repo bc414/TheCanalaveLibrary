@@ -649,7 +649,7 @@ Public/private per list; public lists are viewable + cloneable (independent snap
 settled 2026-07-13 — see `audit/CustomLists.md` "Settled design" (filter-template integration
 dropped; §8.7's filter-composition question dissolved).*
 
-**52. User Account Deletion** — `DeleteUserService` handling RESTRICT FK conflicts before deletion.
+**52. User Account Deletion** — `UserDeletionService` handling RESTRICT FK conflicts before deletion.
 Content anonymization vs interaction CASCADE.
 
 **53. External Story Links & Verification** — *(renamed from "Story Import & Verification"

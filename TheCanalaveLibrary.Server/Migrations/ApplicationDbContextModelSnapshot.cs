@@ -2078,23 +2078,34 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.PollVote", b =>
                 {
-                    b.Property<int>("PollOptionId")
+                    b.Property<int>("PollVoteId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasColumnName("poll_option_id");
+                        .HasColumnName("poll_vote_id");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PollVoteId"));
 
                     b.Property<bool>("IsAnonymous")
                         .HasColumnType("boolean")
                         .HasColumnName("is_anonymous");
 
-                    b.HasKey("PollOptionId", "UserId")
+                    b.Property<int>("PollOptionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("poll_option_id");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("PollVoteId")
                         .HasName("pk_poll_votes");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_poll_votes_user_id");
+
+                    b.HasIndex("PollOptionId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_poll_votes_poll_option_id_user_id");
 
                     b.ToTable("poll_votes", (string)null);
                 });
@@ -5299,8 +5310,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasOne("TheCanalaveLibrary.Core.User", "User")
                         .WithMany("PollVotes")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
+                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_poll_votes_users_user_id");
 
                     b.Navigation("PollOption");

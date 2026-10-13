@@ -126,7 +126,7 @@ public class ServerMessagingWriteService(
 
         // Resolve sender display info for the returned DTO (write-side read, read after commit).
         User? senderUser = await writeDb.Users.FindAsync(senderId);
-        string senderUsername = senderUser?.UserName ?? "[deleted]";
+        string senderUsername = senderUser?.UserName ?? ServerMessagingReadService.DeletedUserLabel;
         string senderAvatarUrl = senderUser?.ProfilePictureRelativeUrl ?? "/img/default-avatar.svg";
 
         return new MessageDto(

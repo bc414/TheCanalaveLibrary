@@ -39,8 +39,11 @@ public sealed class PollEditNotificationSweeper(
                 p.PollId,
                 p.OwnerId,
                 BlogPostId = p is BlogPostPoll ? (int?)((BlogPostPoll)p).BlogPostId : null,
+                // Live voters only: an anonymized vote (owner ruling D13 — the voter deleted their
+                // account) has no one to notify, and a NULL id would fail the recipient FK.
                 VoterIds = p.PollOptions
-                    .SelectMany(o => o.Votes).Select(v => v.UserId).Distinct().ToArray(),
+                    .SelectMany(o => o.Votes).Where(v => v.UserId != null)
+                    .Select(v => v.UserId!.Value).Distinct().ToArray(),
             })
             .ToListAsync(ct);
 

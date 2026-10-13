@@ -17,23 +17,73 @@
 
     <h3 class="text-lg font-semibold text-(--color-text)">Delete Personal Data</h3>
 
+    @* This copy is the compliance surface for the account-deletion policy (owner ruling D13;
+       cross-cutting.md §"Account deletion"): it must enumerate what survives, what is destroyed and how
+       to delete content first. Change the policy, change this copy, in the same WU. Every claim here
+       was checked against the FK graph on 2026-10-13 (WU-UserDeletion). *@
     <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
         <p>
-            <strong>Deleting your account cannot be undone.</strong> Here's what happens to your data:
+            <strong>Deleting your account cannot be undone.</strong> Your account is deleted outright, and
+            nothing links what remains back to you. Here's what happens to your data.
         </p>
-        <ul class="mt-2 list-disc pl-5">
-            <li>Your account and login are <strong>permanently deleted</strong>.</li>
-            <li>
-                Stories, chapters, comments, blog posts, and recommendations you've published are
-                <strong>not deleted</strong> — they're kept and anonymized. Your comments stay in
-                their threads, shown as posted by <em>"[deleted user]"</em>; comments on your own
-                profile page are deleted with it.
-            </li>
-            <li>
-                Follows, interactions (favorites/likes/read-later), reading lists, memberships,
-                badges, settings, and stats are <strong>permanently deleted</strong>.
-            </li>
-        </ul>
+    </div>
+
+    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface) p-6 text-sm text-(--color-text)">
+        <section class="flex flex-col gap-1">
+            <h4 class="font-semibold">Kept, without your name</h4>
+            <p class="text-(--color-text-muted)">These stay on the site, shown as by <em>"[deleted user]"</em>:</p>
+            <ul class="list-disc pl-5">
+                <li>Stories and their chapters, series, comments, blog posts, recommendations, and polls you created.</li>
+                <li>Your votes on polls. They still count in the results, and appear as "[deleted user]" where voters are listed.</li>
+                <li>
+                    Private messages you sent. The other person keeps the conversation, and your messages show as from
+                    "[deleted user]". A conversation is deleted only once everyone in it has deleted their account.
+                </li>
+                <li>Groups you founded, and stories you added to groups.</li>
+                <li>Community Spotlight placements you sponsored, and reports you filed (kept as moderation records).</li>
+            </ul>
+        </section>
+
+        <section class="flex flex-col gap-1">
+            <h4 class="font-semibold">Permanently deleted</h4>
+            <ul class="list-disc pl-5">
+                <li>Your account and login: your email address, password, and any linked sign-in providers.</li>
+                <li>Your profile, settings and stats.</li>
+                <li>Follows and followers, and vouches you gave and received.</li>
+                <li>Favorites, likes, read-later, reading progress, custom lists and saved tag selections.</li>
+                <li>Badges, group memberships, content reveals and your notifications.</li>
+                <li>Comments other people left on your profile.</li>
+                <li>Your credits as a co-author, beta reader or acknowledged helper on other people's stories.</li>
+                <li>The accounts on other sites you linked to your profile, verified or not.</li>
+            </ul>
+        </section>
+
+        <section class="flex flex-col gap-1">
+            <h4 class="font-semibold">Want something gone rather than kept? Delete it first</h4>
+            <ul class="list-disc pl-5">
+                <li>Comments: use Delete on each comment.</li>
+                <li>Chapters: use the chapter list in your story's editor.</li>
+                <li>Recommendations: use Delete on your recommendation, on the story's page.</li>
+                <li>
+                    Series: use Delete on the series' edit page
+                    @if (user is not null)
+                    {
+                        <text>(your series are listed on <a href="/user/@user.Id/series" class="text-(--color-action-ink) hover:underline">your profile</a>)</text>
+                    }.
+                </li>
+                <li>Polls: use Delete on the poll in your blog post's editor. Poll votes: use Retract vote on the poll.</li>
+                <li>Stories and blog posts can't be deleted on the site yet, so they are kept without your name.</li>
+                <li>Private messages you sent can't be deleted. They stay in the other person's inbox.</li>
+            </ul>
+        </section>
+
+        <section class="flex flex-col gap-1">
+            <h4 class="font-semibold">Before you go</h4>
+            <p>
+                Removing your name does not remove what you wrote. If a story, comment or message mentions your
+                real name or other details about you, edit or delete it before deleting your account.
+            </p>
+        </section>
     </div>
 
     <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post" class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">

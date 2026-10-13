@@ -50,6 +50,12 @@ conventions. **Do not revisit these.** Pointers:
 3. **Roles — Member / Admin only.** Creator auto-added as Admin on create. No `GroupRole.Moderator`
    category — permanent decision, not a deferral. Admin-gated mutations enforced server-side in
    `ServerGroupWriteService`. See `layer2-services.md` "Group Membership and Role Model."
+   **Amended 2026-10-13 (owner ruling D13 edge (b), built WU-UserDeletion): the admin-less group.**
+   The "no transfer" line now has two halves. Member-to-member transfer of a *living* admin role stays
+   absent, permanently. A group with **zero** admins (its last admin left or deleted their account) is
+   a waiting state that a site moderator ends by promoting an existing member
+   (`AssignGroupAdminAsync`). Auto-promotion and self-claim are rejected. Rule:
+   `layer2-services.md` §"Group Membership and Role Model"; F38's Settled note below.
 
 4. **Group blog posts — in scope for WU32.** Honors `forward_plan.md` decision (2026-06-24). Reuses
    WU31 `BaseBlogPost` / `IBlogPostWriteService` / `BlogPostCard` / `BlogPostPropertiesForm`
@@ -68,6 +74,27 @@ conventions. **Do not revisit these.** Pointers:
    generate no notification — only `CommentReply` (34) to the parent-comment author fires.
 
 ## Feature 38 — Group Management
+
+**Settled — the admin-less group (owner ruling D13 edge (b), answered 2026-08-06; settled for
+WU-UserDeletion 2026-10-13). Do not revisit:**
+- **A waiting state, both routes.** A group whose last admin leaves *or* deletes their account
+  survives with no admin (`creator_id` NULL on the deletion route). A site moderator assigns a new
+  admin on request. Auto-promotion and member self-claim are rejected; member-to-member transfer of a
+  living admin role stays absent.
+- **The action:** `IModerationWriteService.AssignGroupAdminAsync(groupId, targetUserId, notes)` with
+  exactly three guards (caller is a moderator; the group has zero admins; the target is already a
+  member). No fourth guard: a moderator may assign themselves if they are a member. It files an
+  opened-and-resolved `Report` row (`Group` target, reason Other, the notes) and notifies the promoted
+  user (type 62, null-sourced). It moves no counter (D24).
+- **UI:** the sole admin's Leave confirms first, saying the group will have no admin until a site
+  moderator assigns one (D13's recommended rider); `LeaveAsync` itself is unchanged. A moderator
+  viewing an admin-less group gets an "Assign an admin" panel on the group page. `GroupDetailDto`
+  carries `AdminCount` to drive both.
+- **Open, not decided here:** the request channel for "on request" (unspecified by the owner; out of
+  band, by messaging a moderator, until D47), and what a moderator can do about a group that still has
+  an admin (D47(b), pending).
+
+Rule: `layer2-services.md` §"Group Membership and Role Model".
 
 **Settled — owner rulings D24 and D23 (answered 2026-08-08; built WU-CounterSymmetry 2026-09-30).
 Do not revisit:**
