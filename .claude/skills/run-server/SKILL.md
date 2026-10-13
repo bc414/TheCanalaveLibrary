@@ -166,7 +166,9 @@ AppHost's output. The web app's stdout is `%TEMP%\aspire-dcp*\<guid>_out`, the l
 the newest `aspire-dcp*` folder. Its lines carry ANSI color codes, so strip `\x1b\[[0-9;]*m` before
 grepping for `fail:`/`crit:`. After a DB wipe, a browser that still holds an antiforgery cookie from
 the old key ring logs one `fail: …DefaultAntiforgery[7]` ("key … was not found in the key ring") on its
-first request. That is harmless: the data-protection keys live in the wiped database.
+first request. That is harmless: the data-protection keys live in the wiped database. Moving a browser
+from the server-only path to this one logs the same line once, because each database holds its own key
+ring (seen 2026-10-13).
 
 ### Gotchas encoded here
 
@@ -367,6 +369,14 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
   - In a hidden tab, `window.scrollTo` moves the page but fires no `scroll` event (verified
     2026-09-30). Follow it with `window.dispatchEvent(new Event('scroll'))` to drive scroll listeners
     such as the reading-progress tracker's 90% moment.
+  - **Driving an `InputFile`** (verified 2026-10-13, WU-BlobCleanup browser pass, both render phases).
+    The extension's `file_upload` accepts only files shared with the session. Instead, build the file
+    in the page: draw on a `canvas`, `toBlob('image/png')`, wrap it in a `File`, put it in a
+    `DataTransfer`, assign `input.files = dt.files`, then dispatch `change` (bubbling). A random-noise
+    canvas of 1600×1600 gives an ~8.8 MB PNG. A `File` of text named `.png` drives the refusal path.
+  - **Transient busy states** (an "Uploading…" that lasts 100 ms on localhost) are too quick to
+    sample. Attach a `MutationObserver` to `document.body` before the action and record each distinct
+    state. To keep the record across a `forceLoad` reload, write it to `sessionStorage`.
 - **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
   progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
   one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.

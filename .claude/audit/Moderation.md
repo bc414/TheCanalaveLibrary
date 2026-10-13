@@ -211,6 +211,20 @@ go. A soft removal never touches the blob. No UI changed, so L4.5 is not owed a 
   the fault test (the exception would cost the notifications).
 - **Phase 7:** CDN copies survive an object delete (`immutable` caching), so the illegal-content path
   needs a purge once Cloudflare fronts R2 (`roadmap.md` Phase 7).
+- **Browser verification (2026-10-13; tracker H31 step 7, closed) — no flip; F47 L4.5 stays 5.** No UI
+  sends `hardDelete=true`, so the pass drove it over HTTP as ModUser, as the WU-TptHardDelete pass did.
+  AuthorAlpha published two covered stories through the editor, and TestUser reported each as Illegal
+  Content (`POST /api/moderation/reports`, 204).
+  - **Server-only (Local).** Stories 15 and 16, reports 12 and 13. The hard delete
+    (`resolve-removal?…&hardDelete=true`, 204) removed story 15 and its cover file, and the cover URL
+    went 200 → 404. The takedown (`hardDelete=false`) set `is_taken_down`, kept the column and the file,
+    and the URL stayed 200. Both reports closed `ResolvedActionTaken` by ModUser. The reporter got a
+    type 81 and the author a type 70 for each, so the notifications still ran after the blob delete.
+  - **Aspire (Garage).** Stories 13 and 14, reports 7 and 8 in the Aspire database. The hard delete took
+    the bucket from 3 objects to 2, and its cover URL went 200 → 404. The takedown kept its object,
+    served 200 with `Cache-Control: public, max-age=31536000, immutable`, the header the Phase-7 purge
+    note is about. The 81s and 70s arrived the same way.
+  - No `fail:`/`crit:` line from either resolve.
 
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13 edge (b), Part B) — F47 L4.5 5→1;
 F46/F47 L1/L2/L5 stay 5.** The Settled note above, built.
@@ -493,7 +507,8 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 bigint comment ids; Integration).
 
 **Stages (updated 2026-10-13, WU-BlobCleanup — a hard delete erases the story's cover blob after the
-commit, beneath L2, no flip, Integration-tested, Stage note at the top of this section; earlier the same
+commit, beneath L2, no flip, Integration-tested and driven over HTTP on Local and Garage by its browser
+pass the same day, Stage note at the top of this section; earlier the same
 day, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's
 Group arm beneath L2/L5, no flip there, and **L4.5 5→1** because "Show resolved" lists Group rows no browser
 has seen, tracker H29 — Stage note at the top of this section; its review fixes Unit-test the client's

@@ -84,7 +84,9 @@ tracker **F22**. **Phase 7:** the CDN purge on hard delete (D14 flags it, not de
 
 **Impls:**
 - `LocalImageStorageService` (Server/Images/, **MVP, built WU12**) — writes under `wwwroot/uploads/`,
-  served by `UseStaticFiles()`. Returns a **host-relative URL** (e.g.
+  served by `UseStaticFiles()` only: the folder is kept out of the build's static web assets, so no
+  `MapStaticAssets` endpoint outlives a deleted file (WU-BlobCleanup browser pass, 2026-10-13; Stage
+  note below). Returns a **host-relative URL** (e.g.
   `/uploads/stories/5/cover-{uuid}.jpg`) that resolves against whatever origin the app is running on —
   `localhost:7xxx` in dev, the real domain once deployed. No full URL is ever stored (see "URL
   Conventions" below).
@@ -161,7 +163,7 @@ write path's `CoverArtRelativeUrl` a pass-through string; both UIs have since sh
 
 ---
 
-## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12; refusals made user-facing on both render phases by its browser pass the same day; blob cleanup owned since WU-BlobCleanup, 2026-10-13 — `EnumerateAsync`, the daily orphan sweep, the inline deletes at account deletion and moderation hard delete, cover upload persisting its own reference; Unit + Integration-tested, browser pass owed (tracker H31) — Stage notes below, newest last)
+## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12; refusals made user-facing on both render phases by its browser pass the same day; blob cleanup owned since WU-BlobCleanup, 2026-10-13 — `EnumerateAsync`, the daily orphan sweep, the inline deletes at account deletion and moderation hard delete, cover upload persisting its own reference; Unit + Integration-tested, and browser-driven on Local and Garage by its browser pass the same day, which also took `wwwroot/uploads/` out of the build's static web assets (tracker H31 closed) — Stage notes below, newest last)
 
 `IImageStorageService` + `LocalImageStorageService` minted and registered
 (`AddScoped<IImageStorageService, LocalImageStorageService>()`). No write-path call site yet (Stories'
@@ -338,7 +340,8 @@ cleanup". No migration (only two columns name blobs, and no seed sets either).
   dry-ran; the review fixes below moved the first real cycle to an hour after the dry run.)*
   **Dev-data note:** the WU12 fixture `wwwroot/uploads/stories/999/cover-*.png` (and anything
   `/dev/wu12/upload-test-image` writes) is unreferenced by design, so the first real Local-mode cycle
-  deletes it — a dev server that runs past an hour.
+  deletes it — a dev server that runs past an hour. *(The browser pass's real cycle deleted it from the
+  server-only workbench on 2026-10-13.)*
 - **Inline sites.** `UserDeletionService` captures the avatar path inside the transaction and deletes it
   after the strategy returns (reset per attempt, so only the committed attempt counts).
   `ResolveWithRemovalAsync(hardDelete: true)` captures a Story's cover before the row delete
@@ -397,6 +400,36 @@ cleanup". No migration (only two columns name blobs, and no seed sets either).
   - **The hard-delete docs.** `layer2-services.md` §"Hard deletes of content parents" gains the blob
     step (capture before the parent's delete, delete after the commit in its own `try`), and
     `content-safety.md`'s escape hatch names the cover erasure and the Phase-7 CDN purge.
+- **Browser verification (2026-10-13) — L2 stays 5; tracker H31 closed.** It ran on the server-only
+  path (Local) and on the Aspire path (Garage). The editor and deletion flows are in `audit/Stories.md`
+  F4, `audit/Moderation.md` F47 and `audit/Identity.md` F52. This cluster's own checks:
+  - **The sweep on Local, dry run then real.** One fixture of each kind was planted first: a
+    generated-shape cover under `uploads/stories/12/`, fresh so inside the grace window, and a
+    `handplaced.png` beside it. Five seconds after start, the dry run logged two "would delete" lines,
+    the WU12 fixture `stories/999/cover-*.png` and an unreferenced July `users/1/profile-*.png`. Its
+    summary read scanned 5, candidates 2, in grace 1, foreign 1, deleted 0. The real cycle came at
+    09:22, an hour later as `FirstRealCycleDelay` says. It read scanned 7 (the pass's covers had
+    arrived), deleted 2, in grace 1, foreign 1, dangling 0, and removed both files from disk. AuthorBeta's
+    avatar and the two covers then on stories 14 and 16 still served 200.
+  - **The sweep on Garage (dry run only).** It read scanned 1, candidates 1: a July
+    `users/1/profile-*.png` object that no row in the Aspire database names. Nothing was deleted, and no
+    real cycle was waited for: the Garage tests cover S3 listing and deletes.
+  - **The inline deletes on Garage.** A replaced cover, a hard-deleted story's cover and a deleted
+    account's avatar each took one object out of the bucket (`garage bucket info`), and each URL then
+    answered 404. A takedown kept its object.
+  - **One runtime bug, fixed** (commit "browser-pass fixes"). After the real sweep, the two swept URLs
+    still answered **200 with an empty body** and no content type. The Web SDK had compiled every file
+    in `wwwroot/uploads/` at build time into the static web assets manifest. `MapStaticAssets` then
+    mapped an endpoint per file, fingerprinted twins included, and the endpoint outlived the file.
+    Uploads written after the build had no endpoint, so the inline deletes 404'd and `BlobCleanupTests`
+    could not see the bug. A publish from a machine with local uploads would also have shipped them.
+    The fix: the Server csproj removes `wwwroot\uploads\**` from `Content`, and `UseStaticFiles`
+    still serves uploads at run time. `layer2-services.md`'s cover-art paragraph states the rule.
+    Re-verified after a restart: the avatar and a cover served 200 `image/png`, both swept URLs 404'd,
+    a file deleted by hand 404'd at once, and a cover uploaded on WASM served 200. **Integration**
+    `HostBootTests.NoStaticAssetEndpointServesAnUpload` failed before the csproj change and passes
+    after. It can fail only where `wwwroot/uploads/` held a file at build time (any server-only
+    workbench), never on a clean checkout.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

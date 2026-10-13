@@ -85,7 +85,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   lifecycle move goes through `TransitionStatusAsync` (author) or approve/reject (moderator).
   `PostApprovalStatus` stays an ordinary editable property. Rule of record: `layer2-services.md`
   §"Story Lifecycle".
-- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`); see both Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; see both Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -116,7 +116,7 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save, and since its review fixes the same day its three writes (a cover call, the save, a status change) never overlap; RazorComponents-tested (`StoryEditorPageTests`); see both Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save, and since its review fixes the same day its three writes (a cover call, the save, a status change) never overlap; RazorComponents-tested (`StoryEditorPageTests`), and browser-driven on both render phases by its browser pass the same day; see both Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
   on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
@@ -144,15 +144,17 @@ Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cle
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 1 (5→1, WU-BlobCleanup, 2026-10-13: the cover flow changed — upload on pick,
-  "Remove cover", create-with-cover — and no browser was available; tracker H31 holds the pass. Before
-  that: browser-verified 2026-09-30 by the WU-StoryLifecycle browser pass; it was 1 from the review
-  fixes earlier that day until this pass ran).** Every lifecycle move, the "Status
-  when published" select and the published-story editor were driven on the circuit and on WASM against
-  `psql`. The pass found and fixed three runtime bugs: a refused save killed the circuit, a published
-  story's editor 301'd to its story page on a full load, and the rejection reason rendered as
-  "_rejectionReason". Detail: the browser-verification Stage note below. Not driven: the cover-art
-  `InputFile` (the standing exception in the 2026-07-01 cluster note).
+- **L4.5-Browser — Stage 5 (1→5, WU-BlobCleanup browser pass, 2026-10-13: the cover flow — upload on
+  pick, "Remove cover", create-with-cover, a refused file, the three writes kept apart — driven on the
+  circuit and on WASM with `psql` and the upload folder after every write, which closed trackers H31 and
+  H3; it had gone 5→1 at WU-BlobCleanup earlier that day, with no browser. Before that: browser-verified
+  2026-09-30 by the WU-StoryLifecycle browser pass; it was 1 from the review fixes earlier that day until
+  that pass ran).** The WU-StoryLifecycle pass drove every lifecycle move, the "Status when published"
+  select and the published-story editor on both phases against `psql`, and found and fixed three runtime
+  bugs: a refused save killed the circuit, a published story's editor 301'd to its story page on a full
+  load, and the rejection reason rendered as "_rejectionReason". The WU-BlobCleanup pass drove the
+  cover-art `InputFile`, the 2026-07-01 cluster note's standing exception, for the first time; it found
+  no bug and filed the feedback polish as tracker **H32**. Detail: the two browser Stage notes below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`; the client impls Unit-tested (`ClientStoryCoverServiceTests`) since its review fixes).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
@@ -418,7 +420,7 @@ arc on story 1 with start 3 and end 2 answers 400 "End chapter must not be befor
 and a lineage from story 1 to itself 400 "A story cannot have a lineage link to itself.". The service
 guards answer before the CHECKs can.
 
-### Feature 4 — WU-BlobCleanup Stage note (2026-10-13; owner ruling D14's sub-ruling) — F4 L4.5 5→1; L2/L3-Logic/L3.5/L4/L5 stay 5
+### Feature 4 — WU-BlobCleanup Stage note (2026-10-13; owner ruling D14's sub-ruling) — F4 L4.5 5→1, and 1→5 at its browser pass the same day; L2/L3-Logic/L3.5/L4/L5 stay 5
 
 The Settled note at the top of this feature, built. Rule of record: `layer2-services.md` §"Image Storage
 — blob ownership and cleanup". No migration.
@@ -499,6 +501,42 @@ The Settled note at the top of this feature, built. Rule of record: `layer2-serv
     endpoints, and its CSRF posture is the JSON API's, which worksheet D38 has yet to record.
   - **Mutation-checked:** dropping the handler guards, or the form's cross-disables, fails the overlap
     tests. No browser: tracker **H31** gains the overlap steps.
+- **Browser verification (2026-10-13) — F4 L4.5 1→5; trackers H31 and H3 closed.** Every editor step
+  of H31 ran on both render phases: the circuit, proven by `_blazor/negotiate` and no `/api` call, and
+  WASM, proven by no negotiate and the `/api/stories/…` requests. After each write, `psql` read
+  `story_listings.cover_art_relative_url` and the upload folder was listed. Actors: TestUser (an
+  untrusted author), AuthorAlpha (trusted), anonymous. The `InputFile` was driven with a PNG drawn in
+  the page (`run-server/SKILL.md`, "Driving an `InputFile`").
+  - **Create with a cover.** Picking the file on `/story/new` wrote nothing. Create opened the edit page
+    showing the cover, and the column held it. On WASM the network showed `POST /api/stories`, one
+    `POST …/cover` and no `PUT`.
+  - **Edit-mode upload.** The new cover rendered with no save, the column already held it, and the old
+    file was gone. After leaving the page without saving, the story page showed the new cover and the
+    old title.
+  - **Save after upload.** The reload kept the cover, and the title edit saved (`PUT` 204 on WASM).
+  - **Remove cover.** The image and button went at once, the column read NULL and the file was gone.
+  - **A refused file.** A text file named `.png` got "This file isn't a JPEG, PNG or WebP image."
+    (`POST …/cover` 400 on WASM). The old cover stayed and the picker re-enabled.
+  - **No overlapping writes.** A `MutationObserver` recorded each state change. Under an 8.8 MB upload,
+    the picker, "Remove cover", Save and the lifecycle buttons were all disabled while "Uploading…"
+    showed. Save was then force-enabled and clicked mid-upload. The handler ignored it: no reload, no
+    `PUT`, the title unsaved and the cover persisted. During a Save, and during a status change
+    (Submit, Withdraw), the picker and "Remove cover" were disabled. The server log had no "second
+    operation" line.
+  - **The API's refusals.** Anonymous `POST`/`DELETE …/cover` answered 401. As a non-author they
+    answered 403, and on a missing story 404; none wrote a file.
+  - **Aspire (Garage).** A cover replaced on WASM made the old object's URL 404 and the new one 200.
+    The bucket held 2 objects after the replace, as after the create: the cover and a July orphan.
+    Create-with-cover on WASM stored its object.
+  - **One runtime bug, fixed** (commit "browser-pass fixes"): on the server-only path, an upload that
+    was in `wwwroot/uploads/` at build time kept answering 200 (empty) after its delete. Detail:
+    `audit/ImageStorage.md`'s Stage note. It was never in the editor's flow, because a cover uploaded
+    at run time 404s once deleted.
+  - **Not bugs, filed as tracker H32 (polish):** a refused file is reported in the form's top alert,
+    about 530 px above the picker. "Uploading…" also shows while "Remove cover" runs. The native picker
+    keeps the last file name, and a status change leaves an old cover refusal on screen.
+  - No browser console errors. The server-only log had no `fail:`/`crit:` line. The Aspire log's one
+    `fail:` was the documented antiforgery line for a cookie from the other database's key ring.
 
 ## Feature 5 — Story Browsing & Display
 
@@ -1236,7 +1274,9 @@ NULL means "never published"; it is stamped on first publication instead.)*
 could not be driven (browser-automation file-upload API mismatch in the 2026-07-11 WU38 pass's
 tooling — not an app defect); the storage service itself is Integration-covered and was WU12
 endpoint-verified. Re-verify the InputFile wiring when a browser pass with working file upload
-is available.
+is available. *(Closed 2026-10-13: the WU-BlobCleanup browser pass drove the `InputFile` on both
+render phases with a file built in the page; the technique is in `run-server/SKILL.md`, and the pass
+is in F4's WU-BlobCleanup Stage note.)*
 
 ### WU-AuditFixPass note (2026-07-18)
 

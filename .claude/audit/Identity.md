@@ -172,7 +172,7 @@ for WU-UserDeletion 2026-10-13). Do not revisit:**
   which survive anonymized, are kept; whether to strip them is `roadmap.md` decision row 25 (tracker
   **F22**).
 
-**WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — F52 L2 stays 5; its review fixes flipped L4.5 5→1.** The avatar
+**WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — F52 L2 stays 5; its review fixes flipped L4.5 5→1, and its browser pass the same day returned it to 5.** The avatar
 bullet of the Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and
 cleanup").
 - **L2.** `UserDeletionService` gains `IImageStorageService` and a logger (primary ctor). Inside the
@@ -208,6 +208,20 @@ cleanup").
   - **L4.5 5→1**, per the WU-UserDeletion precedent on this page: its copy changed (now four lines) and
     no browser was available, and the L4.5 headline's "the rewritten copy was read in a browser" no
     longer covered the page as it stands. Tracker **H31** step 6 reads the new lines.
+- **Browser verification (2026-10-13) — F52 L4.5 1→5; tracker H31 closed.**
+  - **The copy.** As TestUser, `/Account/Manage/DeletePersonalData` (static SSR, one render phase)
+    read all four lines in place: "Stories (with their cover images)…", "Your profile, including your
+    profile picture…", "Cover images: use Remove cover in your story's editor." and "The same goes for
+    a cover image that shows you.". The lists render in the page's existing shapes.
+  - **The avatar delete, server-only (Local).** A throwaway account, E2EBlobAvatar (user 10), was
+    registered with the seed password and confirmed through the on-page link. It uploaded a picture
+    on `/settings`, and `psql` held the path. It was deleted through the page. The row was gone, the
+    file was gone, and the URL answered 404.
+  - **The avatar delete, Aspire (Garage).** E2EBlobAvatarS3 (user 8 in the Aspire database) was
+    confirmed through Mailpit and given a picture. The bucket went from 2 objects to 3. After deletion
+    through the page, the row was gone, the URL answered 404 and the bucket was back to 2.
+  - No `fail:`/`crit:` line in the server-only log. The Aspire log's one `fail:` was the antiforgery
+    line for a cookie from the other database's key ring (`run-server/SKILL.md`).
 
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13, Part A: the survival set) — L4.5 5→1;
 L1/L2/L4 stay 5.**
@@ -398,7 +412,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13, and locks them first so two overlapping deletions cannot both miss an emptied one, since its review fixes the same day — Integration-tested, not yet browser-driven; deletes the avatar blob after the commit, best-effort, since WU-BlobCleanup, 2026-10-13, Integration-tested, story covers held for decision row 25 — Stage notes above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13, and locks them first so two overlapping deletions cannot both miss an emptied one, since its review fixes the same day — Integration-tested, not yet browser-driven; deletes the avatar blob after the commit, best-effort, since WU-BlobCleanup, 2026-10-13, Integration-tested and browser-driven on Local and Garage by its browser pass the same day, story covers held for decision row 25 — Stage notes above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
@@ -432,8 +446,10 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
   D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes, and corrected by its review fixes the same day (server logs, a closed poll's votes, a removed recommendation); four copy lines added by WU-BlobCleanup and its review fixes, the same day (the profile picture deleted, covers kept, "Remove cover" as the delete-first path, a cover that shows you), same list shapes, Integration-asserted — Stage notes above). L5 — N/A.**
-  **L4.5 — Stage 1 (5→1 at WU-BlobCleanup's review fixes, 2026-10-13: the page's copy changed again and
-  no browser was available; tracker **H31** step 6 holds the read).** Before that: 5→1 at
+  **L4.5 — Stage 5 (1→5 at WU-BlobCleanup's browser pass, 2026-10-13: the four new copy lines read in a
+  browser, and an account with a picture deleted through the page on Local and on Garage, its blob gone;
+  tracker **H31** closed. It went 5→1 at that WU's review fixes earlier the same day, when the copy
+  changed again with no browser).** Before that: 5→1 at
   WU-UserDeletion and 1→5 at its browser pass, both 2026-10-13, when the rewritten copy was read in a
   browser and two throwaway accounts were deleted through it with `psql` ground truth (browser
   verification Stage note above; tracker **H29** closed); and 5 from the 2026-07-01 pass below.

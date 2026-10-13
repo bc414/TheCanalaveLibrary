@@ -1531,9 +1531,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Source: `layer4-style.md` §"StoryDeck (WU14)" and §"Top bar (MainLayout)."
   - Context: (a) `StoryDeck` loading-skeleton upgrade (gray placeholder cards) is a deferred additive swap behind the `Stories is null` branch. (b) The click-driven flyout-open was never explicitly browser-verified; likely exercised incidentally by later browser passes but no note confirms it.
 
-- [ ] **H3 — Cover-art upload never browser-verified** `[test-gap · low · anytime]` — *Folded into **H31** 2026-10-13 (WU-BlobCleanup review fixes): H31's steps 1–5 drive the cover `InputFile` on both render phases, so closing H31 closes this item too.*
-  - Grid: F4 L4.5=1 since WU-BlobCleanup (2026-10-13), which changed the cover flow (it read 5 when this
-    item was filed).
+- [x] **H3 — Cover-art upload never browser-verified: CLOSED with H31 (2026-10-13)** `[test-gap · low · anytime]` — *Folded into **H31** 2026-10-13 (WU-BlobCleanup review fixes): H31's steps 1–5 drive the cover `InputFile` on both render phases, so closing H31 closes this item too. Closed 2026-10-13 by the WU-BlobCleanup browser pass, which drove the `InputFile` on both phases with a file built in the page (`run-server/SKILL.md`).*
+  - Grid: F4 L4.5=1 from WU-BlobCleanup (2026-10-13), which changed the cover flow (it read 5 when this
+    item was filed), and 5 again from its browser pass the same day.
   - Source: `audit/Stories.md` "L4.5-Browser verification (2026-07-01) … Coverage exception."
   - Context: The story cover-art `InputFile` → `IImageStorageService` path couldn't be driven during the F4 browser pass ("re-verify when a browser pass with working file upload is available"). No later wave records driving it — the L4.5=5 implies whole-feature browser verification that one path didn't get.
 
@@ -2006,10 +2006,18 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `PUT /api/polls/{id}` with the other mode answers 400 "Vote mode is locked once votes exist."
     5. Delete the poll: its options and votes go (`psql`).
 
-- [ ] **H31 — WU-BlobCleanup browser pass: the cover is an immediate commit, and the deletion paths erase blobs** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-BlobCleanup, which ran with no browser available; extended by its review fixes the same day. Closing it closes **H3** (cover upload never browser-verified), which it absorbed.*
+- [x] **H31 — WU-BlobCleanup browser pass: the cover is an immediate commit, and the deletion paths erase blobs: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-BlobCleanup, which ran with no browser available; extended by its review fixes the same day. Closing it closes **H3** (cover upload never browser-verified), which it absorbed. Closed 2026-10-13 by its browser pass.*
+  - **Closure.** All nine steps ran: steps 1–5 and 9 on both render phases (server-only, plus a replace
+    and a create on Garage), step 6 on the static page, step 7 on Local and on Garage, and step 8's dry
+    run on both and its real cycle on Local. F4 and F52 L4.5 went back to 5. One runtime bug was fixed:
+    an upload present in `wwwroot/uploads/` at build time kept a `MapStaticAssets` endpoint that answered
+    200 (empty) after its delete. The Server csproj now keeps the folder out of the build's static web
+    assets (Integration `HostBootTests`). The feedback gaps the pass saw went to **H32**. Narrative:
+    `audit/Stories.md` F4, `audit/Identity.md` F52, `audit/Moderation.md` F47 and
+    `audit/ImageStorage.md`, each WU-BlobCleanup Stage note's browser bullet.
   - Grid: F4 L4.5 went 5→1 (the editor's cover flow changed). F52 L4.5 went 5→1 at the review fixes
     (the deletion page's copy changed again: four lines, asserted by `StaticSsrPageRenderTests` but not
-    read in a browser). F47 L4.5 stays 5 (no interactive UI changed).
+    read in a browser). F47 L4.5 stays 5 (no interactive UI changed). Both returned 1→5 at the pass.
   - Steps (server-only path unless noted; both render phases — circuit proven by `_blazor/negotiate`,
     WASM by the `/api/stories/…/cover` requests; `psql` on `story_listings.cover_art_relative_url` and a
     look at `wwwroot/uploads/stories/{id}/` after each write):
@@ -2046,6 +2054,24 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        Once the cover renders, Save works and the reload keeps the new cover. During a Save, and during a
        status change, the picker and "Remove cover" are disabled. Both render phases; the server log
        shows no "A second operation was started on this context instance".
+
+- [ ] **H32 — The editor's cover feedback: a refusal shows out of view, and removing reads "Uploading…"** `[polish · low · beta]` — *Filed 2026-10-13 by the WU-BlobCleanup browser pass, which found every cover flow working and these four feedback gaps.*
+  - Grid: F4 L4.5=5. The flows are correct; this is where and how the page reports them.
+  - Source: `audit/Stories.md` F4, the WU-BlobCleanup Stage note's browser bullet.
+  - Context:
+    1. **A refused file is reported out of view.** "This file isn't a JPEG, PNG or WebP image." renders
+       in the form's one error alert, above the Title field, about 530 px above the cover picker at a
+       1267×674 viewport. An author at the picker sees only the file name change and the old cover stay.
+       Save errors share that alert, so the placement predates WU-BlobCleanup. Options are a message by
+       the picker or scrolling the alert into view; either is a design call under the element-role
+       system (`layer4-style.md`).
+    2. **"Uploading…" shows while "Remove cover" runs,** because one `CoverUploadBusy` flag drives both
+       (the form's parameter doc says so). A neutral label, or one per operation, would read truer.
+    3. **The native picker keeps the last file name** ("notes.png" after a refusal, the removed
+       cover's name after "Remove cover"): nothing resets the `InputFile`. Cosmetic.
+    4. **A status change leaves an old cover refusal on screen.** "Moved back to draft." showed beside
+       the earlier "This file isn't…" alert, because a transition does not clear the form's error
+       list. Cosmetic.
 
 ---
 

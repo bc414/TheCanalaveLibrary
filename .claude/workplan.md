@@ -24,9 +24,11 @@ references it, does not restate it.
   cap, store → DB only, generated keys only, kill switch); `IImageStorageService` gained
   `EnumerateAsync`. **Cover upload persists its own reference:** `CoverArtRelativeUrl` left the write
   DTOs, `RemoveCoverArtAsync` is new, the editor uploads on pick, and its cover, save and status writes
-  never overlap. No migration. F4 and F52 L4.5 5→1 (no browser; tracker **H31**, which absorbed H3).
-  Filed: **F22** → **decision row 25** (covers kept on a deleted user's stories). `dotnet test`: Unit
-  1,235, RazorComponents 811, Integration 1,539. **Pointer:** its DONE entry.
+  never overlap. No migration. F4 and F52 L4.5 went 5→1 with no browser, and its browser pass the same
+  day returned both to 5 (H31 and H3 closed, polish **H32** filed). The pass fixed one runtime bug:
+  `wwwroot/uploads/` was a build asset, so a swept upload's URL kept answering 200. Filed: **F22** →
+  **decision row 25** (covers kept on a deleted user's stories). `dotnet test`: Unit 1,235,
+  RazorComponents 811, Integration 1,540. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
@@ -270,7 +272,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31**),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -456,7 +458,8 @@ is pending except where a bullet says so.
 - **Cells:** F4 L4.5 5→1 (the editor's cover flow changed, no browser; tracker **H31**). F4
   L2/L3-Logic/L3.5/L4/L5, F47 L2 and F52 L2 stay 5 (built beneath Stage-5 cells); the Images cluster
   has no grid row. The review fixes flipped **F52 L4.5 5→1** (the deletion page's copy changed again;
-  H31). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+  H31). The browser pass the same day returned **F4 and F52 L4.5 1→5** (H31 and H3 closed). Dated
+  2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** worksheet D14 (answered 2026-08-07) and its spec `wu-specs/WU-BlobCleanup.md` (which
   merges D14's WU-CoverPersistence half), with the campaign amendment: X9 dropped
   (`daily_story_stats` cascades from `stories`), the hard-delete blob delete after the strategy returns.
@@ -550,9 +553,42 @@ is pending except where a bullet says so.
   tests; a reference read routed through `Stories` fails only the mis-injected-context test, as its
   comment now says. **Unit 1,235** (+10), **RazorComponents 811** (+6), **Integration 1,539**, all
   green; build 0 errors, no new warnings in touched files; the four gates pass. No browser: **H31**.
+- **Browser pass (2026-10-13). F4 and F52 L4.5 1→5; H31 and H3 closed; H32 opened.** All nine of
+  H31's steps ran: the editor steps on both render phases (circuit proven by `_blazor/negotiate`, WASM by
+  the `/api/stories/…` requests), the deletion page, the hard delete and takedown over HTTP as ModUser,
+  two account deletions, and the sweep. Server-only (Local) and Aspire (Garage). `psql` and the upload
+  folder or `garage bucket info` after every write. Actors: TestUser, AuthorAlpha, ModUser, two
+  throwaway accounts, anonymous.
+  - Every flow worked: create-with-cover (one `POST …/cover`, no `PUT`), upload on pick (old blob
+    gone), save after upload (cover kept), Remove cover, the refused file, and the three writes kept
+    apart. A Save force-enabled mid-upload was ignored. The hard delete and the account deletions erased
+    their blobs (URL 404, bucket −1), and the takedown kept its cover. The dry run logged two would-be
+    deletes, and the real cycle an hour later deleted both. Narrative: the four audit Stage notes.
+  - **One runtime bug, fixed** (commit "browser-pass fixes"): an upload present in `wwwroot/uploads/`
+    at build time was compiled into the static web assets manifest, so after the sweep deleted it its
+    URL still answered 200 (empty). The Server csproj now removes the folder from `Content`;
+    `layer2-services.md` states the rule. **Integration** `HostBootTests` +1 (fails before the fix,
+    only on a machine with uploads at build time). After the fix: Unit 1,235, RazorComponents 811,
+    **Integration 1,540**, all green; the four gates pass.
+  - **Filed H32** (polish): a refused file is reported out of view, "Uploading…" shows during a
+    removal, the picker keeps the last file name, and a status change leaves a stale refusal.
+    `run-server/SKILL.md` gained the `InputFile` and transient-state techniques.
+  - **Dev-DB state left (server-only).** Stories 13 "E2E Blob: WASM Race Title" (TestUser, Draft, no
+    cover) and 14 "E2E Blob: WASM Created With Cover" (TestUser, Draft, no cover). Story 15 (AuthorAlpha)
+    was created and hard-deleted (report 12). Story 16 "E2E Blob: Takedown Target" (AuthorAlpha,
+    taken down, cover `stories/16/…` kept; report 13). Notifications 40029–40032. User 10 was created
+    and deleted. The sweep deleted the WU12 fixture `uploads/stories/999/cover-*.png` and an
+    unreferenced `uploads/users/1/profile-*.png`. The planted `uploads/stories/12/` fixtures were
+    removed.
+  - **Dev-DB state left (Aspire).** Story 13 (AuthorAlpha) was created and hard-deleted (report 7).
+    Story 14 "E2E Blob S3: Takedown Target" (AuthorAlpha, taken down, its cover object kept; report 8).
+    User 8 was created and deleted, with one Mailpit message. The bucket holds 2 objects: story 14's
+    cover and the July `users/1/profile-*.png` orphan, which the next real Aspire sweep deletes. The
+    containers were stopped afterwards.
 - **Pointers:** `audit/ImageStorage.md` (Settled + Stage note), `audit/Stories.md` F4,
   `audit/Moderation.md` F47, `audit/Identity.md` F52; `layer2-services.md` §"Image Storage — blob
-  ownership and cleanup"; roadmap decision row 25; tracker F22, H31.
+  ownership and cleanup"; roadmap decision row 25; tracker F22, H31 and H3 (closed), H32;
+  `run-server/SKILL.md` ("Driving an `InputFile`").
 
 ## WU-PollVoteIntegrity — single-choice as a database constraint, and `AllowMultiple` frozen under a vote by an FK (worksheet D23's poll paragraph and its `ConfigLocked` rider; extends `BlogPosts/`, `Data/`) — DONE ✓ (2026-10-13)
 
