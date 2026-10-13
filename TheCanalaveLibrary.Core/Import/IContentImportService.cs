@@ -20,7 +20,7 @@ public interface IContentImportService
     /// <summary>
     /// Parses one document that may hold a whole story (mode 4): suggests a
     /// <see cref="SplitStrategy"/>, returns the drafts for it plus the strategies worth offering.
-    /// Re-split with <see cref="Resplit"/> — in-memory, no re-upload.
+    /// Re-split with <see cref="ResplitAsync"/> — in-memory, no re-upload.
     /// </summary>
     Task<ImportParseResult> ParseDocumentAsync(Stream file, string fileName, ImportFormat format);
 
@@ -34,6 +34,12 @@ public interface IContentImportService
     /// Recomputes <paramref name="parsed"/>'s drafts under a different strategy (mode 4's
     /// delimiter picker). Pure in-memory: works on <see cref="ImportParseResult.NormalizedHtml"/>.
     /// Throws when <paramref name="parsed"/> has no normalized document (EPUB results).
+    /// <para><b>Asynchronous because the WASM client's implementation is an HTTP round-trip</b> (the
+    /// re-split re-sanitizes every draft, and the sanitizer is server-only). It was synchronous until
+    /// the WU-ParityAndRemaining browser pass (2026-10-13): the client blocked on the request, and the
+    /// WASM runtime refuses any blocking wait ("Cannot wait on monitors on this runtime"), so every
+    /// re-split on WASM crashed the story editor (layer5-wasm.md §"Client Service
+    /// Implementations").</para>
     /// </summary>
-    IReadOnlyList<ImportedChapterDraft> Resplit(ImportParseResult parsed, SplitStrategy strategy);
+    Task<IReadOnlyList<ImportedChapterDraft>> ResplitAsync(ImportParseResult parsed, SplitStrategy strategy);
 }

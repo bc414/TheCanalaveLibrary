@@ -40,7 +40,7 @@ public static class UpdateSiteBlogPostDtoValidations
             errors.Add("Title must not be empty.");
         else if (dto.Title.Length > 256)
             errors.Add("Title must be 256 characters or fewer.");
-        if (string.IsNullOrWhiteSpace(dto.Content))
+        if (RichTextContent.IsBlank(dto.Content))
             errors.Add("Content must not be empty.");
         return errors;
     }

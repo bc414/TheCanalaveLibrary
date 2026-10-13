@@ -541,6 +541,14 @@ in **Integration**, where a real `TestAppFactory` request exercises the actual e
 the same class statically, before anything runs). See `layer5-wasm.md` §"Components that ALSO
 render on static-SSR pages".
 
+They also can't see **the WASM runtime**. Every tier runs on the multi-threaded runtime, where a
+blocking wait on a task succeeds; the browser's single-threaded runtime throws on the same wait. A
+synchronous client method that blocked on its HTTP call passed its Unit tests and crashed the story
+editor on WASM until the WU-ParityAndRemaining browser pass (2026-10-13). The guard is the rule that
+every HTTP-implemented interface method is async (`layer5-wasm.md` §"Client Service
+Implementations"), and a new client method gets a WASM browser pass. Browser JavaScript is outside
+every tier too: `sprite-fallback.js` looped on a missing sprite forever while every tier stayed green.
+
 A restored `[PersistentState]` value is different: bUnit *can* see it, but only when the test asks.
 By default bUnit restores nothing, so components take their fetch path.
 `PersistentStateTestSupport.RestoreDeclarativeStateAsync<T>` performs a full load's restore through

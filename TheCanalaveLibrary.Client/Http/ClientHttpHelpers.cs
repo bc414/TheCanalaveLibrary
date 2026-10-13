@@ -27,16 +27,6 @@ internal static class ClientHttpHelpers
         (await ReadNullableFromJsonAsync<ProblemPayload>(response.Content))?.Detail;
 
     /// <summary>
-    /// The synchronous twin of <see cref="ReadProblemDetailAsync"/>, for the one client method whose
-    /// interface signature is synchronous (<c>ClientContentImportService.Resplit</c>). It shares
-    /// <see cref="ProblemPayload"/> and the web JSON options with the async path, so the two cannot
-    /// drift (the hand-rolled sync copy read with case-sensitive defaults and never bound
-    /// <c>detail</c> — WU-ParityAndRemaining, 2026-10-13).
-    /// </summary>
-    public static string? ReadProblemDetail(HttpResponseMessage response) =>
-        ReadNullableFromJson<ProblemPayload>(response.Content)?.Detail;
-
-    /// <summary>
     /// The standard write-response translation — the inverse of the server's
     /// <c>EndpointHelpers.ExecuteAsync</c>. 400 → <paramref name="validationFactory"/> over the body's
     /// <c>errors</c> extension (the server-side <c>CanalaveValidationException.Errors</c> list, line for
@@ -178,20 +168,9 @@ internal static class ClientHttpHelpers
     public static async Task<T?> ReadNullableFromJsonAsync<T>(HttpContent content) =>
         DeserializeNullable<T>(await content.ReadAsStringAsync());
 
-    /// <summary>
-    /// The synchronous twin of <see cref="ReadNullableFromJsonAsync{T}"/> (empty body → default, web
-    /// JSON options), for the one synchronous client method (<c>ClientContentImportService.Resplit</c>).
-    /// Every client JSON read — sync or async — goes through <see cref="DeserializeNullable{T}"/>, so
-    /// none can fall back to the case-sensitive default options (layer5-wasm.md §"Client Service
-    /// Implementations").
-    /// </summary>
-    public static T? ReadNullableFromJson<T>(HttpContent content)
-    {
-        using Stream body = content.ReadAsStream();
-        using StreamReader reader = new(body);
-        return DeserializeNullable<T>(reader.ReadToEnd());
-    }
-
+    /// <summary>Every client JSON read through these helpers deserializes here, with the web options
+    /// (camelCase, case-insensitive), so none can fall back to the case-sensitive defaults
+    /// (layer5-wasm.md §"Client Service Implementations").</summary>
     private static T? DeserializeNullable<T>(string raw) =>
         string.IsNullOrWhiteSpace(raw) || raw == "null"
             ? default

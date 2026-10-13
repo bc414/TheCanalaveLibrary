@@ -451,13 +451,22 @@ public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadServic
   split at all — the read/write inheritance shape only applies where both sides of a CQRS-lite pair
   exist.
 - **Every JSON read uses the web defaults (`JsonSerializerOptions.Web`)** — camelCase,
-  case-insensitive, the same options `ReadFromJsonAsync`/`GetFromJsonAsync` use. A synchronous read
-  (the one case: `ClientContentImportService.Resplit`, whose interface signature is synchronous)
-  goes through `ClientHttpHelpers`' sync helpers, `ReadNullableFromJson<T>(HttpContent)` and
-  `ReadProblemDetail(HttpResponseMessage)`, which share the async helpers' options and
-  `ProblemPayload`. Never call `JsonSerializer.Deserialize` with default options in a client class:
+  case-insensitive, the same options `ReadFromJsonAsync`/`GetFromJsonAsync` use (or
+  `ClientHttpHelpers.ReadNullableFromJsonAsync<T>`, which shares them). Never call
+  `JsonSerializer.Deserialize` with default options in a client class:
   the defaults are case-sensitive, so every camelCase property silently stays default (the re-split
   returned blank drafts on WASM until WU-ParityAndRemaining, 2026-10-13).
+- **A client method never blocks on a task, so every interface method a client implements over HTTP
+  is async.** The WASM runtime is single-threaded and refuses a blocking wait outright:
+  `.GetAwaiter().GetResult()`, `.Result` or `.Wait()` on an incomplete task throws
+  `PlatformNotSupportedException` ("Cannot wait on monitors on this runtime"). It does not fall back to
+  a synchronous request, and `HttpClient.Send` is unsupported in the browser. Found by the
+  WU-ParityAndRemaining browser pass (2026-10-13): `IContentImportService.Resplit` was synchronous, its
+  client blocked on the request, and every WASM re-split crashed the story editor. It is now
+  `ResplitAsync`. No tier can see this (they run on the multi-threaded runtime), so the guard is the
+  interface shape, plus a browser pass on WASM for any new client method. Reading `.Result` of a task
+  that has already completed (after `Task.WhenAll`, or a provider that returns a completed task, as in
+  `WasmActiveUserContext`) is not a wait and stays legal.
 - **An "anonymous → no-op" method behind `RequireAuthorization()` is caller-gated.** Some service
   contracts say an anonymous call is a silent no-op (`MarkStartedAsync`, `MarkCompletedAsync`). On the
   circuit that holds; over HTTP the endpoint's edge gate answers 401 first, and the client throws

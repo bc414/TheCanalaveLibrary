@@ -30,23 +30,25 @@ namespace TheCanalaveLibrary.Server;
 /// back to its normal query-string binding source with no extra attribute needed.
 /// </para>
 /// <para>
-/// <c>Resplit</c> is synchronous and pure in-memory per the interface's own doc comment ("no
-/// re-upload") — but it is NOT dependency-free: <c>ServerContentImportService.Resplit</c> calls
+/// <c>ResplitAsync</c> is pure in-memory per the interface's own doc comment ("no
+/// re-upload") — but it is NOT dependency-free: <c>ServerContentImportService.ResplitAsync</c> calls
 /// <c>SplitToDrafts</c> → <c>CreateDraft</c>, which re-sanitizes every draft through the
 /// constructor-injected <c>IHtmlSanitizationService</c> (the class's other injected dependency,
 /// <c>ILogger</c>, isn't used on this path, but the sanitizer is). Since
 /// <c>IHtmlSanitizationService</c> is structurally server-only (layer5-wasm.md §"Avoid" —
-/// sanitization must run server-side, never client-implemented), <c>Resplit</c> could NOT have been
+/// sanitization must run server-side, never client-implemented), <c>ResplitAsync</c> could NOT have been
 /// called directly client-side with zero network round-trip even though its own doc comment reads
 /// as if it were pure in-memory recomputation; the standard HTTP endpoint below is the only correct
-/// shape, not just the consistent one. It still gets one for the same
+/// shape, not just the consistent one. That round-trip is also why the method is async: the WASM
+/// runtime refuses a blocking wait, so the synchronous signature it had until 2026-10-13 crashed every
+/// WASM re-split (WU-ParityAndRemaining browser pass). It still gets one for the same
 /// <see cref="ResplitRequest"/>-envelope reason as any other two-parameter JSON-body write (the
 /// method can't bind two complex parameters from one POST body otherwise).
 /// </para>
 /// <para>
 /// <b>Known EndpointHelpers mismatch (flagged, not fixed here — out of scope for this add-only
 /// pass):</b> when <see cref="ImportParseResult.NormalizedHtml"/> is null (EPUB results),
-/// <c>Resplit</c> throws <see cref="InvalidOperationException"/> for a genuine business-rule reason
+/// <c>ResplitAsync</c> throws <see cref="InvalidOperationException"/> for a genuine business-rule reason
 /// ("re-split requires a parsed document; EPUB chapters are spine-defined"), not because the caller
 /// is unauthenticated — <see cref="EndpointHelpers.ExecuteAsync"/> still maps it to 401
 /// uniformly. Same shape as the flagged mismatch in <c>UserSettingsEndpoints</c> and
@@ -89,14 +91,9 @@ public static class ContentImportEndpoints
             .RequireRateLimiting("ImportParse")
             .DisableAntiforgery();
 
-        // Resplit itself is synchronous (see class doc comment) — the async lambda exists purely to
-        // satisfy ExecuteAsync's Func<Task<IResult>> shape. Any exception Resplit throws still
-        // surfaces during the synchronous evaluation inside the awaited call and is caught by the
-        // shared helper exactly as if it had been thrown from an awaited async method.
         group.MapPost("/resplit", (IContentImportService import, ResplitRequest request) =>
                 EndpointHelpers.ExecuteAsync(async () =>
-                    await Task.FromResult(
-                        Results.Ok(import.Resplit(request.Parsed, request.Strategy)))))
+                    Results.Ok(await import.ResplitAsync(request.Parsed, request.Strategy))))
             .RequireAuthorization();
 
         return app;

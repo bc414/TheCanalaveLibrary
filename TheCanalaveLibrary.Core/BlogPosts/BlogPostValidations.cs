@@ -3,8 +3,8 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Tier-2 validation for blog post DTOs — static extension methods shared between server and
 /// (future) client validation. Mirrors <see cref="CommentValidations"/> (WU19).
-/// Content is validated as non-empty <em>before</em> HTML sanitization — an empty raw string
-/// always produces an empty sanitized string, so checking here is equivalent.
+/// Content is validated <em>before</em> HTML sanitization, through <see cref="RichTextContent.IsBlank"/>:
+/// an emptied editor's <c>&lt;p&gt;&lt;br&gt;&lt;/p&gt;</c> is blank too.
 /// </summary>
 public static class BlogPostValidations
 {
@@ -20,7 +20,7 @@ public static class BlogPostValidations
             errors.Add("Title must not be empty.");
         else if (dto.Title.Length > 256)
             errors.Add("Title must be 256 characters or fewer.");
-        if (string.IsNullOrWhiteSpace(dto.Content))
+        if (RichTextContent.IsBlank(dto.Content))
             errors.Add("Content must not be empty.");
         return errors;
     }
@@ -33,7 +33,7 @@ public static class BlogPostValidations
             errors.Add("Title must not be empty.");
         else if (dto.Title.Length > 256)
             errors.Add("Title must be 256 characters or fewer.");
-        if (string.IsNullOrWhiteSpace(dto.Content))
+        if (RichTextContent.IsBlank(dto.Content))
             errors.Add("Content must not be empty.");
         return errors;
     }

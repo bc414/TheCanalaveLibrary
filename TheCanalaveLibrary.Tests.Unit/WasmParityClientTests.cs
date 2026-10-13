@@ -11,7 +11,7 @@ namespace TheCanalaveLibrary.Tests.Unit;
 /// Service audit §2.7's client-side parity breaks (WU-ParityAndRemaining, 2026-10-13), each pinned on
 /// the client class over a canned handler (no host):
 /// <list type="bullet">
-/// <item>§2.7.4 — the import re-split's synchronous read used case-sensitive JSON defaults, so the
+/// <item>§2.7.4 — the import re-split's read used case-sensitive JSON defaults, so the
 /// server's camelCase <c>title</c>/<c>html</c> never bound and every draft came back blank on WASM.</item>
 /// <item>§2.7.7 — the Explore user pivot's 400 lost its message to a bare
 /// <c>EnsureSuccessStatusCode</c>.</item>
@@ -22,17 +22,17 @@ namespace TheCanalaveLibrary.Tests.Unit;
 /// </summary>
 public class WasmParityClientTests
 {
-    // ── §2.7.4: the synchronous re-split reads camelCase ─────────────────────────
+    // ── §2.7.4: the re-split reads camelCase ─────────────────────────────────────
 
     [Fact]
-    public void Resplit_BindsTheServersCamelCaseDrafts()
+    public async Task Resplit_BindsTheServersCamelCaseDrafts()
     {
         CannedHandler handler = new(HttpStatusCode.OK,
             """[{"title":"Chapter One","html":"<p>First.</p>","wordCount":1,"warnings":[{"kind":2,"message":"Flattened a table."}]},{"title":null,"html":"<p>Second.</p>","wordCount":1,"warnings":[]}]""",
             "application/json");
         ClientContentImportService svc = new(NewClient(handler));
 
-        IReadOnlyList<ImportedChapterDraft> drafts = svc.Resplit(Parsed(), SplitStrategy.TopHeading);
+        IReadOnlyList<ImportedChapterDraft> drafts = await svc.ResplitAsync(Parsed(), SplitStrategy.TopHeading);
 
         handler.LastRequest!.RequestUri!.PathAndQuery.Should().Be("/api/content-import/resplit");
         drafts.Should().HaveCount(2);
@@ -44,27 +44,27 @@ public class WasmParityClientTests
     }
 
     [Fact]
-    public void Resplit_A400_ThrowsImportException_WithTheServersDetail()
+    public async Task Resplit_A400_ThrowsImportException_WithTheServersDetail()
     {
         ClientContentImportService svc = new(NewClient(new CannedHandler(HttpStatusCode.BadRequest,
             """{"status":400,"detail":"That split would make more than 500 chapters."}""")));
 
-        Action act = () => svc.Resplit(Parsed(), SplitStrategy.SubHeading);
+        Func<Task> act = () => svc.ResplitAsync(Parsed(), SplitStrategy.SubHeading);
 
-        act.Should().Throw<ImportException>().WithMessage("That split would make more than 500 chapters.");
+        await act.Should().ThrowAsync<ImportException>().WithMessage("That split would make more than 500 chapters.");
     }
 
     [Fact]
-    public void Resplit_A401_KeepsTheBusinessMessage()
+    public async Task Resplit_A401_KeepsTheBusinessMessage()
     {
         // The documented deviation: Resplit's own InvalidOperationException is (mis)mapped to 401 by the
-        // server, and the sync path preserves the real message — which it could not read before.
+        // server, and the client preserves the real message — which it could not read before.
         ClientContentImportService svc = new(NewClient(new CannedHandler(HttpStatusCode.Unauthorized,
             """{"status":401,"detail":"Re-split requires a parsed document; EPUB chapters are spine-defined."}""")));
 
-        Action act = () => svc.Resplit(Parsed(), SplitStrategy.SubHeading);
+        Func<Task> act = () => svc.ResplitAsync(Parsed(), SplitStrategy.SubHeading);
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("Re-split requires a parsed document*");
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Re-split requires a parsed document*");
     }
 
     // ── §2.7.7: the Explore user pivot keeps its message ─────────────────────────

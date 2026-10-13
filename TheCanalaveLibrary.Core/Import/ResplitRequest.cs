@@ -1,7 +1,7 @@
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// Layer-5 transport envelope for <see cref="IContentImportService.Resplit"/> only
+/// Layer-5 transport envelope for <see cref="IContentImportService.ResplitAsync"/> only
 /// (layer5-wasm.md §"Streams and multipart" / §"The Contract Boundary" — "Layer 5 never changes
 /// contracts"). The interface method itself stays the two-parameter shape
 /// (<see cref="ImportParseResult"/> + <see cref="SplitStrategy"/>); this record exists solely

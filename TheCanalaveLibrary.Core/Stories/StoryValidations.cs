@@ -20,7 +20,7 @@ public static class StoryValidations
             errorReasons.Add("Short description is required");
         }
         
-        if (string.IsNullOrWhiteSpace(story.LongDescription))
+        if (RichTextContent.IsBlank(story.LongDescription))
         {
             errorReasons.Add("Long description is required");
         }

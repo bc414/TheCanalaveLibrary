@@ -23,7 +23,7 @@ public static class MessagingValidations
         else if (dto.Subject.Trim().Length > MessagingConstants.MaxSubjectLength)
             errors.Add($"Subject must be {MessagingConstants.MaxSubjectLength} characters or fewer.");
 
-        if (string.IsNullOrWhiteSpace(dto.MessageHtml))
+        if (RichTextContent.IsBlank(dto.MessageHtml))
             errors.Add("Message body must not be empty.");
 
         if (dto.RecipientUserId == senderId)
@@ -39,7 +39,7 @@ public static class MessagingValidations
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(messageHtml))
+        if (RichTextContent.IsBlank(messageHtml))
             errors.Add("Message body must not be empty.");
 
         return errors;

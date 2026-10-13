@@ -86,7 +86,7 @@ public class ContentImportTests
 
         result.AvailableStrategies.Should().Contain(SplitStrategy.PageBreak);
         IReadOnlyList<ImportedChapterDraft> byPageBreak =
-            Service().Resplit(result, SplitStrategy.PageBreak);
+            await Service().ResplitAsync(result, SplitStrategy.PageBreak);
         byPageBreak.Should().HaveCount(3, "title page + one page-break-opened segment per chapter");
     }
 

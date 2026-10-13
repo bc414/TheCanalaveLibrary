@@ -274,11 +274,16 @@ assume the asset exists. Every `<img>` in that family must therefore handle a mi
 broken-image glyph is never an acceptable render. Three sanctioned shapes, picked by what the
 element means:
 
-1. **Fallback chain** when a lesser variant is still meaningful — sprites:
-   `onerror="spriteFallback(this)"` walks animated `.webp` → static `.png` → `unknown.png`. Every
-   step's URL comes from `ISpriteReadService` (`GetSpriteUrl`, `GetUnknownSpriteUrl`), never a
-   hardcoded root, so the chain follows `Sprites:BaseUrl` (`layer2-services.md` §"Sprite URLs Are
-   Resolved At Render Time").
+1. **Fallback chain** when a lesser variant is still meaningful — sprites: `data-static`,
+   `data-unknown` and the `data-sprite-fallback` marker (no inline `onerror`: `security.md`'s
+   delegated listener dispatches to `spriteFallback`), which walks animated `.webp` → static `.png` →
+   `unknown.png` and then stops. Every step's URL comes from `ISpriteReadService` (`GetSpriteUrl`,
+   `GetUnknownSpriteUrl`), never a hardcoded root, so the chain follows `Sprites:BaseUrl`
+   (`layer2-services.md` §"Sprite URLs Are Resolved At Render Time"). `spriteFallback` picks the next
+   step by comparing **resolved** URLs: `img.src` is absolute, while the data-* values are
+   root-relative under the default root. The raw comparison it replaced never matched, so a missing
+   static `.png` was re-requested on every error, forever, and `unknown.png` was never reached
+   (WU-ParityAndRemaining browser pass, 2026-10-13).
 2. **Hide** when adjacent text already carries the meaning — badge icons:
    `onerror="this.style.display='none'"` (`UserCard`, `BadgeSettingsForm`).
 3. **Placeholder swap** when the slot must stay visually occupied — avatars (`onerror` → the

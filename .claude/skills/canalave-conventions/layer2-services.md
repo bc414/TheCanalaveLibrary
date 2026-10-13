@@ -627,7 +627,8 @@ component** via two injected/cascaded values:
    `IActiveUserContext`-never-in-SharedUI rule is unchanged.
 
 Components resolve: `id is null ? null : Sprites.GetSpriteUrl(ctx.Slug, id, ctx.PrefersAnimated)` and
-render `<img src>` with a plain-HTML `onerror` fallback chain (`webp → static .png → unknown.png`).
+render `<img src>` with the `data-sprite-fallback` chain (`webp → static .png → unknown.png`; markup and
+the chain's rules in `layer4-style.md` §"Out-of-Band Asset Images Always Carry an onerror Fallback").
 
 **`ISpriteAssetProbe` is server-only** (`Core/Sprites/ISpriteAssetProbe.cs`, `ExistsAsync(slug, id)`)
 — used only in `ServerTagWriteService` to validate a sprite identifier exists on disk/R2 at mod-write
@@ -2523,6 +2524,19 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 
 **Tier 3 (Server only):** Database context checks in service. On failure, throws
 `StoryValidationException` containing `List<string>` of errors. Server-side only.
+
+**A required rich-text field refuses blank markup** (WU-ParityAndRemaining browser pass, 2026-10-13).
+An untouched or emptied `EditorView` hands back `<p><br></p>`, not an empty string, and
+`string.IsNullOrWhiteSpace` passes it: an empty comment box was posted to a public thread. Every
+validation of a required `EditorView` field tests it with `RichTextContent.IsBlank` (Core/RichText/):
+no visible text once tags are stripped and entities decoded, `&nbsp;` included. The sanitizer's
+allow-list carries no image or embed, so text is the only content a field can hold. The sixteen
+sites: the five comment DTOs (`CommentValidations`), the six blog-post DTOs (profile, group, site;
+create and edit), `CreateChapterDto`/`UpdateChapterContentDto`, the two message bodies
+(`MessagingValidations`), and the story's `LongDescription` (`StoryValidations`). A new required
+rich-text field joins them; `RichTextBlankTests` (Unit) lists each one. An **optional** rich-text field
+(authors' notes, vouch text, descriptions) should store null for blank markup instead: tracker **H22**
+holds that half, unbuilt.
 
 ## Story Lifecycle — transition table, trust waiver, publish anchors (WU-StoryLifecycle; D1/D2)
 

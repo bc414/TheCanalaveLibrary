@@ -22,8 +22,8 @@ public static class ChapterValidations
     /// Only applies when <paramref name="storyRating"/> is also provided.
     /// </param>
     /// <remarks>
-    /// Content is validated as non-empty *before* sanitization — an empty raw string will always
-    /// produce an empty sanitized string, so checking here is equivalent. Title length is checked
+    /// Content is validated *before* sanitization, through <see cref="RichTextContent.IsBlank"/>: an
+    /// emptied editor's <c>&lt;p&gt;&lt;br&gt;&lt;/p&gt;</c> is blank too. Title length is checked
     /// against the 255-character DB constraint.
     /// </remarks>
     public static List<string> CanSave(this CreateChapterDto dto,
@@ -32,7 +32,7 @@ public static class ChapterValidations
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(dto.ChapterText))
+        if (RichTextContent.IsBlank(dto.ChapterText))
             errors.Add("Chapter content must not be empty.");
 
         if (dto.Title is { Length: > 255 })
@@ -57,7 +57,7 @@ public static class ChapterValidations
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(dto.ChapterText))
+        if (RichTextContent.IsBlank(dto.ChapterText))
             errors.Add("Chapter content must not be empty.");
 
         if (dto.Title is { Length: > 255 })

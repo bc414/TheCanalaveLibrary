@@ -83,6 +83,7 @@
                        ("Split chapters at:"), which WCAG 2.5.3 flags (aria-label always wins over
                        label[for] in accessible-name computation). *@
                     <select id="chapter-import-split-strategy" value="@_strategy" @onchange="HandleStrategyChanged"
+                            disabled="@_isParsing"
                             class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text)">
                         @foreach (SplitStrategy strategy in _parsed.AvailableStrategies)
                         {
@@ -269,14 +270,44 @@
         }
     }
 
-    private void HandleStrategyChanged(ChangeEventArgs e)
+    /// <summary>
+    /// Re-splits the parsed document (no re-upload). Awaited: on WASM it is an HTTP round-trip, and
+    /// the picker is disabled until it lands so two answers can't race. A refused re-split shows its
+    /// message here and keeps the previous drafts (WU-ParityAndRemaining browser pass, 2026-10-13 —
+    /// the synchronous call crashed the page on WASM, and nothing caught a refusal on either phase).
+    /// </summary>
+    private async Task HandleStrategyChanged(ChangeEventArgs e)
     {
         if (_parsed is null || !Enum.TryParse((string?)e.Value, out SplitStrategy strategy))
         {
             return;
         }
+        SplitStrategy previous = _strategy;
         _strategy = strategy;
-        _drafts = ImportService.Resplit(_parsed, strategy); // in-memory — no re-upload
+        _errors.Clear();
+        _errorsIsSessionExpired = false;
+        _isParsing = true;
+        try
+        {
+            _drafts = await ImportService.ResplitAsync(_parsed, strategy);
+        }
+        catch (ImportException ex)
+        {
+            _errors.Add(ex.Message); // presentation-safe by contract, as on the parse paths
+            _strategy = previous; // the drafts on screen are still the previous strategy's
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Re-splitting an imported document failed for story {StoryId}", StoryId);
+            _errors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _errorsIsSessionExpired = ex is SessionExpiredException;
+            _strategy = previous; // the drafts on screen are still the previous strategy's
+        }
+        finally
+        {
+            _isParsing = false;
+        }
     }
 
     // ── Mode 5: EPUB ─────────────────────────────────────────────────────────────

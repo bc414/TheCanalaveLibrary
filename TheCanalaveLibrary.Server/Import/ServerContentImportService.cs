@@ -101,14 +101,16 @@ public class ServerContentImportService(
             BookAuthor: content.BookAuthor);
     }
 
-    public IReadOnlyList<ImportedChapterDraft> Resplit(ImportParseResult parsed, SplitStrategy strategy)
+    /// <summary>Pure in-memory work, so it completes synchronously; the signature is async for the
+    /// WASM client, whose implementation is an HTTP call (<see cref="IContentImportService.ResplitAsync"/>).</summary>
+    public Task<IReadOnlyList<ImportedChapterDraft>> ResplitAsync(ImportParseResult parsed, SplitStrategy strategy)
     {
         if (parsed.NormalizedHtml is null)
         {
             throw new InvalidOperationException(
                 "Re-split requires a parsed document; EPUB chapters are spine-defined.");
         }
-        return SplitToDrafts(parsed.NormalizedHtml, strategy);
+        return Task.FromResult(SplitToDrafts(parsed.NormalizedHtml, strategy));
     }
 
     // ── Pipeline pieces ──────────────────────────────────────────────────────────

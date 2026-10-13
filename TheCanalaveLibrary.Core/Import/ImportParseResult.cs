@@ -4,7 +4,7 @@ namespace TheCanalaveLibrary.Core;
 /// Result of parsing a whole document (mode 4) or an EPUB (mode 5) — the suggest-then-refine
 /// state: the UI shows <see cref="Drafts"/> (split by <see cref="SuggestedStrategy"/>), the author
 /// can pick a different <see cref="AvailableStrategies"/> entry, and
-/// <c>IContentImportService.Resplit</c> recomputes drafts from <see cref="NormalizedHtml"/>
+/// <c>IContentImportService.ResplitAsync</c> recomputes drafts from <see cref="NormalizedHtml"/>
 /// in memory — no re-upload, no re-parse.
 /// </summary>
 /// <param name="NormalizedHtml">
