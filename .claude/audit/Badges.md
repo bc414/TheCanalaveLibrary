@@ -73,7 +73,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
   site now runs global InteractiveAuto (badge surfaces not browser-driven in the flip's wave). Full
   wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
-- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5** (lowered to **1** by WU-CounterSymmetry, 2026-09-30: the display filter and the `UserCard` count guard changed what a badge row shows, with no browser available — tracker **H23**; see its Stage note). Browser-verifiable surface
+- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5** (lowered to **1** by WU-CounterSymmetry, 2026-09-30: the display filter and the `UserCard` count guard changed what a badge row shows, with no browser available — tracker **H23**; **back to 5** after its browser pass the same day, on both render phases — see its Stage note). Browser-verifiable surface
   exercised as TestUser against the seeded dev DB:
   - Empty state: `/settings` Badges section rendered "You haven't earned any badges yet."
   - Curation: after awarding `Recommender` (direct `user_badges` insert — the award *trigger*
@@ -115,8 +115,8 @@ fail against the pre-fix code. `dotnet build` green, no new warnings in touched 
 
 ### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling, plus a spec-sourced `UserCard` rider)
 
-**Cells:** **L4.5 5→1** (no browser was available; tracker **H23** owes the pass that restores it).
-L2/L3.5 change beneath Stage 5.
+**Cells:** **L4.5 5→1** (no browser was available; tracker **H23**), **back to 5** after the browser
+pass the same day (below). L2/L3.5 change beneath Stage 5.
 - **The incoherence D21 named.** Under the no-tiers model a badge is a number. A counter-backed badge
   whose count recomputes to 0 (its recommendation was deleted, the crediting reader deleted their
   account) kept showing as earned. D21 keeps the recalc boundary: `SyncBadgeEarnedCountAsync` never
@@ -140,7 +140,7 @@ L2/L3.5 change beneath Stage 5.
   **manual grant** displays. D21 puts manual grants out of scope ("nothing here licenses touching
   them"), and WU-StatBadgeProducers' settled model says a badge "displays its `UserBadge.EarnedCount`".
   So this is the WU spec's own recommended rider, not part of D21's ruling. The owner confirms it, or
-  asks for it back, in tracker **H23**'s browser pass (step 2).
+  asks for it back: tracker **H23**, which the browser pass narrowed to that one check.
 - **Seed.** `DataSeeder` now gives TestUser's seeded Recommender badge real ground truth: one
   `RecommendationSuccess`, with `EarnedCount` 1. Its old free-standing 12 would have recomputed to 0
   and then been hidden. The workbench needs `reset-dev-db.ps1` to show it.
@@ -153,11 +153,45 @@ Rule text: `layer2-services.md` §"Counter recompute principle" (last paragraph)
   profile-header test fails.
 - **RazorComponents**, `UserCardTests` (+2): a counted badge renders "3" and "Recommender (3)", and a
   zero-count badge renders no count text, the tooltip "Patron", and still its icon.
-- The browser pass is owed: tracker **H23**.
+- The browser pass ran the same day (below).
 - **Review fixes (2026-09-30).** `BadgeDisplayTests` +4 (Integration): user search, the following
   list, the outgoing-vouch list and the tree-search author card. Six sites are now driven, one per
   read-service family, plus the shared `SiteBadges.IsDisplayed`. Mutation-checked: dropping the
   zero-count rule from the following list or the tree-search author card fails its test.
+
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — L4.5 back to 5.**
+- **Setup.** Server-only path on a freshly reset workbench (`reset-dev-db.ps1`). TestUser's seeded
+  Recommender read `earned_count` 1. `psql` set up each fixture and confirmed each state.
+- **Render phase.** Read from the network log. The circuit shows `_blazor/negotiate`; it was forced by
+  removing the Auto-mode localStorage hash. WASM shows no negotiate, and its reads go over `/api`.
+- **H23's steps,** as TestUser (signed in) and anonymous:
+  1. **Counted badge, both phases.** TestUser's `UserCard` on story 1's recommendation showed "1" and
+     the tooltip "Recommender (1)".
+  2. **Manual grant, both phases.** A `psql` Patron grant (`earned_count` 0, `display_order` 2) showed
+     with no count and the tooltip "Patron", beside Recommender's "1". It was seen on the
+     recommendation card, AuthorAlpha's vouch list (`/user/4`) and the tree-search root card
+     (`/discover/user/1`). The profile banner (`/user/1`) shows icons only, titled "Recommender" and
+     "Patron".
+  3. **Zero-count counter-backed badge, both phases.** With `psql` setting Recommender's
+     `earned_count` to 0, Recommender left every display surface and Patron stayed:
+     - the UI: the recommendation card, the profile banner, the vouch list and the tree-search root
+       card;
+     - the API, read with `fetch` as the WASM client reads it: user search, the following list,
+       outgoing vouches, and the manual tree search's neighbors of story 1 (the recommendation family
+       and the favoriters).
+
+     `/settings` → Badges still listed Recommender and Patron, on both phases. Anonymous viewers
+     (signed out through the account menu) saw only Patron on the circuit (the recommendation card)
+     and on WASM (the banner and the card).
+- **The recalc boundary, live.** The nightly worker's 01:00 UTC pass (`audit/Profiles.md` F58, "The
+  live nightly pass") set the zeroed Recommender back to `earned_count` 1 from its one success row, and the
+  card showed "1" again. The row was never deleted, as D21 requires.
+- Icons are still unprovisioned, so `data-hide-on-error` hides each `<img>`. The count and the
+  tooltip are what a viewer sees.
+- GIF: `e2e-WU-CounterSymmetry.gif` (count "1", then zeroed and gone with Patron left, then still
+  listed in `/settings`).
+- No console errors, and no `fail:`/`crit:` from these flows.
+- **Left open in H23:** the owner's keep-or-revert call on the manual-grant rider (step 2).
 
 ## WU36 Settled Decisions (2026-06-25)
 

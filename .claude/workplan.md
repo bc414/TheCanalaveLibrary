@@ -24,10 +24,11 @@ references it, does not restate it.
     `ON CONFLICT` upserts; the gem/highlight/vouch limits are stated-soft (an inference, owner-flagged).
   - **Producers fixed:** creating a group counts as joining; published-only `Story.WordCount`; atomic
     `VersionCount`; the like toggles return the landed count; a double lineage approve is refused.
-  - **Badges:** zero-count counter-backed badges hidden through one shared predicate; F50 L4.5 5→1.
+  - **Badges:** zero-count counter-backed badges hidden through one shared predicate. F50 L4.5 went
+    to 1 (no browser), then back to 5 after its browser pass the same day.
   - **Review fixes:** the USI ensure re-read retries instead of answering 401; owed tests; Built banners.
-  - **Filed:** **D11/H23**. `dotnet test`: Unit 1,081, RazorComponents 766, Integration 1,380.
-    **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle", §"Check-then-act posture".
+  - **Browser pass:** a stale lineage row fixed; H23 narrowed to an owner call; **D12/H24** filed (the WU filed **D11/H23**).
+    `dotnet test`: Unit 1,081, RazorComponents 770, Integration 1,380. **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle", §"Check-then-act posture".
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
@@ -259,7 +260,8 @@ references it, does not restate it.
   pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
   2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**);
   **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
-  opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30),
+  opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
+  H23 to an owner check the same day and opened **D12/H24**)),
   including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -281,8 +283,9 @@ references it, does not restate it.
   **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
   to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21**'s pass, WU-TptHardDelete's
   blog-post page and delete paths, ran 2026-09-30 too, returned F36 L4.5 to 5 and closed — see
-  WU-TptHardDelete's DONE entry. Tracker **H23**'s pass — WU-CounterSymmetry's badge display, both
-  phases — is owed; it restores F50 L4.5 to 5.)
+  WU-TptHardDelete's DONE entry. Tracker **H23**'s pass, WU-CounterSymmetry's badge display, ran
+  2026-09-30 too and returned F50 L4.5 to 5; H23 stays open only for Brian's keep-or-revert call on
+  the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry.)
 
 ---
 
@@ -429,9 +432,11 @@ is pending except where a bullet says so.
 ## WU-CounterSymmetry — counter & concurrency doctrine: every counter derived and reconciled, post-commit counters, check-then-act hardened per family, creating a group counts as joining (worksheet D21–D24; extends `Profiles/`, `Groups/`, `Following/`, `UserStoryInteractions/`, `Chapters/`, `Comments/`, `Recommendations/`, `Moderation/`, `Badges/`, `Stories/`, `Users/`) — DONE ✓ (2026-09-30)
 
 - **Cells:** **F50 L4.5 5→1** (the badge display filter and `UserCard`'s count guard, no browser
-  available — tracker **H23**). Everything else lands beneath Stage-5 cells: F58 L2 (the reconciler),
+  available — tracker **H23**), back to 5 after the browser pass the same day ("Browser verification"
+  below). Everything else lands beneath Stage-5 cells: F58 L2 (the reconciler),
   F22 L2, F38 L2, F6 L2, F16 L2, F19 L2, F25 L2, F28 L2, F10 L2, F47 L2, F62 L8, F50 L2/L3.5. No
-  migration. Review fixes, all beneath Stage 5: F16 L2, F19 L2, F50 L2, F58 L2.
+  migration. Review fixes, all beneath Stage 5: F16 L2, F19 L2, F50 L2, F58 L2. Browser-pass fix,
+  beneath Stage 5: F10 L3-Logic (`MyStoryLineagesPage`).
 - **Trigger:** owner rulings D21 (every counter derived, recompute in code), D22 (post-commit,
   recompute-corrected), D23 (check-then-act posture per family) and D24 (creating counts as joining);
   service audit §2.4.2/§2.4.3/§2.4.6, schema §3.6. Orchestrator amendment U1 (lineage double approve).
@@ -557,9 +562,54 @@ is pending except where a bullet says so.
   publish first; bUnit `UserCardTests` +2. Mutation-checked (every reverted fix fails its tests): both
   `ON CONFLICT` USI inserts, the join and vouch `ON CONFLICT`, the create `+1`, the `IsPublished`
   filter, the `++`, both re-reads, the `total_words` predicate, the lineage `Pending` predicate, and
-  the badge filter. WU-CounterSymmetry (2026-09-30) ran with no browser available (H23).
+  the badge filter. WU-CounterSymmetry (2026-09-30) ran with no browser available (H23). The browser
+  pass the same day drove every change on both render phases ("Browser verification" below); its fix
+  added bUnit `MyStoryLineagesPageTests` (4), so `dotnet test` reads Unit 1,081, RazorComponents 770,
+  Integration 1,380, and the four gates pass.
 - **Dev DB:** no migration. The first nightly reconciler pass rewrites drifted values: seeded Draft
   stories' `word_count` drops to 0. The `DataSeeder` badge change needs `reset-dev-db.ps1`.
+- **Browser verification (2026-09-30).** Server-only path on a reset workbench, `psql` after every
+  write; the phase was read from the network log (`_blazor/negotiate` against the action's `/api`
+  call), with the circuit forced by removing the Auto-mode localStorage hash.
+  - **H23, both phases:** the counted badge ("1", "Recommender (1)"), a `psql` Patron grant (no count,
+    "Patron"), and Recommender at `earned_count` 0 gone from every UI and API display surface while
+    `/settings` still lists it; signed in and anonymous. F50 L4.5 is back to 5; H23 stays open only for
+    the owner's rider call. GIF: `e2e-WU-CounterSymmetry.gif`.
+  - **Every other change:** create counts as joining, leave and a double join (one row, +1 once);
+    the circuit vouch and three concurrent HTTP vouches (one row, one notification); USI ensure-row
+    on a favorite, a Read It Later from a card and the 90% start; publish/unpublish word counts, a
+    draft adding nothing, `VersionCount` on alternates; both like toggles returning the landed count
+    against a `psql`-landed concurrent like; the stale-tab and concurrent lineage approves;
+    `/mod/stats` total words 627.
+  - **The nightly worker, live:** started with `Marts__RebuildHourUtc=1` (configuration only), its
+    01:00 UTC pass corrected exactly the nine content counters `psql` had drifted, then inserted 4
+    missing `user_stats` rows and corrected 26 values. AuthorBeta's `words_written` came out at 180, not
+    the 10,143 it would read had the UserStat pass run first, and TestUser's zeroed Recommender came
+    back to 1 (`audit/Profiles.md` F58).
+  - **Bug fixed (commit "browser-pass fixes"):** after a refused stale approve, `/story-lineages` kept
+    the row, whose Reject would have revoked the other tab's approval. The handlers now reload after a
+    "moved under the page" refusal (`error-handling.md`); bUnit `MyStoryLineagesPageTests` (4).
+  - **Filed, not this WU's code:** **D12** (a circuit double-click on Join Group shares the scoped
+    write context → the generic toast; the data stays right) and **H24** (a fresh workbench's
+    hand-set seed counters are wrong until the first nightly pass).
+  - **Dev-DB state left behind** (server-only workbench, reset at the start of the pass):
+    - a `psql` Patron grant on TestUser (`earned_count` 0, `display_order` 2);
+    - group 4 "E2E Counter Group A", whose creator AuthorAlpha left and rejoined, so it now has one
+      Member and no Admin;
+    - AuthorBeta follows and vouches for AuthorAlpha (two type-32 notifications);
+    - on story 2: an alternate version of chapters 1 and 3, and a 13-word draft chapter 4 ("E2E Draft
+      Chapter");
+    - comment 1's likes from ModUser, AuthorBeta and (via `psql`) LurkerDelta, and LurkerDelta's
+      `psql` like on recommendation 1;
+    - TestUser's favorite on story 6; Read It Later rows on story 3 for AuthorBeta and ModUser,
+      attributed to recommendation 2; started rows on story 1 for ModUser and AuthorBeta;
+    - five approved Inspired-By links from AuthorBeta's stories into AuthorAlpha's;
+    - every counter now derived by the nightly pass: the drift fixtures left no residue, and the
+      seed's hand-set `user_stats` values are gone.
+  - Narrative: the browser notes in `audit/Badges.md` F50, `audit/Groups.md` F38, `audit/Following.md`
+    F19, `audit/UserStoryInteractions.md` F16, `audit/Chapters.md` F6, `audit/Comments.md` F25,
+    `audit/Recommendations.md` F28, `audit/Stories.md` F10, `audit/Moderation.md` F62 and
+    `audit/Profiles.md` F58.
 - **Hand-offs:**
   - **WU-ParityAndRemaining:** if it wraps `CreateGroupAsync` in a transaction, the `GroupsJoined` +1
     stays after the commit.

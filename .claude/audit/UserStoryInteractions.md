@@ -507,6 +507,25 @@ Mutation-checked: without either `ON CONFLICT`, the matching tests fail with the
   instead of two fails it. The parent deleted before the partition read: `DbUpdateConcurrencyException`,
   and nothing is resurrected. That test pins the behavior; the old code also failed, at the save.
 
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass), still no flip; L4.5 stays 5.**
+Server-only path, reset workbench, `psql` after every write, render phase read from the network log.
+- **Panel favorite on a new row.** TestUser on story 6, which had no USI row.
+  - On the circuit, Favorite ensured the row and its partition (`favorite_date` set) and moved
+    AuthorBeta's `favorites_on_stories` 0→1.
+  - Clearing it sparse-deleted both rows, and the counter went back to 0.
+  - On WASM (`POST /api/user-story-interactions/6`), Favorite ensured both again, and the counter read
+    1.
+- **Read It Later from a recommendation card, new row.** Story 3, the card for ReaderGamma's
+  recommendation 2. AuthorBeta on WASM
+  (`POST /api/user-story-interactions/read-it-later/from-recommendation/2`) and ModUser on the circuit
+  each got a new row with `is_read_it_later`, a partition with `read_it_later_date`, and an
+  attribution row naming recommendation 2. The button read "Saved for later".
+- **The 90% start, new rows.** Seed chapters fit on one screen, so opening `/story/1/1` fires the
+  start at once. ModUser on the circuit and AuthorBeta on WASM
+  (`POST /api/user-story-interactions/1/started`, server endpoint log) each got a new row with
+  `has_started` through the ensure-row path; AuthorBeta's `stories_in_progress` read 1.
+- No `fail:`/`crit:` from these flows.
+
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;
   derived tabs "Actively Reading" (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned"

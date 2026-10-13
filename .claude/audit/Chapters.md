@@ -110,6 +110,20 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   - Mutation-checked: dropping the `IsPublished` filter fails three tests, and the old `++` fails the
     interleave test.
 
+  **Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip; L4.5 stays 5.**
+  Server-only path, reset workbench, `psql` after every write, render phase read from the network log.
+  Run as AuthorAlpha on story 2: chapters 1–2 published (54 + 36 words), chapter 3 a 38-word draft,
+  story `word_count` 90, AuthorAlpha's seeded `words_written` 400.
+  - **Publish and unpublish.** Publishing chapter 3 on WASM (`PUT /api/chapters/8/published`) took the
+    story to 128 and `words_written` to 438. Unpublishing it on the circuit took them back to 90 and
+    400.
+  - **A new draft adds nothing.** A 13-word "E2E Draft Chapter" created at `/story/2/chapter/new` on
+    WASM (`POST /api/chapters`) left 90 and 400.
+  - **Alternate versions.** "+ Add alternate version" took chapter 3's `version_count` 1→2 on the
+    circuit, and chapter 1's 1→2 on WASM (`POST /api/chapters/6/versions`). The story's word count
+    did not move, since a new alternate is not the primary.
+  - The new chapter's untouched top note stored `<p><br></p>`, the defect already filed as **H22**.
+
   **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip.** `DeleteChapterAsync` no
   longer materializes the chapter's comments to `RemoveRange` them (the template D10 found the other
   three delete sites had failed to copy). It runs `TptDelete.ChapterCommentsAsync` — one set-based

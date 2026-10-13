@@ -155,6 +155,15 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   suite green. `FollowingWriteServiceTests.VouchAsync_ThatLands_NotifiesTheTargetOnce_*` asserts that a
   vouch that lands sends exactly one `NewVouchOnYou` and that a repeat vouch sends no second one.
   Mutation-checked: inverting the gate fails it.
+  **Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip.** Server-only path,
+  reset workbench, `psql` after every write. AuthorBeta was the actor and AuthorAlpha the target.
+  - **On the circuit,** Follow and then Vouch → Submit vouch at `/user/4` landed the follow row, the
+    vouch row and one `NewVouchOnYou` (type 32). The button read "✓ Vouched".
+  - **Over HTTP** (the WASM client's route), with that notification marked read in `psql` (an unread
+    one would suppress a second through the notification service's dedup), the vouch was removed and
+    three concurrent `POST /api/following/vouches/4` sent. All three answered 204, all three reached
+    the `ON CONFLICT` insert (server log), one row landed, and exactly one new type-32 notification
+    was sent.
   **Settled constraints — do not revisit:** dedicated `Vouch` table; outgoing public / incoming private
   asymmetry (§5.8); 5-per-user cap (anti-snowball scarcity lever); FK delete behavior (see Shared
   Context); `VouchText` is rich HTML sanitized-once-on-save (EditorView/RichTextView/sanitize path).

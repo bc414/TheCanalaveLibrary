@@ -266,6 +266,13 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
   load and its counter statement, and asserts the response says 2 (the old return said 1;
   mutation-checked). The factory-global `FakeActiveUserContext` rules out two real users liking in
   parallel, but the interleaved SQL plays the second user.
+  **Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip.** Server-only path,
+  reset workbench, `psql` after every write. The subject was seed comment 1 on story 1's chapter 1
+  (`/story/1/1`), at 1 like.
+  - On the circuit, ModUser's like showed "♥ 2", matching `like_count` 2.
+  - On WASM, AuthorBeta's page loaded showing "♥ 2". `psql` then landed LurkerDelta's like (the row
+    plus `+1`, so 3), playing a concurrent reader. AuthorBeta's click (`POST /api/comments/1/like`)
+    showed "♥ 4", the landed count, not the stale 2 + 1. `like_count` read 4, with four like rows.
 
 ## Feature 26 — Spoiler Comments
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.

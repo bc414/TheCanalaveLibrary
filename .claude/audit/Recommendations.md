@@ -237,6 +237,15 @@ interleaves another user's like before the counter statement and asserts 2 (the 
 mutation-checked). `BadgeDisplayTests.RecommendationCard_*` covers the badge filter on this
 projection.
 
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip.** Server-only path, reset
+workbench, `psql` after every write.
+- **WASM, the like.** AuthorBeta's story-1 page loaded with recommendation 1 at 1 like. `psql` then
+  landed LurkerDelta's like (the row plus `+1`, so 2). AuthorBeta's click
+  (`POST /api/recommendations/1/like`) showed 3, the landed count, and `like_count` read 3.
+- **Circuit, the unlike.** The unlike showed 2, matching `like_count` 2.
+- **Read It Later from this card** is in `audit/UserStoryInteractions.md` F16's browser note, and the
+  card's badge row in `audit/Badges.md` F50's.
+
 ## Feature 29 — Hidden Gem Management
 - **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 5 (WU29, 2026-06-23).** 5-per-user limit in C#:
 - **L3-Logic — Stage 5 (WU29, 2026-06-23; reconciled Phase B, 2026-06-20; was Stage 1).** Spec §8

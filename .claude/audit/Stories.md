@@ -809,7 +809,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
    created already `Approved` with no self-notification (matches the notification drop-self
    invariant). Only cross-author links start `Pending`.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30 — see its Stage note).** **L4-Style — Stage 1** (pending human
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30, and L3-Logic's page reloads its list after a stale approve since that WU's browser pass — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
   close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
@@ -942,6 +942,40 @@ drafts' links; a taken-down source is empty for everyone.
 - `…_AnApprovalLandingBetweenTheReadAndTheWrite_*` (`InterleavingCommandInterceptor`, per `testing.md`
   §"Testing a check-then-act guard"): refused, the counter is 0, and no notification is sent.
 - Mutation-checked: dropping the `Pending` predicate fails both.
+
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — one bug found and fixed; no flip,
+L3-Logic and L4.5 stay 5.** Server-only path, reset workbench, `psql` after every write, render phase
+read from the network log. AuthorBeta requested three Inspired-By links into AuthorAlpha's stories over
+`POST /api/story-lineage` (6→1, 12→3, 5→7), and AuthorAlpha handled them at `/story-lineages`.
+- **The stale-tab approve, both phases.** With the page open, each request was approved once over the
+  API, playing a second tab, and the page's own Approve was then clicked.
+  - On the circuit (6→1) and on WASM (12→3, whose click's `POST …/approve` answered 400), the page
+    showed "This lineage request is no longer pending." inline, not the generic error.
+  - Each link landed `status_id` 1, one `StoryLineageApproved` (type 51) and one `+1`: AuthorAlpha's
+    `acknowledged_as_inspiration_count` read 1, then 2.
+- **Three concurrent approves** of 5→7 over HTTP answered one 204 and two 400s carrying the same
+  detail. The counter moved once, to 3, and one notification was sent.
+- **Bug (fixed in the same pass): the refused row stayed listed.** The handler showed the refusal but
+  did not reload, so the row, which the server no longer listed as Pending, still offered Approve and
+  Reject. Reject acts on an Approved row by design, so it would have revoked the approval the other
+  tab had just made.
+  - **Fix.** `HandleApproveAsync`/`HandleRejectAsync` now treat a `StoryLineageValidationException`
+    (no longer Pending) or a `KeyNotFoundException` (the requester removed it) as "moved under the
+    page". They keep the message and reload through `ReloadAfterRefusalAsync`, the
+    `ModSubmissionsPage` shape. A failed reload is appended to the refusal, never shown instead of it.
+    The rule is now written in `error-handling.md` §"Layered error boundaries".
+  - **Test tier: RazorComponents.** `MyStoryLineagesPageTests` (4): a stale Approve keeps the
+    message and drops the row; an Approve or a Reject of a request the requester removed drops it too
+    (Reject never refuses an Approved row, so that is its only stale case); and a reload that also
+    fails keeps the refusal and appends its own message. Mutation-checked: all four fail with the
+    reload removed.
+  - **Re-verified in the browser after the fix,** after a rebuild and restart, with two fresh requests
+    (4→2, 6→7). On the circuit (4→2) and on WASM (6→7: the click's `POST …/approve` answered 400,
+    then the page re-read `GET /api/story-lineage/manage`), the message stayed and the stale row was
+    gone. 6→7 was the last request, so the list read "No pending requests.". Each link landed
+    `status_id` 1 with one `+1` (the counter read 5). The 6→7 approval sent no second
+    `StoryLineageApproved`, because an unread one for the same target story (7) already existed: the
+    notification service's existing dedup. The console was clean.
 
 ## Feature 45 — View Count Tracking
 

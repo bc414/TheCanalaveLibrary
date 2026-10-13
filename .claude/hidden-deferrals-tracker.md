@@ -826,6 +826,28 @@ unless noted. All sit under Stage-5 cells.
     - Deletes: `ExecuteDeleteAsync`, with the counter gated on rows-affected.
     - Each one is mechanical. Tested with `InterleavingCommandInterceptor` (`CounterSymmetryTests` is
       the precedent).
+- [ ] **D12 — Two writes on one circuit can share the scoped `ApplicationDbContext` at once → the generic error** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-CounterSymmetry browser pass. It is not D23's cross-request race, and not this WU's code.*
+  - Grid: F38 L2/L3 stay 5. The same class reaches any circuit write handler with no re-entry guard.
+  - **Seen:** on the circuit, a double-click on Join Group (the browser tool's `double_click`, two
+    clicks a few milliseconds apart).
+    - The second handler ran while the first awaited, and its query on the circuit-scoped write context
+      threw `InvalidOperationException` ("A second operation was started on this context instance").
+    - The log shows `fail: …EntityFrameworkCore.Query[10100]`, and the viewer got the generic
+      "Something went wrong on our end" toast.
+    - The data stayed right: one member row, and `GroupsJoined` +1 once (the `ON CONFLICT` upsert).
+    - On WASM the same double click sends two HTTP requests, each in its own scope, and both answered
+      cleanly.
+    - `GroupPage`'s Join and Leave buttons have no busy state at all, so nothing narrows the window.
+  - **Why it is open:** `layer2-services.md` keeps the write context a plain scoped `AddDbContext`
+    because writes are "effectively serialized per circuit", and adds "Revisit only if a real
+    write-vs-write interleaving surfaces". This is that interleaving, so far at machine-speed clicks on
+    localhost; a slower database widens the window toward a human double-click.
+    - A `_busy` flag alone does not close it: `MyStoryLineagesPage`'s `_busy` disables Approve only at
+      the next render, and its handlers do not check it on entry.
+  - **Fix shape (a plan decision, not made here):** a re-entry check at each write handler's entry,
+    per-circuit write serialization, or a write context per operation. Each has a different reach.
+    The `testing.md` tiers cannot see it today: bUnit has no real circuit, and Integration uses one
+    scope per call.
 
 ---
 
@@ -1490,27 +1512,39 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
       (and any other `EditorView`-fed optional field) does not.
     - Fix shape: normalize empty editor HTML to null at the editor's pull (or in the service's
       sanitize step), plus a test.
-- [ ] **H23 — WU-CounterSymmetry's badge display change: browser pass owed** `[test-gap · low · beta]` — *Filed 2026-09-30; WU-CounterSymmetry ran with no browser available.*
-  - Grid: **F50 L4.5 5→1.** Driving the steps below restores it. The other WU-CounterSymmetry changes
-    are server-side, Integration-covered and markup-unchanged, so their L4.5 cells stay 5.
-  - Run on both render phases (circuit and WASM), with `psql` as ground truth. Run
-    `reset-dev-db.ps1` first, so TestUser's seeded Recommender badge has its new ground truth
-    (`EarnedCount` 1).
-    1. **A counted badge.** On a `UserCard` (TestUser's recommendation on the flagship story), the
-       Recommender badge shows the icon with "1", and the tooltip "Recommender (1)".
-    2. **A manual grant.** Give a user Patron (`EarnedCount` 0, as a manual grant has). Their
-       `UserCard` shows the icon with no count, and the tooltip "Patron". **Owner check:** this is a
-       spec-sourced change to manual-grant display, outside D21's scope (D21 leaves manual grants
-       untouched). Before it, the card showed "0" and "Patron (0)". Keep it, or ask for it back
-       (`audit/Badges.md` F50's Stage note, the `UserCard` rider).
-    3. **A zero-count counter-backed badge.** Set TestUser's Recommender `earned_count` to 0 in
-       `psql`. It is gone from the profile header, the recommendation card, the following and vouch
-       lists and the tree-search nodes, and still listed in `/settings` → Badges.
-  - Optional, not part of the restore (all Integration-covered):
-    - an author's story word count moves on publish and unpublish, and a draft adds nothing;
-    - creating a group shows Groups Joined 1 on the creator's profile stats, and leaving shows 0;
-    - double-clicking Approve on `/my/lineages` shows "This lineage request is no longer pending."
-  - Narrative: `audit/Badges.md` F50's WU-CounterSymmetry Stage note; WU-CounterSymmetry's DONE entry.
+- [ ] **H23 — WU-CounterSymmetry's `UserCard` manual-grant rider: owner check (the browser pass is done)** `[decision · low · beta]` — *Filed 2026-09-30, when WU-CounterSymmetry ran with no browser available. Narrowed 2026-09-30 by its browser pass to the one owner check below.*
+  - Grid: **F50 L4.5 is back at 5.** The WU had lowered it 5→1. The pass drove all three steps on both
+    render phases, with `psql` as ground truth, on a reset workbench:
+    1. **Counted badge.** TestUser's recommendation card showed "1" and the tooltip
+       "Recommender (1)".
+    2. **Manual grant.** A Patron grant (`earned_count` 0) showed with no count and the tooltip
+       "Patron".
+    3. **Zero-count badge.** With Recommender at `earned_count` 0, it was gone from the profile banner,
+       the recommendation card, the vouch list, the tree-search root card, user search, the following
+       list, outgoing vouches and the manual tree search's neighbors. It was still listed in
+       `/settings` → Badges.
+
+    The optional steps ran too (word count on publish and unpublish, create counts as joining, the
+    refused stale approve), and the nightly pass restored the zeroed badge from its success row.
+    Narrative: `audit/Badges.md` F50's browser-verification note.
+  - **Still open, the owner check (step 2).** Showing no count on a manual grant is a spec-sourced
+    change, outside D21's scope (D21 leaves manual grants untouched). Before it, the card showed "0"
+    and "Patron (0)". Keep it, or ask for it back (`audit/Badges.md` F50's Stage note, the `UserCard`
+    rider).
+- [ ] **H24 — A fresh workbench shows wrong profile stats until the first nightly reconcile** `[test-hygiene · low · beta]` — *Filed 2026-09-30 by the WU-CounterSymmetry browser pass. Not this WU's change: its spec left the hand-set seed counters alone.*
+  - Grid: F58 L2 stays 5. This is a seed-data defect with no production effect.
+  - **Seen:** right after `reset-dev-db.ps1`, TestUser's profile reads "0 words" and "0 groups",
+    though it authors two 36-word stories and is a member of the standard group. AuthorAlpha's
+    `words_written` reads 400 against 447 derived. ReaderGamma, ModUser, AdminUser and LurkerDelta
+    have no `user_stats` row at all. The first nightly pass corrected all of it: TestUser 72 words and
+    1 group, AuthorAlpha 447, four rows inserted (`audit/Profiles.md` F58, "The live nightly pass").
+  - **Cause:** `DataSeeder.SeedProfilesAndStatsAsync` hand-sets the counters ("hand-set
+    approximations … not exact derived totals"). The class doc says the opposite: "`UserStat`
+    counters matching the content". Under D21 the recompute is the definition, so a seeded value that
+    disagrees with it is simply wrong until the pass runs, which misleads a browser check of any
+    counter on a fresh workbench.
+  - **Fix shape:** derive the seeded counters, by running both recalculators at the end of the Full
+    seed or by computing them, and make the class doc true.
 
 ---
 

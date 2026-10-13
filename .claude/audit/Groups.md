@@ -107,6 +107,24 @@ and a concurrent double join (no throw, one row, exactly 1). Every test ends wit
 `Join_ACompetingJoinLandingBeforeTheInsert_*`, which interleaves the competing row just before the
 insert (mutation-checked: without `ON CONFLICT` it 500s).
 
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip; L4.5 stays 5.** Server-only
+path, reset workbench, `psql` after every write, render phase read from the network log. AuthorAlpha
+started at `groups_joined` 1, a member of the standard group only.
+- **Create (circuit).** Creating "E2E Counter Group A" (group 4) at `/group/new` wrote an Admin member
+  row and moved `groups_joined` 1→2.
+- **Leave, then a double Join (circuit).** Leave took it to 1. A real double-click on Join Group
+  landed one member row and moved the counter once, to 2. But the second click's handler ran while the
+  first was still awaiting, on the same circuit-scoped `ApplicationDbContext`, and threw
+  `InvalidOperationException` ("A second operation was started on this context instance"). The viewer
+  got the generic "Something went wrong on our end" toast. This is not D23's cross-request race and
+  not this WU's code: the old `AnyAsync`-then-`Add` shared the same context. It is the same-circuit
+  write interleaving `layer2-services.md` sets aside, filed as tracker **D12**.
+- **Leave, then a double Join (WASM).** Leave (`POST /api/groups/4/leave`) took it to 1. Two Join
+  clicks in one JS tick sent two `POST /api/groups/4/join`. Both reached the `ON CONFLICT` insert
+  (server log), one member row landed, the counter moved once (to 2), and no error showed: each request
+  has its own scope.
+- The WASM profile then read "2 groups".
+
 - **L1 — Stage 5.** `Group` + `GroupMember` with role/audience model.
 - **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30; create counts as joining + `JoinAsync` upsert WU-CounterSymmetry, 2026-09-30 — see its Stage note).** `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
   `ServerGroupReadService` / `ServerGroupWriteService` in `Server/Groups/`; CQRS-lite inheritance.

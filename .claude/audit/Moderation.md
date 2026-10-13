@@ -1126,6 +1126,11 @@ the day's end. It now uses that same predicate: `WHERE published_date < @range_e
 excluded stories (a Draft at 1,000 words, a taken-down story at 2,000, one first published the day
 after at 4,000), and `UpsertDayAsync_ComputesEveryCounter` now asserts `TotalWords == 800` and
 `TotalStories == 2` exactly (was `>=`). Mutation-checked: the old subquery gives 7,800.
+**Browser verification (2026-09-30, WU-CounterSymmetry e2e pass) — no flip.** On a reset workbench the
+worker's startup backfill wrote 30 days. The latest, 2026-10-12, reads `total_stories` 9 and
+`total_words` 627: exactly the nine visible stories' published words. The two Pending stories (36
+words each) and the empty Draft are excluded, and so is story 2's 38-word draft chapter. The old
+subquery would have read 699. `/mod/stats` showed "Total words 627" to AdminUser.
 
 **Requirements settled 2026-07-10 (WU-SiteDailyStat plan)** — reconciling the Gemini design source
 (`GeminiDiscussions/MyActivity September to November 2025_filtered.md:38146`, 2025-10-29) against

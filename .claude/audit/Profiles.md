@@ -256,7 +256,7 @@ never wired). That breaks `layer2-services.md` §"Recalculation worker — mirro
 WU's spec proposed a fix (its R10); the campaign orchestrator excluded it as unsourced, so which posts
 count is owner-open: tracker **F16**.
 
-- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30; content-counter pass `ContentCounterRecalculator` added WU-CounterSymmetry, 2026-09-30, worker order Unit-tested since its review fixes — see its Stage note below).** Periodic `IHostedService`/`BackgroundService`
+- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30; content-counter pass `ContentCounterRecalculator` added WU-CounterSymmetry, 2026-09-30, worker order Unit-tested since its review fixes, and a live nightly pass on the dev workbench observed by its browser pass — see its Stage note below).** Periodic `IHostedService`/`BackgroundService`
   reconciling the denormalized counters. Pure background computation — Layer 2 *is* the worker
   (grid_axes). All UI layers **N/A**. **L8 revised (2026-07-15):** mostly set-based raw SQL, not
   EF LINQ (mirrors `SiteDailyStatAggregator`'s style); one counter, `ViewsOnStories`, reads the
@@ -377,8 +377,39 @@ sums the corrected `stories.word_count`), and each pass's own try/log.
   because `TestAppFactory` removes it.
 - **Seeds: no test tier.** Integration runs pin `DataSeeder` to `DevSeed=None`, and SeedTool has no
   test project. The `SeedGraph` published-only sum and the `DataSeeder` badge ground truth are
-  verified by build and code review only. They are exercised by `reset-dev-db.ps1`, which tracker
-  **H23**'s browser pass runs first.
+  verified by build and code review only. `reset-dev-db.ps1` exercised the `DataSeeder` half at the
+  start of tracker **H23**'s browser pass (2026-09-30): TestUser's Recommender read `earned_count` 1,
+  with one success row behind it. SeedTool was not run.
+
+**The live nightly pass (2026-09-30, WU-CounterSymmetry e2e pass), still no flip.** The worker had
+never been seen running against real data, so the browser pass set it up to run during the pass.
+- **Setup.** The server was started with `Marts__RebuildHourUtc=1`, so the workers' daily hour fell
+  inside the session. That is plain configuration; no code changed. Before 01:00 UTC `psql` planted
+  drift on rows no other flow touched:
+  - zero-unmatched cases: comment 3 `like_count` 7, blog post 2 `like_count` 5, recommendation 3
+    `like_count` 4 and `successful_rec_count` 2, story 7 and user 7 `active_report_count` 3 and 2, and
+    the empty Draft story 10's `word_count` 500;
+  - matched cases: chapter 2 `version_count` 5, and the Pending story 9's `word_count` 9999;
+  - the UserStat side: AuthorBeta's `groups_joined` 9, and TestUser's Recommender badge at
+    `earned_count` 0 (the badge check's fixture).
+
+  A drift query mirroring all 11 specs listed exactly those nine content rows.
+- **The run.** At 01:00 the log read "Content counter recalculation completed: 9 counter value(s)
+  corrected", then "UserStat recalculation completed: 4 missing row(s) inserted, 26 counter value(s)
+  corrected". There was no `fail:`/`crit:`.
+- **Ground truth afterwards.**
+  - The drift query listed 0 rows.
+  - The pass order is proven: AuthorBeta's `words_written` read 180, the sum over the corrected
+    word counts. Run the other way round it would have summed story 9's 9999.
+  - AuthorBeta's `groups_joined` read 1.
+  - The hand-set seed counters were derived: TestUser 0→72 words and 0→1 groups, AuthorAlpha 400→447
+    words. AdminUser, ModUser, ReaderGamma and LurkerDelta gained rows.
+  - TestUser's Recommender returned to `earned_count` 1 from its one success row, and the card showed
+    "1" again. The row was never deleted.
+  - TestUser's profile read "72 words" and "1 groups".
+  - The `SiteDailyStatWorker` ran at the same hour and kept 2026-10-12 at `total_words` 627.
+- The hand-set seed values the pass corrected are filed as tracker **H24**: a fresh workbench shows
+  them until the first pass.
 
 ## L4.5-Browser verification (2026-07-01) — F20 + F21 + F22 → Stage 5, no bugs
 
