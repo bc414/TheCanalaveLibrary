@@ -44,7 +44,7 @@ public class UserStoryInteractionFilterTests : BunitContext
     // ── Toggle emits updated excluded list ──────────────────────────────────────────
 
     [Fact]
-    public async Task ToggleIgnore_EmitsIgnoreInExcludedList()
+    public async Task ToggleIgnore_EmitsIgnoreInExcludedList_AndASecondKindAddsToIt()
     {
         IReadOnlyList<UserStoryInteractionTypeEnum>? emitted = null;
         IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
@@ -52,36 +52,21 @@ public class UserStoryInteractionFilterTests : BunitContext
                 (IReadOnlyList<UserStoryInteractionTypeEnum> list) => emitted = list));
 
         // Click the Ignore checkbox (label text "Hide stories I've ignored").
-        IElement ignoreLabel = cut.FindAll("label")
-            .First(l => l.TextContent.Contains("ignored", StringComparison.OrdinalIgnoreCase));
-        IElement ignoreCheckbox = ignoreLabel.QuerySelector("input[type='checkbox']")!;
-
-        await ignoreCheckbox.TriggerEventAsync("onchange",
-            new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = true });
-
-        emitted.Should().NotBeNull();
-        emitted!.Should().Contain(UserStoryInteractionTypeEnum.Ignore,
-            "checking the Ignore checkbox must add Ignore to the excluded list");
-    }
-
-    [Fact]
-    public async Task ToggleTwoKinds_EmitsBothInExcludedList()
-    {
-        IReadOnlyList<UserStoryInteractionTypeEnum>? emitted = null;
-        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
-            .Add(c => c.OnChanged,
-                (IReadOnlyList<UserStoryInteractionTypeEnum> list) => emitted = list));
-
         // Re-find each element immediately before triggering — avoids stale event handler IDs after re-render.
         await cut.FindAll("label")
-            .First(l => l.TextContent.Contains("favorited", StringComparison.OrdinalIgnoreCase)
-                        && !l.TextContent.Contains("privately", StringComparison.OrdinalIgnoreCase))
+            .First(l => l.TextContent.Contains("ignored", StringComparison.OrdinalIgnoreCase))
             .QuerySelector("input[type='checkbox']")!
             .TriggerEventAsync("onchange",
                 new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = true });
 
+        emitted.Should().NotBeNull();
+        emitted!.Should().Contain(UserStoryInteractionTypeEnum.Ignore,
+            "checking the Ignore checkbox must add Ignore to the excluded list");
+
+        // A second kind joins the list rather than replacing it (merged from a second test, H7).
         await cut.FindAll("label")
-            .First(l => l.TextContent.Contains("ignored", StringComparison.OrdinalIgnoreCase))
+            .First(l => l.TextContent.Contains("favorited", StringComparison.OrdinalIgnoreCase)
+                        && !l.TextContent.Contains("privately", StringComparison.OrdinalIgnoreCase))
             .QuerySelector("input[type='checkbox']")!
             .TriggerEventAsync("onchange",
                 new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = true });

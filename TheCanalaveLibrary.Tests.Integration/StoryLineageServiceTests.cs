@@ -501,7 +501,7 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
     {
         // The post-commit ExecuteUpdateAsync producer is a silent no-op when the target
         // author has no UserStat row yet (SeedUserAsync never creates one). Integration tests
-        // must seed one explicitly, matching RecommendationWriteServiceTests' SeedUserStatAsync.
+        // must seed one explicitly through the base SeedUserStatAsync.
         await SeedUserStatAsync(_otherUserId);
         int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
         int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
@@ -672,16 +672,6 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.StoryLineages.AsNoTracking().FirstOrDefaultAsync(l =>
             l.SourceStoryId == sourceStoryId && l.TargetStoryId == targetStoryId && l.RelationshipTypeId == typeId);
-    }
-
-    /// <summary>The post-commit ExecuteUpdateAsync producer is a silent no-op when the
-    /// target has no UserStat row (no production write path creates one at registration).</summary>
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
     }
 
     private async Task<int> LoadInspirationCounterAsync(int userId)

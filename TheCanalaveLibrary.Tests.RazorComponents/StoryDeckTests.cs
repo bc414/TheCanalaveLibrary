@@ -181,27 +181,21 @@ public class StoryDeckTests : BunitContext
     }
 
     [Fact]
-    public void PaginationControls_HiddenWhenSinglePage()
+    public void PaginationControls_HiddenWhenSinglePage_OrWhenPageSizeIsZero()
     {
-        // 5 items, page size 10 → 1 page → PaginationControls self-hides (renders nothing)
-        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
+        // 5 items, page size 10 → 1 page → PaginationControls self-hides (renders nothing).
+        // It is still in the tree but renders nothing (@if TotalPages > 1).
+        IRenderedComponent<StoryDeck> singlePage = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() })
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 5));
+        singlePage.Markup.Should().NotContain("aria-label=\"Previous page\"");
 
-        // PaginationControls is still in the tree but renders nothing (@if TotalPages > 1)
-        cut.Markup.Should().NotContain("aria-label=\"Previous page\"");
-    }
-
-    [Fact]
-    public void PaginationControls_HiddenWhenPageSizeIsZero()
-    {
-        // PageSize default = 0 → TotalPages = 0 → PaginationControls self-hides
-        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
+        // PageSize default = 0 → TotalPages = 0 → PaginationControls self-hides too.
+        IRenderedComponent<StoryDeck> noPageSize = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() }));
-
-        cut.Markup.Should().NotContain("aria-label=\"Previous page\"");
+        noPageSize.Markup.Should().NotContain("aria-label=\"Previous page\"");
     }
 
     [Fact]

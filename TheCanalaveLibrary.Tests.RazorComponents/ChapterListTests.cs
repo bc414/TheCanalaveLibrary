@@ -239,7 +239,7 @@ public class ChapterListTests : BunitContext
     // ── Empty list ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ChapterList_EmptyList_ShowsNoChaptersMessage()
+    public void ChapterList_EmptyList_ShowsNoChaptersMessage_AndNoChapterLinks()
     {
         IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, [])
@@ -247,15 +247,6 @@ public class ChapterListTests : BunitContext
 
         cut.Markup.Should().Contain("No chapters yet",
             "an empty chapter list must show the 'No chapters yet.' message");
-    }
-
-    [Fact]
-    public void ChapterList_EmptyList_NoAnchorLinksRendered()
-    {
-        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
-            .Add(c => c.Chapters, [])
-            .Add(c => c.StoryId, StoryId));
-
         cut.FindAll($"a[href^='/story/{StoryId}/']").Should().BeEmpty(
             "no chapter links must appear for an empty chapter list");
     }

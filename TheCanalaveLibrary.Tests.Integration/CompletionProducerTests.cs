@@ -233,20 +233,6 @@ public class CompletionProducerTests(PostgresFixture postgres) : IntegrationTest
         return chapter.ChapterId;
     }
 
-    /// <summary>
-    /// Ensures a <see cref="UserStat"/> row exists for <paramref name="userId"/>.
-    /// <see cref="IntegrationTestBase.SeedUserAsync"/> does not create one, and
-    /// <see cref="ServerUserStoryInteractionWriteService.MarkCompletedAsync"/>'s
-    /// <c>ExecuteUpdateAsync</c> calls silently no-op without it.
-    /// </summary>
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
-    }
-
     private async Task MarkStartedAsync(int storyId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();

@@ -433,7 +433,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     [Fact]
     public async Task RecordSuccess_AtFirstSuccess_AwardsRecommenderBadge()
     {
-        await SeedUserStatAsync(_recommenderUserId, successesEarned: 0);
+        await SeedUserStatAsync(_recommenderUserId);
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
@@ -453,7 +453,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     {
         // Seed the counter row but record no qualifying success — confirms the award check itself
         // gates on the counter, not merely on the row existing.
-        await SeedUserStatAsync(_recommenderUserId, successesEarned: 0);
+        await SeedUserStatAsync(_recommenderUserId);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -465,7 +465,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     [Fact]
     public async Task RecordSuccess_SecondSuccess_UpdatesEarnedCountOnExistingBadge()
     {
-        await SeedUserStatAsync(_recommenderUserId, successesEarned: 1);
+        await SeedUserStatAsync(_recommenderUserId, s => s.RecommendationSuccessesEarned = 1);
         using (IServiceScope seedScope = Factory.Services.CreateScope())
         {
             ApplicationDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -985,27 +985,6 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         using IServiceScope scope = Factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
             .Recommendations.FirstOrDefaultAsync(r => r.RecommendationId == id);
-    }
-
-    /// <summary>
-    /// Ensures a <see cref="UserStat"/> row exists for <paramref name="userId"/> and optionally
-    /// pre-sets the <c>RecommendationSuccessesEarned</c> counter. Required for award-chain tests
-    /// because <see cref="IntegrationTestBase.SeedUserAsync"/> does not create a UserStat row and
-    /// <see cref="ServerRecommendationWriteService.RecordSuccessAsync"/>&#x27;s
-    /// <c>ExecuteUpdateAsync</c> silently no-ops when no UserStat row exists.
-    /// </summary>
-    private async Task SeedUserStatAsync(int userId, int successesEarned = 0)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
-
-        if (successesEarned > 0)
-            await db.UserStats
-                .Where(us => us.UserId == userId)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    us => us.RecommendationSuccessesEarned, successesEarned));
     }
 
     private async Task<int> LoadRecommendationSuccessesEarned(int userId)

@@ -122,6 +122,24 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
     }
 
     /// <summary>
+    /// Inserts the user's <c>UserStat</c> row, optionally pre-setting counters through
+    /// <paramref name="configure"/>. <see cref="SeedUserAsync"/> creates none, and no production
+    /// path creates one at registration (<c>UserStatRecalculator</c> is the real first populator),
+    /// so every counter producer, an <c>ExecuteUpdateAsync</c>, is a <b>silent no-op</b> without it.
+    /// Call it before exercising any counter-touching path. Hoisted from nine private copies by
+    /// WU-TrackerFixes (2026-10-13; tracker H7).
+    /// </summary>
+    protected async Task SeedUserStatAsync(int userId, Action<UserStat>? configure = null)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        UserStat stat = new() { UserId = userId };
+        configure?.Invoke(stat);
+        db.UserStats.Add(stat);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Inserts a minimal story row and returns the new <c>StoryId</c>.
     /// <paramref name="authorId"/> is optional; pass the seeded user's id when a test needs
     /// author-owned story semantics (e.g. Hidden-Gem notification, highlight-ownership guard).

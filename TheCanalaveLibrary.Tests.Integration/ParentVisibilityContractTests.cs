@@ -1048,18 +1048,6 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
             .SetUserStoryInteractionStateAsync(storyId, update);
     }
 
-    /// <summary>
-    /// The counter producers are <c>ExecuteUpdate</c>s that silently no-op without a row, and no
-    /// production path creates one at registration — seed it explicitly.
-    /// </summary>
-    private async Task SeedUserStatAsync(int userId, int favoritesOnStories = 0)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = Resolve<ApplicationDbContext>(scope);
-        db.UserStats.Add(new UserStat { UserId = userId, FavoritesOnStories = favoritesOnStories });
-        await db.SaveChangesAsync();
-    }
-
     private async Task SeedReadMarkAsync(int userId, int chapterId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -1173,7 +1161,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
     public async Task UserStoryInteraction_Clear_TakenDownStory_DecrementsAuthorFavoritesCounter()
     {
         int storyId = await SeedStoryAsync(_authorId);
-        await SeedUserStatAsync(_authorId, favoritesOnStories: 1);
+        await SeedUserStatAsync(_authorId, s => s.FavoritesOnStories = 1);
         await SeedUsiRowAsync(_strangerId, storyId, favorite: true);
         await TakeDownStoryAsync(storyId);
 

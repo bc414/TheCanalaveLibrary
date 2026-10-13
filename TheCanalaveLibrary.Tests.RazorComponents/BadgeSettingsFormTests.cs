@@ -20,20 +20,12 @@ public class BadgeSettingsFormTests : BunitContext
     // ── Empty state ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void EmptyBadges_ShowsNoBadgesMessage()
+    public void EmptyBadges_ShowsNoBadgesMessage_AndNoSaveButton()
     {
         IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, []));
 
         cut.Markup.Should().Contain("You haven't earned any badges yet.");
-    }
-
-    [Fact]
-    public void EmptyBadges_DoesNotRenderSaveButton()
-    {
-        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
-            p.Add(f => f.EarnedBadges, []));
-
         cut.FindAll("button[type='button']")
             .Select(b => b.TextContent.Trim())
             .Should().NotContain("Save Badge Display",
@@ -53,33 +45,22 @@ public class BadgeSettingsFormTests : BunitContext
     }
 
     [Fact]
-    public void VisibleBadge_ShowsEarnedCount()
+    public void VisibleAndHiddenBadges_EachGetTheirPartitionsAffordance()
     {
+        // One render with a badge in each partition (merged from three single-badge tests, H7).
         IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
-            p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1, earnedCount: 7)]));
+            p.Add(f => f.EarnedBadges,
+            [
+                MakeBadge("Recommender", displayOrder: 1, earnedCount: 7),
+                MakeBadge("Reader", displayOrder: 0),
+            ]));
 
         cut.Markup.Should().Contain("×7",
             "the no-tiers model displays the producing counter's value, not a Bronze/Silver split");
-    }
-
-    [Fact]
-    public void VisibleBadge_ShowsHideButton()
-    {
-        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
-            p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)]));
-
         cut.FindAll("button[title='Hide this badge']")
-            .Should().HaveCount(1, "a visible badge must have a Hide button");
-    }
-
-    [Fact]
-    public void HiddenBadge_ShowsShowButton()
-    {
-        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
-            p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 0)]));
-
+            .Should().HaveCount(1, "the visible badge, and only it, must have a Hide button");
         cut.FindAll("button[title='Make visible']")
-            .Should().HaveCount(1, "a hidden badge (DisplayOrder = 0) must have a Show button");
+            .Should().HaveCount(1, "the hidden badge (DisplayOrder = 0), and only it, must have a Show button");
     }
 
     [Fact]

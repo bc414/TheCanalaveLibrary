@@ -12,64 +12,35 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// </summary>
 public class TreeSearchTabStripTests : BunitContext
 {
-    [Fact]
-    public void AutomaticActive_MarksAutomaticTabSelected()
+    /// <summary>Exactly the active tab is selected (merged from three per-tab tests, H7).</summary>
+    [Theory]
+    [InlineData(TreeSearchTab.Automatic, 0)]
+    [InlineData(TreeSearchTab.Explore, 1)]
+    [InlineData(TreeSearchTab.DeepDive, 2)]
+    public void ActiveTab_IsTheOnlyTabMarkedSelected(TreeSearchTab active, int selectedIndex)
     {
         IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
-            .Add(c => c.ActiveTab, TreeSearchTab.Automatic));
+            .Add(c => c.ActiveTab, active));
 
         var tabs = cut.FindAll("button[role=tab]");
         tabs.Count.Should().Be(3);
-        tabs[0].GetAttribute("aria-selected").Should().Be("true");
-        tabs[1].GetAttribute("aria-selected").Should().Be("false");
-        tabs[2].GetAttribute("aria-selected").Should().Be("false");
+        for (int i = 0; i < tabs.Count; i++)
+            tabs[i].GetAttribute("aria-selected").Should().Be(i == selectedIndex ? "true" : "false");
     }
 
-    [Fact]
-    public void ExploreActive_MarksExploreTabSelected()
-    {
-        IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
-            .Add(c => c.ActiveTab, TreeSearchTab.Explore));
-
-        var tabs = cut.FindAll("button[role=tab]");
-        tabs[0].GetAttribute("aria-selected").Should().Be("false");
-        tabs[1].GetAttribute("aria-selected").Should().Be("true");
-        tabs[2].GetAttribute("aria-selected").Should().Be("false");
-    }
-
-    [Fact]
-    public void DeepDiveActive_MarksDeepDiveTabSelected()
-    {
-        IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
-            .Add(c => c.ActiveTab, TreeSearchTab.DeepDive));
-
-        var tabs = cut.FindAll("button[role=tab]");
-        tabs[2].GetAttribute("aria-selected").Should().Be("true");
-    }
-
-    [Fact]
-    public void ClickingExploreTab_EmitsExplore()
+    /// <summary>Clicking a tab emits that tab (merged from two per-tab tests, H7).</summary>
+    [Theory]
+    [InlineData(1, TreeSearchTab.Explore)]
+    [InlineData(2, TreeSearchTab.DeepDive)]
+    public void ClickingATab_EmitsThatTab(int tabIndex, TreeSearchTab expected)
     {
         TreeSearchTab? emitted = null;
         IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
             .Add(c => c.ActiveTab, TreeSearchTab.Automatic)
             .Add(c => c.OnTabChanged, EventCallback.Factory.Create<TreeSearchTab>(this, t => emitted = t)));
 
-        cut.FindAll("button[role=tab]")[1].Click();
+        cut.FindAll("button[role=tab]")[tabIndex].Click();
 
-        emitted.Should().Be(TreeSearchTab.Explore);
-    }
-
-    [Fact]
-    public void ClickingDeepDiveTab_EmitsDeepDive()
-    {
-        TreeSearchTab? emitted = null;
-        IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
-            .Add(c => c.ActiveTab, TreeSearchTab.Automatic)
-            .Add(c => c.OnTabChanged, EventCallback.Factory.Create<TreeSearchTab>(this, t => emitted = t)));
-
-        cut.FindAll("button[role=tab]")[2].Click();
-
-        emitted.Should().Be(TreeSearchTab.DeepDive);
+        emitted.Should().Be(expected);
     }
 }

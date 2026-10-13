@@ -526,14 +526,6 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
-    }
-
     private async Task SeedFollowedUserAsync(int followerId, int followedId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();

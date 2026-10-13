@@ -78,7 +78,7 @@ public class TagSelectorTests : BunitContext
     // ── remove flow ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task TagSelector_RemovingATag_FiresOnSelectionChangedWithUpdatedList()
+    public async Task TagSelector_RemovingATag_FiresOnSelectionChangedWithUpdatedList_AndRemovesTheChip()
     {
         IReadOnlyList<TagChipDto>? received = null;
 
@@ -105,25 +105,8 @@ public class TagSelectorTests : BunitContext
         received!.Should().HaveCount(1, "one tag was removed — only one remains");
         received.Should().NotContain(t => t.TagName == "Adventure", "the removed tag must not be in the list");
         received.Should().Contain(t => t.TagName == "Mystery", "the kept tag must still be in the list");
-    }
 
-    [Fact]
-    public async Task TagSelector_RemovingATag_RemovesChipFromRender()
-    {
-        IReadOnlyList<TagChipDto> initial =
-        [
-            MakeChip(1, "Adventure", TagTypeEnum.Genre),
-            MakeChip(2, "Mystery", TagTypeEnum.Genre)
-        ];
-
-        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
-            .Add(c => c.TagType, TagTypeEnum.Genre)
-            .Add(c => c.SelectedTags, initial)
-            .Add(c => c.OnSelectionChanged, (IReadOnlyList<TagChipDto> _) => { }));
-
-        await cut.FindAll("button[aria-label='Remove tag']").First()
-            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
-
+        // The same click also takes the chip out of the render (merged from a second test, H7).
         cut.Markup.Should().NotContain("Adventure", "the removed chip must disappear from the rendered output");
         cut.Markup.Should().Contain("Mystery", "the kept chip must still be rendered");
     }

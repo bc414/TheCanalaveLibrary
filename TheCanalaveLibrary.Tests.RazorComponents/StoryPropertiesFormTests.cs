@@ -43,29 +43,15 @@ public class StoryPropertiesFormTests : BunitContext
     };
 
     [Fact]
-    public void Form_Renders_TitleInput()
+    public void Form_Renders_TitleInput_ShortDescriptionTextarea_AndRatingSelect()
     {
+        // Merged from three one-field render tests (H7). AllFields_HaveAccessibleNames below checks
+        // naming, not presence, so the presence checks stay here.
         IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("input[placeholder='Story title']").Should().NotBeNull();
-    }
-
-    [Fact]
-    public void Form_Renders_ShortDescriptionTextarea()
-    {
-        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
         cut.FindAll("textarea").Should().NotBeEmpty();
-    }
-
-    [Fact]
-    public void Form_Renders_RatingSelect()
-    {
-        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
         // Rating + "Status when published" (the latter only while ShowPostApprovalStatus) are
         // selects; Rating alone guarantees at least one.
         cut.FindAll("select").Should().HaveCountGreaterThan(0);

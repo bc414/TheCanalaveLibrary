@@ -334,14 +334,6 @@ public class GroupAdminRescueTests(PostgresFixture postgres) : IntegrationTestBa
         return (await scope.ServiceProvider.GetRequiredService<IGroupReadService>().GetByIdAsync(groupId))!;
     }
 
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
-    }
-
     private async Task<int> GroupsJoinedAsync(int userId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();

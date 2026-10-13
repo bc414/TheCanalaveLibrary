@@ -255,8 +255,12 @@ public class SiteAnnouncementServiceTests(PostgresFixture postgres) : Integratio
     public async Task GetSiteAnnouncements_OrdersNewestFirst()
     {
         int older = await CreatePostAsync(title: "Older", isPublished: true);
-        await Task.Delay(10); // ensure distinct DateCreated ordering
         int newer = await CreatePostAsync(title: "Newer", isPublished: true);
+        // Pin the two stamps an hour apart instead of sleeping between the creates: two saves can
+        // land in the same clock tick, and a tie would make the expected order a coin flip.
+        DateTime now = DateTime.UtcNow;
+        await SetBlogPostDateCreatedAsync(older, now.AddHours(-1));
+        await SetBlogPostDateCreatedAsync(newer, now);
 
         (BlogPostListingDto[] items, _) = await CallGetSiteAnnouncementsAsync();
 
@@ -358,6 +362,20 @@ public class SiteAnnouncementServiceTests(PostgresFixture postgres) : Integratio
             IsPublished    = isPublished,
             NotifyAllUsers = notifyAllUsers
         });
+    }
+
+    /// <summary>
+    /// Pins a site announcement's <c>DateCreated</c> directly, so an ordering test controls the
+    /// stamps rather than racing the clock (the <c>NotificationServiceTests</c>
+    /// <c>SetNotificationDateCreatedAsync</c> shape).
+    /// </summary>
+    private async Task SetBlogPostDateCreatedAsync(int blogPostId, DateTime dateCreated)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        SiteBlogPost row = await db.SiteBlogPosts.SingleAsync(p => p.BlogPostId == blogPostId);
+        row.DateCreated = dateCreated;
+        await db.SaveChangesAsync();
     }
 
     private async Task CallUpdateAsync(

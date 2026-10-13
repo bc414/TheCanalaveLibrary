@@ -32,22 +32,7 @@ public class VouchListTests : BunitContext
     // ── UserCard renders per vouch ────────────────────────────────────────────────
 
     [Fact]
-    public void VouchList_RendersOneListItemPerVouch()
-    {
-        IReadOnlyList<VouchDisplayDto> vouches =
-        [
-            MakeVouch(1, "Ash", null),
-            MakeVouch(2, "Misty", null)
-        ];
-
-        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
-            .Add(c => c.Vouches, vouches));
-
-        cut.FindAll("li").Should().HaveCount(2);
-    }
-
-    [Fact]
-    public void VouchList_RendersUsernamesForEachVouch()
+    public void VouchList_RendersOneListItemPerVouch_WithEachUsername()
     {
         IReadOnlyList<VouchDisplayDto> vouches =
         [
@@ -58,6 +43,7 @@ public class VouchListTests : BunitContext
         IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches));
 
+        cut.FindAll("li").Should().HaveCount(2);
         cut.Markup.Should().Contain("Brock");
         cut.Markup.Should().Contain("Gary");
     }

@@ -150,7 +150,7 @@ public class StoryAcknowledgmentServiceTests(PostgresFixture postgres) : Integra
         // The post-commit ExecuteUpdateAsync producer is a silent no-op when the recipient
         // has no UserStat row yet (SeedUserAsync never creates one — no production write path
         // does either; UserStatRecalculator is the real first populator). Integration tests must
-        // seed one explicitly, matching RecommendationWriteServiceTests' SeedUserStatAsync.
+        // seed one explicitly through the base SeedUserStatAsync.
         await SeedUserStatAsync(_recipientId);
         int storyId = await SeedStoryAsync(authorId: _authorId);
         SetActiveUser(_authorId);
@@ -485,18 +485,6 @@ public class StoryAcknowledgmentServiceTests(PostgresFixture postgres) : Integra
             .Where(us => us.UserId == userId)
             .Select(us => us.AcknowledgedAsBetaReaderCount)
             .FirstOrDefaultAsync();
-    }
-
-    /// <summary>The post-commit ExecuteUpdateAsync producer is a silent no-op when the
-    /// target has no UserStat row (no production write path creates one at registration —
-    /// UserStatRecalculator is the real first populator). Must be called before exercising any
-    /// counter-touching path.</summary>
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.UserStats.Add(new UserStat { UserId = userId });
-        await db.SaveChangesAsync();
     }
 
     private async Task<UserBadge?> LoadBadgeAsync(int userId, string badgeKey)

@@ -489,13 +489,6 @@ public class CounterSymmetryTests(PostgresFixture postgres) : IntegrationTestBas
     private static ApplicationDbContext Db(IServiceScope scope) =>
         scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-    private async Task SeedUserStatAsync(int userId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        Db(scope).UserStats.Add(new UserStat { UserId = userId });
-        await Db(scope).SaveChangesAsync();
-    }
-
     /// <summary>SeedStoryAsync bypasses CreateStoryAsync's +1. Before a convergence pass, each user's
     /// StoriesWritten gets the ground truth those direct inserts created (testing.md "Counter
     /// convergence"), so the pass compares only what the test's own wired ops moved.</summary>

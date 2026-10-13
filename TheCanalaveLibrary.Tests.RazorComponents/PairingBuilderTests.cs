@@ -18,41 +18,29 @@ public class PairingBuilderTests : BunitContext
         new TagChipDto { TagId = 2, TagName = "Eevee",   TagTypeId = TagTypeEnum.Character }
     ];
 
-    [Fact]
-    public void PairingBuilder_WithZeroCharacters_ShowsNoAddUI()
+    /// <summary>The add UI needs two characters; exactly one shows the hint instead, and none shows
+    /// neither (merged from three per-count tests, H7).</summary>
+    [Theory]
+    [InlineData(0, false, false)]
+    [InlineData(1, false, true)]
+    [InlineData(2, true, false)]
+    public void PairingBuilder_AddUiAppearsAtTwoCharacters(int characterCount, bool showsAddUi, bool showsHint)
     {
         IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
-            p.Add(c => c.CharacterChips, []);
+            p.Add(c => c.CharacterChips, [.. TwoChips().Take(characterCount)]);
             p.Add(c => c.Pairings, []);
         });
 
-        cut.Markup.Should().NotContain("Add Pairing", "add UI must be hidden when fewer than 2 characters");
-    }
+        if (showsAddUi)
+            cut.Markup.Should().Contain("Add Pairing", "add UI must appear when 2+ characters present");
+        else
+            cut.Markup.Should().NotContain("Add Pairing", "add UI must be hidden when fewer than 2 characters");
 
-    [Fact]
-    public void PairingBuilder_WithOneCharacter_ShowsHintNotAddUI()
-    {
-        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
-        {
-            p.Add(c => c.CharacterChips, [new TagChipDto { TagId = 1, TagName = "Pikachu", TagTypeId = TagTypeEnum.Character }]);
-            p.Add(c => c.Pairings, []);
-        });
-
-        cut.Markup.Should().Contain("at least 2 characters", "hint text must appear with only 1 character");
-        cut.Markup.Should().NotContain("Add Pairing");
-    }
-
-    [Fact]
-    public void PairingBuilder_WithTwoCharacters_ShowsAddUI()
-    {
-        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
-        {
-            p.Add(c => c.CharacterChips, TwoChips());
-            p.Add(c => c.Pairings, []);
-        });
-
-        cut.Markup.Should().Contain("Add Pairing", "add UI must appear when 2+ characters present");
+        if (showsHint)
+            cut.Markup.Should().Contain("at least 2 characters", "hint text must appear with only 1 character");
+        else
+            cut.Markup.Should().NotContain("at least 2 characters");
     }
 
     [Fact]

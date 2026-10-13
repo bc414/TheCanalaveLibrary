@@ -29,49 +29,26 @@ public class GroupCardTests : BunitContext
     // ── Renders ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GroupCard_RendersGroupName()
+    public void GroupCard_RendersGroupName_AndLinksToGroupDetailPage()
     {
         IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
-            .Add(c => c.Group, MakeGroup(groupName: "Pokémon Writers")));
+            .Add(c => c.Group, MakeGroup(groupId: 42, groupName: "Pokémon Writers")));
 
         cut.Markup.Should().Contain("Pokémon Writers");
-    }
-
-    [Fact]
-    public void GroupCard_LinksToGroupDetailPage()
-    {
-        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
-            .Add(c => c.Group, MakeGroup(groupId: 42, groupName: "My Group")));
-
         // Href should start with /group/42/ (slug is cosmetic, appended by Slugify).
         cut.Find("a").GetAttribute("href").Should().StartWith("/group/42/");
     }
 
-    [Fact]
-    public void GroupCard_Standard_ShowsStandardBadge()
+    [Theory]
+    [InlineData(GroupAudienceType.Standard, "Standard")]
+    [InlineData(GroupAudienceType.SfwOnly, "SFW Only")]
+    [InlineData(GroupAudienceType.Mature, "Mature")]
+    public void GroupCard_ShowsTheAudienceBadgeLabel(GroupAudienceType audience, string label)
     {
         IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
-            .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.Standard)));
+            .Add(c => c.Group, MakeGroup(audienceType: audience)));
 
-        cut.Markup.Should().Contain("Standard", "Standard badge should be visible");
-    }
-
-    [Fact]
-    public void GroupCard_SfwOnly_ShowsSfwOnlyBadge()
-    {
-        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
-            .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.SfwOnly)));
-
-        cut.Markup.Should().Contain("SFW Only");
-    }
-
-    [Fact]
-    public void GroupCard_Mature_ShowsMatureBadge()
-    {
-        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
-            .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.Mature)));
-
-        cut.Markup.Should().Contain("Mature");
+        cut.Markup.Should().Contain(label, "the audience badge should be visible");
     }
 
     [Fact]

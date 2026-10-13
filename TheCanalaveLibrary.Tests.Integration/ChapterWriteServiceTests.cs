@@ -425,7 +425,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     [Fact]
     public async Task DraftChapter_ContributesNothing_ToStoryWordCountOrWordsWritten()
     {
-        await SeedUserStatAsync(_authorId);
+        await SeedUserStatAtGroundTruthAsync(_authorId);
 
         await CallCreateAsync(new CreateChapterDto
         {
@@ -441,7 +441,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     [Fact]
     public async Task Publish_AddsTheWords_Unpublish_RemovesThem_AndARepeatPublishCountsOnce()
     {
-        await SeedUserStatAsync(_authorId);
+        await SeedUserStatAtGroundTruthAsync(_authorId);
         int chapterId = await CallCreateAsync(new CreateChapterDto
         {
             StoryId = _storyId, ChapterText = "<p>one two three four</p>", Rating = Rating.E
@@ -465,7 +465,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     [Fact]
     public async Task EditingAPublishedPrimary_AppliesTheDelta_EditingADraft_AppliesNone()
     {
-        await SeedUserStatAsync(_authorId);
+        await SeedUserStatAtGroundTruthAsync(_authorId);
         int published = await CallCreateAsync(new CreateChapterDto
         {
             StoryId = _storyId, ChapterText = "<p>one two three</p>", Rating = Rating.E
@@ -528,13 +528,15 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     /// <summary>Seeds the author's UserStat row with the ground truth already present: the story
     /// SeedStoryAsync inserted (bypassing CreateStoryAsync's +1) is one StoriesWritten, so the
     /// convergence assertion compares only what the test's own wired ops moved.</summary>
-    private async Task SeedUserStatAsync(int userId)
+    private async Task SeedUserStatAtGroundTruthAsync(int userId)
     {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        int storiesWritten = await db.Stories.CountAsync(s => s.AuthorId == userId);
-        db.UserStats.Add(new UserStat { UserId = userId, StoriesWritten = storiesWritten });
-        await db.SaveChangesAsync();
+        int storiesWritten;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            storiesWritten = await db.Stories.CountAsync(s => s.AuthorId == userId);
+        }
+        await SeedUserStatAsync(userId, s => s.StoriesWritten = storiesWritten);
     }
 
     private async Task<int> LoadStoryWordCountAsync(int storyId)
