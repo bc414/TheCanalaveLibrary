@@ -1084,7 +1084,12 @@ unless noted. All sit under Stage-5 cells.
       `RenameFolderAsync`, `DeleteFolderAsync` (WU-SchemaHardening);
     - `ServerModerationWriteService.SubmitReportAsync`'s duplicate open report (WU-ModerationIntegrity);
     - `ServerRecommendationWriteService`'s duplicate recommendation (string match, not a constraint
-      name).
+      name);
+    - `ServerPollWriteService` (WU-PollVoteIntegrity; seen by its browser pass, 2026-10-13):
+      `VoteAsync`'s lost race (23505 on either vote index, 23503 on either composite FK; both lines per
+      loser, whether the answer is the 400 or the double submit counted as cast), and
+      `UpdatePollAsync`'s mode-FK refusal. That one is a set-based `ExecuteUpdate`, so it writes only
+      the `Database.Command[20102]` line.
   - **Fix shape, an owner-level trade-off:**
     - For a race whose answer is "already done", `INSERT … ON CONFLICT DO NOTHING` raises no exception
       at all. That is D11's insert shape, so the `AddStoryAsync` site belongs with D11.
@@ -1956,11 +1961,19 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        the group and offers no action; it is absent from the open queue. The founder's
        `/mod/users/{id}` history lists it (when the founder still exists).
 
-- [ ] **H30 — WU-PollVoteIntegrity browser smoke: the restructured vote and edit paths still work** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PollVoteIntegrity, which ran with no browser available.*
+- [x] **H30 — WU-PollVoteIntegrity browser smoke: the restructured vote and edit paths still work: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PollVoteIntegrity, which ran with no browser available. Closed 2026-10-13 by its browser pass.*
   - Grid: F37 L4.5 stays 5. No markup or copy that a normal flow renders changed; the new refusal text
-    appears only when a write loses a race, which no manual pass can time. The smoke checks that the
+    appears only when a write loses a race. The smoke checks that the
     schema change (new vote columns, two composite FKs, the generated guard) broke nothing on either
     render phase.
+  - **Closed:** all five steps below ran on the server-only path, on the circuit and on WASM, with
+    `psql` after every write. No runtime bug was found. The races were timed after all, from the page:
+    a `fetch` vote fired beside the UI's own vote, and a `fetch` edit beside a vote. Both refusal texts
+    read on both phases, and the voter's own identical double submit answered 200 twice with one row.
+    A `psql` `FOR NO KEY UPDATE` lock on the poll row held an edit's mode UPDATE until a first vote
+    committed: the database refused it, and the page read the lock message. The handled races log EF
+    Core's `fail:` lines, so the poll sites joined **E10**. Narrative: `audit/BlogPosts.md` F37, the
+    WU-PollVoteIntegrity Stage note's browser bullet.
   - Steps (server-only path, both render phases; `psql` on `poll_votes` and `base_polls` after each
     write — every vote row has `poll_id` equal to its option's poll, `allow_multiple` equal to the
     poll's, and `single_choice_poll_id` equal to `poll_id` on a single-choice poll and NULL on a

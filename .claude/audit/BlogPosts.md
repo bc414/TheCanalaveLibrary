@@ -530,8 +530,8 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
-**WU-PollVoteIntegrity Stage note (2026-10-13; owner ruling D23 and its `ConfigLocked` rider) — no
-flip.** Single-choice is now a database constraint, and `AllowMultiple` cannot change while a vote
+**WU-PollVoteIntegrity Stage note (2026-10-13; owner ruling D23 and its `ConfigLocked` rider; browser-verified
+the same day) — no flip.** Single-choice is now a database constraint, and `AllowMultiple` cannot change while a vote
 exists, against every writer and every interleaving (the Settled bullets below).
 - **L1.** Migration `WU_PollVoteIntegrity`. `poll_votes` gains `poll_id` (composite FK `(poll_id,
   poll_option_id)` → `poll_options`' new alternate key, replacing the single-column option FK),
@@ -570,8 +570,8 @@ exists, against every writer and every interleaving (the Settled bullets below).
   `ParentVisibilityContractTests` now name the poll (the schema refused them, as designed;
   `testing.md`).
 - **L4.5 stays 5.** No markup or normal-flow copy changed; the new refusal text shows only on a lost
-  race, which no manual pass can time. Tracker **H30** holds a regression smoke of the vote and edit
-  flows for the browser pass (no browser was available to this WU).
+  race. Tracker **H30** held a regression smoke of the vote and edit flows for the browser pass (no
+  browser was available to this WU); the pass closed it the same day (the browser bullet below).
 - **Review fixes (2026-10-13) — no flip.** Three reviews, six findings, four distinct after merging two
   duplicates. All four were real; one is routed to the owner, not built.
   1. **L2.** A lost vote race that leaves exactly what the call asked for is now a success. That is the
@@ -597,6 +597,59 @@ exists, against every writer and every interleaving (the Settled bullets below).
      **F21** now quote the lock's stated purpose ("prevents retroactive anonymity exposure", Settled
      below) and the rider's "first-vote-vs-config-edit boundary". The owner can therefore see that the
      status-quo default leaves that purpose open for a window one request wide.
+- **Browser verification (2026-10-13) — no flip; L4.5 stays 5; tracker H30 closed.** Server-only path,
+  dev DB kept (the migration was already applied). Each phase was proven from the network log: the
+  circuit by `_blazor/negotiate` and no `/api` call, WASM by the `/api/polls` requests. `psql` checked
+  every write: each vote row's `poll_id` equals its option's, its `allow_multiple` equals the poll's,
+  and `single_choice_poll_id` is the poll id on a single-choice poll and NULL on a multi-choice one.
+  - **Pre-vote mode edits.** On `/polls` as ModUser (circuit), a new Single-choice site poll (poll 3)
+    was edited to Multiple choice and back, twice through one circuit. `base_polls.allow_multiple`
+    followed both times, the log shows the set-based `UPDATE`, and the editor showed no error. That
+    second edit proves the detach. On `/blog/2/edit` as AuthorAlpha (WASM), a new Multiple-choice poll
+    (poll 4) went to Single and back (two `PUT`s), and `psql` agreed.
+  - **Single choice (poll 3), as TestUser.** On the circuit, a vote, a change, a retraction and a new
+    vote left at most one row. On WASM, the same sequence did too. On poll 2 (blog post 2), TestUser's
+    live row and the two anonymized rows share the guard value 2, and changing the vote worked.
+  - **Multi choice (poll 4), as TestUser.** On WASM, ticking two options made two rows with the guard
+    NULL, and unticking one left one row. On the circuit, three ticks made three rows, and going back
+    to one option left one.
+  - **The lock.** With a vote present, the editor's three selects and the open date are disabled, and
+    the hint shows (ModUser on poll 3, circuit; AuthorAlpha on poll 4, WASM). A select forced on in
+    the DOM and saved reads "Vote mode is locked once votes exist." on both phases (WASM: `PUT` 400). A
+    direct `PUT /api/polls/4` with the other mode answers 400 with the same `detail`. `psql` showed both
+    polls unchanged. A later description edit through the same circuit saved, which proves the
+    refused edit's detach, and it stamped `last_edited_at`.
+  - **Races, timed from the page.** A `fetch` vote fired beside the UI's own vote:
+    - On WASM, the UI lost: "This poll or your vote on it changed while your vote was being saved.
+      Reload the page and vote again." (400; the 23505 on the single-choice guard is in the log).
+    - On the circuit, the UI won once, and the `fetch` got the same text as the ProblemDetails
+      `detail`. Then the UI lost, showing the message, and its next vote on the same circuit saved,
+      which proves the vote detach.
+    - An identical concurrent vote answered 200 twice with one row: the loser hit
+      `ix_poll_votes_poll_option_id_user_id` and counted as cast.
+    - In 40 edit-beside-first-vote rounds on a throwaway poll (poll 5), every outcome was a readable
+      400 or a success. Some votes lost to the mode FK with `VoteRaceMessage`. Some edits hit the
+      service check.
+    - To reach the database's edit-side refusal, `psql` held `FOR NO KEY UPDATE` on poll 5's row. That
+      lock blocks the edit's `UPDATE` but not a vote's FK check. The edit waited 11 s while a first
+      vote committed, and then got "Vote mode is locked once votes exist." The log shows the refused
+      `UPDATE`, and the mode stayed put.
+  - **Constraints, raw.** In rolled-back `psql` transactions on the live dev DB:
+    - flipping poll 3's mode under its vote failed with 23503 on
+      `fk_poll_votes_base_polls_poll_id_allow_multiple`;
+    - a second live single-choice row failed with 23505 on the guard;
+    - another poll's option failed with 23503 on `fk_poll_votes_poll_options_poll_id_poll_option_id`;
+    - a row with the wrong mode failed with 23503 on the mode FK.
+  - **Delete.** Poll 5 (WASM, as AuthorAlpha) and poll 4 (circuit) were deleted through the confirm
+    dialog. `psql` shows no `base_polls`, `blog_post_polls`, `poll_options` or `poll_votes` rows left.
+  - **Other actors.** TestUser's `PUT` on poll 3 answered 403, and an anonymous vote 401. Anonymous
+    `/polls` renders the sign-in hint with no radios.
+  - **Logs.** No browser console error. The only `fail:` lines are EF Core's own logging of the caught
+    constraint violations (`Database.Command[20102]`, `Update[10000]`) and the known stale-cookie
+    antiforgery line. Those poll sites were added to tracker **E10**; the log level is not changed
+    here. No runtime bug was found, so no test was added.
+  - **As designed, noted:** after a refused vote, `PollView` keeps the poll it had (the stale tally
+    and selection) beside the "Reload the page" message, as the WU's Left-alone says.
 
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13) — L4.5 5→1; L1/L2/L3/L3.5 stay 5.** A
 deleted voter's votes now survive anonymized (the Settled bullet "Voter deletion" below).
@@ -798,9 +851,9 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
 bullet below, 2026-07-13.)
 
-- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; single-choice and the vote mode held by the schema — `poll_id`/`allow_multiple` behind composite FKs, the generated guard unique with `user_id` — since WU-PollVoteIntegrity, 2026-10-13, Integration-tested by `PollVoteIntegrityTests`, Stage note at this feature's top; `poll_votes` surrogate key + nullable SET NULL `user_id` since WU-UserDeletion, 2026-10-13 — Stage note at this feature's top; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; single-choice and the vote mode held by the schema — `poll_id`/`allow_multiple` behind composite FKs, the generated guard unique with `user_id` — since WU-PollVoteIntegrity, 2026-10-13, Integration-tested by `PollVoteIntegrityTests`, browser-driven by its browser pass the same day (the constraints also probed live through `psql`), Stage note at this feature's top; `poll_votes` surrogate key + nullable SET NULL `user_id` since WU-UserDeletion, 2026-10-13 — Stage note at this feature's top; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; a vote or mode edit that loses a race to the schema is never a 500, and a pre-vote mode change is written set-based, since WU-PollVoteIntegrity, 2026-10-13 — Integration-tested, Stage note at this feature's top. The lost race is a 400, except that since its review fixes a vote whose rows already stand as asked (the voter's own double submit) succeeds; anonymized votes counted and listed, the sweep notifies live voters only, since WU-UserDeletion, 2026-10-13 — Integration-tested, Stage note at this feature's top; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; a vote or mode edit that loses a race to the schema is never a 500, and a pre-vote mode change is written set-based, since WU-PollVoteIntegrity, 2026-10-13 — Integration-tested, browser-driven by its browser pass the same day (races timed from the page on both render phases), Stage note at this feature's top. The lost race is a 400, except that since its review fixes a vote whose rows already stand as asked (the voter's own double submit) succeeds; anonymized votes counted and listed, the sweep notifies live voters only, since WU-UserDeletion, 2026-10-13 — Integration-tested, Stage note at this feature's top; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13, browser-driven by its browser pass the same day — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock
@@ -824,7 +877,7 @@ bullet below, 2026-07-13.)
   destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
   Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
   design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
-- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
+- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed. WU-PollVoteIntegrity's browser pass, 2026-10-13, drove the restructured vote and edit flows and both race refusals on both phases, with no flip — its Stage note's browser bullet; tracker H30 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
   As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
   New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
   names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while

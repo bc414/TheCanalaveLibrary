@@ -25,8 +25,9 @@ references it, does not restate it.
   A lost vote or edit race is never a 500. It is a 400, except that the voter's own identical double
   submit counts as cast (`layer2-services.md` §"Check-then-act posture"). No cell flipped. Filed:
   tracker **F21**, promoted to **decision row 24** (`AnonymityMode`'s lock), and **H30** (a browser
-  smoke; no browser was available). `dotnet test`: Unit 1,190, RazorComponents 795, Integration 1,503.
-  **Pointer:** its DONE entry.
+  smoke), which its browser pass closed the same day with no runtime bug, on both render phases and
+  with the races timed from the page; the handled races' EF `fail:` lines joined **E10**. `dotnet test`:
+  Unit 1,190, RazorComponents 795, Integration 1,503. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
@@ -269,7 +270,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30**),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -488,8 +489,9 @@ is pending except where a bullet says so.
   non-unique guard, no mode FK, no vote catch, no vote detach, no poll detach, no edit catch, and
   dropping the concurrency or option-FK branch each fail their tests. Four inline vote seeds in three
   classes were refused by the new FKs (the rule working) and now name the poll. check-doc-hygiene,
-  check-design-tokens, check-render-modes and check-a11y pass. No browser was available: tracker **H30**
-  holds a regression smoke of the vote and edit flows.
+  check-design-tokens, check-render-modes and check-a11y pass. No browser was available to the build:
+  tracker **H30** held a regression smoke of the vote and edit flows. The browser pass closed it the
+  same day (below).
 - **Review fixes (2026-10-13).** Three reviews raised 6 findings, 4 distinct after merging duplicates.
   All 4 were real. One needs an owner ruling and was routed, not built.
   1. **A double submit was refused (L2).** Two identical votes from one voter (two tabs, a client retry)
@@ -513,8 +515,36 @@ is pending except where a bullet says so.
   **Integration 1,503** (+5), all green; build 0 errors, no new warnings in touched files; the four gates
   pass. No browser: the new success path and the reworded refusal show only on a race (tracker **H30**
   unchanged).
-- **Pointers:** `audit/BlogPosts.md` F37 (Stage note and Settled bullets); `layer2-services.md`
-  §"Check-then-act posture"; tracker F21/H30; roadmap decision row 24.
+- **Browser pass (2026-10-13). No flip (F37 L4.5 stays 5); H30 closed; no runtime bug.** All five of
+  H30's steps ran on the server-only path, on both render phases (circuit proven by
+  `_blazor/negotiate`, WASM by the `/api/polls` calls), with `psql` after every write. Actors were
+  ModUser (site poll), AuthorAlpha (blog-post polls), TestUser (voter) and anonymous.
+  - **Flows.** Pre-vote mode edits went both ways, twice through one circuit and twice over `PUT`.
+    Single-choice vote, change, retract and re-vote left one row at most. Multi-choice ticks tracked the
+    rows. The lock showed disabled selects, and a forced select read "Vote mode is locked once votes
+    exist." on both phases. A direct `PUT` with the other mode answered 400. Two polls were deleted
+    through the confirm dialog, and no rows remained.
+  - **Races, timed from the page.** A `fetch` fired beside the UI's own vote or edit. Both refusal texts
+    read on both phases. An identical double submit answered 200 twice with one row. A `psql`
+    `FOR NO KEY UPDATE` lock held an edit's `UPDATE` while a first vote committed, and the database
+    refused the mode change. The same circuit's next vote and next edit both saved after a refusal,
+    so the detaches work.
+  - **Constraints.** Raw `psql` violations inside rolled-back transactions were all refused: the
+    guard with 23505, and the option FK and the mode FK (both the UPDATE and the INSERT direction) with
+    23503.
+  - **Logs.** The handled races log EF Core's `fail:` lines, so the poll sites were added to tracker
+    **E10**; the level is unchanged here. No console error. Narrative: `audit/BlogPosts.md` F37's
+    WU-PollVoteIntegrity Stage note, browser bullet.
+  - **Dev-DB state left (server-only).**
+    - Site poll 3 "E2E integrity poll: favourite region" (ModUser; Single choice, Always, Shown;
+      options 5–7). Its description edit with a vote present stamped `last_edited_at`, so the edit
+      worker will notify TestUser on the server's next run.
+    - TestUser's vote on poll 3 (Sinnoh, row 41).
+    - TestUser's poll-2 vote, restored to Turtwig after a change (row 88, which replaced row 4).
+    - Polls 4 and 5 (blog post 2) were created and deleted. The rolled-back probes and races used up
+      identity values.
+- **Pointers:** `audit/BlogPosts.md` F37 (Stage note, its browser bullet, and the Settled bullets);
+  `layer2-services.md` §"Check-then-act posture"; tracker F21, H30 (closed) and E10; roadmap decision row 24.
 
 ## WU-UserDeletion — the account-deletion survival set ratified and built (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface) and the admin-less group rescue (worksheet D13 and its edges, schema audit §3.8; extends `Identity/`, `BlogPosts/`, `Messaging/`, `Groups/`, `Moderation/`, `Notifications/`, `Data/`) — DONE ✓ (2026-10-13)
 
