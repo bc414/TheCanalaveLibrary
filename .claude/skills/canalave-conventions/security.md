@@ -46,12 +46,14 @@ actual bytes. Pipeline, in order:
 Library: **SixLabors.ImageSharp, held at 3.1.12** (Split License — free below the
 small-business revenue threshold; a hobby fanfiction site qualifies. Re-check terms if the
 project ever takes money beyond donations). **Do not bump to 4.x or 3.2.x without the owner's
-call (tracker E9):** both lines run Six Labors' build-time license check
-(`$(SixLaborsLicenseKey)` — a Release build fails without one, a Debug build only warns). 3.2.0
-(2026-10-09) shipped the 2026-10 security fixes *together with* that check, so the 3.1.x line
-gets no more security patches. That fired the old rule's revisit trigger. Until the owner picks
-a key, a library swap or standing risk, the five 2026-10 advisories are accepted risk; see
-§"Dependency Vulnerability Scan Cadence". Dependabot ignores the major bump
+call (`roadmap.md` decision row 21, tracker E9):** both lines run Six Labors' build-time license
+check (`$(SixLaborsLicenseKey)` — a Release build fails without one, a Debug build only warns).
+3.2.0 (2026-10-09) shipped the 2026-10 security fixes *together with* that check, so the 3.1.x
+line gets no more security patches. That fired the old rule's revisit trigger. Until the owner
+picks a key, a library swap or standing risk, the five 2026-10 advisories are accepted risk; see
+§"Dependency Vulnerability Scan Cadence". If the owner picks a key, take **4.1.2+**: 3.2.x
+carries the fixes but still fails the scan (the GitHub-reviewed ranges recorded on 2026-10-12
+run to `<= 4.1.1`). Dependabot ignores the major bump
 (`.github/dependabot.yml`). Its 3.2.x minor-bump PR fails CI's Release build for want of a key,
 which is expected, not a regression. Constants live on `ImageUploadProcessor`.
 
@@ -331,13 +333,16 @@ publication dates run from 2026-07-17 to 2026-10-07). They were cleared as follo
 
 | Package | Scope | Advisories | Resolution |
 |---|---|---|---|
-| `System.Security.Cryptography.Xml` 10.0.9 | Core, and everything that references it. Legacy `Microsoft.AspNetCore.Identity` 2.3.x pulls it in through `DataProtection` 2.3.0. | GHSA-23rf-6693-g89p, -8q5v-6pqq-x66h, -cvvh-rhrc-wg4q, -g8r8-53c2-pm3f, -mmjf-rqrv-855v (high) | Core's pin raised to 10.0.12 (patched from 10.0.10). The redundant direct pins in SharedUI, Client and AppHost were removed: the first two inherit Core's, and nothing in AppHost's graph uses the package. |
-| `SSH.NET` 2025.1.0 | **Test-only**: `Testcontainers` 4.13 in Tests.Integration. Only `ScpClient` is affected, and Testcontainers never uses SCP. | GHSA-mggc-4xg6-vcxf, GHSA-q939-rpr3-3284 (high) | Pinned to 2026.0.0 (no breaking changes listed). |
+| `System.Security.Cryptography.Xml` 10.0.9 | Core, and every project that restores it through Core (SharedUI, Client, SeedTool, the test projects). Legacy `Microsoft.AspNetCore.Identity` 2.3.x pulls it in through `DataProtection` 2.3.0. **Not the Server:** .NET 10 prunes the package there in favour of the ASP.NET Core shared framework's copy. | GHSA-23rf-6693-g89p, -8q5v-6pqq-x66h, -cvvh-rhrc-wg4q, -g8r8-53c2-pm3f, -mmjf-rqrv-855v (high) | Core's pin raised to 10.0.12 (patched from 10.0.10); that clears the package copies. The redundant direct pins in SharedUI, Client and AppHost were removed: the first two inherit Core's, and nothing in AppHost's graph uses the package. **The deployed Server is fixed only by the host runtime** (≥ 10.0.10, Phase-7 register): see the runtime note below. |
+| `SSH.NET` 2025.1.0 | **Test-only**: `Testcontainers` 4.13 in Tests.Integration. Only `ScpClient` is affected, and Testcontainers never uses SCP. | GHSA-mggc-4xg6-vcxf, GHSA-q939-rpr3-3284 (high) | Pinned to 2026.0.0 (no breaking changes listed). The pin goes once Testcontainers 4.14+ is taken: 4.14.0 already depends on SSH.NET 2026.0.0. |
 | `AngleSharp` 0.17.1 / 1.4.0 | Server, plus **test-only** bUnit 2.7.2 in Tests.RazorComponents | GHSA-pgww-w46g-26qg (moderate); the target also had to clear GHSA-cgp3-27rh-pcp2 | Both moved to 1.8.4. See the resolution above. |
 | `SixLabors.ImageSharp` 3.1.12 | Server upload pipeline | GHSA-j3p4-wp97-rph4, -j9gm-c75j-xc9q, -jjfr-hcj7-qf5w (high); -gwg2-r3hj-4w44, -wmxv-xphr-5c9g (moderate) | **Accepted risk, pending owner (tracker E9).** See below. |
 
-**Accepted risk — ImageSharp 3.1.12, pending tracker E9.** The fixes ship only in 4.1.2+ and
-3.2.0+, and both run the license check (§"Upload Content Pipeline"). On 3.1.12 every vector is
+**Accepted risk — ImageSharp 3.1.12, pending decision row 21 (tracker E9).** The fixes ship only
+in 4.1.2+ and 3.2.0+, and both run the license check (§"Upload Content Pipeline"). Only 4.1.2+
+clears the scan: the GitHub-reviewed ranges recorded on 2026-10-12 run to `<= 4.1.1` with 4.1.2
+the first patched, so 3.2.x stays listed (and the hard gate stays blocked) until GitHub amends
+them. On 3.1.12 every vector is
 unreachable through `ImageUploadProcessor`, the only ImageSharp consumer:
 - **j3p4** (float TIFF + `HistogramEqualization`): no TIFF decoder is configured, and no histogram
   processor is ever called.
@@ -352,9 +357,15 @@ unreachable through `ImageUploadProcessor`, the only ImageSharp consumer:
 The report-only scan keeps listing ImageSharp until E9 is decided. That is expected, not a
 regression.
 
-**The scan cannot see the host runtime.** GHSA-cvvh-rhrc-wg4q also affects the .NET 10 shared
-runtime ≤ 10.0.9. A framework-dependent deploy takes whatever runtime its host has, so the host
-must run a patched .NET servicing release. This is a Phase-7 register item (below).
+**The scan cannot see the host runtime.** The Server, the only internet-facing consumer, never
+uses the `System.Security.Cryptography.Xml` package: .NET 10 prunes it, and the assembly comes from
+the ASP.NET Core shared framework (`Microsoft.AspNetCore.App` ships its own
+`System.Security.Cryptography.Xml.dll`). So in production **all five** 2026-07 Crypto.Xml
+advisories close only when the host runs a patched runtime (≥ 10.0.10), not through Core's pin,
+which covers the package copies only. GHSA-cvvh-rhrc-wg4q also lists the .NET core runtime itself
+(≤ 10.0.9). A framework-dependent deploy takes whatever runtime its host has, so the host must run
+a patched .NET servicing release. This is a Phase-7 register item (below). Scope corrected by the
+WU-DependencyCVEs review fixes (2026-10-12).
 
 ## Phase-7 Deferred Register (launch-readiness picks these up)
 
@@ -375,6 +386,7 @@ Security items that only make sense at deployment — deliberately **not** built
 - **CSP enforce verification against the real domain** — one browse pass with enforcement on
   in the production topology before launch.
 - **Patched .NET runtime on the host.** The deploy host or base image runs the current .NET 10
-  servicing release (≥ 10.0.10 for the 2026-07 runtime advisories) and moves with each Patch
-  Tuesday. The package scan cannot see the shared runtime (§"Dependency Vulnerability Scan
-  Cadence").
+  servicing release (≥ 10.0.10 for the 2026-07 advisories: the Server's
+  `System.Security.Cryptography.Xml` comes from the ASP.NET Core shared framework, so all five
+  close only here) and moves with each Patch Tuesday. The package scan cannot see the shared runtime (§"Dependency
+  Vulnerability Scan Cadence").

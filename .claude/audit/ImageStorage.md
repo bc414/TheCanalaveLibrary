@@ -206,8 +206,8 @@ GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (high); GHSA-gwg2-r3hj-4w44 and GHSA
 (moderate). They are fixed only in 4.1.2+ and in 3.2.0 (2026-10-09), and both lines now run Six
 Labors' build-time license check, which fails a Release build without a key. The WU-Security pin
 rule ("stay on 3.1.x; revisit only if 3.1.x stops receiving security patches") has therefore fired.
-The choice of a key, a library swap or standing risk is the owner's: tracker **E9**. **No package
-or pipeline code changed.**
+The choice of a key, a library swap or standing risk is the owner's: `roadmap.md` decision row 21
+(tracker **E9**). **No package or pipeline code changed.**
 - **Why it is acceptable meanwhile.** Every vector is unreachable through `ImageUploadProcessor`:
   - no TIFF decoder is configured (`SniffConfiguration` serves both `Identify` and `Load`);
   - only JPEG, PNG and WebP are encoded;
@@ -226,8 +226,7 @@ or pipeline code changed.**
   (the test fails on the deadline). Reading `IccProfile.Entries` after decode allocates 114.9 MB
   (fails). The existing `ImageUploadProcessorTests` and the Integration storage tests are unchanged
   and green.
-- No browser pass is owed: ImageSharp did not change version and no UI changed. This environment has
-  no browser in any case.
+- No browser pass is owed: ImageSharp did not change version and no UI changed.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

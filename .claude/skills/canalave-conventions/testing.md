@@ -27,6 +27,22 @@ test needs a `DbContext`, it needs a real Postgres container → it belongs in I
 **Don't mock `DbContext`/`DbSet`** to force DB-touching logic into Unit or RazorComponents.
 The invariants worth protecting are Postgres-specific; mocked LINQ isn't evidence.
 
+## Unit tests that measure process-wide state, or guard against a hang (WU-DependencyCVEs)
+
+Unit test classes run in parallel (the Integration tier's assembly-wide
+`DisableTestParallelization` does not apply here). Two shapes need more than the default:
+- **Process-wide measurements** (`GC.GetTotalAllocatedBytes`, anything else other classes add to
+  while they run) join `[Collection(AllocationSensitiveCollection.Name)]`. That collection is
+  declared with `DisableParallelization = true`, so xUnit runs it alone, after the parallel
+  collections finish, and the measured delta is the test's own. Reuse the collection; don't declare
+  a second one. Precedent: `ImageUploadProcessorAdvisoryTests`' ICC allocation bound.
+- **Hang regressions** (a payload that loops forever if a guard is removed) run the call inside
+  `Task.Run(...)` and await it through `.WaitAsync(deadline)`, so a regression fails with a
+  `TimeoutException` instead of stalling the run. Pick a deadline far above the healthy time (the
+  precedent uses 10 s for a call that returns in milliseconds) and assert the expected exception,
+  so the timeout is never the passing outcome. Precedent: `ImageUploadProcessorAdvisoryTests`'
+  BigTIFF test.
+
 ## Integration tests run against real Postgres — never InMemory/SQLite
 
 The invariants this project most needs protected are **Postgres-specific EF behaviors**, not

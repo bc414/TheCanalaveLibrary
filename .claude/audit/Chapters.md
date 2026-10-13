@@ -80,7 +80,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   rather than the 1.7.2 floor also clears AngleSharp's repository advisory GHSA-cgp3-27rh-pcp2 (SVG
   `<style>` serialization mXSS, 1.3.1–1.8.1). The allow-list, its configuration and the code are
   unchanged; the version rule is `security.md` §"Dependency Vulnerability Scan Cadence" (pin rules).
-  **Verified:** Unit `HtmlSanitizationServiceTests` (36, +6): the existing 30 pass unchanged on the
+  **Verified:** Unit `HtmlSanitizationServiceTests` (37, +6): the existing 31 pass unchanged on the
   new parser. A 4-case theory feeds both advisories' payloads (three `annotation-xml` variants and
   the SVG-style payload) and asserts that no `img`/`onerror`/`math`/`svg`/`style`/`title` survives
   and that allowed siblings do. Two parser canaries run the advisories' own PoC checks.

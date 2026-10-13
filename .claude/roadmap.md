@@ -108,11 +108,13 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
     (WU-DependencyCVEs, tracker E2).** HtmlSanitizer 9.2.1039 lifted its AngleSharp 0.17.1 pin, and
     AngleSharp moved to 1.8.4. This was the zero-code path, and the custom-sanitizer plan is retired.
     See `security.md` §"Dependency Vulnerability Scan Cadence".
-  - **Decide ImageSharp licensing (tracker E9).** The vuln-scan hard gate above blocks on it.
-    3.1.12 carries five 2026-10 advisories, and every patched line (3.2.x, 4.1.2+) needs a Six Labors
-    build-time license key. Options: a key, a library swap, or standing accepted risk. Until the
-    owner decides, the risk is accepted (all five vectors are unreachable through the upload
-    pipeline). See `security.md` §"Upload Content Pipeline".
+  - **Decide ImageSharp licensing (decision row 21, tracker E9).** The vuln-scan hard gate above
+    blocks on it. 3.1.12 carries five 2026-10 advisories, and every patched line (3.2.x, 4.1.2+)
+    needs a Six Labors build-time license key. Options: a key, a library swap, or standing accepted
+    risk. Until the owner decides, the risk is accepted (all five vectors are unreachable through
+    the upload pipeline). **Only 4.1.2+ clears the scan:** the GitHub-reviewed ranges, as recorded
+    on 2026-10-12, run to `<= 4.1.1`, so 3.2.x carries the fixes but stays listed, and the hard gate
+    stays blocked until GitHub amends them. See `security.md` §"Upload Content Pipeline".
   - **TLS/domain** (Cloudflare Registrar).
   - **Activate verified-crawler serving** — flip `Seo:TrustVerifiedBots` once the origin-lockdown
     item above lands, and verify the real Cloudflare verified-bot header contract at that time.
@@ -131,7 +133,9 @@ the same rule; F9's other two items already sit on the worksheet as pending D20 
 were added 2026-09-30 by WU-InertFeatures: two unruled edges its build had to take a default on.
 Row 19 was added the same day by its review fixes (a third such edge, previously only labelled
 "unruled" in the conventions). Row 20 was added 2026-09-30 by WU-ModerationIntegrity: two account-status
-transitions its spec derived rather than took from owner text.
+transitions its spec derived rather than took from owner text. Row 21 was added 2026-10-12 by the
+WU-DependencyCVEs review fixes, promoted out of `hidden-deferrals-tracker.md` **E9** under the same
+rule.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -146,6 +150,7 @@ transitions its spec derived rather than took from owner text.
 | 18 | **May a recommender earn a "helpful" credit from their own recommendation?** A recommender who saves a story for later from their own recommendation card (or follows its "Read now" link) gets an attribution row, and answering the prompt adds +1 to that recommendation's `SuccessfulRecCount`. | As built (status quo): allowed. Only the recommender badge counter skips the reader-is-recommender case; D3's author gate covers the *story's* author, not the recommender. | It decides what the public "N helpful" count means; D3 did not address it. Rule text: `layer2-services.md` §"Attribution (Feature 30)". |
 | 19 | **Should a Spotlight slot grant name the moderator who granted it?** `SpotlightSlotGranted` (90) carries the granting moderator as its source, so the awardee's notification shows that moderator's name (and ships their id in `NotificationDto`). | As built (status quo): the source is kept. D4's dedup exemption already applies to 90. | D5 de-identifies the 70–82 moderation band "including the good news" so a name's presence cannot leak an outcome, but D5 scopes itself to 70–82 and 90 sits outside it; whether a reward from a moderator is a moderation act is policy. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". Filed WU-InertFeatures review fixes, 2026-09-30. |
 | 20 | **Two account-status refusals the build derived (service §2.1.3).** May a moderator *warn* someone who is serving a live suspension, and may they *ban* someone already banned? | As built (derived, not owner text): both refused with a `ModerationValidationException`. A warning would lower a live suspension to Warned — the same "silent lowering" §2.1.3 names for warning a banned user — and a second ban would write a second `AccountBanned` (74) notification, since D4 exempts 74 from dedup. Everything else in the table is literal §2.1.3 (Banned leavable only via Reinstate; a suspension needs a future date). **Refined by the WU's review fixes (2026-09-30):** the second-ban refusal holds only on the moderator-initiated path. A *report-driven* Ban on a banned account resolves that report against the standing ban (`ResolvedActionTaken`, 81 to the reporter; no status write, stamp bump or second 74). Refusing it there left every other report about a banned account closable only as "no action" (82) — account actions close no siblings (D7), Warn/Suspend on Banned are refused, and a `User` report cannot be removed — which tells the reporter something false and writes `ResolvedNoAction` into D8's history. | Escalation policy is yours; "allowed" is a one-line change per row. Rule text: `layer2-services.md` §"Moderation Services" → "The account-status transition table".
+| 21 | **ImageSharp licensing (tracker E9).** SixLabors.ImageSharp 3.1.12 carries five 2026-10 advisories (GHSA-j3p4, -j9gm, -jjfr high; -gwg2, -wmxv moderate), and every patched line (3.2.x, 4.1.2+) runs a build-time license check that fails a Release build without a Six Labors key. Choose: **(a)** apply for Six Labors community licensing and add the key as a CI secret and a dev user-secret; **(b)** swap the upload pipeline to another decoder library; **(c)** keep 3.1.12 as standing accepted risk. | As built (interim, not a ruling): hold 3.1.12 as accepted risk. All five vectors are unreachable through `ImageUploadProcessor`, and two Unit tests guard the reachable-in-principle halves. Consequences: the report-only vuln scan keeps listing ImageSharp, so the Phase-7 hard gate (tracker E3) cannot be promoted, and Dependabot's 3.2.x PR fails CI. Under (a), only 4.1.2+ clears the scan: the GitHub-reviewed ranges recorded on 2026-10-12 run to `<= 4.1.1`, so 3.2.x stays listed. | A license application and its terms, a reversal of the 2026-07-06 choice of ImageSharp (`middle_plan_v2.md` §Resolved, "Upload validation"), or standing risk at launch: licensing and launch risk posture are yours. Gates the Phase-7 vuln-scan hard gate (row 4). Rule text: `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence". |
 
 ## Recommended next work units (2026-07-27)
 
@@ -202,7 +207,7 @@ its AngleSharp 0.17.1 hard pin, so the CVE cleared with a two-line package bump 
 Phase 7 custom-sanitizer rewrite. **E9 (ImageSharp licensing) is the open successor.** Its
 priority is `high` because the five advisories are high/moderate, but the risk is accepted and
 every vector is unreachable through the upload pipeline. Only the owner can choose a license key,
-a library swap or standing risk; it gates the Phase 7 vuln-scan hard gate.
+a library swap or standing risk (decision row 21); it gates the Phase 7 vuln-scan hard gate.
 
 Group G is fully closed (2026-07-30) — G1's genuine residual (mid-session account-status
 responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above) shipped

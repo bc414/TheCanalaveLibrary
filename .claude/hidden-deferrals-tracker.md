@@ -880,9 +880,13 @@ unless noted. All sit under Stage-5 cells.
   - Grid: none.
   - Source: `security.md` §"Phase-7 Deferred Register"; `roadmap.md` Phase 7.
   - Context: Cloudflare TLS Full-Strict, origin firewall to CF ranges, `ForwardedHeaders`, serving uploads from a separate origin (+ CSP `img-src` tightening), Turnstile on registration, HSTS tuning, real-domain CSP-enforce verification, and promoting the vuln scan from report-only to a hard gate.
-  - **Added 2026-10-12 (WU-DependencyCVEs):** a patched .NET runtime on the deploy host. The package
-    scan cannot see the shared runtime, and GHSA-cvvh-rhrc-wg4q affects runtime ≤ 10.0.9. The
-    hard-gate promotion now also waits on **E9**: ImageSharp is still listed.
+  - **Added 2026-10-12 (WU-DependencyCVEs):** a patched .NET runtime (≥ 10.0.10) on the deploy
+    host. The package scan cannot see the shared runtime. The Server never restores the
+    `System.Security.Cryptography.Xml` package (.NET 10 prunes it in favour of the ASP.NET Core
+    shared framework's copy), so in production all five 2026-07 Crypto.Xml advisories close only
+    on a patched host runtime, not through Core's package pin (scope corrected by the review fixes,
+    2026-10-12). The hard-gate promotion now also waits on **E9** (decision row 21): ImageSharp is
+    still listed, and only 4.1.2+ clears the scan as the advisories are recorded.
 
 - [x] **E4 — Default OG/social image is an SVG, not a raster — CLOSED (2026-07-31, WU-SweepRiders)** `[off-grid · low · launch]`
   - Grid: `Seo/` cluster has no row; consuming features (F4/F6/F20/F35/F38) read 5.
@@ -940,11 +944,12 @@ unless noted. All sit under Stage-5 cells.
     the reason id against `report_reasons` and refuses an unknown one with `ModerationValidationException`.
     Then sweep the other request DTOs that carry lookup ids.
 
-- [ ] **E9 — ImageSharp 3.1.12 carries five 2026-10 advisories; every patched line needs a Six Labors license key** `[off-grid · high · launch]` — *Owner decision. Filed 2026-10-12 by WU-DependencyCVEs.*
+- [ ] **E9 — ImageSharp 3.1.12 carries five 2026-10 advisories; every patched line needs a Six Labors license key** `[decision · high · launch]` — *Owner decision. Filed 2026-10-12 by WU-DependencyCVEs; promoted to `roadmap.md` decision row 21 by its review fixes the same day.*
   - Grid: no cell moves. F4 L2 (cover upload) and F20–F22 L2 (avatar upload) read 5; `Images/`
     has no row of its own.
-  - Source: `security.md` §"Upload Content Pipeline" (library paragraph) and §"Dependency
-    Vulnerability Scan Cadence" (accepted-risk entry); the csproj comment.
+  - Source: `roadmap.md` §"Decisions that need you" row 21; `security.md` §"Upload Content
+    Pipeline" (library paragraph) and §"Dependency Vulnerability Scan Cadence" (accepted-risk
+    entry); the csproj comment.
   - The advisories (published 2026-10-07): GHSA-j3p4-wp97-rph4, GHSA-j9gm-c75j-xc9q and
     GHSA-jjfr-hcj7-qf5w (high); GHSA-gwg2-r3hj-4w44 and GHSA-wmxv-xphr-5c9g (moderate). They are
     fixed in 4.1.2, and in 3.2.0 (2026-10-09, ImageSharp PR #3208, "Backport v3 security fixes and
@@ -954,8 +959,11 @@ unless noted. All sit under Stage-5 cells.
   - Why it is open: the settled rule was "stay on 3.1.x (key-free); revisit only if 3.1.x stops
     receiving security patches". That trigger has now fired. The choice is the owner's:
     - **(a)** apply for Six Labors community licensing (free but application-based, per
-      sixlabors.com/pricing), then add the key as a CI secret and a dev user-secret, and take 3.2.x
-      (or 4.x);
+      sixlabors.com/pricing), then add the key as a CI secret and a dev user-secret, and take
+      **4.1.2+**. 3.2.x carries the same fixes, but it does not clear the scan: the GitHub-reviewed
+      ranges recorded on 2026-10-12 list every version up to 4.1.1 as vulnerable, with 4.1.2 the
+      first patched. On 3.2.x, ImageSharp stays listed and
+      E3's hard gate stays blocked until GitHub amends those ranges;
     - **(b)** swap the upload pipeline to another decoder library;
     - **(c)** keep 3.1.12 as standing accepted risk.
   - Interim posture (WU-DependencyCVEs): accepted risk. Every vector is unreachable through
@@ -968,7 +976,8 @@ unless noted. All sit under Stage-5 cells.
 ## F. Off-grid open decisions & whole phases
 
 From `roadmap.md` "Decisions that need you" + `middle-addendum.md` §3. None maps to a grid row; a grid-scanner sees
-built rows at 5 and no signal these exist.
+built rows at 5 and no signal these exist. One decision item lives outside this group: **E9**
+(ImageSharp licensing, decision row 21) stays with the security items in group E.
 
 - [x] **F1 — Homepage is unbuilt and design-blocked (WU-Home)** `[decision · high · mvp]` —
   **CLOSED 2026-07-28 (WU-Home):** decision row 2 resolved (`roadmap.md` §Resolved) and built —
