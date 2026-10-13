@@ -5,14 +5,15 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Data Transfer Object for creating a new story. AuthorId is intentionally absent —
 /// the server service stamps it from IActiveUserContext.UserId (never trust the client). So is
-/// StoryStatusId: a new story is always Draft, server-stamped (WU-StoryLifecycle, D1).
+/// StoryStatusId: a new story is always Draft, server-stamped (WU-StoryLifecycle, D1). So is the cover:
+/// it is uploaded after the create, by <c>IStoryWriteService.UploadCoverArtAsync</c>, which persists it
+/// (owner ruling D14).
 /// </summary>
 public class CreateStoryDTO : IEditableStoryProperties
 {
     public string Title { get; set; } = string.Empty;
     public string? ShortDescription { get; set; } = string.Empty;
     public Rating Rating { get; set; }
-    public string? CoverArtRelativeUrl { get; set; }
     public string? LongDescription { get; set; }
     public StoryStatusEnum PostApprovalStatus { get; set; }
     public List<IStoryTag> StoryTags { get; set; } = new();

@@ -39,10 +39,9 @@ public static class StoryMappers
             Title = story.Title,
             ShortDescription = story.ShortDescription,
             Rating = story.Rating,
-            CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
-                StoryTags = new List<IStoryTag>(story.StoryTags),
+            StoryTags = new List<IStoryTag>(story.StoryTags),
             StoryCharacters = new List<StoryCharacterDto>(story.StoryCharacters),
             StoryCharacterPairings = new List<StoryCharacterPairingDto>(story.StoryCharacterPairings)
         };
@@ -59,7 +58,6 @@ public static class StoryMappers
             Title = story.Title,
             ShortDescription = story.ShortDescription,
             Rating = story.Rating,
-            CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
             StoryTags = new List<IStoryTag>(story.StoryTags),
@@ -87,8 +85,10 @@ public static class StoryMappers
         actualStory.StoryListing.ShortDescription = tempStory.ShortDescription;
         actualStory.Rating = tempStory.Rating;
         // StoryStatusId is never copied (WU-StoryLifecycle, D1) — status moves only through
-        // TransitionStatusAsync or moderator approve/reject.
-        actualStory.StoryListing.CoverArtRelativeUrl = tempStory.CoverArtRelativeUrl;
+        // TransitionStatusAsync or moderator approve/reject. Neither is the cover (owner ruling D14):
+        // an unconditional copy here once let any update whose DTO omitted it null the column, after
+        // which UpdateStoryAsync deleted the live blob. The cover changes only through
+        // UploadCoverArtAsync / RemoveCoverArtAsync.
         actualStory.StoryDetail.LongDescription = tempStory.LongDescription;
         actualStory.StoryDetail.PostApprovalStatus = tempStory.PostApprovalStatus;
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -112,5 +113,40 @@ public class LocalImageStorageService(
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Walks <c>{WebRootPath}/uploads/stories/</c> and <c>…/users/</c> lazily (never the rest of
+    /// uploads/, never wwwroot) and yields each file as its stored <c>/uploads/…</c> path with its
+    /// last-write time. A file deleted mid-walk is skipped, not reported. No span: the orphan sweep's
+    /// span covers the walk (owner ruling D14).
+    /// </summary>
+    public async IAsyncEnumerable<StoredImage> EnumerateAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        string uploadsRoot = Path.GetFullPath(Path.Combine(env.WebRootPath, "uploads"));
+        EnumerationOptions walk = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
+
+        foreach (string prefix in ImageUploadRules.KeyPrefixes)
+        {
+            // Yield the thread between prefixes: the walk is synchronous file-system I/O.
+            await Task.Yield();
+
+            string prefixDir = Path.Combine(uploadsRoot, prefix.TrimEnd('/'));
+            if (!Directory.Exists(prefixDir)) continue;
+
+            foreach (string file in Directory.EnumerateFiles(prefixDir, "*", walk))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // FileInfo, not File.GetLastWriteTimeUtc: on a vanished file the latter returns
+                // 1601-01-01, which would read as an ancient blob instead of a missing one.
+                FileInfo info = new(file);
+                if (!info.Exists) continue;
+
+                string relative = Path.GetRelativePath(uploadsRoot, file).Replace(Path.DirectorySeparatorChar, '/');
+                yield return new StoredImage(ImageUploadRules.UploadsPrefix + relative, info.LastWriteTimeUtc);
+            }
+        }
     }
 }

@@ -1,7 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -193,5 +196,93 @@ public class StoryEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Accepted,
             "MA-302: the buffered reading-progress ping silently no-ops for anonymous viewers — a 401 " +
             "here threw HttpRequestException out of the [JSInvokable] scroll handler on the public reading page");
+    }
+
+    // ── /api/stories/{id}/cover — upload persists, DELETE clears (owner ruling D14, WU-BlobCleanup) ──
+
+    private async Task<HttpResponseMessage> PostCoverAsync(int storyId)
+    {
+        using MultipartFormDataContent form = new();
+        ByteArrayContent file = new(TestImages.Png(4, 4));
+        file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        form.Add(file, "file", "cover");
+        return await Factory.CreateClient().PostAsync($"/api/stories/{storyId}/cover", form);
+    }
+
+    private async Task<string?> StoredCoverAsync(int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().StoryListings
+            .Where(l => l.StoryId == storyId).Select(l => l.CoverArtRelativeUrl).SingleAsync();
+    }
+
+    [Fact]
+    public async Task PostCover_Author_Returns200_AndThePathIsAlreadyPersisted_AndEchoedByEdit()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(authorId);
+
+        HttpResponseMessage response = await PostCoverAsync(storyId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        string? path = await response.Content.ReadFromJsonAsync<string>();
+        path.Should().MatchRegex($@"^/uploads/stories/{storyId}/cover-[0-9a-f-]+\.png$");
+        (await StoredCoverAsync(storyId)).Should().Be(path, "no follow-up PUT is needed (D14)");
+
+        StoryEditDTO? edit = await ReadNullableAsync<StoryEditDTO>(
+            await Factory.CreateClient().GetAsync($"/api/stories/{storyId}/edit"));
+        edit!.CoverArtRelativeUrl.Should().Be(path, "GET /edit echoes the cover over the wire (WASM parity)");
+    }
+
+    [Fact]
+    public async Task DeleteCover_Author_Returns204_AndClearsTheColumn()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(authorId);
+        (await PostCoverAsync(storyId)).EnsureSuccessStatusCode();
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}/cover");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StoredCoverAsync(storyId)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteCover_NonAuthor_Returns403_AndTheCoverStays()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(authorId);
+        string? path = await (await PostCoverAsync(storyId)).Content.ReadFromJsonAsync<string>();
+        SetActiveUser(await SeedUserAsync("other"));
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}/cover");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await StoredCoverAsync(storyId)).Should().Be(path);
+    }
+
+    [Fact]
+    public async Task DeleteCover_Anonymous_Returns401()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}/cover");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task DeleteCover_MissingStory_Returns404()
+    {
+        SetActiveUser(await SeedUserAsync("author"));
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{int.MaxValue}/cover");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

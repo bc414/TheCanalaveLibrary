@@ -40,6 +40,10 @@ namespace TheCanalaveLibrary.Server;
 /// status and is refused — nothing decrements twice. Removal also closes the target's sibling reports
 /// (owner ruling D7).</para>
 ///
+/// <para><b>A hard delete erases the story's cover blob</b> (owner ruling D14): the path is captured
+/// before the row delete and the blob deleted after the strategy returns, best-effort, in its own
+/// <c>try</c> ahead of the notifications. A soft removal never touches it.</para>
+///
 /// <para><b>Notifications are best-effort.</b> Every <c>NotifyXxx</c> call happens <em>after</em>
 /// the primary write commits — on the resolve paths, after the execution strategy returns, never
 /// inside the retried delegate — each inside its own <c>try/catch</c> that logs and swallows, so a
@@ -64,6 +68,7 @@ public class ServerModerationWriteService(
     INotificationWriteService notifications,
     IWriteRateLimitService rateLimit,
     UserManager<User> userManager,
+    IImageStorageService imageStorage,
     ILogger<ServerModerationWriteService> logger)
     : ServerModerationReadService(readDbFactory, activeUser), IModerationWriteService, IReportSubmissionService
 {
@@ -234,10 +239,20 @@ public class ServerModerationWriteService(
                 throw new ModerationValidationException(
                     ["User reports are resolved with an account action, not a removal."]);
 
-            // (2) The removal itself (tracked; committed by the save below).
-            int? contentAuthorId = hardDelete
-                ? await ApplyHardDeleteAsync(type, entityId)
-                : await ApplyRemovalAsync(type, entityId, removalReason);
+            // (2) The removal itself (tracked; committed by the save below). Only a hard delete reports a
+            // cover path: a soft removal is reversible, so it never touches the blob (D14).
+            int? contentAuthorId;
+            string? coverPath = null;
+            if (hardDelete)
+            {
+                HardDeleteOutcome removed = await ApplyHardDeleteAsync(type, entityId);
+                contentAuthorId = removed.AuthorId;
+                coverPath = removed.CoverPath;
+            }
+            else
+            {
+                contentAuthorId = await ApplyRemovalAsync(type, entityId, removalReason);
+            }
 
             // (3) The primary report, tracked as before.
             DateTime now = DateTime.UtcNow;
@@ -289,8 +304,28 @@ public class ServerModerationWriteService(
                 [..siblings
                     .Where(s => s.ReporterUserId is not null)
                     .GroupBy(s => s.ReporterUserId!.Value)
-                    .Select(g => (g.First().ReportId, g.Key))]);
+                    .Select(g => (g.First().ReportId, g.Key))],
+                entityId,
+                coverPath);
         });
+
+        // The hard-deleted story's cover blob (owner ruling D14): after the strategy returns, never
+        // inside the retried delegate, and in its own try ahead of the notifications, so an erasure
+        // failure cannot skip a notification and a notification failure cannot skip the erasure. A
+        // failure leaves an orphan the daily sweep collects.
+        if (outcome.CoverPath is string coverToDelete)
+        {
+            try
+            {
+                await imageStorage.DeleteAsync(coverToDelete);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Best-effort delete of hard-deleted story {StoryId}'s cover {ImagePath} failed for report {ReportId} — blob orphaned; the orphan sweep collects it",
+                    outcome.EntityId, coverToDelete, reportId);
+            }
+        }
 
         // Each notification in its own best-effort try, so one failure cannot drop the rest. Never the
         // acting moderator (the D4 guardrail's general rule): not as the reporter of a report they then
@@ -726,10 +761,18 @@ public class ServerModerationWriteService(
         "author's account has been deleted. Remove the content instead.";
 
     /// <summary>What a removal's transaction hands to the post-commit notifications.</summary>
+    /// <param name="CoverPath">A hard-deleted story's cover blob path, captured before the row delete
+    /// (the cascade removes the listing that names it) and deleted after commit; null otherwise.</param>
     private sealed record RemovalOutcome(
         int? ReporterUserId,
         int? ContentAuthorId,
-        List<(long ReportId, int ReporterUserId)> SiblingReporters);
+        List<(long ReportId, int ReporterUserId)> SiblingReporters,
+        long EntityId,
+        string? CoverPath);
+
+    /// <summary>What <see cref="ApplyHardDeleteAsync"/> learned before deleting: the author to notify,
+    /// and a Story's cover path (null for every other type, or a story without a cover).</summary>
+    private readonly record struct HardDeleteOutcome(int? AuthorId, string? CoverPath);
 
     /// <summary>
     /// Runs one resolve path in a single transaction under the execution strategy (the Spotlight
@@ -1089,7 +1132,7 @@ public class ServerModerationWriteService(
     private async Task<int?> ApplyRemovalAsync(ReportedEntityType type, long id, string reason)
     {
         if (type == ReportedEntityType.Message)
-            return await ApplyHardDeleteAsync(type, id);
+            return (await ApplyHardDeleteAsync(type, id)).AuthorId;
 
         if (type == ReportedEntityType.User)
             return null; // Unreachable from ResolveWithRemovalAsync (it refuses User targets).
@@ -1112,8 +1155,10 @@ public class ServerModerationWriteService(
 
     /// <summary>
     /// Hard-deletes the target entity (illegal content path — CSAM, piracy). Returns the author's
-    /// user id before deletion when possible, or <c>null</c>. The <c>reports</c> rows survive it (they
-    /// carry no FK to their target) and are closed by the caller (D7).
+    /// user id before deletion when possible (or <c>null</c>), and for a Story its cover path, read
+    /// before the delete because the cascade removes the listing row that names it. The caller deletes
+    /// that blob after commit, outside the retry (owner ruling D14). The <c>reports</c> rows survive it
+    /// (they carry no FK to their target) and are closed by the caller (D7).
     /// <para><b>TPT dependents go first (owner ruling D10).</b> A Story's chapter comments and a blog
     /// post's comments and polls are deleted through their base rows by <see cref="TptDelete"/> — no
     /// cascade from a content parent reaches a TPT base row, and the parent → child FKs are RESTRICT,
@@ -1122,31 +1167,39 @@ public class ServerModerationWriteService(
     /// transaction. A Comment, Recommendation or Message is a loaded entity whose own removal deletes
     /// every row it owns (a <c>BaseComment</c> removal deletes base and child rows).</para>
     /// </summary>
-    private async Task<int?> ApplyHardDeleteAsync(ReportedEntityType type, long id)
+    private async Task<HardDeleteOutcome> ApplyHardDeleteAsync(ReportedEntityType type, long id)
     {
         if (type is ReportedEntityType.Story or ReportedEntityType.Comment
             or ReportedEntityType.BlogPost or ReportedEntityType.Recommendation)
         {
             IModeratableContent? entity = await LoadModeratableAsync(type, id);
-            if (entity is null) return null;
+            if (entity is null) return default;
             int? authorId = entity.AuthorUserId;
+            string? coverPath = null;
 
             if (type == ReportedEntityType.Story)
+            {
+                // Captured before the delete (D14): the listing row that names the cover cascades away.
+                coverPath = await writeDb.StoryListings
+                    .Where(l => l.StoryId == (int)id)
+                    .Select(l => l.CoverArtRelativeUrl)
+                    .FirstOrDefaultAsync();
                 await TptDelete.StoryCommentsAsync(writeDb, (int)id);
+            }
             else if (type == ReportedEntityType.BlogPost)
                 await TptDelete.BlogPostDependentsAsync(writeDb, (int)id);
 
             writeDb.Remove((object)entity);
-            return authorId;
+            return new HardDeleteOutcome(authorId, coverPath);
         }
 
         if (type == ReportedEntityType.Message)
         {
             var msg = await writeDb.PrivateMessages
                 .SingleOrDefaultAsync(m => m.MessageId == id);
-            if (msg is null) return null;
+            if (msg is null) return default;
             writeDb.PrivateMessages.Remove(msg);
-            return null;
+            return default;
         }
 
         throw new InvalidOperationException($"Hard delete is not supported for entity type '{type}'.");

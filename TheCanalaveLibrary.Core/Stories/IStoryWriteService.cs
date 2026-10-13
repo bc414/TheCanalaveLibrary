@@ -34,22 +34,32 @@ public interface IStoryWriteService
     Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus);
 
     /// <summary>
-    /// Uploads a new cover image for <paramref name="storyId"/> via <c>IImageStorageService</c> and
-    /// returns the resulting relative path — the caller still patches
-    /// <c>StoryUpdateDTO.CoverArtRelativeUrl</c> and calls <see cref="UpdateStoryAsync"/> itself
-    /// (same two-step shape <c>StoryEditorPage</c> already uses). Mirrors
-    /// <see cref="IUserSettingsService.UploadProfilePictureAsync"/>'s service-owns-the-storage-call
-    /// pattern, added so the WASM boundary never needs a client impl of the server-only
-    /// <c>IImageStorageService</c> (layer5-wasm.md "Streams and multipart").
+    /// Uploads a new cover image for <paramref name="storyId"/> and <b>commits it at once</b>: stores
+    /// the blob, persists it as the story's cover, then deletes the old cover's blob best-effort. No
+    /// follow-up <see cref="UpdateStoryAsync"/> is needed or possible: the cover is not a property edit
+    /// (owner ruling D14; <c>layer2-services.md</c> §"Image Storage — blob ownership and cleanup").
+    /// Stamps <c>LastUpdatedDate</c>. Mirrors <see cref="IUserSettingsService.UploadProfilePictureAsync"/>,
+    /// so the WASM boundary never needs a client impl of the server-only <c>IImageStorageService</c>
+    /// (layer5-wasm.md "Streams and multipart").
     /// </summary>
     /// <param name="content">The raw file stream from &lt;InputFile&gt;.</param>
     /// <param name="contentType">MIME type (e.g. "image/jpeg").</param>
     /// <param name="storyId">The story to attach the cover to — must already exist (created via
     /// <see cref="CreateStoryAsync"/> first, for the new-story flow) and be owned by the caller.</param>
-    /// <returns>The new relative URL to store on the story.</returns>
+    /// <returns>The new cover's stored relative path, already persisted.</returns>
     /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/> exists.</exception>
-    /// <exception cref="UnauthorizedAccessException">Caller does not own the story.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author — including a
+    /// story whose author deleted their account.</exception>
     /// <exception cref="ImageUploadValidationException">The upload pipeline refused the file (type,
     /// size, unreadable bytes or dimensions); the message is user-facing.</exception>
     Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId);
+
+    /// <summary>
+    /// Clears the story's cover and deletes its blob best-effort (owner ruling D14: clearing is its own
+    /// operation, never a null in an update DTO). Commits at once and stamps <c>LastUpdatedDate</c>; a
+    /// story with no cover is a no-op.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/> exists.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    Task RemoveCoverArtAsync(int storyId);
 }

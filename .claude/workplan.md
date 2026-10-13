@@ -17,17 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-PollVoteIntegrity (2026-10-13, plus review fixes) — worksheet D23's poll
-  paragraph and its `ConfigLocked` rider. Migration `WU_PollVoteIntegrity` is on the server-only dev DB
-  (not yet the Aspire DB). **Single-choice is a database constraint:** `poll_votes` carries `poll_id`
-  behind a composite FK and a generated guard unique with `user_id`. **`AllowMultiple` cannot change
-  under a vote:** the vote row's FK `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action.
-  A lost vote or edit race is never a 500. It is a 400, except that the voter's own identical double
-  submit counts as cast (`layer2-services.md` §"Check-then-act posture"). No cell flipped. Filed:
-  tracker **F21**, promoted to **decision row 24** (`AnonymityMode`'s lock), and **H30** (a browser
-  smoke), which its browser pass closed the same day with no runtime bug, on both render phases and
-  with the races timed from the page; the handled races' EF `fail:` lines joined **E10**. `dotnet test`:
-  Unit 1,190, RazorComponents 795, Integration 1,503. **Pointer:** its DONE entry.
+- **Last landed:** WU-BlobCleanup (2026-10-13) — worksheet D14, both halves. **Blob cleanup has two
+  owners:** an inline post-commit delete at account deletion (the avatar) and the moderation hard delete
+  (the story cover), plus a daily `ImageOrphanSweeper` backstop (unfiltered reference read, 24 h grace,
+  dry-run first cycle, 100-delete cap, store → DB only, generated keys only, kill switch
+  `ImageStorage:OrphanSweep:Enabled`); `IImageStorageService` gained `EnumerateAsync` (a recorded
+  amendment). **Cover upload persists its own reference:** `CoverArtRelativeUrl` left the write DTOs,
+  `RemoveCoverArtAsync` + `DELETE /api/stories/{id}/cover` are new, and the editor uploads on pick. No
+  migration. F4 L4.5 5→1 (no browser; tracker **H31**). Filed: **F22**, promoted to **decision row 25**
+  (do a deleted user's surviving stories keep their covers? built: yes). `dotnet test`: Unit 1,225,
+  RazorComponents 805, Integration 1,539. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
@@ -241,7 +241,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13); **WU-BlobCleanup** is next in the campaign's build order.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13); **WU-ThrottleCoverage** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -270,7 +270,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**)),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31**),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -278,7 +278,7 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–24** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–25** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -287,7 +287,9 @@ references it, does not restate it.
   standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes; 22 — the folder-delete
   name-clash default — added 2026-10-13 by WU-SchemaHardening; 23 — type 62's moderator attribution —
   added the same day by the WU-UserDeletion review fixes; 24 — whether a poll's anonymity mode is
-  frozen by the database like its vote mode — added the same day by WU-PollVoteIntegrity). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  frozen by the database like its vote mode — added the same day by WU-PollVoteIntegrity; 25 — whether
+  account deletion strips the covers of the user's surviving stories — added the same day by
+  WU-BlobCleanup). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -448,6 +450,76 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-BlobCleanup — blob cleanup owned twice (an inline post-commit delete at every terminal deletion path, a daily orphan sweep as the backstop) and cover upload persisting its own reference (worksheet D14, both halves; service audit §3.16 and §2.12; extends `Images/`, `Stories/`, `Moderation/`, `Identity/`) — DONE ✓ (2026-10-13)
+
+- **Cells:** F4 L4.5 5→1 (the editor's cover flow changed, no browser; tracker **H31**). F4
+  L2/L3-Logic/L3.5/L5, F47 L2 and F52 L2 stay 5 (built beneath Stage-5 cells); the Images cluster has
+  no grid row. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+- **Trigger:** worksheet D14 (answered 2026-08-07) and its spec `wu-specs/WU-BlobCleanup.md` (which
+  merges D14's WU-CoverPersistence half), with the campaign amendment: X9 dropped
+  (`daily_story_stats` cascades from `stories`), the hard-delete blob delete after the strategy returns.
+- **What landed:**
+  1. **Enumeration (frozen-interface amendment):** `IImageStorageService.EnumerateAsync` yields Core
+     `StoredImage(RelativePath, LastModifiedUtc)` over `stories/` and `users/` only;
+     `ImageUploadRules.KeyPrefixes` and `IsGeneratedKey` (the exact `BuildKey` shape, extensions from the
+     allow-list); Local walks lazily, S3 pages `ListObjectsV2` (`ListPageSize`).
+  2. **Sweep:** `ImageOrphanSweeper` + `ImageOrphanSweepWorker` (registered in Program.cs, removed by
+     `TestAppFactory`): reference read first, unfiltered (write context + `IgnoreQueryFilters`); 24 h
+     grace; foreign keys skipped; 100 attempts per cycle; dry-run first cycle per process; dangling rows
+     logged, never acted on; kill switch `ImageStorage:OrphanSweep:Enabled`; span
+     `ImageStorage.OrphanSweep` and counter `canalave.image.orphans.deleted`.
+  3. **Inline sites:** `UserDeletionService` deletes the avatar after the strategy returns;
+     `ResolveWithRemovalAsync(hardDelete: true)` captures a story's cover before the delete
+     (`HardDeleteOutcome`) and deletes it after the strategy, in its own `try` ahead of the
+     notifications. Both best-effort with a Warning; a takedown never touches the blob.
+  4. **Cover persistence:** `CoverArtRelativeUrl` off `IEditableStoryProperties`/`StoryUpdateDTO`/
+     `CreateStoryDTO` and the mapper; `UpdateStoryAsync`'s cover branch gone; `GetStoryForEditAsync`
+     returns `StoryEditDTO`; `UploadCoverArtAsync` loads, gates (authorless → 403, closing §2.12's
+     `(int?)` item), writes, persists, deletes the old blob; new `RemoveCoverArtAsync`
+     (`DELETE /api/stories/{id}/cover`, client impl). `StoryPropertiesForm` raises
+     `OnCoverSelected`/`OnRemoveCover` with `CoverUploadBusy`; `StoryEditorPage` uploads on pick (edit)
+     or after the create (create, the second `UpdateStoryAsync` gone).
+  5. **Docs:** moment 1 — `layer2-services.md` §"Image Storage — blob ownership and cleanup" (new) and its
+     two stale S3 sentences; `testing.md` (the upload folder is not reset; `TempBlobStore`);
+     `cross-cutting.md` (Blobs in the delete policy and the account-deletion lists); `layer5-wasm.md`,
+     `render-and-layout.md`, `layer3.5-structure.md`, `folder_clusters.md`; Settled notes in
+     ImageStorage (the "Orphan bug" header rewritten, the Contract amended), Stories F4, Moderation F47,
+     Identity F52; roadmap D14 Resolved, Phase-7 CDN purge, the restore-drill kill switch, one bucket per
+     database, **decision row 25**; tracker **F22**; service audit §3.16/§2.12 annotated;
+     `SelectedCoverFile` registered as retired. Moment 2 — `testing.md` §Unit (span emitters);
+     `logging.md` (the sweep's span and counter).
+     Moment 3 — Stage notes and headlines (ImageStorage L2, Stories F4, Moderation F47, Identity F52),
+     `status.md` F4 L4.5, the worksheet D14 Built line, tracker **H31**. The deletion page's copy (the
+     compliance surface) names the profile picture as deleted and covers as kept.
+- **Left alone:** stripping a deleted user's surviving-story covers (the spec's X1: D14's text asks for
+  it on a premise D13 overturned — **decision row 25**, tracker **F22**); the CDN purge (X2, Phase 7);
+  author story delete as the third inline site (X3, WU-AuthorStoryDelete inherits the rule); derivative
+  sizing (B14); a revert-cover action (X5, D14's accepted consequence); a throttle on
+  `RemoveCoverArtAsync` (X6, WU-ThrottleCoverage lists it as exempt); `UserDeletionService`'s folder and
+  interface (X7); avatar removal (X10). The create flow's pre-existing gap (the story exists if the
+  cover upload then fails, and a resubmit duplicates it) is noted in F4's Stage note, not fixed. No
+  automated test drives the worker loop, as for every worker.
+- **Verification:** build 0 errors, no new warnings in touched files (the three pre-existing C#
+  warnings only); **Unit 1,225** (+35: `ImageUploadRulesTests` 28, `LocalImageStorageEnumerationTests`
+  5, `StoryMappersTests` 2), **RazorComponents 805** (+10: `StoryEditorPageTests` 5,
+  `StoryPropertiesFormTests` 5), **Integration 1,539** (+36: `ImageOrphanSweeperTests` 8,
+  `BlobCleanupTests` 6, `BlobCleanupGarageTests` 1, `StoryCoverTests` 12, `StoryEndpointsTests` 5,
+  `S3ImageStorageServiceTests` 3, `HostBootTests` 1; `StaticSsrPageRenderTests` asserts the new copy),
+  all green. Mutation-checked, each failing a test: the reference read through filtered `Stories`; no
+  grace, key-shape guard, cap or dry run; avatars left out of the references; no S3 continuation or
+  prefix scope; no avatar delete; no cover delete or its own `try`; an unpersisted upload; no replaced
+  or removed blob delete; the old authorless gate; an update after either editor upload; the upload
+  deferred to save; no busy disable. A first full run caught a Unit cross-talk (a `SaveAsync` in a
+  parallel class tripped `ImageStorageTelemetryTests`' span count); fixed and written into
+  `testing.md`. A second run caught a pre-existing `GarageFixture` readiness race that a second
+  Garage-using class made likelier: a just-opened container dropped the connection
+  (`HttpIOException`), which escaped the retry's `AmazonS3Exception`-only catch; the retry now tolerates
+  `IOException`/`HttpRequestException` until its deadline. check-doc-hygiene, check-design-tokens, check-render-modes and check-a11y pass. No
+  browser was available: tracker **H31** holds the pass.
+- **Pointers:** `audit/ImageStorage.md` (Settled + Stage note), `audit/Stories.md` F4,
+  `audit/Moderation.md` F47, `audit/Identity.md` F52; `layer2-services.md` §"Image Storage — blob
+  ownership and cleanup"; roadmap decision row 25; tracker F22, H31.
 
 ## WU-PollVoteIntegrity — single-choice as a database constraint, and `AllowMultiple` frozen under a vote by an FK (worksheet D23's poll paragraph and its `ConfigLocked` rider; extends `BlogPosts/`, `Data/`) — DONE ✓ (2026-10-13)
 

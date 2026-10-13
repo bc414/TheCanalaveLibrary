@@ -509,11 +509,11 @@ DTO; structured-tag validation trusts client `TagTypeEnum` and never verifies ta
 (forged types bypass required-Setting/Genre and priority caps; nonexistent ids → raw FK 500);
 WU37 pairing rules (member count ≥2, member-in-story) are silently dropped instead of rejected —
 doctrine table and code disagree; `UserDeletionService` and moderation hard-delete never delete
-avatar/cover blobs (and abandoned cover uploads orphan — ownership decision §3.16); saved-selection
+avatar/cover blobs (and abandoned cover uploads orphan — ownership decision §3.16) [ruled D14; built WU-BlobCleanup 2026-10-13]; saved-selection
 and tag-name app-level case-insensitive checks sit over case-sensitive DB indexes (mixed-case race
 persists a duplicate the app can never recreate — schema §3.1's service half); N+1 in
 `GetPublicSelectionsByUserAsync`; EPUB decompressed-size unbounded; legacy-encoding imports garble
-without a warning; `banned (int?)` scalar projection shipped verbatim in `UploadCoverArtAsync`;
+without a warning; `banned (int?)` scalar projection shipped verbatim in `UploadCoverArtAsync` [closed WU-BlobCleanup 2026-10-13: the method loads the story and compares `AuthorId`, so an authorless story is 403, not 404];
 ExternalVerification `SingleAsync` → 401-instead-of-404 error class (same class as nonexistent
 report id → 401 in moderation); mod-report queue unbounded; unresolvable zombie sibling reports on
 removed targets; `GetForStoryAsync` author-probe uses the filtered set (mature-off author can't see
@@ -613,6 +613,10 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     uploads): inline deletes vs periodic orphan sweeper vs "orphans accepted" — currently nobody's
     job and undocumented. Related ruling: keep the cover two-step upload protocol or move
     persistence into the service like avatars.
+    *Ruled worksheet D14 (both owners: inline at every terminal path plus a daily sweep backstop;
+    cover upload persists its own reference); built WU-BlobCleanup, 2026-10-13. Rule in
+    `layer2-services.md` §"Image Storage — blob ownership and cleanup". Covers of a deleted user's
+    surviving stories: decision row 25.*
 17. **`UserNotificationSetting` granularity**: doctrine says per-field NULL sparse; columns are
     non-nullable (an override of `Collapsed` freezes `EmailEnabled` against future default
     changes). Make both columns nullable now (free) or fix the doctrine sentence.

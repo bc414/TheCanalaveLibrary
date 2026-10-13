@@ -64,6 +64,11 @@ WU-Marts components (spans are root spans for the workers — background work, n
   (`ContentCounterRecalculator`, WU-CounterSymmetry 2026-09-30) emits its own span,
   `ContentCounterRecalc.Pass`, on this same source, tagged `canalave.contentcounterrecalc.counters_corrected`.
   It has no meter of its own. The count also goes in the worker's completion log line.
+- **`ImageStorage`** also carries the daily orphan sweep (WU-BlobCleanup, 2026-10-13, owner ruling
+  D14): the root span `ImageStorage.OrphanSweep` (tags `canalave.image.sweep.{scanned, candidates,
+  deleted, dangling, dry_run, cap_reached}`) and the counter `canalave.image.orphans.deleted`
+  (`{blob}`). A steady non-zero rate means a write path leaks blobs and wants an inline fix.
+  `EnumerateAsync` has no span of its own; the sweep's covers it.
 
 - Producers are **`static readonly` process singletons** — `ActivitySource`/`Meter` are
   thread-safe, stateless funnels (the mirror image of `DbContext`, which is scoped because it

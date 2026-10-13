@@ -24,11 +24,18 @@ namespace TheCanalaveLibrary.Server;
 /// remains survives intact: she keeps the thread, and the user's messages lose their sender. The
 /// user's conversation rows are locked before the delete, so two participants deleting at once are
 /// serialized and the second one's emptiness check sees the first one's delete.</item>
+/// <item><b>After the commit</b>, outside the execution strategy, it deletes the user's avatar blob
+/// (owner ruling D14): the path is captured inside the transaction, since the row that names it goes
+/// with the user, and the delete is best-effort, with the daily orphan sweep as the backstop. The covers
+/// of the user's stories stay: the stories survive anonymized (decision row 25).</item>
 /// </list>
 /// <para>Server-only (the static-SSR <c>DeletePersonalData</c> page and the dev endpoint resolve it by
 /// type); it has no Core interface.</para>
 /// </summary>
-public class UserDeletionService(ApplicationDbContext writeDb)
+public class UserDeletionService(
+    ApplicationDbContext writeDb,
+    IImageStorageService imageStorage,
+    ILogger<UserDeletionService> logger)
 {
     /// <summary>
     /// Deletes a user and all their associated data, correctly handling
@@ -44,8 +51,16 @@ public class UserDeletionService(ApplicationDbContext writeDb)
         // whole retriable unit (including the transaction) must run through CreateExecutionStrategy().
         var strategy = writeDb.Database.CreateExecutionStrategy();
 
-        return await strategy.ExecuteAsync(async () =>
+        // The avatar path the committed attempt saw (owner ruling D14). Declared out here so the blob
+        // delete can run after the strategy returns: a retried delegate must not re-delete, and a blob
+        // delete cannot roll back with a failed commit.
+        string? avatarPath = null;
+
+        bool deleted = await strategy.ExecuteAsync(async () =>
         {
+            // Reset per attempt, so only the attempt that commits decides what is deleted.
+            avatarPath = null;
+
             // Clear first (layer2-services.md §"Hard deletes of content parents"): the profile wall goes
             // by raw SQL below, which never reaches the tracker, and EF refuses to Remove the user while
             // a tracked UserProfileComment (a RESTRICT dependent) remains. A retried attempt must not
@@ -138,6 +153,9 @@ public class UserDeletionService(ApplicationDbContext writeDb)
             // pseudonymization (cross-cutting.md §"Account deletion").
             // The database now handles every remaining 'Cascade'/'SetNull' rule, including the
             // UserStat 1-to-1 Cascade and the poll votes' SET NULL (D13: votes survive anonymized).
+            // The avatar's path goes with this row, so it is captured first (D14). The row was loaded
+            // above, so this costs no query.
+            avatarPath = user.ProfilePictureRelativeUrl;
             writeDb.Users.Remove(user);
 
             // --- 7. SAVE ---
@@ -176,10 +194,28 @@ public class UserDeletionService(ApplicationDbContext writeDb)
             }
 
             await transaction.CommitAsync();
-
-            // Post-commit seam: deleting the avatar blob (WU-BlobCleanup, owner ruling D14) belongs
-            // after the strategy returns, never inside the retried delegate.
             return true;
         });
+
+        // --- 9. DELETE THE AVATAR BLOB (owner ruling D14) ---
+        // After the commit, outside the retry. Best-effort: the account is already gone, so a failed
+        // delete leaves an orphan for the daily sweep (ImageOrphanSweeper) and must not fail the
+        // deletion. The user's story covers are NOT deleted: those stories survive anonymized (D13),
+        // so their rows still name the covers (roadmap.md decision row 25).
+        if (deleted && avatarPath is not null)
+        {
+            try
+            {
+                await imageStorage.DeleteAsync(avatarPath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Best-effort delete of deleted user {UserId}'s avatar {ImagePath} failed — blob orphaned; the orphan sweep collects it",
+                    userId, avatarPath);
+            }
+        }
+
+        return deleted;
     }
 }

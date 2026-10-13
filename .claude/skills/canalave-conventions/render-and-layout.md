@@ -278,7 +278,8 @@ factory's header since WU12; browser-verified end-to-end in `audit/Sprites.md`, 
 
 **`SpriteBaseUrl` config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`).
 The resolver builds: `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. Changing this one
-setting + Rclone syncing assets is the complete R2/CDN cutover — zero code change. This is the same
-public-asset-base seam `IImageStorageService` will adopt at `S3ImageStorageService` time; sprites
-and uploads converge on one CDN/base-URL config but do **not** share a storage service (sprites have
-no runtime write path — assets are provisioned out-of-band).
+setting + Rclone syncing assets is the complete R2/CDN cutover — zero code change. Uploads have the
+analogous seam, `ImageStorage:PublicBaseUrl` (wired, unset: `S3ImageStorageService` exists since
+WU-S3Garage, 2026-07-05, and every upload is still served same-origin through the app); sprites
+and uploads converge on one CDN but do **not** share a storage service (sprites have no runtime
+write path — assets are provisioned out-of-band).

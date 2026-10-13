@@ -6,7 +6,10 @@
    Contract:
      - ViewModel carries field values + structured tag state + validation errors (set by the page).
      - OnValidSubmit fires when EditForm validation passes; the page then calls GetLongDescriptionAsync()
-       and reads SelectedCoverFile before mapping to the write DTO.
+       before mapping to the write DTO. The cover is NOT part of the submit (owner ruling D14): picking a
+       file raises OnCoverSelected at once and "Remove cover" raises OnRemoveCover; the page uploads or
+       removes through the write service, which persists the change itself. CoverUploadBusy disables
+       both while an upload runs.
      - InitialTagsByType seeds TagSelectors on first render (edit mode). Null = create mode (empty).
      - InitialCharacters/SettingDetails/Pairings/GenrePriorities seed structured data in edit mode. *@
 
@@ -74,9 +77,18 @@
             <img src="@ViewModel.CoverArtRelativeUrl"
                  alt="Current cover"
                  class="h-32 w-24 rounded-md object-cover shadow-subtle" />
+            <button type="button" disabled="@CoverUploadBusy" @onclick="HandleRemoveCoverAsync"
+                    class="self-start rounded-md px-2 py-1 text-sm text-(--color-danger) transition-colors hover:bg-(--color-danger)/10 disabled:cursor-not-allowed disabled:opacity-50">
+                Remove cover
+            </button>
         }
-        <InputFile id="story-cover-art" OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
-                   class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-action) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-(--color-text) file:transition-colors hover:file:bg-(--color-action-hover)" />
+        <InputFile id="story-cover-art" OnChange="HandleCoverSelectedAsync" accept="image/jpeg,image/png,image/webp"
+                   disabled="@CoverUploadBusy"
+                   class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-action) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-(--color-text) file:transition-colors hover:file:bg-(--color-action-hover) disabled:cursor-not-allowed disabled:opacity-50" />
+        @if (CoverUploadBusy)
+        {
+            <span class="text-xs text-(--color-text-muted)">Uploading…</span>
+        }
         <p class="text-xs text-(--color-text-muted)">JPEG, PNG, or WebP · max 10 MB</p>
     </div>
 
@@ -342,8 +354,17 @@
                 : i < _characterChips.Count ? _characterChips[i].TagName : $"#{i}")
             .ToList();
 
-    /// <summary>The most recently selected cover file, or null if none was picked this session.</summary>
-    public IBrowserFile? SelectedCoverFile { get; private set; }
+    /// <summary>Raised as soon as the author picks a cover file. The page uploads it (edit mode) or
+    /// holds it until the story is created (create mode) — the form never sees the result except
+    /// through <c>ViewModel.CoverArtRelativeUrl</c>.</summary>
+    [Parameter] public EventCallback<IBrowserFile> OnCoverSelected { get; set; }
+
+    /// <summary>True while the page uploads a cover: the file picker and "Remove cover" are disabled
+    /// and "Uploading…" shows.</summary>
+    [Parameter] public bool CoverUploadBusy { get; set; }
+
+    /// <summary>Raised by "Remove cover" (rendered only while a cover is set).</summary>
+    [Parameter] public EventCallback OnRemoveCover { get; set; }
 
     /// <summary>Pull the current editor HTML. Called by the page on submit before building the DTO.</summary>
     public async Task<string> GetLongDescriptionAsync() =>
@@ -584,8 +605,13 @@
         };
     }
 
-    private void HandleCoverSelected(InputFileChangeEventArgs e) =>
-        SelectedCoverFile = e.File;
+    private async Task HandleCoverSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (e.File is not null)
+            await OnCoverSelected.InvokeAsync(e.File);
+    }
+
+    private Task HandleRemoveCoverAsync() => OnRemoveCover.InvokeAsync();
 
     // ── "Also posted on" link rows (WU38d) ───────────────────────────────────────
 

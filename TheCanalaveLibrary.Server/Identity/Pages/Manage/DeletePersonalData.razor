@@ -23,7 +23,9 @@
        was checked against the FK graph on 2026-10-13 (WU-UserDeletion), and each delete-it-first path
        against the UI that offers it (its review fixes: a closed poll's vote and a recommendation the
        author removed have none). The server-logs sentence changes when Phase 7 bounds log retention
-       (tracker E11). *@
+       (tracker E11). The picture/cover lines follow owner ruling D14 (WU-BlobCleanup, 2026-10-13): the
+       avatar's file is deleted with the account; covers stay with the surviving stories until decision
+       row 25 says otherwise. *@
     <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
         <p>
             <strong>Deleting your account cannot be undone.</strong> Your account is deleted outright, and
@@ -36,7 +38,7 @@
             <h4 class="font-semibold">Kept, without your name</h4>
             <p class="text-(--color-text-muted)">These stay on the site, shown as by <em>"[deleted user]"</em>:</p>
             <ul class="list-disc pl-5">
-                <li>Stories and their chapters, series, comments, blog posts, recommendations, and polls you created.</li>
+                <li>Stories (with their cover images) and their chapters, series, comments, blog posts, recommendations, and polls you created.</li>
                 <li>Your votes on polls. They still count in the results, and appear as "[deleted user]" where voters are listed.</li>
                 <li>
                     Private messages you sent. The other person keeps the conversation, and your messages show as from
@@ -51,7 +53,7 @@
             <h4 class="font-semibold">Permanently deleted</h4>
             <ul class="list-disc pl-5">
                 <li>Your account and login: your email address, password, and any linked sign-in providers.</li>
-                <li>Your profile, settings and stats.</li>
+                <li>Your profile, including your profile picture, and your settings and stats.</li>
                 <li>Follows and followers, and vouches you gave and received.</li>
                 <li>Favorites, likes, read-later, reading progress, custom lists and saved tag selections.</li>
                 <li>Badges, group memberships, content reveals and your notifications.</li>

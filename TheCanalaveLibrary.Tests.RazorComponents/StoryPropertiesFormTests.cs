@@ -1,6 +1,7 @@
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
@@ -120,6 +121,81 @@ public class StoryPropertiesFormTests : BunitContext
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.FindAll("input[type='file']").Should().NotBeEmpty();
+    }
+
+    // ── Cover: raised at once, never part of the submit (owner ruling D14, WU-BlobCleanup) ────────
+
+    [Fact]
+    public void PickingACoverFile_RaisesOnCoverSelected_WithThatFile()
+    {
+        IBrowserFile? raised = null;
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, MakeValidViewModel());
+            p.Add(f => f.OnCoverSelected, (IBrowserFile file) => raised = file);
+        });
+
+        cut.FindComponent<InputFile>().UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2, 3], "cover.webp", contentType: "image/webp"));
+
+        raised.Should().NotBeNull("the page uploads on pick, so the form hands the file over at once");
+        raised!.Name.Should().Be("cover.webp");
+        raised.ContentType.Should().Be("image/webp");
+    }
+
+    [Fact]
+    public void CoverUploadBusy_DisablesThePickerAndRemove_AndShowsUploading()
+    {
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.CoverArtRelativeUrl = "/uploads/stories/1/cover-11111111-1111-1111-1111-111111111111.png";
+
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.CoverUploadBusy, true);
+        });
+
+        cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeTrue();
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover")
+            .HasAttribute("disabled").Should().BeTrue();
+        cut.Markup.Should().Contain("Uploading…");
+    }
+
+    [Fact]
+    public void NotBusy_ThePickerIsEnabled_AndNoUploadingText()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
+            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
+
+        cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeFalse();
+        cut.Markup.Should().NotContain("Uploading…");
+    }
+
+    [Fact]
+    public void RemoveCover_RendersOnlyWhenACoverIsSet()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
+            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
+
+        cut.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Remove cover",
+            "there is nothing to remove");
+    }
+
+    [Fact]
+    public async Task RemoveCover_RaisesOnRemoveCover()
+    {
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.CoverArtRelativeUrl = "/uploads/stories/1/cover-11111111-1111-1111-1111-111111111111.png";
+        int raised = 0;
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.OnRemoveCover, () => raised++);
+        });
+
+        await cut.FindAll("button").Single(b => b.TextContent.Trim() == "Remove cover").ClickAsync(new());
+
+        raised.Should().Be(1);
     }
 
     [Fact]

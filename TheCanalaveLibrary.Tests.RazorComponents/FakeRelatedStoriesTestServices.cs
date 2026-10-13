@@ -44,7 +44,7 @@ internal sealed class FakeRelatedStoriesStoryReadService : IStoryReadService
 
     public Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) => Task.FromResult(StoryDetails);
     public Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) => Task.FromResult<GatedMetadataDto?>(null);
-    public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
+    public Task<StoryEditDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryEditDTO?>(null);
 
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) =>
         Task.FromResult(storyIds.Where(StoriesById.ContainsKey).Select(id => StoriesById[id]).ToArray());

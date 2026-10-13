@@ -42,6 +42,11 @@ Unit test classes run in parallel (the Integration tier's assembly-wide
   precedent uses 10 s for a call that returns in milliseconds) and assert the expected exception,
   so the timeout is never the passing outcome. Precedent: `ImageUploadProcessorAdvisoryTests`'
   BigTIFF test.
+- **Span emitters.** An `ActivityListener` is process-wide too, and `ImageStorageTelemetryTests`
+  asserts exactly one `ImageStorage.*` span per call. Another Unit class that calls
+  `LocalImageStorageService.SaveAsync` or `DeleteAsync` while it runs breaks that count, so keep those
+  calls out of other Unit classes and round-trip saves in Integration instead (the WU-BlobCleanup
+  enumeration tests write their files directly for this reason; `EnumerateAsync` emits no span).
 
 ## Integration tests run against real Postgres — never InMemory/SQLite
 
@@ -137,6 +142,16 @@ with "clean state per test":
   already performing a filtered story read in the same method needs one more manual call —
   `IntegrationTestBase.InvalidateTagHierarchy()` — since the per-test reset only covers the
   boundary *between* tests.
+
+- **The upload folder is NOT reset.** The shared host's `WebRootPath` (a temp folder per run,
+  `TestAppFactory.WebRootPath`) accumulates every file any test uploads; Respawn resets rows only.
+  A test whose result depends on *which files exist* (an enumeration, the orphan sweep, a delete
+  cap) constructs its own `LocalImageStorageService` over a per-test temp root (the `TempBlobStore`
+  helper in `BlobTestSupport.cs`, beside `ThrowingDeleteImageStorageService` for the storage-down
+  fault) and passes it to the service under test, via
+  `ActivatorUtilities.CreateInstance<T>(scope.ServiceProvider, storage, …)` (`ImageOrphanSweeperTests`,
+  `BlobCleanupTests`, `StoryCoverTests`; WU-BlobCleanup 2026-10-13). A test that only checks its own
+  uploaded path (exists, gone, 404) may use the shared host's storage.
 
 **A test that needs its own host builds its own `TestAppFactory`** (never disposes or mutates the
 shared one — that poisons the rest of the run). Three do, and each documents why:

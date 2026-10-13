@@ -1380,7 +1380,10 @@ Component-level guard: disable "Add pairing" button when fewer than 2 characters
 
 All four sub-components are **presentational leaves** (no `@inject`) so they are bUnit-testable.
 `StoryEditorPage` owns the `StoryPropertiesViewModel`, populates it from `GetStoryForEditAsync`
-on edit-mode load, and maps it back to DTOs on submit.
+on edit-mode load, and maps it back to DTOs on submit. The cover is never on the submit DTO (owner
+ruling D14, WU-BlobCleanup 2026-10-13): the form raises `OnCoverSelected`/`OnRemoveCover`, and the
+page uploads-and-persists (edit mode: at once; create mode: right after `CreateStoryAsync`) or
+removes through the write service's own calls.
 
 ## Page Route Reference
 

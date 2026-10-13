@@ -20,7 +20,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// exercised on every request. The <c>/uploads/{**key}</c> serving endpoint is browser-verified
 /// under the Aspire AppHost instead (Program.cs reads ImageStorage:Provider eagerly, before
 /// WebApplicationFactory config overrides apply — same quirk as the connection string, see
-/// TestAppFactory).
+/// TestAppFactory). <c>EnumerateAsync</c> (owner ruling D14, WU-BlobCleanup) is covered here too: the
+/// stored-path shape and last-modified time, the upload-prefix scope, and continuation paging.
 /// </summary>
 public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<GarageFixture>
 {
@@ -117,6 +118,89 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
             await service.DeleteAsync("/uploads/stories/424242/cover-00000000-0000-0000-0000-000000000000.png");
 
         await act.Should().NotThrowAsync();
+    }
+
+    // ── EnumerateAsync (owner ruling D14, WU-BlobCleanup) — the bucket is shared across this class,
+    //    so these assert "contains" / "does not contain", never an exact listing. ──────────────────
+
+    private static async Task<List<StoredImage>> EnumerateAllAsync(S3ImageStorageService service)
+    {
+        List<StoredImage> items = [];
+        await foreach (StoredImage item in service.EnumerateAsync()) items.Add(item);
+        return items;
+    }
+
+    [Fact]
+    public async Task EnumerateAsync_ListsSavedCoversAndAvatars_WithTheStoresLastModifiedTime()
+    {
+        S3ImageStorageService service = CreateService();
+        using MemoryStream png = new(SmallPng);
+        string cover = await service.SaveAsync(png, "image/png", ImageKind.Cover, ownerId: 501);
+        using MemoryStream webp = new(SmallWebp);
+        string avatar = await service.SaveAsync(webp, "image/webp", ImageKind.ProfilePicture, ownerId: 502);
+
+        List<StoredImage> items = await EnumerateAllAsync(service);
+
+        foreach (string path in new[] { cover, avatar })
+        {
+            StoredImage item = items.Should().ContainSingle(i => i.RelativePath == path,
+                "a stored path enumerates in exactly the shape SaveAsync returned").Which;
+            item.LastModifiedUtc.Kind.Should().Be(DateTimeKind.Utc);
+            item.LastModifiedUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(5));
+        }
+    }
+
+    [Fact]
+    public async Task EnumerateAsync_NeverListsOutsideTheUploadPrefixes()
+    {
+        // Sprites may share the production bucket: the sweep must never see them.
+        using AmazonS3Client client = S3ImageStorageService.CreateClient(garage.Options);
+        string spriteKey = $"sprites/themes/pokemon/static/{Guid.NewGuid()}.png";
+        await client.PutObjectAsync(new PutObjectRequest
+        {
+            BucketName = garage.Options.BucketName,
+            Key = spriteKey,
+            InputStream = new MemoryStream(SmallPng),
+            UseChunkEncoding = false,
+        });
+
+        List<StoredImage> items = await EnumerateAllAsync(CreateService());
+
+        items.Should().NotContain(i => i.RelativePath.Contains(spriteKey));
+        items.Should().OnlyContain(i => i.RelativePath.StartsWith("/uploads/stories/")
+                                        || i.RelativePath.StartsWith("/uploads/users/"));
+    }
+
+    [Fact]
+    public async Task EnumerateAsync_FollowsTheContinuationToken_AcrossPages()
+    {
+        S3ImageStorageService saver = CreateService();
+        List<string> saved = [];
+        for (int i = 0; i < 3; i++)
+        {
+            using MemoryStream png = new(SmallPng);
+            saved.Add(await saver.SaveAsync(png, "image/png", ImageKind.Cover, ownerId: 600 + i));
+        }
+
+        // One key per page: three or more pages, so every item past the first needs a continuation token.
+        S3ImageStorageOptions onePerPage = new()
+        {
+            ServiceUrl = garage.Options.ServiceUrl,
+            Region = garage.Options.Region,
+            AccessKey = garage.Options.AccessKey,
+            SecretKey = garage.Options.SecretKey,
+            BucketName = garage.Options.BucketName,
+            ListPageSize = 1,
+        };
+        S3ImageStorageService paged = new(S3ImageStorageService.CreateClient(onePerPage), Options.Create(onePerPage),
+            new ImageUploadProcessor(new FakeWriteRateLimitService(), FakeActiveUserContext.Anonymous(),
+                NullLogger<ImageUploadProcessor>.Instance),
+            NullLogger<S3ImageStorageService>.Instance);
+
+        List<StoredImage> items = await EnumerateAllAsync(paged);
+
+        items.Select(i => i.RelativePath).Should().Contain(saved);
+        items.Select(i => i.RelativePath).Should().OnlyHaveUniqueItems("paging must not repeat a key");
     }
 
     [Fact]

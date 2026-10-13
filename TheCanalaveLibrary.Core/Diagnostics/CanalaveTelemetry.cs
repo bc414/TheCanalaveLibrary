@@ -55,6 +55,13 @@ public static class CanalaveTelemetry
             "canalave.image.upload.size", unit: "By",
             description: "Size in bytes of completed image blob uploads.");
 
+        /// <summary>Orphaned blobs the daily sweep deleted (ImageOrphanSweeper, owner ruling D14).
+        /// A steady non-zero rate means some write path leaks blobs and wants an inline fix: the
+        /// sweep is the backstop for faults, never the designed way blobs go.</summary>
+        public static readonly Counter<long> OrphansDeleted = Meter.CreateCounter<long>(
+            "canalave.image.orphans.deleted", unit: "{blob}",
+            description: "Orphaned image blobs deleted by the daily orphan sweep.");
+
         /// <summary>One completed upload — both instruments, consistently tagged. Both storage
         /// impls call this so the metric shape can't drift between providers.</summary>
         public static void RecordUpload(ImageKind kind, string provider, long sizeBytes)

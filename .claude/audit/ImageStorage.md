@@ -11,10 +11,19 @@ file). This file is the settled-vs-open reference both cite.
 
 **Contract (Core/Images/):** `IImageStorageService` — `Task<string> SaveAsync(Stream content, string
 contentType, ImageKind kind, int ownerId)` returning the **stored relative path**; `Task
-DeleteAsync(string relativePath)`. `ImageKind` enum (`Cover`/`ProfilePicture`) drives the key
-convention. This is a **write-side blob service** (distinct from sprites, which have no runtime write
-path at all — sprite assets are provisioned out-of-band via Rclone → R2). Any read of a user image is
-just serving the static file directly, no service call.
+DeleteAsync(string relativePath)`; and, since WU-BlobCleanup (2026-10-13),
+`IAsyncEnumerable<StoredImage> EnumerateAsync(CancellationToken)`, which streams every stored upload
+under the upload key space only (`stories/`, `users/`) with the store-reported last-modified time.
+`ImageKind` enum (`Cover`/`ProfilePicture`) drives the key convention. This is a **write-side blob
+service** (distinct from sprites, which have no runtime write path at all — sprite assets are
+provisioned out-of-band via Rclone → R2). Any read of a user image is just serving the static file
+directly, no service call.
+
+**`EnumerateAsync` is an amendment to the frozen interface, not a violation (owner ruling D14,
+2026-08-07).** D14 named the member `IAsyncEnumerable<string>`; it yields a `StoredImage(RelativePath,
+LastModifiedUtc)` record instead, because the sweep's grace window needs the store's last-modified
+time and `ListObjectsV2` returns it in the same page (the alternative is one HEAD request per blob).
+The interface is still never client-implemented.
 
 **Relationship to sprites (settled 2026-06-27):** user uploads and sprites converge on **one thing
 only** — the public-asset-base config (same CDN / R2 bucket in prod, same `SpriteBaseUrl` /
@@ -23,11 +32,42 @@ uploads are owner-written at runtime (uuid key, entity stores path), sprites are
 provisioned (semantic key on `Tag`, URL computed per-viewer). `IImageStorageService` stays
 uploads-only; sprites use `ISpriteAssetProbe` for write-time existence checking only.
 
-**Orphan bug (fixed 2026-06-27):** `IImageStorageService.DeleteAsync` previously had zero callers
-— replacing a cover or avatar orphaned the old blob forever. Now: `ServerStoryWriteService.UpdateStoryAsync`
-calls `DeleteAsync(oldPath)` after a successful save when the cover changes;
-`ServerUserSettingsService.UploadProfilePictureAsync` reads the old path and calls `DeleteAsync` after
-persisting the new one. Both are best-effort (failure does not fail the user's save).
+**Orphans — the replacement case (fixed 2026-06-27) was one case of four; D14 (2026-08-07) owns the
+rest.** Until 2026-06-27 `IImageStorageService.DeleteAsync` had zero callers, so replacing a cover or
+avatar orphaned the old blob forever; that fix added the replacement deletes. It did **not** make
+orphans a solved problem, and reading it that way is part of why the other cases went unowned for
+six weeks:
+- **Terminal deletion** (an account deleted, a story hard-deleted by moderation) left the blobs its
+  rows named.
+- **A failed save after an upload** leaked a blob on a routine path: under the old two-step protocol
+  `UploadCoverArtAsync` wrote the blob, then `UpdateStoryAsync` could refuse the save. The inverse was
+  worse: an `UpdateStoryAsync` whose DTO omitted the cover nulled the column and deleted the live blob.
+- **Fault-class residue**: a blob write that succeeds while its column write fails has no delete
+  event to hook.
+
+D14 settled two owners, deliberately: an inline delete at every terminal deletion path, plus a daily
+sweep as the backstop for fault residue. "Orphans accepted" is rejected for every class. Its
+sub-ruling moved cover persistence into the upload method (the avatar shape). Rule of record:
+`layer2-services.md` §"Image Storage — blob ownership and cleanup"; built WU-BlobCleanup (2026-10-13).
+
+**Settled (owner ruling D14, answered 2026-08-07; settled for WU-BlobCleanup 2026-10-13). Do not
+revisit:**
+- A blob is referenced by exactly one row; the method that writes it persists its reference (write →
+  persist → best-effort delete old). No write DTO carries a blob path.
+- Every terminal deletion path captures the paths before the row delete and deletes the blobs after the
+  commit, outside the retry, best-effort with a Warning. D15's author story delete inherits this.
+- The sweep is the backstop, never the erasure mechanism: unfiltered reference read, 24 h grace window,
+  log-only first cycle, per-cycle cap, store → DB direction only, upload prefixes and generated key
+  shape only, rows naming a missing blob logged and never acted on, a kill switch. One bucket per
+  database.
+- Cover upload is an immediate commit, so form-cancel no longer reverts a cover (accepted; a revert
+  action is not built).
+
+**Open, the owner's:** whether account deletion strips the covers of the user's surviving
+(anonymized) stories — D14's text says delete them, but its premise ("the cascade removes the rows
+that name them") is false since D13 keeps stories. Built: covers kept. `roadmap.md` decision row 25,
+tracker **F22**. **Phase 7:** the CDN purge on hard delete (D14 flags it, not designed here) — a
+`roadmap.md` Phase-7 bullet.
 
 **Impls:**
 - `LocalImageStorageService` (Server/Images/, **MVP, built WU12**) — writes under `wwwroot/uploads/`,
@@ -108,7 +148,7 @@ write path's `CoverArtRelativeUrl` a pass-through string; both UIs have since sh
 
 ---
 
-## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12; refusals made user-facing on both render phases by its browser pass the same day — last two Stage notes below)
+## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12; refusals made user-facing on both render phases by its browser pass the same day; blob cleanup owned since WU-BlobCleanup, 2026-10-13 — `EnumerateAsync`, the daily orphan sweep, the inline deletes at account deletion and moderation hard delete, cover upload persisting its own reference; Unit + Integration-tested, browser pass owed (tracker H31) — Stage notes below, newest last)
 
 `IImageStorageService` + `LocalImageStorageService` minted and registered
 (`AddScoped<IImageStorageService, LocalImageStorageService>()`). No write-path call site yet (Stories'
@@ -259,6 +299,69 @@ ground truth.
     a non-image cover each answer 400 with the readable `Detail` and write nothing (the WASM half).
   - Mutation-checked: putting the `ArgumentException` back at the sniff and the claimed-type check
     fails 5 Unit tests and all 3 Integration tests.
+
+**WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — L2 remains Stage 5.** The Settled note in
+Shared Context, built. Rule of record: `layer2-services.md` §"Image Storage — blob ownership and
+cleanup". No migration (only two columns name blobs, and no seed sets either).
+- **`EnumerateAsync` (frozen-interface amendment).** New Core `StoredImage(RelativePath,
+  LastModifiedUtc)`. `ImageUploadRules.KeyPrefixes` (`stories/`, `users/`) and `IsGeneratedKey`, an
+  anchored regex built from the allow-list's extensions so the two cannot drift: the exact `BuildKey`
+  shape, the kind matching its folder, a lowercase "D" guid, an `int` owner, `\z` (a trailing newline
+  does not match). Local walks the two prefix folders lazily and skips a file that vanished mid-walk;
+  S3 pages `ListObjectsV2` per prefix (`S3ImageStorageOptions.ListPageSize`, default 1,000) and guards
+  the SDK v4 nulls (`S3Objects`, `IsTruncated`; a null `LastModified` reads as "now", so the grace window
+  skips it).
+- **`ImageOrphanSweeper` + `ImageOrphanSweepWorker`** (Server/Images/; Program.cs registers both;
+  `TestAppFactory` removes the worker). The sweeper reads the references first from the write context
+  through `StoryListings`/`Users` with `IgnoreQueryFilters()`, then streams the store: referenced →
+  kept; not a generated key → foreign; under 24 h → in grace; otherwise a candidate. A real cycle
+  attempts at most 100 deletes (the cap counts attempts, so a failing store is bounded too), logs each
+  delete, and counts failures without stopping. Rows naming a missing blob are one Warning (count plus
+  ten samples), never acted on. One summary log, a Warning when capped, the root span
+  `ImageStorage.OrphanSweep` (`canalave.image.sweep.*` tags) and the counter
+  `canalave.image.orphans.deleted`. The worker's first cycle per process is a dry run, set only once a
+  dry run has actually run; `ImageStorage:OrphanSweep:Enabled` is read every cycle. A dev server rarely
+  lives 24 h, so in dev the sweep effectively only ever dry-runs. **Dev-data note:** the WU12 fixture
+  `wwwroot/uploads/stories/999/cover-*.png` (and anything `/dev/wu12/upload-test-image` writes) is
+  unreferenced by design, so the first real Local-mode cycle deletes it.
+- **Inline sites.** `UserDeletionService` captures the avatar path inside the transaction and deletes it
+  after the strategy returns (reset per attempt, so only the committed attempt counts).
+  `ResolveWithRemovalAsync(hardDelete: true)` captures a Story's cover before the row delete
+  (`HardDeleteOutcome`) and deletes it after the strategy returns, in its own `try` ahead of the
+  notifications. Both log a Warning naming the path on failure. Covers of a deleted user's surviving
+  stories stay (decision row 25, tracker F22).
+- **Cover persistence.** `UploadCoverArtAsync` now loads the story with its listing, gates (an authorless
+  story is 403, not 404: service audit §2.12's `(int?)` item, closed), writes the blob, persists the column
+  and `LastUpdatedDate`, then deletes the old blob. `RemoveCoverArtAsync` is new
+  (`DELETE /api/stories/{id}/cover` → 204, client impl). `CoverArtRelativeUrl` is off the write DTOs,
+  the mapper and `UpdateStoryAsync` (whose cover-change delete branch is gone). Detail: `audit/Stories.md`
+  F4's Stage note.
+- **Doc corrections (D14 required them):** the "Orphan bug (fixed 2026-06-27)" header above is
+  rewritten; `layer2-services.md`'s two stale "when S3 lands" sentences, `render-and-layout.md`'s twin,
+  `layer5-wasm.md`'s "fix is adding UploadCoverArtAsync" (done since WU-L5Sweep, and it persists now),
+  `folder_clusters.md`'s "Groups" consumer (none exists), and `ServerUserSettingsService`'s dead
+  §"Image Storage" pointer. `SelectedCoverFile` is a registered retired term.
+- **How verified:** build 0 errors, no new warnings in touched files; all three tiers green.
+  - **Unit:** `ImageUploadRulesTests` (28: every kind × extension `BuildKey` emits is accepted, 20 near
+    misses rejected, the prefixes cover every `ImageKind`) and `LocalImageStorageEnumerationTests` (5:
+    `/`-separated paths with last-write times, only the two prefixes, nothing without `uploads/`,
+    one-prefix, cancellation). These write files directly and never call `SaveAsync`, because
+    `ImageStorageTelemetryTests`' process-wide listener counts `ImageStorage.Save` spans (`testing.md`).
+  - **Integration:** `ImageOrphanSweeperTests` (8, each over its own temp store): the query-filter trap
+    (taken-down, draft and M-rated covers plus an avatar survive while an orphan in the same run goes),
+    the same over a mis-injected read context, grace window, foreign files, a dangling row
+    (Warning, column untouched), dry run, the cap (102 orphans → 100 deleted, `CapReached`), failed
+    deletes counted. `S3ImageStorageServiceTests` +3 against Garage: saved objects enumerate with a
+    last-modified within 5 min, a `sprites/…` object is never listed, `ListPageSize = 1` pages through
+    three or more objects. `BlobCleanupTests`, `BlobCleanupGarageTests`, `StoryCoverTests` and the
+    endpoint tests: see the F4/F47/F52 Stage notes. `HostBootTests` +1 (the sweeper resolves; the shared
+    host runs no sweep worker).
+  - **Mutation-checked** (each fails a test, restored after): the reference read through `Stories`
+    without `IgnoreQueryFilters`; no grace check; no key-shape guard; no cap; dry run ignored; avatars
+    left out of the reference set; no S3 continuation; listing the whole bucket.
+  - The worker loop has no automated test, like every other worker, since `TestAppFactory` removes it.
+  - **No browser was available to the build:** tracker **H31** holds the pass (the editor's cover flow
+    on both render phases; a hard delete's cover URL 404ing on the Aspire/Garage path).
 
 ## L3/L3.5/L4 — N/A for this cluster
 

@@ -571,10 +571,12 @@ is not usable for restore (`error-handling.md` — prerender-handoff only).
 
 **`SpriteBaseUrl` is a config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`
 for wwwroot). At R2/CDN time, changing this one config value — together with an Rclone sync of the
-assets — is the complete cutover; no code changes. This is the same public-asset-base seam
-`IImageStorageService` will adopt when `S3ImageStorageService` lands; the two features converge on
-one base-URL config and one CDN but do **not** share a storage service (sprites have no runtime
-write path — assets are provisioned out-of-band via Rclone).
+assets — is the complete cutover; no code changes. Uploads have the analogous seam:
+`S3ImageStorageService` has existed since WU-S3Garage (2026-07-05), and `ImageStorage:PublicBaseUrl`
+is wired but unset, because every upload is still served same-origin through the app (static files in
+Local mode, the `/uploads/{**key}` endpoint in S3 mode). The two features converge on one CDN but do
+**not** share a storage service (sprites have no runtime write path — assets are provisioned
+out-of-band via Rclone).
 
 **Avatars are a related but distinct case (settled WU10):** `UserCardDto.AvatarUrl` is *not* produced
 by `ISpriteReadService` — it's the read service copying `User.ProfilePictureRelativeUrl` (a
@@ -586,9 +588,60 @@ directly. See `layer4-style.md` §"Avatars Are Stored URLs, Not Sprite Keys".
 `StoryListingDto.CoverArtRelativeUrl` is also copied verbatim, never resolved through
 `ISpriteReadService`. The difference from sprites/tags is *how the relative path got there in the first
 place* — `IImageStorageService.SaveAsync` (Core/Images/) is the write-side counterpart that turns an
-uploaded file into the relative key stored on the entity. `LocalImageStorageService` (MVP) writes under
-`wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap (Garage/R2).
-See `audit/ImageStorage.md` for the full contract and URL conventions.
+uploaded file into the relative key stored on the entity. `LocalImageStorageService` writes under
+`wwwroot/uploads/`; `S3ImageStorageService` (Garage in dev, R2 in prod) sits behind the same interface,
+selected by `ImageStorage:Provider`. See `audit/ImageStorage.md` for the full contract and URL
+conventions, and the next section for who deletes a blob.
+
+### Image Storage — blob ownership and cleanup (owner ruling D14; built WU-BlobCleanup 2026-10-13)
+
+A blob lives outside the database, so no transaction can cover a blob write and the column write
+that names it. D14 therefore gives blob cleanup **two owners on purpose**, and "orphans accepted" is
+rejected for every class:
+
+1. **A stored blob is referenced by exactly one row, and the method that writes the blob persists its
+   reference.** Order: write the blob → persist the column → best-effort delete the old blob (never
+   delete first). `IUserSettingsService.UploadProfilePictureAsync` and
+   `IStoryWriteService.UploadCoverArtAsync` both commit immediately; clearing a cover is its own
+   operation (`RemoveCoverArtAsync`). **No write DTO carries a blob path**: `CoverArtRelativeUrl` is
+   off `IEditableStoryProperties`, so `UpdateStoryAsync` cannot set, clear or "not touch" a cover by
+   accident. The read side keeps it (`StoryEditDTO`, a read echo the write path never reads). A
+   persist that fails after its blob write leaves an orphan; no compensating delete is written,
+   because that is the sweep's class.
+2. **Every terminal deletion path deletes the blobs its rows named, inline.** It captures the paths
+   before the row delete (a cascade removes the rows that name them), and deletes them after the commit,
+   outside the execution-strategy retry (a retried delegate must not re-delete, and a blob delete cannot
+   roll back). Best-effort: catch, log a Warning naming the path, carry on. Built at
+   `UserDeletionService` (the avatar) and `ResolveWithRemovalAsync(hardDelete: true)` (the story cover;
+   a soft removal never touches the blob, because it is reversible). Author story deletion (D15) is the
+   third site and inherits this rule; so does any future terminal path. **A row that survives keeps its
+   blob:** stories survive their author's deletion anonymized (D13), so their covers stay (whether to
+   strip them is decision row 25).
+3. **The daily sweep is the fault-class backstop, never the mechanism of erasure.**
+   `ImageOrphanSweeper` (worker: `ImageOrphanSweepWorker`) anti-joins the store against the database
+   (`IImageStorageService.EnumerateAsync`, which streams the upload key space without materializing
+   it). Its constraints, all mandatory:
+   - **The reference read is unfiltered:** the write context plus `IgnoreQueryFilters()`. A filtered
+     read (takedown, draft status, rating, confidentiality) makes live covers look orphaned. This is
+     the one failure mode that destroys real user data.
+   - **Grace window:** a blob whose store-reported last-modified time is under 24 h old is never
+     deleted, so the sweep cannot race an upload whose column write has not landed yet.
+   - **Scope:** only the upload prefixes (`stories/`, `users/`), and only a key in the exact shape
+     `ImageUploadRules.BuildKey` emits (`ImageUploadRules.IsGeneratedKey`). Sprites may share the prod
+     bucket; anything else is counted as foreign and never deleted.
+   - **Blast radius:** the first cycle after each process start is log-only (dry run), and each real
+     cycle attempts at most `MaxDeletesPerCycle` (100) deletes.
+   - **Direction is store → DB only.** A row naming a missing blob is a different, non-destructive
+     defect: it is logged as a Warning (count plus samples) and never acted on.
+   - **Kill switch:** `ImageStorage:OrphanSweep:Enabled` (default `true`) is read every cycle. Turn it
+     off during and after a database restore until the restored rows and the live bucket are
+     reconciled: every blob written after the backup looks orphaned to a restored database.
+4. **One bucket per database.** Never point two databases (prod and a staging copy, two dev machines)
+   at one bucket or one upload folder: each one's sweep sees the other's blobs as orphans.
+
+D14 also routes a launch item here: `/uploads/{**key}` is served `immutable` for a year, so deleting
+an object does not evict CDN copies. The illegal-content path needs a cache purge once Cloudflare sits
+in front of R2 (roadmap Phase 7).
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
 

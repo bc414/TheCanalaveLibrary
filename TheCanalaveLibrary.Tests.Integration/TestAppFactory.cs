@@ -142,6 +142,9 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
                          typeof(SiteDailyStatWorker), typeof(SpotlightGoLiveWorker),
                          typeof(PollEditNotificationWorker), typeof(NotificationCleanupWorker),
                          typeof(UserStatRecalculationWorker), typeof(NotificationEmailWorker),
+                         // Mandatory: the shared host would otherwise sweep its upload folder 5 s
+                         // after boot, while tests are writing to it (WU-BlobCleanup).
+                         typeof(ImageOrphanSweepWorker),
                      })
             {
                 ServiceDescriptor? backgroundWorker = services.FirstOrDefault(d =>

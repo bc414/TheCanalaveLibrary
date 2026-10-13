@@ -21,7 +21,7 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     public async Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) =>
         await Http.GetNullableFromJsonAsync<GatedMetadataDto?>($"api/stories/{storyId}/gate");
 
-    public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
+    public async Task<StoryEditDTO?> GetStoryForEditAsync(int storyId)
     {
         // 401 → SessionExpiredException, 403 → UnauthorizedAccessException (the server's author
         // gate — StoryEditorPage's forbidden handling works identically under both render modes),
@@ -30,7 +30,7 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
         // permission distinction).
         using HttpResponseMessage response = await Http.GetAsync($"api/stories/{storyId}/edit");
         await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
-        return await ClientHttpHelpers.ReadNullableFromJsonAsync<StoryUpdateDTO?>(response.Content);
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<StoryEditDTO?>(response.Content);
     }
 
     public async Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds)

@@ -146,7 +146,7 @@ public class ServerStoryReadService(
         };
     }
 
-    public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
+    public async Task<StoryEditDTO?> GetStoryForEditAsync(int storyId)
     {
         // Author gate (endpoint-authz sweep 2026-07-18): this feeds the author-only StoryEditorPage,
         // so ownership is enforced here — the page's own AuthorId comparison is affordance, not a
@@ -165,7 +165,7 @@ public class ServerStoryReadService(
                 // Same ordering as the Dto.StoryCharacters subquery — positional index source.
                 CharacterRowIds = s.StoryCharacters.OrderBy(sc => sc.StoryCharacterId)
                     .Select(sc => sc.StoryCharacterId).ToList(),
-                Dto = new StoryUpdateDTO
+                Dto = new StoryEditDTO
                 {
                 StoryId = s.StoryId,
                 Title = s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
@@ -175,6 +175,7 @@ public class ServerStoryReadService(
                 // ignores both. The rejection reason rides the takedown columns (tracker D6).
                 StoryStatusId = s.StoryStatusId,
                 RejectionReason = s.StoryStatusId == StoryStatusEnum.Rejected ? s.TakedownReason : null,
+                // Read echo (StoryEditDTO, owner ruling D14) — never read by the write path.
                 CoverArtRelativeUrl = s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
                 LongDescription = s.StoryDetail != null ? s.StoryDetail.LongDescription : null,
                 PostApprovalStatus = s.StoryDetail != null ? s.StoryDetail.PostApprovalStatus : default,

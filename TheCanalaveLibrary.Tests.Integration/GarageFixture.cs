@@ -60,7 +60,11 @@ public sealed class GarageFixture : IAsyncLifetime
                 await client.GetBucketLocationAsync(BucketName);
                 break;
             }
-            catch (AmazonS3Exception) when (DateTime.UtcNow < deadline)
+            // Not only AmazonS3Exception: a container that has just opened its port can also drop the
+            // connection mid-response (HttpIOException, an IOException), which escaped this loop and
+            // failed the whole class once a second Garage-using class existed (WU-BlobCleanup).
+            catch (Exception ex) when ((ex is AmazonS3Exception or IOException or HttpRequestException)
+                                       && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(500);
             }

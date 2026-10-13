@@ -1475,6 +1475,24 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     `layer2-services.md` §"Check-then-act posture".
   - As built: the three fields keep the service check; `layer2-services.md` names them as not covered.
 
+- [ ] **F22 — Does account deletion strip the covers of the user's surviving stories?** `[decision · low · launch]` — *Filed 2026-10-13 by WU-BlobCleanup (its spec's X1); two owner rulings disagree on one edge. Promoted the same day to `roadmap.md` decision row 25.*
+  - Grid: F52 L2 reads 5 (unchanged).
+  - Source: D14's mechanism text says `UserDeletionService` collects "the avatar path and the cover
+    paths of every story the user authored … since the cascade removes the rows that name them". The
+    premise is false: `stories.author_id` is `SET NULL` (`IdentityConfigurations.cs`), and D13
+    (answered 2026-08-06, a day before D14) ratified stories as surviving anonymized. Their listing
+    rows survive and still name their covers.
+  - As built (non-destructive, reversible): only the avatar blob is deleted; the covers stay. Deleting
+    them would break the covers of live stories, contradict the sweep's "a referenced blob survives"
+    invariant, and turn every such row into a dangling reference. D14's stated principle ("the blob is
+    gone when the row is gone") does not reach a row that survives.
+  - The question: keep covers on anonymized stories, or strip them (a cover can be personal: a photo,
+    the author's own art)? Built shape if "strip": inside the deletion transaction, null
+    `CoverArtRelativeUrl` on the user's stories and capture the paths; delete the blobs post-commit
+    beside the avatar; add the covers to `DeletePersonalData.razor`'s "Permanently deleted" list.
+    Integration test: the D14 test as worded ("an avatar and two covered stories → all three blobs gone,
+    and a later sweep finds nothing").
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1986,6 +2004,37 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. As the owner, with a vote present, the editor's mode select is disabled as before; a direct
        `PUT /api/polls/{id}` with the other mode answers 400 "Vote mode is locked once votes exist."
     5. Delete the poll: its options and votes go (`psql`).
+
+- [ ] **H31 — WU-BlobCleanup browser pass: the cover is an immediate commit, and the deletion paths erase blobs** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-BlobCleanup, which ran with no browser available.*
+  - Grid: F4 L4.5 went 5→1 (the editor's cover flow changed). F47 and F52 L4.5 stay 5 (no interactive
+    UI changed; the deletion page's two copy lines are asserted by `StaticSsrPageRenderTests`).
+  - Steps (server-only path unless noted; both render phases — circuit proven by `_blazor/negotiate`,
+    WASM by the `/api/stories/…/cover` requests; `psql` on `story_listings.cover_art_relative_url` and a
+    look at `wwwroot/uploads/stories/{id}/` after each write):
+    1. **Edit mode, upload.** On `/story/{id}/edit` as the author, pick a PNG: "Uploading…" shows and the
+       picker disables, then the new cover renders with no Save. `psql` already holds the new path; the
+       previous cover's file is gone. Leave the page without saving: the cover stays (D14's accepted
+       consequence — cancel does not revert it).
+    2. **Edit mode, save after upload.** Pick a cover, edit the title, Save: the page reloads with the
+       new title and the cover intact (the inverse-hazard regression in the browser).
+    3. **Remove cover.** "Remove cover" clears the image at once; `psql` NULL; the file is gone; the button
+       disappears.
+    4. **A refused file.** Pick a non-image renamed `.png`: the form reads "This file isn't a JPEG, PNG or
+       WebP image.", the old cover stays, the picker re-enables.
+    5. **Create with a cover.** On `/story/new`, pick a cover (nothing uploads yet), fill the form, Create:
+       the edit page opens showing the cover; `psql` holds it and the network shows one `POST …/cover` and
+       no `PUT`.
+    6. **The deletion page.** `/Account/Manage/DeletePersonalData` reads "Your profile, including your
+       profile picture" and "Stories (with their cover images)".
+    7. **Aspire/Garage path (the owner's smoke).** No UI sends a hard delete (the queue's removal is the
+       takedown), so drive it as a moderator over HTTP, as the WU-TptHardDelete pass did:
+       `POST /api/moderation/reports/{id}/resolve-removal?removalReason=…&hardDelete=true` on a report
+       about a covered story (204). Its cover URL then 404s, and `docker exec canalave-garage /garage
+       bucket info canalave-images` shows one object fewer. A takedown (`hardDelete=false`) keeps the
+       cover. Delete a test account that has an avatar: its avatar URL 404s.
+    8. **Orphan sweep, dry run.** Start the server and watch the log 5 s in: one "Orphan sweep finished
+       (dry run: True)" line, and a "would delete" line per orphan older than 24 h (the WU12 fixture
+       `uploads/stories/999/cover-*.png` is one, by design). Nothing is deleted.
 
 ---
 

@@ -20,11 +20,12 @@ public interface IStoryReadService
     Task<GatedMetadataDto?> GetStoryGateAsync(int storyId);
 
     /// <summary>
-    /// Gets the data required to edit a story.
+    /// Gets the data required to edit a story: its editable properties plus read echoes (status,
+    /// rejection reason, and the cover — owner ruling D14 keeps the cover off the write DTO).
     /// </summary>
     /// <param name="storyId">The ID of the story to edit.</param>
-    /// <returns>A DTO containing the story's editable properties.</returns>
-    Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId);
+    /// <returns>A DTO containing the story's editable properties and its current cover.</returns>
+    Task<StoryEditDTO?> GetStoryForEditAsync(int storyId);
 
     /// <summary>
     /// Building-block method (spec §6.6) — turns story IDs that another service's domain query already

@@ -245,7 +245,9 @@ public class ServerUserSettingsService(
             .FirstOrDefaultAsync();
 
         // Delegate storage and key construction to IImageStorageService.
-        // Stored key: users/{userId}/profile-{uuid}.{ext} (per layer2-services.md §"Image Storage").
+        // Stored key: users/{userId}/profile-{uuid}.{ext} (ImageUploadRules.BuildKey). Order per owner
+        // ruling D14: write blob → persist column → best-effort delete the old blob (layer2-services.md
+        // §"Image Storage — blob ownership and cleanup").
         string relativeUrl = await imageStorage.SaveAsync(
             content, contentType, ImageKind.ProfilePicture, ownerId: userId);
 

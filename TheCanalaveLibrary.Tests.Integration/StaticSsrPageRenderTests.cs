@@ -135,6 +135,11 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
         html.Should().Contain("server logs record activity by account number");
         html.Should().Contain("They are not erased when your account is deleted");
         html.Should().NotContain("nothing links what remains back to you", "server logs can, until Phase 7 bounds them");
+
+        // WU-BlobCleanup (owner ruling D14): the avatar's file goes with the account; covers stay with the
+        // surviving stories (decision row 25).
+        html.Should().Contain("Your profile, including your profile picture");
+        html.Should().Contain("Stories (with their cover images)");
     }
 
     /// <summary>

@@ -23,4 +23,9 @@ public sealed class S3ImageStorageOptions
     public string SecretKey { get; set; } = "";
 
     public string BucketName { get; set; } = "";
+
+    /// <summary>Keys per <c>ListObjectsV2</c> page when the orphan sweep enumerates the upload
+    /// prefixes (<see cref="S3ImageStorageService.EnumerateAsync"/>). 1,000 is S3's own maximum;
+    /// tests lower it to exercise continuation paging.</summary>
+    public int ListPageSize { get; set; } = 1000;
 }

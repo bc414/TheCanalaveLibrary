@@ -57,6 +57,14 @@ public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadSe
         return (await response.Content.ReadFromJsonAsync<string>())!;
     }
 
+    /// <summary>Bodiless <c>DELETE api/stories/{id}/cover</c> → 204 (owner ruling D14: clearing a
+    /// cover is its own call).</summary>
+    public async Task RemoveCoverArtAsync(int storyId)
+    {
+        HttpResponseMessage response = await Http.DeleteAsync($"api/stories/{storyId}/cover");
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     /// <summary>Status-code → contract-exception translation (inverse of StoryEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -55,6 +57,39 @@ public static class ImageUploadRules
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         return $"{subfolder}/{filePrefix}-{Guid.NewGuid()}.{extension}";
+    }
+
+    /// <summary>
+    /// The top-level key prefixes <see cref="BuildKey"/> writes under — the whole upload key space.
+    /// <see cref="IImageStorageService.EnumerateAsync"/> lists these and nothing else: sprites may
+    /// share the production bucket and must never reach the orphan sweep (owner ruling D14).
+    /// </summary>
+    public static readonly IReadOnlyList<string> KeyPrefixes = ["stories/", "users/"];
+
+    // Declared after AllowedContentTypes on purpose: static initializers run in textual order, and
+    // the extension alternation is built from that dictionary so the two can never drift.
+    private static readonly Regex GeneratedKeyPattern = new(
+        "^(?:stories/(?<owner>[0-9]{1,10})/cover|users/(?<owner>[0-9]{1,10})/profile)" +
+        "-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" +
+        // \z, not $: in .NET, $ also matches before a trailing newline.
+        $@"\.(?:{string.Join('|', AllowedContentTypes.Values.Distinct().Select(Regex.Escape))})\z",
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+
+    /// <summary>
+    /// True only for a key in the exact shape <see cref="BuildKey"/> emits:
+    /// <c>stories/{int}/cover-{guid}.{ext}</c> or <c>users/{int}/profile-{guid}.{ext}</c>, the kind
+    /// matching its folder, the guid in <see cref="Guid.ToString()"/>'s lowercase "D" format, and the
+    /// extension one this service family writes. The orphan sweep deletes only keys that pass: anything
+    /// else in the upload prefixes (a hand-placed file, a traversal-shaped name) is foreign, never ours
+    /// to delete (owner ruling D14).
+    /// </summary>
+    public static bool IsGeneratedKey(string? key)
+    {
+        if (key is null) return false;
+        Match match = GeneratedKeyPattern.Match(key);
+        // The owner id must be an int, as BuildKey's is: ten digits can still overflow one.
+        return match.Success && int.TryParse(match.Groups["owner"].ValueSpan, NumberStyles.None,
+            CultureInfo.InvariantCulture, out _);
     }
 
     /// <summary>

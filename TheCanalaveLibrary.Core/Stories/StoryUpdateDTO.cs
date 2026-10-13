@@ -24,7 +24,8 @@ public class StoryUpdateDTO : IEditableStoryProperties
     /// </summary>
     public string? RejectionReason { get; set; }
 
-    public string? CoverArtRelativeUrl { get; set; }
+    // No CoverArtRelativeUrl (owner ruling D14): UpdateStoryAsync cannot touch the cover. The editor
+    // reads it from StoryEditDTO, GetStoryForEditAsync's read echo.
     public string? LongDescription { get; set; }
     public StoryStatusEnum PostApprovalStatus { get; set; }
     public List<IStoryTag> StoryTags { get; set; } = new();

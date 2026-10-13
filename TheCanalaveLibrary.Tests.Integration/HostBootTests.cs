@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using TheCanalaveLibrary.Core;
+using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Tests.Integration;
 
@@ -25,9 +27,19 @@ public class HostBootTests(PostgresFixture postgres) : IntegrationTestBase(postg
             scope.ServiceProvider.GetRequiredService<IStoryReadService>();
             scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
             scope.ServiceProvider.GetRequiredService<IImageStorageService>();
+            scope.ServiceProvider.GetRequiredService<ImageOrphanSweeper>();
         };
 
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void TheSharedHost_RunsNoOrphanSweepWorker()
+    {
+        // Without TestAppFactory's removal the shared host would sweep its upload folder 5 s after
+        // boot, while tests write to it (WU-BlobCleanup).
+        Factory.Services.GetServices<IHostedService>()
+            .Should().NotContain(s => s is ImageOrphanSweepWorker);
     }
 
     [Fact]

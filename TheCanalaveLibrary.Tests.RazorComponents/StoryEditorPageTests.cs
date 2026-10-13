@@ -1,5 +1,6 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
@@ -54,9 +55,9 @@ public class StoryEditorPageTests : BunitContext
 
     private IRenderedComponent<StoryEditorPage> RenderEditor(
         StoryStatusEnum status, StoryStatusEnum postApproval = StoryStatusEnum.Completed,
-        string? rejectionReason = null, string? longDescription = null)
+        string? rejectionReason = null, string? longDescription = null, string? cover = null)
     {
-        _reads.EditDto = new StoryUpdateDTO
+        _reads.EditDto = new StoryEditDTO
         {
             StoryId = StoryId,
             Title = "Lifecycle Story",
@@ -66,6 +67,7 @@ public class StoryEditorPageTests : BunitContext
             PostApprovalStatus = postApproval,
             RejectionReason = rejectionReason,
             LongDescription = longDescription,
+            CoverArtRelativeUrl = cover,
         };
         return Render<StoryEditorPage>(p => p.Add(c => c.StoryId, StoryId));
     }
@@ -187,16 +189,106 @@ public class StoryEditorPageTests : BunitContext
             "a changed EditorContent is exactly the diff that crashes the renderer under real Quill");
     }
 
+    // ── Cover: an immediate commit, never part of the save (owner ruling D14, WU-BlobCleanup) ──────
+
+    private static readonly byte[] CoverBytes = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];
+    private const string OldCover = "/uploads/stories/7/cover-11111111-1111-1111-1111-111111111111.png";
+
+    private static void PickCover(IRenderedComponent<StoryEditorPage> cut) =>
+        cut.FindComponent<InputFile>().UploadFiles(
+            InputFileContent.CreateFromBinary(CoverBytes, "cover.png", contentType: "image/png"));
+
+    [Fact]
+    public void EditMode_PickingACover_UploadsAtOnce_AndShowsIt_WithNoSaveAndNoUpdate()
+    {
+        // D14's RazorComponents test: the editor renders the newly uploaded cover without a save.
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+        cut.FindAll("img[alt='Current cover']").Should().BeEmpty();
+
+        PickCover(cut);
+
+        cut.WaitForAssertion(() => cut.Find("img[alt='Current cover']").GetAttribute("src")
+            .Should().Be(_writes.UploadedPath));
+        _writes.Calls.Should().Equal([$"Upload:{StoryId}:image/png:{CoverBytes.Length}"],
+            "the upload persists the cover itself; the page must not follow it with UpdateStoryAsync");
+        cut.FindAll("button").Should().Contain(b => b.TextContent.Trim() == "Remove cover");
+    }
+
+    [Fact]
+    public async Task EditMode_RemoveCover_CallsRemove_AndTheCoverDisappears()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        cut.Find("img[alt='Current cover']").GetAttribute("src").Should().Be(OldCover);
+
+        await ClickAsync(cut, "Remove cover");
+
+        _writes.Calls.Should().Equal([$"Remove:{StoryId}"]);
+        cut.FindAll("img[alt='Current cover']").Should().BeEmpty();
+        cut.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Remove cover");
+    }
+
+    [Fact]
+    public void EditMode_ARefusedUpload_ShowsTheMessage_AndKeepsTheOldCover()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        _writes.CoverFailure = new ImageUploadValidationException("Images must be JPEG, PNG or WebP files.");
+
+        PickCover(cut);
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Images must be JPEG, PNG or WebP files."));
+        cut.Find("img[alt='Current cover']").GetAttribute("src").Should().Be(OldCover);
+        cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeFalse(
+            "the picker is usable again once the upload settled");
+    }
+
+    [Fact]
+    public async Task CreateMode_APickedCover_WaitsForTheCreate_ThenUploadsToTheNewStory_WithNoUpdate()
+    {
+        IRenderedComponent<StoryEditorPage> cut = Render<StoryEditorPage>();
+
+        PickCover(cut);
+        _writes.Calls.Should().BeEmpty("a new story has no id to attach a cover to yet");
+
+        await cut.Find("#story-title").ChangeAsync(new() { Value = "A brand new story" });
+        await cut.Find("#story-short-description").ChangeAsync(new() { Value = "A short description" });
+        await cut.Find("form").SubmitAsync();
+
+        _writes.Calls.Should().Equal(
+            ["Create", $"Upload:{_writes.CreatedStoryId}:image/png:{CoverBytes.Length}"],
+            "UploadCoverArtAsync persists the cover, so the old second UpdateStoryAsync is gone (owner ruling D14)");
+    }
+
+    [Fact]
+    public async Task CreateMode_WithNoCoverPicked_CreatesOnly()
+    {
+        IRenderedComponent<StoryEditorPage> cut = Render<StoryEditorPage>();
+
+        await cut.Find("#story-title").ChangeAsync(new() { Value = "A brand new story" });
+        await cut.Find("#story-short-description").ChangeAsync(new() { Value = "A short description" });
+        await cut.Find("form").SubmitAsync();
+
+        _writes.Calls.Should().Equal(["Create"]);
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Records each requested target and answers with <see cref="Result"/> (the status the
-    /// server says the story landed on) or throws <see cref="Failure"/>.</summary>
+    /// server says the story landed on) or throws <see cref="Failure"/>. Since WU-BlobCleanup it also
+    /// records the create/update/cover calls in order (<see cref="Calls"/>), so a test can prove which
+    /// call the page made and which it did not.</summary>
     private sealed class ScriptedStoryWriteService : IStoryWriteService
     {
         public StoryStatusEnum Result { get; set; }
         public Exception? Failure { get; set; }
         public Exception? SaveFailure { get; set; }
+        public Exception? CoverFailure { get; set; }
         public List<StoryStatusEnum> Requested { get; } = [];
+        public int CreatedStoryId { get; set; } = 42;
+        public string UploadedPath { get; set; } = "/uploads/stories/7/cover-22222222-2222-2222-2222-222222222222.png";
+
+        /// <summary>"Create", "Update", "Upload:{storyId}:{contentType}:{bytes}" and "Remove:{storyId}",
+        /// in call order.</summary>
+        public List<string> Calls { get; } = [];
 
         public Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
         {
@@ -204,10 +296,32 @@ public class StoryEditorPageTests : BunitContext
             return Failure is null ? Task.FromResult(Result) : Task.FromException<StoryStatusEnum>(Failure);
         }
 
-        public Task<int> CreateStoryAsync(CreateStoryDTO dto) => throw new NotImplementedException();
-        public Task UpdateStoryAsync(StoryUpdateDTO dto) =>
-            SaveFailure is null ? throw new NotImplementedException() : Task.FromException(SaveFailure);
-        public Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId) => throw new NotImplementedException();
+        public Task<int> CreateStoryAsync(CreateStoryDTO dto)
+        {
+            Calls.Add("Create");
+            return Task.FromResult(CreatedStoryId);
+        }
+
+        public Task UpdateStoryAsync(StoryUpdateDTO dto)
+        {
+            Calls.Add("Update");
+            return SaveFailure is null ? Task.CompletedTask : Task.FromException(SaveFailure);
+        }
+
+        public async Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId)
+        {
+            using MemoryStream copy = new();
+            await content.CopyToAsync(copy);
+            Calls.Add($"Upload:{storyId}:{contentType}:{copy.Length}");
+            if (CoverFailure is not null) throw CoverFailure;
+            return UploadedPath;
+        }
+
+        public Task RemoveCoverArtAsync(int storyId)
+        {
+            Calls.Add($"Remove:{storyId}");
+            return CoverFailure is null ? Task.CompletedTask : Task.FromException(CoverFailure);
+        }
     }
 
     private sealed class UnusedFanonReadService : IFanonReadService

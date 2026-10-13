@@ -183,6 +183,35 @@ seventh-type amendment and D47's floor; settled for WU-UserDeletion 2026-10-13).
 - **Open:** D47(b), what a moderator can do about a group that still has an admin.
 Rule: `layer2-services.md` §"Account actions" (the Group shape) and §"Group Membership and Role Model".
 
+**Settled — a hard delete erases the story's cover (owner ruling D14, answered 2026-08-07; settled
+for WU-BlobCleanup 2026-10-13). Do not revisit:** `ResolveWithRemovalAsync(hardDelete: true)` on a
+Story captures the cover path before the row delete (the cascade removes the listing that names it)
+and deletes the blob after the execution strategy returns, in its own best-effort `try` ahead of the
+notifications, so neither failure skips the other. A soft removal (`IsTakenDown`) never touches the
+blob, because it is reversible. Rule: `layer2-services.md` §"Image Storage — blob ownership and
+cleanup". **Phase 7:** a deleted object stays in CDN caches (`/uploads/{**key}` is `immutable`), so
+the illegal-content path needs a cache purge once Cloudflare fronts R2 (`roadmap.md` Phase 7).
+
+**WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — no flip; F47 L2 stays 5.** The hard-delete
+Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and cleanup").
+`ServerModerationWriteService` gains `IImageStorageService` (DI-only). `ApplyHardDeleteAsync` returns a
+`HardDeleteOutcome(AuthorId, CoverPath)`: for a Story it reads the listing's cover before the delete,
+because the cascade removes the row that names it; `ApplyRemovalAsync`'s Message fall-through takes the
+author only. `ResolveWithRemovalAsync` carries the path and the target id out of the execution strategy
+(`RemovalOutcome`) and deletes the blob after the strategy returns, in its own `try` ahead of the
+notifications: a failure logs a Warning with the story, path and report ids, and the notifications still
+go. A soft removal never touches the blob. No UI changed, so L4.5 is not owed a pass for this; tracker
+**H31** carries a Garage-path smoke for the owner.
+- **How verified (Integration):** `BlobCleanupTests` — a hard delete makes the cover's `/uploads/…` URL
+  go from 200 to 404 on the shared host (Local); a soft removal attempts no delete and keeps the column;
+  with a store whose delete throws, the report still resolves, the story is gone, the reporter gets
+  `ReportResolved` (81), and one Warning names the path and report. `BlobCleanupGarageTests` — the same
+  hard delete removes the object from a real Garage bucket (a raw `GetObject` then answers 404).
+  Mutation-checked: skipping the delete fails the Local and Garage tests; dropping its own `try` fails
+  the fault test (the exception would cost the notifications).
+- **Phase 7:** CDN copies survive an object delete (`immutable` caching), so the illegal-content path
+  needs a purge once Cloudflare fronts R2 (`roadmap.md` Phase 7).
+
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13 edge (b), Part B) — F47 L4.5 5→1;
 F46/F47 L1/L2/L5 stay 5.** The Settled note above, built.
 - **L1/L2 (F46).** `ReportedEntityType.Group = 6` (no lookup table, so no migration; enum doc says
@@ -463,7 +492,9 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-10-13, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's
+**Stages (updated 2026-10-13, WU-BlobCleanup — a hard delete erases the story's cover blob after the
+commit, beneath L2, no flip, Integration-tested, Stage note at the top of this section; earlier the same
+day, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's
 Group arm beneath L2/L5, no flip there, and **L4.5 5→1** because "Show resolved" lists Group rows no browser
 has seen, tracker H29 — Stage note at the top of this section; its review fixes Unit-test the client's
 `AssignGroupAdminAsync`, no flip; the same day, WU-SchemaHardening —

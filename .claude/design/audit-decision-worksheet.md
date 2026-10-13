@@ -1445,6 +1445,8 @@ new blob with the old one deleted; a later `UpdateStoryAsync` that says nothing 
 leaves it intact — the regression test for the inverse hazard. *(RazorComponents tier.)* The editor
 renders the newly uploaded cover without a save.
 
+**Built:** WU-BlobCleanup (2026-10-13), both halves (the cleanup rule and the WU-CoverPersistence sub-ruling) — rule now stated in `layer2-services.md` §"Image Storage — blob ownership and cleanup" (`EnumerateAsync` yields a `StoredImage` with the store's last-modified time, a recorded amendment; the sweep adds a generated-key scope guard and a kill switch, `ImageStorage:OrphanSweep:Enabled`). Not built, routed to the owner: the user-deletion bullet's "cover paths of every story the user authored" — its premise ("the cascade removes the rows that name them") does not hold since D13 keeps stories anonymized, so the covers stay (decision row 25, tracker F22); the "user with an avatar and two covered stories" test was adapted accordingly. The CDN purge is a `roadmap.md` Phase-7 bullet.
+
 ### D15. Author story deletion (archive permanence)
 
 *Source: service §3.20.*

@@ -17,7 +17,9 @@ public interface IEditableStoryProperties
     // edit. Lifecycle moves go through IStoryWriteService.TransitionStatusAsync (author) or the
     // moderator approve/reject path — layer2-services.md §"Story Lifecycle".
 
-    public string? CoverArtRelativeUrl { get; set; }
+    // CoverArtRelativeUrl is deliberately NOT here (owner ruling D14, WU-BlobCleanup): no write DTO
+    // carries a blob path. IStoryWriteService.UploadCoverArtAsync sets the cover (and persists it),
+    // RemoveCoverArtAsync clears it — layer2-services.md §"Image Storage — blob ownership and cleanup".
 
     public string? LongDescription { get; set; }
 

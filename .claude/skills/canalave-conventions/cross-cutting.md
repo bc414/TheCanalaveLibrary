@@ -137,6 +137,9 @@ context, since even a genuine replica would trail the primary slightly.
 - **Interaction data** (follows, interactions, badges, settings): CASCADE on user. **Poll votes are
   the one exception** (owner ruling D13): see "Account deletion" below.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
+- **Blobs** (story covers, avatars) are not rows, so no FK reaches them. Every terminal deletion path
+  captures the paths its rows name and deletes the blobs after the commit; a daily sweep collects the
+  residue (owner ruling D14; `layer2-services.md` §"Image Storage — blob ownership and cleanup").
 - **Comment deletion** (owner ruling D12, 2026-08-06): a hard delete. Replies are reparented to top
   level by `base_comments.parent_comment_id` `ON DELETE SET NULL`. There is no tombstone row, no
   placeholder node and no "removed" affordance anywhere in the thread; spec §5.9's placeholder is
@@ -176,6 +179,10 @@ live FK graph (`pg_constraint`, 2026-10-13).
   source of the notifications they caused (nulled; the recipient keeps the notification).
 - **Closed by the service** (`ReportLedger`, D7's sub-edge): open reports on the account itself, on the
   destroyed profile comments, and on the messages of a conversation the deletion leaves empty.
+- **Blobs** (owner ruling D14, built WU-BlobCleanup 2026-10-13): the profile picture's blob is deleted
+  after the commit, best-effort, with the orphan sweep as the backstop. The covers of the user's
+  stories stay with the surviving stories; whether to strip them is owner-open (`roadmap.md` decision
+  row 25, tracker **F22**).
 
 **Why poll votes survive when favorites cascade.** Interaction data whose only expression is a live
 aggregate cascades: a favorite count measures a story's standing and *should* track the live user
@@ -244,8 +251,9 @@ user-anchored types). Neither maps the id to the anonymized content, so rule 2 h
 should be zeroed at deletion is owner-open (tracker **F19**).
 
 **The deletion page's copy is the compliance surface** (Art. 13/14 transparency).
-`DeletePersonalData.razor` enumerates this policy in the user's terms: what survives anonymized, what
-is destroyed, how to delete content first (and where that path does not exist or is closed: stories,
+`DeletePersonalData.razor` enumerates this policy in the user's terms: what survives anonymized
+(stories with their cover images), what is destroyed (the profile with its picture), how to delete
+content first (and where that path does not exist or is closed: stories,
 blog posts, votes on a closed poll, a recommendation the author removed), that sent messages cannot be
 deleted and stay in the recipient's inbox, that server logs are not erased with the account, and that
 anonymization removes the name but not identifying details written into the content. **Change the

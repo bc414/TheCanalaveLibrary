@@ -271,14 +271,14 @@ transport:
   same as any authenticated same-origin download. There is no `ClientExportService` HTTP-fetch-then-
   save-to-disk dance; that's what the direct-URL download already does natively in both circuit and
   WASM.
-- **`StoryEditorPage`'s stray `IImageStorageService` injection.** The component calls
-  `IImageStorageService.SaveAsync` directly instead of going through `IStoryWriteService`, unlike
-  `IUserSettingsService.UploadProfilePictureAsync`'s pattern where the service owns the storage
-  call. `IImageStorageService` itself stays server-only infra (never client-implemented — see
-  "Avoid"); the fix is adding `IStoryWriteService.UploadCoverArtAsync(Stream, string, int storyId)`
-  (mirroring `UploadProfilePictureAsync`'s shape) so the component goes through the same
-  service-owns-the-upload pattern as Profiles, and the Stories cluster's multipart endpoint covers
-  it like the other two upload cases above.
+- **Story covers** (`IStoryWriteService.UploadCoverArtAsync(Stream, string, int storyId)`, multipart
+  `POST /api/stories/{id}/cover`). Fixed: `StoryEditorPage` once injected the server-only
+  `IImageStorageService` and called `SaveAsync` itself; the upload now goes through the write
+  service, as avatars do. Since WU-BlobCleanup (2026-10-13, owner ruling D14) the method also
+  **persists** the cover and deletes the old blob, so no follow-up `UpdateStoryAsync` is needed, and
+  clearing a cover is its own bodiless call: `RemoveCoverArtAsync` → `DELETE /api/stories/{id}/cover`
+  (no body, so no antiforgery concern). `IImageStorageService` stays server-only infra, never
+  client-implemented (see "Avoid").
 
 ## The Error-Translation Contract
 
@@ -645,6 +645,6 @@ stable interfaces. This is how it played out: WU-L5Sweep batched the pattern fea
   writes flow through the owning feature's write service instead, see "Streams and multipart"),
   `IHtmlSanitizationService` (sanitization must run server-side; called only from within write
   services, never a component), `IWriteRateLimitService` (server-side enforcement mechanism, called
-  only from within services). None of these three are ever `@inject`ed by a component directly once
-  `StoryEditorPage`'s `IImageStorageService` injection is fixed per "Streams and multipart" — if a
-  future component injects one anyway, that's the bug to fix, not a cue to add a client impl.
+  only from within services). No component `@inject`s any of the three (`StoryEditorPage`'s old
+  `IImageStorageService` injection was removed — see "Streams and multipart"); if a future component
+  injects one anyway, that's the bug to fix, not a cue to add a client impl.

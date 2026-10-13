@@ -165,6 +165,37 @@ for WU-UserDeletion 2026-10-13). Do not revisit:**
 - **Two overlapping deletions of one conversation's participants are serialized** on the conversation
   row, so the emptiness check of the later one sees the earlier one's committed delete
   (`cross-cutting.md` §"Account deletion"; WU-UserDeletion review fixes, 2026-10-13).
+- **The avatar blob is deleted with the account** (owner ruling D14; settled for WU-BlobCleanup
+  2026-10-13): the path is captured inside the transaction and the blob deleted after the strategy
+  returns, best-effort, with the daily orphan sweep as the backstop (`layer2-services.md` §"Image
+  Storage — blob ownership and cleanup"). **Open, the owner's:** the covers of the user's stories,
+  which survive anonymized, are kept; whether to strip them is `roadmap.md` decision row 25 (tracker
+  **F22**).
+
+**WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — no flip; F52 L2 stays 5.** The avatar
+bullet of the Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and
+cleanup").
+- **L2.** `UserDeletionService` gains `IImageStorageService` and a logger (primary ctor). Inside the
+  strategy delegate it captures `user.ProfilePictureRelativeUrl` just before `Users.Remove` (the row is
+  already loaded, so no extra query; reset at the start of each attempt, so only the committed attempt
+  counts). After the strategy returns `true` — outside the retry, since a retried delegate must not
+  re-delete and a blob delete cannot roll back — it deletes the blob best-effort: a failure logs a Warning
+  naming the user and path, and the daily orphan sweep collects the file. The class doc and step 9 say so.
+- **Held, owner-open (the spec's X1):** D14's text also asks for "the cover paths of every story the
+  user authored … since the cascade removes the rows that name them". The premise is false: stories are
+  `SET NULL` and survive anonymized (D13), so their rows still name their covers, and deleting the blobs
+  would break live stories. Built: covers kept. `roadmap.md` decision row 25, tracker **F22**.
+- **The compliance surface (D13's copy rule).** `DeletePersonalData.razor` now says "Your profile,
+  including your profile picture" under "Permanently deleted" and "Stories (with their cover images)"
+  under "Kept, without your name"; `cross-cutting.md` §"Account deletion" gains a Blobs bullet.
+- **How verified (Integration):** `BlobCleanupTests` — a user with an avatar and two covered stories
+  (each saved through `SaveAsync` into a temp store): after deletion the avatar file is gone, both
+  stories survive with a NULL author and their covers referenced and intact, and a later sweep, every
+  blob aged past the grace window, finds no candidate and no dangling row; no avatar → no delete
+  attempted; a store whose delete throws → the user is still deleted, one Warning names the path, the
+  file stays, and the sweep then deletes it. `StaticSsrPageRenderTests`' deletion-copy test asserts both
+  new phrases. Mutation-checked: skipping the avatar delete fails two tests. L4.5 stays 5: the change is
+  two copy lines on a static page whose render is Integration-tested; tracker **H31** includes a look.
 
 **WU-UserDeletion Stage note (2026-10-13; owner ruling D13, Part A: the survival set) — L4.5 5→1;
 L1/L2/L4 stay 5.**
@@ -355,7 +386,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13, and locks them first so two overlapping deletions cannot both miss an emptied one, since its review fixes the same day — Integration-tested, not yet browser-driven, Stage notes above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day; deletes the conversations it leaves empty, closing their message reports, since WU-UserDeletion, 2026-10-13, and locks them first so two overlapping deletions cannot both miss an emptied one, since its review fixes the same day — Integration-tested, not yet browser-driven; deletes the avatar blob after the commit, best-effort, since WU-BlobCleanup, 2026-10-13, Integration-tested, story covers held for decision row 25 — Stage notes above).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to

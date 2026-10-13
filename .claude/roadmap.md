@@ -84,11 +84,19 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   - **Deploy mechanism** — `aspire publish` docker-compose output is the candidate path.
   - **Config/secrets promotion contract** — one documented list of every env var the droplet needs
     (connection strings, `ImageStorage__S3__*` R2 values, `Email__*` per the chosen provider,
-    OTLP endpoint, Data Protection).
+    OTLP endpoint, Data Protection). It must state **one bucket per database**: never point two
+    databases at one bucket, or each one's orphan sweep sees the other's blobs as orphans (owner
+    ruling D14; `layer2-services.md` §"Image Storage — blob ownership and cleanup").
   - **Migration-in-production convention** — gated deploy step (backup first), not dev's
     migrate-on-startup.
   - **Backups you have restored** — managed-PG backup policy + one performed restore drill; R2
-    story for blobs.
+    story for blobs. Disable `ImageStorage:OrphanSweep:Enabled` during and after a DB restore until
+    the restored rows and the live bucket are reconciled: a database restored behind a live bucket
+    makes every blob written after the backup look orphaned (WU-BlobCleanup, 2026-10-13).
+  - **CDN purge on a hard delete** — `/uploads/{**key}` is served `max-age=31536000, immutable`, so
+    deleting an object (the illegal-content hard delete, which D14 made erase the story's cover)
+    does not evict CDN copies. Once Cloudflare sits in front of R2, the hard-delete path needs a
+    cache-purge step. Flagged by owner ruling D14, not designed there.
   - **Uptime & alerting** — safely-exposed health endpoint (exposure mechanism itself undecided)
     + external pinger + an alert channel that reaches Brian.
   - **Sending-domain DNS (SPF/DKIM/DMARC)** — part of decision row 8 below; must verify before
@@ -139,7 +147,9 @@ WU-DependencyCVEs review fixes, promoted out of `hidden-deferrals-tracker.md` **
 rule. Row 22 was added 2026-10-13 by WU-SchemaHardening: an unruled edge its build had to take a
 default on. Row 23 was added the same day by the WU-UserDeletion review fixes: its build had cited D5
 for a notification D5's own scope does not reach. Row 24 was added the same day by WU-PollVoteIntegrity,
-promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider did not rule.
+promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider did not rule. Row 25 was
+added the same day by WU-BlobCleanup, promoted out of **F22**: two owner rulings (D13, D14) disagree on
+one edge.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -158,6 +168,7 @@ promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider di
 | 22 | **Deleting a group folder whose sub-folder would duplicate a top-level name.** Since WU-SchemaHardening a deleted folder's sub-folders move to the top level (the spec's SET NULL), and top-level names are unique. Say "Fanfic" holds a sub-folder "Favorites" and the group already has a top-level "Favorites": what should deleting "Fanfic" do? | As built (a default, not a ruling): refuse the whole delete with a message naming the clashing sub-folder ("Rename one of them first"); nothing is deleted. It mutates nothing the admin did not ask for, and follows D23's loud-failure posture. | The alternative, renaming the promoted folder automatically (say "Favorites (2)"), changes a name a group's admins chose. Which surprise is better is a product call; "rename" is a one-method change in `ServerGroupWriteService.DeleteFolderAsync`. Rule text: `layer2-services.md` §"Group Folder Integrity". |
 | 23 | **Should a group-admin assignment name the moderator who made it?** `GroupAdminAssigned` (62) tells a member that a site moderator made them the admin of an admin-less group (D13 edge (b)). | As built (the WU spec's pick, not owner text): null-sourced, no moderator parameter, actor-free copy ("You were made an admin of {group}"); the `Report` row keeps the moderator internally. | D5 says a moderator is never named "to the sanctioned or reporting user" and scopes itself to 70–82; the promoted member is neither, and 62 sits in the Groups band. D5's threat model (retaliation against volunteer moderators) argues for the default; an appointment is also good news a member may want to answer. Sibling of row 19 (type 90), whose source is kept. "Name them" needs a small build: a source parameter on `NotifyGroupAdminAssignedAsync` and an `{actor}` in the presenter arm. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". |
 | 24 | **Should a poll's anonymity mode be frozen by the database once votes exist, like its vote mode?** D23's `ConfigLocked` rider named `AllowMultiple`, and WU-PollVoteIntegrity froze it with an FK (`layer2-services.md` §"Check-then-act posture"). `AnonymityMode` (with `ResultsVisibility` and `DateOpened`) still freezes only through `UpdatePollAsync`'s `hasVotes` read, so an owner's edit that crosses the first vote can land: a vote cast under `Anonymous` is then named under `Public`. | As built (the status quo, not a ruling): the service check only. The window is one request wide. | D23's classification test reads two ways here: a reader publishes a name (a constraint), or the voter's intent is disappointed (a policy). The status quo works against the lock's own stated purpose: F37's Settled bullet says the freeze "prevents retroactive anonymity exposure", and that is the one-request window the default leaves open. D23's rider says "the first-vote-vs-config-edit boundary … needs the same treatment in the same WU". The build read that as `AllowMultiple` only, since the sentence is about the restructure depending on it; read as the whole boundary, it would cover this field too. The fix costs one column per vote row. Tracker **F21**. |
+| 25 | **When an account is deleted, do the covers of its stories go?** D14 says the account deletion collects "the cover paths of every story the user authored … since the cascade removes the rows that name them" and deletes those blobs. The premise does not hold: `stories.author_id` is `SET NULL`, and D13 (one day earlier) ratified stories as surviving anonymized, so those rows live on and still name their covers. | As built (non-destructive, reversible; not a ruling): the covers stay with the surviving stories. Only the avatar is deleted. D14's principle ("the blob is gone when the row is gone") does not reach a row that survives, and deleting the blobs would break live stories' covers and leave every such row naming a missing blob. | Read literally, D14 asks for erasure the D13 survival set does not need; read by its principle, it asks for nothing here. A cover is the author's upload, and could be personal (a photo, their art), so "strip them" is a defensible erasure choice: null `CoverArtRelativeUrl` on the user's stories inside the deletion transaction and delete the blobs post-commit (a small build in `UserDeletionService`, plus the deletion page's copy). Rule text: `layer2-services.md` §"Image Storage — blob ownership and cleanup". Tracker **F22**. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -221,6 +232,25 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Blob cleanup ownership (worksheet D14) — answered 2026-08-07, built WU-BlobCleanup 2026-10-13.**
+  No decision row: it came out of the service audit's §3.16 and §2.12. Blob cleanup has two owners on
+  purpose, and "orphans accepted" is rejected for every class:
+  - An **inline delete at every terminal deletion path**, captured before the row delete and run after
+    the commit, outside the retry: the avatar at account deletion, the cover at a moderation hard
+    delete. D15's author story delete inherits the rule.
+  - A **daily orphan sweep** (`ImageOrphanSweeper`) as the backstop for fault residue. It reads the
+    references unfiltered, has a 24 h grace window, a dry-run first cycle, a 100-delete cap per cycle,
+    and a kill switch; it acts store → DB only, on generated upload keys only. `IImageStorageService`
+    gained `EnumerateAsync` (a recorded amendment to the frozen interface).
+
+  The sub-ruling: **cover upload persists its own reference**, and `CoverArtRelativeUrl` left the
+  story-update write path (`RemoveCoverArtAsync` clears a cover). Rule: `layer2-services.md`
+  §"Image Storage — blob ownership and cleanup". Narrative: `audit/ImageStorage.md`,
+  `audit/Stories.md` F4, `audit/Moderation.md` F47, `audit/Identity.md` F52. Phase 7 gains a CDN-purge
+  bullet, the restore-drill kill-switch step and the one-bucket-per-database rule. **Not built:**
+  stripping the covers of a deleted user's surviving stories — D14's text asks for it on a premise D13
+  overturned, so it is decision row **25** (tracker **F22**).
 
 - **User-deletion survival set (worksheet D13) — answered 2026-08-06, built WU-UserDeletion
   2026-10-13.** No decision row: it came out of the schema audit's §3.8. Schema §3.8's three lists are

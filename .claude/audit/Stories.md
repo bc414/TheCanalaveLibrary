@@ -61,6 +61,21 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
 `story-card` boundary island — one broken card degrades to a tile, the deck survives. Strategy:
 `error-handling.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
 
+**Settled — cover upload persists its own reference (owner ruling D14's sub-ruling, answered
+2026-08-07; settled for WU-BlobCleanup 2026-10-13). Do not revisit:**
+- `IStoryWriteService.UploadCoverArtAsync` patches `StoryListing.CoverArtRelativeUrl` itself and
+  commits: write the blob → persist the column → best-effort delete the old blob. Clearing a cover is
+  its own operation, `RemoveCoverArtAsync`. The old two-step (upload, then the page patches the DTO and
+  calls `UpdateStoryAsync`) is retired.
+- `CoverArtRelativeUrl` is off `IEditableStoryProperties`, `StoryUpdateDTO` and `CreateStoryDTO`, so
+  `UpdateStoryAsync` cannot touch the cover. `GetStoryForEditAsync` returns `StoryEditDTO`
+  (`StoryUpdateDTO` plus the cover as a read echo).
+- The editor uploads on pick in edit mode (the new cover shows without a save) and after
+  `CreateStoryAsync` in create mode. Form-cancel no longer reverts a cover: an accepted consequence,
+  with no revert action built.
+- This supersedes the L3.5 note's "cover-art save-first-then-upload ordering" (WU24) below.
+Rule of record: `layer2-services.md` §"Image Storage — blob ownership and cleanup".
+
 - **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note; `ck_stories_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note at the end of this feature).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
   slug server-generated; explicit-interface edit contract. **Settled by owner ruling D1 (worksheet
@@ -70,7 +85,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   lifecycle move goes through `TransitionStatusAsync` (author) or approve/reject (moderator).
   `PostApprovalStatus` stays an ordinary editable property. Rule of record: `layer2-services.md`
   §"Story Lifecycle".
-- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; see its Stage note below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`); see both Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -101,7 +116,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; see its Stage note).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save; RazorComponents-tested (`StoryEditorPageTests`); see both Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
   on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
@@ -113,7 +128,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   implements `IEditableStoryProperties` (decoupled from wire DTOs; mapping is at page layer).
   `Routes.razor` switched from `RouteView` to `AuthorizeRouteView` so `[Authorize]` attributes are
   enforced (was silently ignored with `RouteView`).
-- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; see its Stage note).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
+- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; re-verified WU-BlobCleanup, 2026-10-13 — `StoryPropertiesForm` raises `OnCoverSelected`/`OnRemoveCover`, `CoverUploadBusy`, a "Remove cover" control; RazorComponents-tested (`StoryPropertiesFormTests`); see both Stage notes).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
   Tailwind, all 6 `TagSelector` instances wired with `OnSelectionChanged` + `InitialTagsByType` prefill,
   `EditorView @ref` pull-on-submit via public `GetLongDescriptionAsync()`, `InputFile` for cover art,
   `Rating`+`Status` selects, server validation error display, `IsLoading` disabled-submit guard). No
@@ -129,14 +144,16 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 5 (browser-verified 2026-09-30 by the WU-StoryLifecycle browser pass; it was
-  1 from the review fixes earlier that day until this pass ran).** Every lifecycle move, the "Status
+- **L4.5-Browser — Stage 1 (5→1, WU-BlobCleanup, 2026-10-13: the cover flow changed — upload on pick,
+  "Remove cover", create-with-cover — and no browser was available; tracker H31 holds the pass. Before
+  that: browser-verified 2026-09-30 by the WU-StoryLifecycle browser pass; it was 1 from the review
+  fixes earlier that day until this pass ran).** Every lifecycle move, the "Status
   when published" select and the published-story editor were driven on the circuit and on WASM against
   `psql`. The pass found and fixed three runtime bugs: a refused save killed the circuit, a published
   story's editor 301'd to its story page on a full load, and the rejection reason rendered as
   "_rejectionReason". Detail: the browser-verification Stage note below. Not driven: the cover-art
   `InputFile` (the standing exception in the 2026-07-01 cluster note).
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl).** (History: the dead pre-WU12 `HttpStoryReadService`/
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
   InteractiveAuto; story CREATE with tags verified end-to-end in a real WASM runtime during the
@@ -400,6 +417,57 @@ one.
 arc on story 1 with start 3 and end 2 answers 400 "End chapter must not be before the start chapter.",
 and a lineage from story 1 to itself 400 "A story cannot have a lineage link to itself.". The service
 guards answer before the CHECKs can.
+
+### Feature 4 — WU-BlobCleanup Stage note (2026-10-13; owner ruling D14's sub-ruling) — F4 L4.5 5→1; L2/L3-Logic/L3.5/L5 stay 5
+
+The Settled note at the top of this feature, built. Rule of record: `layer2-services.md` §"Image Storage
+— blob ownership and cleanup". No migration.
+- **L2.** `CoverArtRelativeUrl` left `IEditableStoryProperties`, `StoryUpdateDTO` and `CreateStoryDTO`;
+  the mapper no longer copies it (the unconditional copy was D14's inverse hazard: an update whose DTO
+  omitted the cover nulled the column, and `UpdateStoryAsync` then deleted the live blob), and
+  `UpdateStoryAsync`'s old-cover capture and delete branch are gone. `GetStoryForEditAsync` returns the new
+  `StoryEditDTO : StoryUpdateDTO` (the cover as a read echo; `IStoryTag` polymorphism rides the base class,
+  so it deserializes on WASM). `UploadCoverArtAsync` loads the story with its listing and gates (missing →
+  404; not the author, **including an authorless story** → 403 — service audit §2.12's `(int?)` item,
+  closed), writes the blob, persists the column, then deletes the old blob best-effort.
+  `RemoveCoverArtAsync` clears the column and deletes the blob; no cover is a no-op. **Derived, flagged:**
+  both stamp `LastUpdatedDate`, preserving "stamped on every successful property edit"; D2's
+  publish-anchor rules may revisit what bumps it.
+- **L3-Logic / L3.5.** `StoryPropertiesForm` lost `SelectedCoverFile` (a registered retired term) and
+  gained `OnCoverSelected`, `CoverUploadBusy` (the picker disabled, "Uploading…") and `OnRemoveCover` (a
+  danger-text "Remove cover" Control, shown only while a cover is set; `check-design-tokens` passes).
+  `StoryEditorPage`: in edit mode a picked file is uploaded at once and the returned path shown without a
+  save; "Remove cover" calls `RemoveCoverArtAsync`; errors reach the form's list through
+  `ExceptionPresenter`, and a 403 renders the forbidden state. In create mode the file waits in
+  `_pendingCoverFile` and is uploaded right after `CreateStoryAsync`; the second `UpdateStoryAsync` is
+  gone. The save path no longer carries a cover. **Accepted (D14):** form-cancel no longer reverts a
+  cover. **Unchanged, noted:** if the create-mode upload fails, the story exists and the page stays on
+  `/story/new`, so a resubmit duplicates it (pre-existing; the old flow had the same gap).
+- **L5.** `DELETE /api/stories/{id}/cover` → 204 (author), 403, 401, 404;
+  `ClientStoryWriteService.RemoveCoverArtAsync`. No throttle: a delete, exempt under D20's
+  throttle-coverage half (WU-ThrottleCoverage lists it); uploads stay throttled in `ImageUploadProcessor`.
+- **How verified:** build 0 errors, no new warnings in touched files; all three tiers green.
+  - **Integration** `StoryCoverTests` (12, over a temp store): the upload alone persists (the edit echo
+    shows it, `LastUpdatedDate` moves); a second upload deletes the first file, also through one scope;
+    **the inverse-hazard regression** — upload, then `UpdateStoryAsync` from the edit DTO (its cover echo
+    nulled) or through the same scope, and the cover and its file are intact; non-author 403 with no file
+    written; missing 404; authorless 403; remove nulls and deletes; non-author remove refused; no-cover
+    remove writes nothing; missing remove 404. `StoryEndpointsTests` +5: multipart POST persists and
+    `GET …/edit` echoes the cover over the wire; DELETE 204/403/401/404.
+  - **Unit** `StoryMappersTests` +2: a property edit leaves a stored cover untouched even when handed a
+    `StoryEditDTO` with a different echo; `ToStory` leaves the cover unset.
+  - **RazorComponents** `StoryEditorPageTests` +5: edit-mode pick uploads once and shows the cover with
+    no `UpdateStoryAsync` (D14's RazorComponents test); remove calls `RemoveCoverArtAsync` and hides the
+    cover; a refused upload shows its message, keeps the old cover and re-enables the picker; create mode
+    uploads nothing until `CreateStoryAsync`, then uploads to the new id with no update; create with no
+    cover only creates. `StoryPropertiesFormTests` +5: the pick raises `OnCoverSelected`, busy disables
+    the picker and remove and shows "Uploading…", remove renders only with a cover and raises
+    `OnRemoveCover`.
+  - **Mutation-checked:** not persisting the upload, not deleting the replaced or removed blob, the old
+    "authorless = not found" gate, an `UpdateStoryAsync` after the edit-mode or create-mode upload,
+    deferring the edit-mode upload to the save, and dropping the busy disable each fail a test.
+  - **No browser was available:** F4 L4.5 5→1; tracker **H31** holds the pass on both render phases
+    (edit-mode upload, remove, create-with-cover, a refused file).
 
 ## Feature 5 — Story Browsing & Display
 

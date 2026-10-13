@@ -16,8 +16,11 @@
 @using Microsoft.Extensions.Logging
 
 @* Story create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
-   View side is StoryPage / WU25. This page owns routing, auth, data-load, cover-upload ordering,
-   and DTO-mapping. StoryPropertiesForm is a presentational child (no inject, bUnit-testable). *@
+   View side is StoryPage / WU25. This page owns routing, auth, data-load, the cover calls, and
+   DTO-mapping. StoryPropertiesForm is a presentational child (no inject, bUnit-testable).
+   The cover is never on a write DTO (owner ruling D14): in edit mode a picked file is uploaded and
+   persisted at once (UploadCoverArtAsync) and "Remove cover" clears it (RemoveCoverArtAsync); in
+   create mode the picked file waits for CreateStoryAsync's id. Form-cancel does not revert a cover. *@
 
 <PageTitle>@(StoryId.HasValue ? "Edit Story" : "New Story")</PageTitle>
 
@@ -73,6 +76,9 @@ else
                              ExternalPlatforms="@(ExternalPlatforms ?? [])"
                              VerifiedPlatformIds="@((IReadOnlySet<short>)(VerifiedPlatformIds ?? []))"
                              OnRequestLinkVerification="HandleRequestLinkVerification"
+                             OnCoverSelected="HandleCoverSelectedAsync"
+                             CoverUploadBusy="_coverUploadBusy"
+                             OnRemoveCover="HandleRemoveCoverAsync"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
 
@@ -125,6 +131,12 @@ else
     private bool _isLoading = true;
     private bool _forbidden;
 
+    // Cover state (owner ruling D14). Edit mode uploads on pick, so only the busy flag lives here; create
+    // mode has no story id yet, so the picked file waits in _pendingCoverFile until CreateStoryAsync.
+    private const long MaxCoverBytes = 10 * 1024 * 1024; // ImageUploadRules.MaxBytes (server-side)
+    private bool _coverUploadBusy;
+    private IBrowserFile? _pendingCoverFile;
+
     // Lifecycle state (WU-StoryLifecycle, D1), loaded from the edit DTO's read echoes. A new story
     // is always Draft. _savedPostApprovalStatus is the PERSISTED value — the form's select edits
     // _viewModel.PostApprovalStatus, which only reaches the server on Save (and Save reloads).
@@ -137,7 +149,7 @@ else
     private bool _lifecycleErrorIsSessionExpired;
 
     // Persisted lookup lists (prerender→interactive, [PersistentState]) — both are rendered by the
-    // form, so persisting adds no browser exposure. The edit-source StoryUpdateDTO is deliberately
+    // form, so persisting adds no browser exposure. The edit-source StoryEditDTO is deliberately
     // NOT persisted: its List<IStoryTag> interface member doesn't survive the default-settings
     // System.Text.Json round trip [PersistentState] uses (no [JsonDerivedType] config on IStoryTag),
     // so the edit-mode source fetch runs on both passes until that DTO gets a serializable shape.
@@ -162,7 +174,7 @@ else
             // The service throws UnauthorizedAccessException for a non-author (the real gate,
             // both render modes — endpoint-authz sweep 2026-07-18) — render the forbidden state,
             // mirroring ChapterEditorPage's load-path handling.
-            StoryUpdateDTO? editData;
+            StoryEditDTO? editData;
             try
             {
                 editData = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
@@ -211,7 +223,7 @@ else
         _isLoading = false;
     }
 
-    private void PopulateViewModelFromEdit(StoryUpdateDTO dto)
+    private void PopulateViewModelFromEdit(StoryEditDTO dto)
     {
         _viewModel.Title = dto.Title;
         _viewModel.ShortDescription = dto.ShortDescription;
@@ -301,7 +313,6 @@ else
                     Title = _viewModel.Title,
                     ShortDescription = _viewModel.ShortDescription,
                     Rating = _viewModel.Rating,
-                    CoverArtRelativeUrl = _viewModel.CoverArtRelativeUrl,
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
                     StoryTags = flatTags,
@@ -312,16 +323,7 @@ else
                     OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate
                 };
 
-                // Upload new cover if selected (id already exists on edit).
-                if (_form?.SelectedCoverFile is { } coverFile)
-                {
-                    const long maxBytes = 10 * 1024 * 1024;
-                    await using Stream stream = coverFile.OpenReadStream(maxBytes);
-                    updateDto.CoverArtRelativeUrl = await StoryWriteService.UploadCoverArtAsync(
-                        stream, coverFile.ContentType, StoryId.Value);
-                    _viewModel.CoverArtRelativeUrl = updateDto.CoverArtRelativeUrl;
-                }
-
+                // No cover here: it was persisted the moment it was picked (HandleCoverSelectedAsync).
                 await StoryWriteService.UpdateStoryAsync(updateDto);
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 // forceLoad: same-component redirect on a Quill-hosting page. An in-place re-render
@@ -340,7 +342,6 @@ else
                     Title = _viewModel.Title,
                     ShortDescription = _viewModel.ShortDescription,
                     Rating = _viewModel.Rating,
-                    CoverArtRelativeUrl = null, // set after create if a file was selected
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
                     StoryTags = flatTags,
@@ -353,31 +354,14 @@ else
 
                 int newStoryId = await StoryWriteService.CreateStoryAsync(createDto);
 
-                // Upload cover now that we have the story id.
-                if (_form?.SelectedCoverFile is { } coverFile)
+                // Upload the picked cover now that the story has an id. UploadCoverArtAsync persists it
+                // itself (owner ruling D14), so there is no second UpdateStoryAsync. Known gap, unchanged
+                // here: if this upload fails, the story exists but the page stays on /story/new.
+                if (_pendingCoverFile is { } coverFile)
                 {
-                    const long maxBytes = 10 * 1024 * 1024;
-                    await using Stream stream = coverFile.OpenReadStream(maxBytes);
-                    string coverUrl = await StoryWriteService.UploadCoverArtAsync(
-                        stream, coverFile.ContentType, newStoryId);
-
-                    // Patch the cover URL onto the just-created story.
-                    await StoryWriteService.UpdateStoryAsync(new StoryUpdateDTO
-                    {
-                        StoryId = newStoryId,
-                        Title = _viewModel.Title,
-                        ShortDescription = _viewModel.ShortDescription,
-                        Rating = _viewModel.Rating,
-                        CoverArtRelativeUrl = coverUrl,
-                        LongDescription = _viewModel.LongDescription,
-                        PostApprovalStatus = _viewModel.PostApprovalStatus,
-                        StoryTags = flatTags,
-                        StoryCharacters = characters,
-                            StoryCharacterPairings = pairings,
-                        ExternalLinks = _viewModel.ExternalLinks,
-                        OriginalPublishedDate = _viewModel.OriginalPublishedDate,
-                        OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate
-                    });
+                    await using Stream stream = coverFile.OpenReadStream(MaxCoverBytes);
+                    await StoryWriteService.UploadCoverArtAsync(stream, coverFile.ContentType, newStoryId);
+                    _pendingCoverFile = null;
                 }
 
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
@@ -398,6 +382,67 @@ else
         finally
         {
             _viewModel.IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// A cover file was picked (owner ruling D14). Edit mode: upload it now — the service persists it
+    /// and deletes the old blob — and show the returned path without a save. Create mode: there is no
+    /// story id yet, so hold the file until <see cref="HandleValidSubmit"/> has created the story.
+    /// </summary>
+    private async Task HandleCoverSelectedAsync(IBrowserFile file)
+    {
+        if (!StoryId.HasValue)
+        {
+            _pendingCoverFile = file;
+            return;
+        }
+
+        await RunCoverChangeAsync(async () =>
+        {
+            await using Stream stream = file.OpenReadStream(MaxCoverBytes);
+            _viewModel.CoverArtRelativeUrl =
+                await StoryWriteService.UploadCoverArtAsync(stream, file.ContentType, StoryId.Value);
+        }, "upload");
+    }
+
+    /// <summary>"Remove cover" (edit mode only — the button shows only while a cover is set, and a new
+    /// story has none). Commits at once, like the upload.</summary>
+    private async Task HandleRemoveCoverAsync()
+    {
+        if (!StoryId.HasValue) return;
+
+        await RunCoverChangeAsync(async () =>
+        {
+            await StoryWriteService.RemoveCoverArtAsync(StoryId.Value);
+            _viewModel.CoverArtRelativeUrl = null;
+        }, "remove");
+    }
+
+    /// <summary>The cover calls' shared busy flag and error handling: a 403 renders the forbidden
+    /// state; anything else shows in the form's error list through <c>ExceptionPresenter</c>, logged
+    /// only when it is not a user-facing refusal (the save path's shape).</summary>
+    private async Task RunCoverChangeAsync(Func<Task> change, string operation)
+    {
+        _coverUploadBusy = true;
+        _viewModel.ServerValidationErrors.Clear();
+        try
+        {
+            await change();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Cover {CoverOperation} for story {StoryId} failed unexpectedly", operation, StoryId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+        }
+        finally
+        {
+            _coverUploadBusy = false;
         }
     }
 

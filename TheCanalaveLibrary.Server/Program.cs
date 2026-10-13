@@ -413,6 +413,12 @@ else
 {
     builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
 }
+// Daily orphan-blob sweep (owner ruling D14): the backstop for fault residue, never the mechanism of
+// erasure — terminal deletion paths delete their blobs inline. First cycle per process is a dry run;
+// ImageStorage:OrphanSweep:Enabled is the kill switch. TestAppFactory removes the worker (tests drive
+// ImageOrphanSweeper directly).
+builder.Services.AddScoped<ImageOrphanSweeper>();
+builder.Services.AddHostedService<ImageOrphanSweepWorker>();
 // Configuration happens once at construction and Sanitize() is thread-safe thereafter, so this is a
 // singleton rather than scoped (see ServerHtmlSanitizationService). First call site: WU17 chapter
 // write service. Future: WU19 comments, WU29 recommendations, WU31 blog posts, WU35 messaging.

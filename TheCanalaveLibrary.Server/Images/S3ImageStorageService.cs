@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -139,6 +140,46 @@ public class S3ImageStorageService(
             activity?.AddException(ex);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Pages <c>ListObjectsV2</c> once per upload prefix (<see cref="ImageUploadRules.KeyPrefixes"/>,
+    /// never the whole bucket: sprites may share it) at <see cref="S3ImageStorageOptions.ListPageSize"/>
+    /// keys a page, following the continuation token until the listing is no longer truncated. No span:
+    /// the orphan sweep's span covers the listing (owner ruling D14).
+    /// </summary>
+    public async IAsyncEnumerable<StoredImage> EnumerateAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (string prefix in ImageUploadRules.KeyPrefixes)
+        {
+            string? continuationToken = null;
+            do
+            {
+                ListObjectsV2Response page = await s3.ListObjectsV2Async(new ListObjectsV2Request
+                {
+                    BucketName = options.Value.BucketName,
+                    Prefix = prefix,
+                    MaxKeys = options.Value.ListPageSize,
+                    ContinuationToken = continuationToken,
+                }, cancellationToken);
+
+                // AWSSDK.S3 v4 leaves collections null when a page is empty, and makes IsTruncated
+                // and LastModified nullable.
+                foreach (S3Object obj in page.S3Objects ?? [])
+                {
+                    // An unknown age reads as "just written", so the sweep's grace window skips it
+                    // (fail-safe: never delete a blob whose age the store did not report).
+                    DateTime lastModifiedUtc = obj.LastModified is DateTime reported
+                        ? reported.ToUniversalTime()
+                        : DateTime.UtcNow;
+                    yield return new StoredImage(ImageUploadRules.UploadsPrefix + obj.Key, lastModifiedUtc);
+                }
+
+                continuationToken = page.IsTruncated == true ? page.NextContinuationToken : null;
+            }
+            while (continuationToken is not null);
         }
     }
 }

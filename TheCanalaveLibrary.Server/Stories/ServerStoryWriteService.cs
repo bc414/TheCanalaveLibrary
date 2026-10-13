@@ -106,12 +106,12 @@ public class ServerStoryWriteService(
 
         await ValidateStructuredTagGatesAsync(dto, writeDb);
 
-        // Capture the old cover path before overwriting (orphan-bug fix — DeleteAsync had zero callers).
-        string? oldCoverPath = storyToUpdate.StoryListing?.CoverArtRelativeUrl;
-
         // Never changes status (WU-StoryLifecycle, D1): the mapper does not copy StoryStatusId, and
         // dto.StoryStatusId is a read echo. An in-queue (PendingApproval) edit is allowed and stays
         // PendingApproval — the moderator approves the row as it stands (D1 sub-edge, owner rec).
+        // Never touches the cover either (owner ruling D14): it is on neither the DTO nor the mapper,
+        // so a property edit cannot set, clear or delete it. UploadCoverArtAsync and
+        // RemoveCoverArtAsync own the cover and its blob.
         storyToUpdate.UpdateStoryEditableProperties(dto);
         // Sanitize on save, same as CreateStoryAsync above (MA-201 fix).
         storyToUpdate.StoryDetail.LongDescription = dto.LongDescription is not null
@@ -154,20 +154,6 @@ public class ServerStoryWriteService(
         }
 
         await writeDb.SaveChangesAsync();
-
-        // Best-effort cleanup of the old cover blob when it changes. A failed delete must not
-        // propagate — the story update already succeeded. The null/same-path guard prevents
-        // accidental deletion when the cover hasn't actually changed.
-        if (oldCoverPath is not null && oldCoverPath != dto.CoverArtRelativeUrl)
-        {
-            try { await imageStorage.DeleteAsync(oldCoverPath); }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "Best-effort delete of replaced cover {ImagePath} failed for story {StoryId} — blob orphaned",
-                    oldCoverPath, dto.StoryId);
-            }
-        }
     }
 
     public async Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
@@ -258,19 +244,80 @@ public class ServerStoryWriteService(
 
     public async Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId)
     {
-        int? authorId = await writeDb.Stories
-            .Where(s => s.StoryId == storyId)
-            .Select(s => (int?)s.AuthorId)
-            .FirstOrDefaultAsync();
+        Story story = await LoadStoryForCoverChangeAsync(storyId, "You can only upload a cover for your own story.");
 
-        if (authorId is null)
+        // Write blob → persist column → best-effort delete the old blob; never delete first (owner
+        // ruling D14; ServerUserSettingsService.UploadProfilePictureAsync has the same shape). A failed
+        // save leaves the new blob orphaned: no compensating delete, because that is the orphan sweep's
+        // class.
+        string? oldPath = story.StoryListing.CoverArtRelativeUrl;
+        string newPath = await imageStorage.SaveAsync(content, contentType, ImageKind.Cover, storyId);
+
+        story.StoryListing.CoverArtRelativeUrl = newPath;
+        // Stamped like every successful property edit (UpdateStoryAsync) — a derived choice, flagged in
+        // audit/Stories.md F4; D2's publish-anchor rules may revisit what bumps LastUpdatedDate.
+        story.LastUpdatedDate = DateTime.UtcNow;
+        await writeDb.SaveChangesAsync();
+
+        if (oldPath is not null && oldPath != newPath)
+            await DeleteReplacedCoverAsync(oldPath, storyId);
+
+        return newPath;
+    }
+
+    public async Task RemoveCoverArtAsync(int storyId)
+    {
+        Story story = await LoadStoryForCoverChangeAsync(storyId, "You can only remove the cover of your own story.");
+
+        string? oldPath = story.StoryListing.CoverArtRelativeUrl;
+        if (oldPath is null)
+            return; // nothing to clear — no write, no stamp
+
+        // Persist first, then delete the blob (D14): a failed delete leaves an orphan, never a row
+        // naming a missing blob.
+        story.StoryListing.CoverArtRelativeUrl = null;
+        story.LastUpdatedDate = DateTime.UtcNow;
+        await writeDb.SaveChangesAsync();
+
+        await DeleteReplacedCoverAsync(oldPath, storyId);
+    }
+
+    /// <summary>
+    /// The shared load and gate of the two cover operations: a tracked load with the listing (the cover
+    /// column lives there), <see cref="KeyNotFoundException"/> when the story does not exist and
+    /// <see cref="UnauthorizedAccessException"/> unless the caller is its author. An authorless story
+    /// (its author deleted their account) is therefore 403, not 404: the old <c>(int?)</c> projection
+    /// read a NULL author as "not found" (service audit §2.12, closed WU-BlobCleanup). Moderation
+    /// actions never call this path.
+    /// </summary>
+    private async Task<Story> LoadStoryForCoverChangeAsync(int storyId, string notAuthorMessage)
+    {
+        Story? story = await writeDb.Stories
+            .Include(s => s.StoryListing)
+            .FirstOrDefaultAsync(s => s.StoryId == storyId);
+
+        if (story is null)
             throw new KeyNotFoundException($"Story with ID {storyId} not found.");
 
-        // Same author-only gate as UpdateStoryAsync — moderation actions never call this path.
-        if (authorId != ActiveUser.UserId)
-            throw new UnauthorizedAccessException("You can only upload a cover for your own story.");
+        // Explicit-auth check rather than nullable comparison: an anonymous caller (UserId null) against
+        // an authorless story (AuthorId null) must not pass on null == null.
+        if (ActiveUser.UserId is not int callerId || story.AuthorId != callerId)
+            throw new UnauthorizedAccessException(notAuthorMessage);
 
-        return await imageStorage.SaveAsync(content, contentType, ImageKind.Cover, storyId);
+        return story;
+    }
+
+    /// <summary>Best-effort delete of a cover blob no row names any more. The cover change already
+    /// committed, so a failure is logged and swallowed; the orphan sweep collects the blob.</summary>
+    private async Task DeleteReplacedCoverAsync(string oldPath, int storyId)
+    {
+        try { await imageStorage.DeleteAsync(oldPath); }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Best-effort delete of replaced cover {ImagePath} failed for story {StoryId} — blob orphaned; the orphan sweep collects it",
+                oldPath, storyId);
+        }
     }
 
     /// <summary>

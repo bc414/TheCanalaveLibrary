@@ -11,6 +11,8 @@
     <PackageReference Include="coverlet.collector" Version="10.0.1" />
     <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <!-- FakeLogger<T> for asserting best-effort Warning logs (WU-BlobCleanup); same version as Unit. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" Version="10.7.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageReference Include="Respawn" Version="7.0.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />

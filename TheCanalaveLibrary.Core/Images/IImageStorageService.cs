@@ -37,4 +37,14 @@ public interface IImageStorageService
 
     /// <summary>Deletes a previously saved image by its stored relative path. No-ops if not found.</summary>
     Task DeleteAsync(string relativePath);
+
+    /// <summary>
+    /// Streams every stored upload under the upload key space only (<c>stories/</c> and
+    /// <c>users/</c>) — never anything else the store holds, such as sprites in a shared bucket — and
+    /// never materializes the store: S3 pages <c>ListObjectsV2</c>, Local walks the folders lazily.
+    /// Each item carries the store-reported last-modified time. Added for the orphan sweep (owner
+    /// ruling D14, WU-BlobCleanup 2026-10-13), as a recorded amendment to this frozen interface; see
+    /// audit/ImageStorage.md "Contract".
+    /// </summary>
+    IAsyncEnumerable<StoredImage> EnumerateAsync(CancellationToken cancellationToken = default);
 }
