@@ -278,6 +278,11 @@
             await LineageService.ApproveLineageAsync(req.SourceStoryId, req.TargetStoryId, req.TypeId);
             await ReloadAsync();
         }
+        catch (Exception ex) when (IsMovedUnderThePage(ex))
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception ex)
         {
             _incomingError = ExceptionPresenter.GetUserMessage(ex);
@@ -299,6 +304,11 @@
             await LineageService.RejectLineageAsync(req.SourceStoryId, req.TargetStoryId, req.TypeId);
             await ReloadAsync();
         }
+        catch (Exception ex) when (IsMovedUnderThePage(ex))
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception ex)
         {
             _incomingError = ExceptionPresenter.GetUserMessage(ex);
@@ -307,6 +317,29 @@
         finally
         {
             _busy = false;
+        }
+    }
+
+    // The request changed under this page: another tab (or a concurrent click) already approved it,
+    // so it is no longer Pending (a 400), or the requester removed it (a 404). The listed row is stale,
+    // and its Reject would now act on whatever the row became, revoking an approval made elsewhere.
+    private static bool IsMovedUnderThePage(Exception ex) =>
+        ex is StoryLineageValidationException or KeyNotFoundException;
+
+    // Keep the refusal's message, and reload so the stale row no longer offers Approve/Reject (the
+    // ModSubmissionsPage shape; error-handling.md §"Layered error boundaries"). A failed reload is
+    // reported after the refusal, never instead of it.
+    private async Task ReloadAfterRefusalAsync()
+    {
+        try
+        {
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            string reloadError = ExceptionPresenter.GetUserMessage(ex);
+            _incomingError = _incomingError is null ? reloadError : $"{_incomingError} {reloadError}";
+            _incomingErrorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 

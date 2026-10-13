@@ -28,6 +28,13 @@ write handler catches the typed refusal and shows it inline (`layer3-logic.md` �
 replaces the whole page — what the interaction panel and `FollowButton` did until the
 WU-AccessGateSweep2 browser pass (2026-09-30).
 
+When the refusal means the row moved under a list page (another tab or moderator already acted, or
+the row is gone), the handler also reloads the list, keeping the message, so the stale row stops
+offering actions on a state it no longer shows. A failed reload is appended to the refusal, never
+shown instead of it. The shape is `ReloadAfterRefusalAsync` in `ModSubmissionsPage` and
+`MyStoryLineagesPage` (the latter from the WU-CounterSymmetry browser pass, 2026-09-30: the stale
+lineage row's Reject would have revoked the approval the other tab made).
+
 An unhandled render/lifecycle/event exception now degrades the *island*, not the circuit — the
 circuit (and every other island's state, including in-server drafts) survives. Boundaries do NOT
 catch background-`Task` continuations or exceptions thrown outside their subtree; the
