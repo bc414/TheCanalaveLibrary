@@ -77,6 +77,16 @@
         <PackageReference Include="MailKit" Version="4.17.0" />
     </ItemGroup>
 
+    <!-- User uploads (Local image storage, wwwroot/uploads/) are runtime data, not build assets.
+         Left in Content, every file present at build time became a MapStaticAssets endpoint, and that
+         endpoint outlived the file: after the orphan sweep or an inline delete erased it, its URL
+         answered 200 with an empty body instead of 404, and a publish would have shipped the folder.
+         UseStaticFiles serves uploads at runtime either way (WU-BlobCleanup browser pass, 2026-10-13;
+         HostBootTests.NoStaticAssetEndpointServesAnUpload). -->
+    <ItemGroup>
+        <Content Remove="wwwroot\uploads\**" />
+    </ItemGroup>
+
     <!-- Tailwind CSS v4 build pipeline (Phase C). Input: Styles/app.css. Output: wwwroot/app.css
          (generated, gitignored). See .claude/skills/canalave-conventions/layer4-style.md. -->
     <Target Name="NpmInstall" BeforeTargets="TailwindBuild" Inputs="package.json" Outputs="node_modules/.install-stamp">

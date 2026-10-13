@@ -601,7 +601,10 @@ directly. See `layer4-style.md` §"Avatars Are Stored URLs, Not Sprite Keys".
 place* — `IImageStorageService.SaveAsync` (Core/Images/) is the write-side counterpart that turns an
 uploaded file into the relative key stored on the entity. `LocalImageStorageService` writes under
 `wwwroot/uploads/`; `S3ImageStorageService` (Garage in dev, R2 in prod) sits behind the same interface,
-selected by `ImageStorage:Provider`. See `audit/ImageStorage.md` for the full contract and URL
+selected by `ImageStorage:Provider`. Local uploads are runtime data: `UseStaticFiles` serves them, and
+the Server csproj keeps `wwwroot/uploads/` out of the build's static web assets. A file present at build
+time would otherwise become a `MapStaticAssets` endpoint that outlives its delete and answers 200 with an
+empty body, not 404 (WU-BlobCleanup browser pass, 2026-10-13; `HostBootTests`). See `audit/ImageStorage.md` for the full contract and URL
 conventions, and the next section for who deletes a blob.
 
 ### Image Storage — blob ownership and cleanup (owner ruling D14; built WU-BlobCleanup 2026-10-13)
