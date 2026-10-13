@@ -9,6 +9,13 @@ namespace TheCanalaveLibrary.Server;
 /// Inherits <see cref="ServerMessagingReadService"/> for read methods (CQRS-lite pattern).
 /// Uses <see cref="ApplicationDbContext"/> for all mutations (tracked, write-primary DbContext).
 /// Message HTML is sanitized once on save (sanitize-once-on-save convention).
+///
+/// <para><b>New-message email (owner ruling D18, WU-PrivateMessageEmail 2026-10-13).</b> Both sends
+/// enqueue the new message's id on the shared <see cref="OutboundEmailBuffer"/> after their own commit;
+/// <see cref="PrivateMessageEmailComposer"/> decides at drain time who is mailed (one email per unread
+/// run). The message row is the contract and mail is the side channel, so enqueueing never fails a
+/// send. No <c>INotificationWriteService</c> is injected — private messages never create
+/// <c>Notification</c> rows (<c>cross-cutting.md</c> §"Two unread systems").</para>
 /// </summary>
 public class ServerMessagingWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -16,6 +23,7 @@ public class ServerMessagingWriteService(
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     IWriteRateLimitService rateLimit,
+    OutboundEmailBuffer emailBuffer,
     ILogger<ServerMessagingWriteService> logger)
     : ServerMessagingReadService(readDbFactory, activeUser), IMessagingWriteService
 {
@@ -73,15 +81,17 @@ public class ServerMessagingWriteService(
             UserId = dto.RecipientUserId
             // LastReadTimestamp = null → recipient has unread from the start
         });
-        conversation.PrivateMessages.Add(new PrivateMessage
+        var firstMessage = new PrivateMessage
         {
             SenderUserId = senderId,
             MessageText = sanitizedMessage,
             DateSent = now
-        });
+        };
+        conversation.PrivateMessages.Add(firstMessage);
         writeDb.Conversations.Add(conversation);
 
         await writeDb.SaveChangesAsync();
+        EnqueueNewMessageEmail(firstMessage.MessageId);
 
         logger.LogInformation(
             "Conversation {ConversationId} started by user {SenderId} with recipient {RecipientId}.",
@@ -123,6 +133,7 @@ public class ServerMessagingWriteService(
         myParticipant.LastReadTimestamp = message.DateSent;
 
         await writeDb.SaveChangesAsync();
+        EnqueueNewMessageEmail(message.MessageId);
 
         // Resolve sender display info for the returned DTO (write-side read, read after commit).
         User? senderUser = await writeDb.Users.FindAsync(senderId);
@@ -166,6 +177,48 @@ public class ServerMessagingWriteService(
 
         participant.IsArchived = archived;
         await writeDb.SaveChangesAsync();
+    }
+
+    public async Task SetMyNewMessageEmailEnabledAsync(bool enabled)
+    {
+        int userId = RequireAuthenticatedUser();
+
+        // One column, set-based (owner ruling D18: Messaging owns this preference). Not a tracked
+        // save: the circuit's write context may already track this User (a send's FindAsync), and
+        // saving that instance would also write any edit still pending on it.
+        int updated = await writeDb.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(set => set.SetProperty(u => u.EmailOnNewMessage, enabled));
+        if (updated == 0)
+            throw new KeyNotFoundException($"User {userId} not found.");
+
+        // A tracked copy would now hold the old value, and a later tracking query would hand it back
+        // (layer2-services.md "Set-based writes leave the circuit's tracked copies stale").
+        foreach (var entry in writeDb.ChangeTracker.Entries<User>().Where(e => e.Entity.Id == userId).ToList())
+            entry.State = EntityState.Detached;
+
+        logger.LogInformation(
+            "User {UserId} turned new-message emails {EmailState}.", userId, enabled ? "on" : "off");
+    }
+
+    // -----------------------------------------------------------------------
+    // New-message email hand-off
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Queues a just-committed message for new-message email (owner ruling D18). After the commit, so
+    /// the id names a durable row. An in-memory append that cannot fail the send; a full buffer is
+    /// logged and counted, never silent (layer2-services.md §"Outbound email pipeline").
+    /// </summary>
+    private void EnqueueNewMessageEmail(long messageId)
+    {
+        int dropped = emailBuffer.Enqueue([new OutboundEmailWork(OutboundEmailKind.PrivateMessage, messageId)]);
+        if (dropped > 0)
+        {
+            logger.LogError(
+                "Outbound email buffer at capacity ({MaxDepth}); dropped the new-message email for message {MessageId} without sending. The drain has stalled.",
+                OutboundEmailBuffer.MaxDepth, messageId);
+        }
     }
 
     // -----------------------------------------------------------------------

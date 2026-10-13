@@ -519,9 +519,9 @@ shape keyed per-user with a latest-timestamp merge — see `layer8-data-marts.md
    Records flush batch-size + duration histograms; on failure: `Restore`, log, rethrow.
 3. **Worker** — `BackgroundService` + `PeriodicTimer` (5 s), delegating to the flusher; catches and
    logs so the loop survives a failed cycle; **drains once more after cancellation** (graceful
-   shutdown must not eat the loss window). A flusher whose batch is **bounded** (the notification
+   shutdown must not eat the loss window). A flusher whose batch is **bounded** (the outbound
    email flusher's 200) must instead **drain to empty within a budget** — one more flush moves only
-   one batch — and log what it strands (§"Email fan-out"). Singleton-worker discipline: exactly one
+   one batch — and log what it strands (§"Outbound email pipeline"). Singleton-worker discipline: exactly one
    per process.
 4. **Scoped write service** — the unchanged `I{Feature}WriteService` body becomes
    `buffer.Record(...)`. The interface doc states the honest contract: *eventually-durable,
@@ -1177,7 +1177,7 @@ anchor is already stamped when the story later goes live — is open as `roadmap
 
 **`UserNotificationSetting` governs email and display, not in-app generation.** The sparse-override
 table stores exactly two user-settable fields per type — `EmailEnabled` (the email side-channel; see
-"Email fan-out" below) and `Collapsed` (display override for the panel — a per-user override of
+"Outbound email pipeline" below) and `Collapsed` (display override for the panel — a per-user override of
 `NotificationType.DefaultCollapsed`). NULL for either field means "use the type's default."
 No in-app mute column exists; that toggle was deliberately dropped from spec §5.18 (recorded in
 `audit/Notifications.md`).
@@ -1215,38 +1215,45 @@ Defaults"). That is the distinction, not a second exception.
 9 categories, 47 types with gap-based numbering (30 of them default `EmailEnabled = true`).
 `DefaultEmailEnabled` and `DefaultCollapsed` are required non-nullable on all types.
 
-### Email fan-out (WU-NotifEmail, 2026-07-31)
+### Outbound email pipeline (WU-NotifEmail, 2026-07-31; titled "Email fan-out" until WU-PrivateMessageEmail shared it, 2026-10-13)
 
-**Create-core enqueues; it never sends.** After the in-app rows commit, `CreateCoreAsync` pushes the
-inserted rows onto `NotificationEmailBuffer` (in-process, bounded, singleton) and returns. A
-`BackgroundService` drains it and sends the batch over **one** pooled SMTP connection. This is the
-standard buffer/flusher/worker trio — see §"Signal Buffering" and `ReadingProgressFlushWorker.cs`.
+**Producers enqueue; they never send.** After its own commit a producer pushes `(kind, id)` items
+(`OutboundEmailWork(OutboundEmailKind, long Id)`) onto `OutboundEmailBuffer` (`Server/Email/`;
+in-process, bounded, singleton) and returns. `OutboundEmailWorker` ticks every 30 s and hands one
+bounded batch to `OutboundEmailFlusher`, which groups the items by kind, gives each kind's ids to that
+kind's `IOutboundEmailComposer`, and sends every composed mail in **one** `SendBatchAsync` over one
+pooled SMTP connection. This is the standard buffer/flusher/worker trio — see §"Signal Buffering" and
+`ReadingProgressFlushWorker.cs`. Two kinds exist: `Notification` (create-core enqueues notification
+ids; `Notifications/NotificationEmailComposer`) and `PrivateMessage` (Messaging enqueues message ids;
+`Messaging/PrivateMessageEmailComposer`, §"Private-message email (D18)"). The buffer, worker and
+flusher were notification-named and lived in `Notifications/` until WU-PrivateMessageEmail
+(2026-10-13) renamed and generalized them: shared infrastructure must carry no feature's vocabulary
+(D18).
 
 Inline sending is **rejected**, not deferred: 30 of the 47 seeded types default `EmailEnabled = true`
 and several fan out to every follower of a story or author, so an inline send puts N ×
 (connect → auth → send → disconnect) inside a SignalR circuit write path.
 
-Rules that bind the flusher:
+Rules that bind the flusher (every kind):
 
-- **Eligibility is the flusher's job, not the enqueuer's.** Effective `EmailEnabled` = the sparse
-  `UserNotificationSetting` row's non-NULL `EmailEnabled`, falling back to
-  `NotificationType.DefaultEmailEnabled` (per field — §"Filtering semantics", D19) — the same LEFT
-  JOIN `GetSettingsAsync` implements. Resolve it at drain time, not enqueue time, so a user who
-  unsubscribes between the two is honored.
-- **Gate on `EmailConfirmed`. Do not gate on account status.** `AccountWarning`,
-  `AccountSuspended`, and `AccountBanned` default `EmailEnabled = true` and are exactly the
-  notifications a restricted user must receive.
-- **Skip rows already `IsRead` at drain time** — the user saw it in-app first.
-- **Mail failure never touches the in-app row, and restores only what was not sent**
+- **Items only; eligibility is the composer's job, at drain time.** The buffer stores nothing but
+  the item, so each composer resolves eligibility against live rows when the batch drains: a user who
+  opens the notification, reads the conversation or unsubscribes between enqueue and drain is
+  honored. A composer returns each mail paired with a **restore key** — the item that, composed
+  again, would mail that recipient again (the notification id; the newest enqueued message id of the
+  conversation). Items it judged ineligible are simply absent.
+- **Items of a kind no composer is registered for** are dropped with an Error log carrying the count.
+  That is a wiring bug; restoring them would only spin.
+- **Mail failure never touches the producer's rows, and restores only what was not sent**
   (WU-NotificationCorrectness, 2026-10-12). Log with the batch size and the restored count, let the
-  worker survive. Same best-effort posture as the rest of create-core. Which ids go back:
-  - compose failed → the whole drained batch (nothing was sent);
-  - `MailBatchInterruptedException` → only the composed messages from `ProcessedCount` on; the ones
-    before it were sent (or dropped as a per-message failure) and must not be sent twice, and
-    ineligible ids were already judged and are correctly gone;
-  - any other transport exception → every composed id (assume nothing was processed);
-  - **a deferred mail** (below) → requeued through `NotificationEmailBuffer.Defer`, which counts
-    deferrals per id and drops the mail at `MaxDeferrals` (10) — counted on `canalave.email.failed`
+  worker survive. Same best-effort posture as the rest of create-core. Which items go back:
+  - compose failed (any composer) → the whole drained batch (nothing was sent);
+  - `MailBatchInterruptedException` → only the restore keys of the composed messages from
+    `ProcessedCount` on; the ones before it were sent (or dropped as a per-message failure) and must
+    not be sent twice, and ineligible items were already judged and are correctly gone;
+  - any other transport exception → every composed restore key (assume nothing was processed);
+  - **a deferred mail** (below) → requeued through `OutboundEmailBuffer.Defer`, which counts
+    deferrals per item and drops the mail at `MaxDeferrals` (10) — counted on `canalave.email.failed`
     and logged at Error there. Deferred mails never hold back the rest of the batch (WU-NotificationCorrectness
     review fixes, 2026-10-13: before them a 4xx to one recipient aborted the batch, and that mail,
     restored at the head of the tail, aborted every later batch too);
@@ -1255,19 +1262,57 @@ Rules that bind the flusher:
     still sees an OCE. Error-level logging is for non-cancellation failures only.
   - **At-least-once, for exactly one message.** If the server accepted DATA but the reply was lost,
     that one message is retried and may arrive twice. Every other message is exactly-once.
+- **After-send hooks run for what the transport took, and never restore** (WU-PrivateMessageEmail,
+  2026-10-13). A composer may return an `AfterSendAsync` hook. The flusher calls it with the indices of
+  that composer's mails the transport *took* — sent, or dropped as a per-message failure; never a
+  deferred or unsent one — after a successful batch **and** after an aborted one (its processed
+  head). A hook records that the mail is handled; the private-message composer stamps its unread-run
+  watermark there. It runs with `CancellationToken.None`: the mail has already left, and the record
+  of that must not be lost to a shutdown that began after it. A hook failure is logged at Error and
+  restores nothing, because the mail cannot be unsent and a restore would send it again.
 - **Shutdown drains to empty, within a budget.** A batch is bounded (`MaxBatchSize` = 200, deliberate
   per-tick work), so one final flush would strand everything past the first batch.
-  `NotificationEmailFlusher.DrainAllAsync(budget)` loops `FlushAsync` while the buffer is non-empty,
+  `OutboundEmailFlusher.DrainAllAsync(budget)` loops `FlushAsync` while the buffer is non-empty,
   stops on the first failed batch (already restored), on a batch that settled nothing (everything it
   drained was deferred again — retrying at once would only repeat the deferral) or on cancellation,
-  and returns the stranded count; the worker runs it under `NotificationEmailWorker.ShutdownDrainBudget` (15 s, inside the
+  and returns the stranded count; the worker runs it under `OutboundEmailWorker.ShutdownDrainBudget` (15 s, inside the
   host's default 30 s `ShutdownTimeout`) and logs a Warning with the count when anything is
-  stranded. A hard crash still loses the in-memory buffer; the in-app rows are durable either way.
+  stranded. A hard crash still loses the in-memory buffer; every producer's rows are durable either
+  way.
 - **Never silently drop.** If the buffer's bound is hit, log and increment a counter — a fan-out
   that quietly stops emailing is indistinguishable from one that works.
 
-**Transport.** Notification mail does not ride `IEmailSender<User>` (Identity's three-method
-confirmation/reset contract). Both paths sit on `IMailTransport` (`Server/Email/`), so the
+**The notification composer's eligibility** (`NotificationEmailComposer`; four gates, one query):
+
+- **Effective `EmailEnabled`** = the sparse `UserNotificationSetting` row's non-NULL `EmailEnabled`,
+  falling back to `NotificationType.DefaultEmailEnabled` (per field — §"Filtering semantics", D19) —
+  the same LEFT JOIN `GetSettingsAsync` implements.
+- **Gate on `EmailConfirmed`. Do not gate on account status.** `AccountWarning`,
+  `AccountSuspended`, and `AccountBanned` default `EmailEnabled = true` and are exactly the
+  notifications a restricted user must receive.
+- **Skip rows already `IsRead` at drain time** — the user saw it in-app first.
+- **A non-empty address** (defensive: Identity requires one, but the column is nullable).
+
+**Feature-owned email: share the transport, never the identity** (owner ruling D18, answered
+2026-08-07 — the general rule for every future "feature X wants email" question). A feature that
+needs email depends on `IMailTransport` and the outbound pipeline, a shared lower-level service with
+no vocabulary of its own, and owns everything else: its preference, its suppression rule, its bodies
+and its unsubscribe purpose (`security.md` §"One-click unsubscribe tokens"). It never borrows another
+domain's identity to get there: no `NotificationTypeEnum` member, category, seed row or
+`RelatedEntityKind` arm for something that is not a notification. A private-message row in the
+notification catalogue would have been the first type whose `Notification` rows are permanently
+absent and whose `DefaultCollapsed` means nothing: an invariant weakened by one special case that
+lives only in prose.
+
+**Standing rider: every outbound non-transactional email appears on `/notifications/settings`**
+(D18). Each owning domain renders its own section there from its own service. The page is a
+composition surface, not a domain artifact, so it may read two sources. Enforced by **review**, not
+by a shared registry, because a registry is exactly the coupling D18 rejects. The page holds the
+notification categories and, since WU-PrivateMessageEmail (2026-10-13), a "Private messages" section.
+Transactional mail (confirmation, password reset) is not optional and has no row.
+
+**Transport.** Notification and private-message mail do not ride `IEmailSender<User>` (Identity's
+three-method confirmation/reset contract). Every path sits on `IMailTransport` (`Server/Email/`), so the
 `Email:Provider` switch, `EmailOptions`, and the `CanalaveTelemetry.Email` span/counters are
 single-sourced. Selecting a provider is a config change; no code depends on which one.
 
@@ -1309,7 +1354,9 @@ copy). A send has three outcomes besides success:
 the same reason it is wrong for Open Graph tags. No email-specific base-URL config exists — do not
 add one.
 
-**Unsubscribe.** Every notification email carries RFC 8058 `List-Unsubscribe` +
+**Unsubscribe (notification purpose).** Every outbound non-transactional email follows the shared
+convention in `security.md` §"One-click unsubscribe tokens"; each owning feature mints its own
+purpose. Every notification email carries RFC 8058 `List-Unsubscribe` +
 `List-Unsubscribe-Post` headers pointing at an anonymous Data-Protection-signed endpoint, plus a
 visible footer link. Unsubscribing turns email off for one type through the same sparse helper as
 `SetSettingAsync` (`NotificationSettingUpsert`) — never reimplement the "matches default ⇒ NULL;
@@ -1321,9 +1368,10 @@ insert is conditional on the user still existing (`INSERT … SELECT … WHERE E
 longer valid" page (400), never a foreign-key 500 (WU-NotificationCorrectness review fixes,
 2026-10-13).
 
-**Email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text — the per-type
-switch is not forked. Bodies are table-based inline-CSS HTML and are the one markup surface
-**exempt** from the design-token rules in `layer4-style.md`: email clients do not support custom
+**Notification email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text —
+the per-type switch is not forked. Email bodies (`NotificationEmailBodies`,
+`PrivateMessageEmailBodies`, Identity's `EmailBodies`) are table-based inline-CSS HTML and are the
+one markup surface **exempt** from the design-token rules in `layer4-style.md`: email clients do not support custom
 properties, and `check-design-tokens.ps1` governs app markup only.
 
 ### Comment & blog-post semantic methods (WU-B2, 2026-07-25)
@@ -2245,6 +2293,90 @@ The read is **two-step** (the same page-the-ids-then-hydrate idiom as the thread
 Unpaged stays correct because conversation counts are bounded by human effort (someone must start
 each one), unlike machine-generated notifications, which are paged. Step 1's two ordering keys emit
 as correlated `MAX()` subqueries (min/max seeks on the same index).
+
+## Private-Message Email — Messaging-Owned, One Email per Unread Run (D18; WU-PrivateMessageEmail, 2026-10-13)
+
+Owner ruling D18 (answered 2026-08-07): private messages never create `Notification` rows and never
+take a `NotificationTypeEnum` value (`cross-cutting.md` §"Two unread systems"). Messaging owns
+private-message email end to end and shares only the transport and the outbound pipeline
+(§"Outbound email pipeline" → "Feature-owned email").
+
+**What Messaging owns.**
+- **The preference, `User.EmailOnNewMessage`** (`bool`, default `true`, the layer-1 bool-true
+  shape). It is a scalar column, not a field in the `PrivacySettings` JSON beside
+  `AllowPrivateMessages`: `ServerUserSettingsService.UpdatePrivacySettingsAsync` replaces that JSON
+  group wholesale from the privacy form's DTO, so a field inside it would reset on every privacy
+  save. Written only by `IMessagingWriteService.SetMyNewMessageEmailEnabledAsync` and the messaging
+  unsubscribe endpoint, both set-based.
+- **The suppression watermark, `ConversationParticipant.LastNotifiedTimestamp`** (nullable).
+  Written only by the composer's after-send hook, set-based. No other code assigns it.
+- **The body** (`PrivateMessageEmailBodies`), **the composer** (`PrivateMessageEmailComposer`), and
+  **its own unsubscribe purpose** (`MessagingUnsubscribeTokenService`,
+  `/unsubscribe/messages/{token}`; `security.md` §"One-click unsubscribe tokens").
+
+**Enqueue.** `StartConversationAsync` and `SendMessageAsync` enqueue
+`(PrivateMessage, messageId)` after their `SaveChangesAsync`. The message row is the contract and
+mail is the side channel: a buffer at capacity logs an Error and drops the item; it never fails the
+send. `INotificationWriteService` is still not injected.
+
+**The run rule: one email per unread run, never a re-nag.** At drain time the composer mails a
+participant row of a conversation the batch names when all of these hold:
+- **The run is not yet notified:** `LastNotifiedTimestamp IS NULL OR (LastReadTimestamp IS NOT NULL
+  AND LastNotifiedTimestamp <= LastReadTimestamp)`.
+- **An unread message from the other party exists:** the predicate
+  `GetUnreadConversationCountAsync` uses (a sender other than the participant, a NULL sender
+  included, newer than `LastReadTimestamp`).
+- **Not archived.** Archive mutes email too. Archive is the only disposal gesture against an
+  unwanted correspondent (§"Conversation Archiving Is Sticky"), and an email that bypassed it would
+  take that relief away. Unarchiving reopens nothing by itself; the next new message mails.
+- **`EmailOnNewMessage`, `EmailConfirmed`, and a non-null address.** Account status is not a gate,
+  mirroring the notification composer.
+
+The sender drops out by construction: sending stamps the sender's own `LastReadTimestamp`. Each
+(conversation, recipient) pair yields at most one mail per flush. Outcomes: a 20-message burst while
+the recipient is away sends one email; reading and then receiving a new message sends a second; a
+standing unread state is never mailed again.
+
+The read goes through the **write context** (`AsNoTracking`; write-side read, Case 1): the composer
+checks a watermark it writes itself, so replica lag must never make it mail a run twice. The newest
+unread message's date and sender name are two scalar subqueries, not one multi-column
+`FirstOrDefault` (§"Conversation Archiving Is Sticky" → the measured window-form trap).
+
+**Stamp after the send.** The after-send hook sets `LastNotifiedTimestamp` to the `DateSent` of the
+newest other-party message the mail covered, guarded by `last_notified_timestamp IS NULL OR
+last_notified_timestamp < @stamp`. A recipient who reads between compose and stamp has
+`LastReadTimestamp` past the stamp, so the run correctly reopens. A failed send restores the item
+unstamped and the retry mails, which makes it exactly-once at N=1. At N≥2 two nodes that drain the
+same run in one window can both mail (`horizontal-scaling.md` §6); claim-before-send is not built.
+
+**Why not D18's literal formula.** D18 says to mail "when a message from the other party is newer
+than the recipient's `LastReadTimestamp` **and** newer than `LastNotifiedTimestamp`, then stamp".
+Read literally, that mails again on every drain cycle that sees a new message during one unread run,
+which contradicts D18's own stated outcomes ("a 20-message burst … produces one email"; "a standing
+unread state is never re-poked"). The run predicate above produces exactly those outcomes and still
+gates only on watermarks, never on a proxy row's `IsRead`. Owner confirmation: `roadmap.md` decision
+row 28 (d).
+
+**No sender-authored text in the mail.** The body names the sender and links to
+`/messages/{conversationId}`; it carries neither the message nor the conversation subject. Otherwise
+anyone who can start a conversation could have the site deliver arbitrary text to any confirmed
+address (a spam relay), and the privacy of a message would depend on the recipient's mail provider.
+A deleted sender reads "a member". Every interpolated value is HTML-encoded.
+
+**Drain interval: the shared 30 s worker.** D18 left this to the build; no second knob was added. A
+message waits 0–30 s for the next tick, not a full 30 s, so "a reader who is already here is not
+mailed" holds only for a read that lands before that tick. A per-kind minimum age is not built.
+
+**Preference API.** `IMessagingReadService.GetMyNewMessageEmailEnabledAsync()` and
+`IMessagingWriteService.SetMyNewMessageEmailEnabledAsync(bool)`, self-scoped (anonymous →
+`InvalidOperationException`, 401). The write is one `ExecuteUpdateAsync`, then it detaches any
+tracked `User` it touched (§"Read-Context Concurrency: Factory Per Method" → "Set-based writes leave
+the circuit's tracked copies stale"). HTTP: `GET`/`PUT /api/messaging/email-preference`. Unthrottled
+as a self-scoped setting (`security.md` enumeration). The one UI is the "Private messages" section of
+`/notifications/settings` (§"Outbound email pipeline" → the standing rider), not the privacy form.
+
+The derived choices here (default on, no sender text, archive mutes, the run reading) are built
+defaults awaiting the owner's confirmation in `roadmap.md` decision row 28.
 
 ## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 

@@ -24,6 +24,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ApprovedStorySubmissions).HasDefaultValue(0);
         builder.Property(u => u.CanAutoApprove).HasDefaultValue(true).HasSentinel(true);
 
+        // New-message email preference (owner ruling D18, WU-PrivateMessageEmail): the same bool-true
+        // shape. The DB default also backfills existing users on when the column is added, and covers
+        // SeedTool's COPY, which omits the column like the two above.
+        builder.Property(u => u.EmailOnNewMessage).HasDefaultValue(true).HasSentinel(true);
+
         // A suspension end date exists only while Suspended (schema audit §2.6; service audit
         // §2.1.3(c), kept by ServerModerationWriteService.ApplyStatus). One direction only: whether
         // Suspended requires a date is §2.1.3(a)'s call, not the schema's.

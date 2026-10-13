@@ -204,8 +204,8 @@ five (2026-10-13).
 | **View ping** — `RecordViewAsync` (anonymous) | **Ratified unthrottled (D20 sub-ruling).** Views are never sort keys, so inflation cannot distort discovery, and `ViewCountBuffer` is keyed by story id, so a bot loop grows a dictionary bounded by story count, not ping count. Accepted consequence, recorded rather than defended: displayed view counts are inflatable, and authors read them. No IP-partitioned limiter until a proxy-aware client-IP policy exists (Phase 7). |
 | **Content gate, the other two** — anonymous reveal, `/content-gate/mature`, `/refresh-claims` | The anonymous reveal writes only the viewer's own cookie (LRU-capped at 50); the mature flip is a self-scoped setting plus a cookie reissue; refresh is idempotent. |
 | **Moderator/admin-gated** — all of `IModerationWriteService` (including `AssignGroupAdminAsync`, story approve/reject, `SetCanAutoApproveAsync`), EV approve/reject, `SetIntAsync` (`RequireModerator`), tag writes (`RequireModerator` + the `TagWrites` edge policy), Fanon `LinkGroupAsync` / `NotifyNewAuthorsAsync`, Spotlight `GrantSlotAsync` / `RevokeSlotAsync` (`RequireModerator`) | Mod actions are never throttled. Confirmed per method. **Fanon's author half** (`AdoptAsync`, `AdoptAllAsync`, `SetDismissedAsync`) is user-facing, not mod-gated: self-scoped to the caller's own stories, no notification; HTTP carries `TagWrites`, the circuit path is unthrottled. |
-| **Self-scoped settings and account** — profile / reader / privacy / author / appearance settings, filter settings, self account deletion | Self-scoped. Avatar upload is covered by `ImageUpload`. |
-| **Import `/resplit`**; **unsubscribe** | `/resplit` re-splits an already-parsed result (bounded by `ImportLimits`, no decode). Unsubscribe carries the `Unsubscribe` edge policy (anonymous, per-IP). The import *commit* loops `CreateChapterAsync` under `ContentCreate`, so an import of more than five chapters partially commits and then refuses (tracker D16). |
+| **Self-scoped settings and account** — profile / reader / privacy / author / appearance settings, filter settings, the new-message email preference (`SetMyNewMessageEmailEnabledAsync`, `PUT /api/messaging/email-preference`, owner ruling D18, WU-PrivateMessageEmail 2026-10-13), self account deletion | Self-scoped. Avatar upload is covered by `ImageUpload`. The email preference is one idempotent column write on the caller's own row and sends nothing. |
+| **Import `/resplit`**; **unsubscribe** | `/resplit` re-splits an already-parsed result (bounded by `ImportLimits`, no decode). Both unsubscribe groups (`/unsubscribe/{token}`, `/unsubscribe/messages/{token}`) carry the `Unsubscribe` edge policy (anonymous, per-IP). The import *commit* loops `CreateChapterAsync` under `ContentCreate`, so an import of more than five chapters partially commits and then refuses (tracker D16). |
 
 ## HTTP Edge Rate Limiting
 
@@ -218,8 +218,10 @@ that way. The policy set (Program.cs):
   **lockout**, which is per-*account* — the two defend different axes.
 - **Tag write API** (`POST/PUT/DELETE /api/tags*`): named policy `"TagWrites"`, 30/min
   partitioned by authenticated user name (IP fallback).
-- **Unsubscribe** (`/unsubscribe/{token}`): named policy `"Unsubscribe"`, per-IP 20/min — the one
-  anonymous, antiforgery-exempt endpoint group that writes.
+- **Unsubscribe** (`/unsubscribe/{token}` and, since WU-PrivateMessageEmail 2026-10-13,
+  `/unsubscribe/messages/{token}`): named policy `"Unsubscribe"`, per-IP 20/min, one partition
+  across both groups — the anonymous, antiforgery-exempt endpoints that write
+  (§"One-click unsubscribe tokens").
 - **Import parse** and **export generation**: the `"ImportParse"` and `"ExportGenerate"`
   concurrency limiters (4 permits, queue 8, oldest first) — the never-commits cost class above.
 
@@ -385,6 +387,44 @@ are retained — **never delete rows from `data_protection_keys`** (deleting = p
 everything they protect). Respawn ignores the table in integration tests (`PostgresFixture`).
 Shipping this change produced exactly one global sign-out (new key ring + app name), expected
 and pre-beta-harmless.
+
+## One-click unsubscribe tokens (shared convention, owner ruling D18)
+
+Every outbound non-transactional email carries a one-click unsubscribe. D18 (answered 2026-08-07)
+makes the pattern a **shared convention, not shared code**: each owning feature mints its own token
+service and endpoint, and both conform to these rules.
+
+- **One Data Protection purpose per owning feature, versioned.** Bumping the suffix invalidates every
+  outstanding token of that feature at once. A token minted under one purpose never reads under
+  another, so a notification link can never silence private-message email or the reverse.
+- **The payload carries only the target identity:** the user id, plus whatever names the one
+  setting. Never a session, an auth ticket or anything readable.
+- **Exactly one action, disable-only, idempotent.** A token can only turn its one setting off. It can
+  never enable anything, read data or sign anyone in. Mail clients and link scanners re-POST, so a
+  repeat answers the same success page.
+- **Anonymous, antiforgery-exempt `POST`; read-only `GET`.** The RFC 8058 one-click `POST` comes from a
+  mail client with no cookies, so the signed token is the credential. The visible footer link opens a
+  `GET` that only renders a confirmation form posting to the same URL: link scanners follow every
+  `GET` in a message.
+- **One failure page.** A tampered, expired, rotated-key or foreign-purpose token, and a valid token
+  for an account deleted since the mail went out, all answer the same 400 "link no longer valid"
+  page, logged once at Information. The page never says which.
+- **Rate limited** by the per-IP `"Unsubscribe"` edge policy (§"HTTP Edge Rate Limiting").
+- **Headers:** the RFC 8058 pair, `List-Unsubscribe: <absolute url>` plus
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click`, always together.
+- **Shared presentation, separate tokens.** Both landing pages render through
+  `Server/Email/UnsubscribeLandingPage` (a self-contained HTML shell, no layout). That is presentation
+  infrastructure; the token services stay separate classes.
+
+Live purposes:
+
+| Purpose | Token service | Route | Payload | The one action |
+|---|---|---|---|---|
+| `TheCanalaveLibrary.NotificationUnsubscribe.v1` | `UnsubscribeTokenService` | `/unsubscribe/{token}` | user id + notification type | that type's `email_enabled` off (`NotificationSettingUpsert`) |
+| `TheCanalaveLibrary.MessagingUnsubscribe.v1` | `MessagingUnsubscribeTokenService` | `/unsubscribe/messages/{token}` | user id | `User.EmailOnNewMessage` off (WU-PrivateMessageEmail, 2026-10-13) |
+
+Both tokens live 365 days. A key-ring loss invalidates outstanding links, which degrade to the
+failure page, never to a wrong action.
 
 ## Dependency Vulnerability Scan Cadence
 

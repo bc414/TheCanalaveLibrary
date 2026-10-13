@@ -152,15 +152,17 @@ public static class CanalaveTelemetry
     }
 
     /// <summary>
-    /// All outbound email — Identity's transactional mail (WU-Email) and notification fan-out
-    /// (WU-NotifEmail), both of which run through <c>IMailTransport</c>.
+    /// All outbound email — Identity's transactional mail (WU-Email), notification fan-out
+    /// (WU-NotifEmail) and private-message email (WU-PrivateMessageEmail, owner ruling D18), all of
+    /// which run through <c>IMailTransport</c>.
     /// HttpClient/socket auto-instrumentation is blind to SMTP, so this names "one email" as its
     /// own span; sent/failed counters split by kind (confirmation vs. reset vs. each notification
-    /// type) so a provider outage or misconfiguration shows up as a metric, not just an exception
-    /// trace.
+    /// type vs. <c>PrivateMessage</c>) so a provider outage or misconfiguration shows up as a metric,
+    /// not just an exception trace.
     ///
     /// <para>The buffer-depth ObservableGauge ("canalave.email.buffer.depth") is created by
-    /// <c>NotificationEmailBuffer</c>'s constructor — same rationale as ReadingProgress's gauge.</para>
+    /// <c>OutboundEmailBuffer</c>'s constructor (one shared queue for notification and private-message
+    /// mail) — same rationale as ReadingProgress's gauge.</para>
     /// </summary>
     public static class Email
     {

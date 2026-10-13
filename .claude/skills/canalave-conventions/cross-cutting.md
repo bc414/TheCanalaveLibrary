@@ -55,6 +55,19 @@ in `MainLayout`'s chrome, `render-and-layout.md`) calls
 `IMessagingReadService.GetUnreadConversationCountAsync()` directly — that badge is the cross-cutting
 signal; the notification bell is for social/content events.
 
+**Ratified by owner ruling D18 (answered 2026-08-07), with the reason the rule lacked:** a
+`Notification` row is an *event* you may not have seen, surfaced in a feed and pruned by
+`NotificationCleanupWorker` at 60 days. A private message is *durable correspondence* with its own
+inbox, its own read model and no expiry. They are different things that want the same pipe, and
+sharing a pipe is not coupling. So **private-message email is Messaging-owned and private messages
+have no `NotificationTypeEnum` member** — no category, seed row, `RelatedEntityKind` arm, presenter
+arm or Messaging→Notifications dependency. The two domains share only `IMailTransport` and the
+outbound email pipeline (`layer2-services.md` §"Outbound email pipeline"; the PM rules are in
+§"Private-Message Email"). A notification-backed PM email would also have mailed recipients about
+messages they had already read, since `MarkConversationReadAsync` stamps only the watermark, and the
+bell and messages badges would have disagreed for good (WU-PrivateMessageEmail built D18,
+2026-10-13).
+
 ### 1-on-1 only
 
 Group conversations are out of scope. The N-participant data model (`ConversationParticipant`) is

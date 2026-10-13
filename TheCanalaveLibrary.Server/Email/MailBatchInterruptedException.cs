@@ -3,7 +3,7 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Thrown by <see cref="IMailTransport.SendBatchAsync"/> when a batch stops part-way — the
 /// partial-progress half of the transport's failure contract (WU-NotificationCorrectness,
-/// 2026-10-12; <c>layer2-services.md</c> §"Email fan-out" → "Transport failure contract").
+/// 2026-10-12; <c>layer2-services.md</c> §"Outbound email pipeline" → "Transport failure contract").
 ///
 /// <para><see cref="ProcessedCount"/> is the number of <b>leading</b> messages the transport finished
 /// with: sent, dropped as a per-message failure, or deferred by the server (those are listed in

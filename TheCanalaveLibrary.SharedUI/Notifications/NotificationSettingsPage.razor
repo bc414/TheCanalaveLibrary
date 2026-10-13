@@ -2,7 +2,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
 @inject INotificationWriteService NotificationService
+@inject IMessagingWriteService MessagingService
+@inject ILogger<NotificationSettingsPage> Logger
 
 @* Feature 43 — Notification Settings page (WU33).
    Displays all notification types grouped by category with two per-row toggles:
@@ -10,7 +13,13 @@
      • Collapsed — whether to initially collapse this type's category section in the
        grouped notification view on /notifications.
    No in-app mute toggle (always-on per audit correction #2). No Save button — each
-   toggle saves immediately via SetSettingAsync (sparse upsert/delete model). *@
+   toggle saves immediately via SetSettingAsync (sparse upsert/delete model).
+
+   Standing rider (owner ruling D18): every outbound non-transactional email appears on this
+   page, each section sourced from its owning domain's own service — no shared registry. Today:
+   the notification categories (INotificationWriteService) and "Private messages"
+   (IMessagingWriteService, WU-PrivateMessageEmail 2026-10-13; Email only — Collapsed has no
+   meaning for messages). *@
 
 @if (_isLoading)
 {
@@ -89,6 +98,53 @@ else
                 </div>
             </section>
         }
+
+        @* Private messages — Messaging-owned email (owner ruling D18), not a notification category:
+           the value comes from IMessagingWriteService, never from the notification settings rows. *@
+        <section aria-labelledby="pm-email-heading">
+            <div class="mb-3 flex items-center gap-2">
+                <svg viewBox="0 0 24 24" class="size-5 shrink-0 text-(--color-text-muted)" aria-hidden="true"
+                     fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                <h2 id="pm-email-heading" class="text-base font-semibold text-(--color-text)">Private messages</h2>
+            </div>
+
+            <div class="rounded-xl border border-(--color-border) divide-y divide-(--color-border)">
+                <div class="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+                    <span>Message type</span>
+                    <span class="w-16 text-center">Email</span>
+                </div>
+
+                <div class="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3">
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-(--color-text)">New private message</p>
+                        <p class="text-xs text-(--color-text-muted)">
+                            One email when someone messages you, then none until you've read that conversation.
+                            Archived conversations never email.
+                        </p>
+                    </div>
+
+                    <div class="flex w-16 justify-center">
+                        <input type="checkbox"
+                               class="size-4 cursor-pointer accent-(--color-action-ink) disabled:cursor-not-allowed disabled:opacity-50"
+                               checked="@(NewMessageEmailEnabled ?? false)"
+                               disabled="@(_pmEmailBusy || NewMessageEmailEnabled is null)"
+                               aria-label="Email me about new private messages"
+                               title="@(NewMessageEmailEnabled == true ? "Stop emailing me about new private messages" : "Email me about new private messages")"
+                               @onchange="HandleNewMessageEmailToggleAsync" />
+                    </div>
+                </div>
+            </div>
+
+            @if (_pmEmailError is not null)
+            {
+                <div class="mt-2">
+                    <ErrorAlert Message="@_pmEmailError" ShowSignIn="@_pmEmailErrorIsSessionExpired" />
+                </div>
+            }
+        </section>
     </div>
 
     <div class="mt-6 border-t border-(--color-border) pt-4 text-center text-sm text-(--color-text-muted)">
@@ -105,11 +161,53 @@ else
     // property) — the settings rows hydrate from the prerender payload instead of refetching.
     [PersistentState] public NotificationSettingDto[]? Settings { get; set; }
 
+    // The new-message email preference (owner ruling D18) — Messaging's own value, persisted across
+    // the prerender→interactive handoff like Settings. Nullable so "not loaded" is distinguishable from
+    // "off" and a hydrated value is never refetched.
+    [PersistentState] public bool? NewMessageEmailEnabled { get; set; }
+
+    private bool _pmEmailBusy;
+    private string? _pmEmailError;
+    private bool _pmEmailErrorIsSessionExpired;
+
     protected override async Task OnInitializedAsync()
     {
         // ??= — restore-or-fetch idiom; toggles below mutate with plain assignment.
         Settings ??= await NotificationService.GetSettingsAsync();
+        NewMessageEmailEnabled ??= await MessagingService.GetMyNewMessageEmailEnabledAsync();
         _isLoading = false;
+    }
+
+    /// <summary>
+    /// Optimistic toggle of the new-message email preference. One write at a time (the checkbox is
+    /// disabled while one is in flight); a refused write rolls the box back and says why inline,
+    /// never escaping to the page boundary (layer3-logic.md §"Optimistic Updates & Debounce" rule 4).
+    /// </summary>
+    private async Task HandleNewMessageEmailToggleAsync(ChangeEventArgs e)
+    {
+        if (_pmEmailBusy || NewMessageEmailEnabled is not bool previous) return;
+        bool requested = e.Value is bool b ? b : !previous;
+
+        _pmEmailBusy = true;
+        _pmEmailError = null;
+        _pmEmailErrorIsSessionExpired = false;
+        NewMessageEmailEnabled = requested;
+        try
+        {
+            await MessagingService.SetMyNewMessageEmailEnabledAsync(requested);
+        }
+        catch (Exception ex)
+        {
+            NewMessageEmailEnabled = previous;
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Turning new-message email {EmailState} failed unexpectedly", requested ? "on" : "off");
+            _pmEmailError = ExceptionPresenter.GetUserMessage(ex);
+            _pmEmailErrorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _pmEmailBusy = false;
+        }
     }
 
     private async Task HandleToggleAsync(NotificationSettingDto dto, bool emailEnabled, bool collapsed)

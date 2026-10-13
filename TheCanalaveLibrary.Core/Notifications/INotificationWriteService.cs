@@ -27,6 +27,10 @@ namespace TheCanalaveLibrary.Core;
 ///
 /// <para><b>Semantic methods land with their triggering work-units.</b> Types seeded but not yet
 /// produced: tracker B24.</para>
+///
+/// <para><b>Never for private messages</b> (owner ruling D18): there is no <c>NotifyNewMessageAsync</c>
+/// and never will be — PM email is Messaging-owned and shares only the transport
+/// (<c>cross-cutting.md</c> §"Two unread systems").</para>
 /// </summary>
 public interface INotificationWriteService : INotificationReadService
 {

@@ -53,6 +53,13 @@ public sealed class ClientMessagingWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
+    public async Task SetMyNewMessageEmailEnabledAsync(bool enabled)
+    {
+        HttpResponseMessage response = await Http.PutAsync(
+            $"api/messaging/email-preference?enabled={(enabled ? "true" : "false")}", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     /// <summary>Status-code → contract-exception translation (inverse of MessagingEndpoints'). 403
     /// is intercepted here for <see cref="MessagingPermissionException"/>; every other status
     /// delegates to the shared standard mapping.</summary>

@@ -106,6 +106,16 @@ public class User : IdentityUser<int>
     // --- "WARM" SETTINGS (Stored as JSON) ---
     public ReaderSettings ReaderSettings { get; set; } = new ReaderSettings();
     public PrivacySettings PrivacySettings { get; set; } = new PrivacySettings();
+
+    // --- New-message email preference (owner ruling D18, WU-PrivateMessageEmail) ---
+    // Messaging-owned (D18); written only by IMessagingWriteService.SetMyNewMessageEmailEnabledAsync
+    // and the messaging unsubscribe endpoint (/unsubscribe/messages/{token}), both set-based. A
+    // scalar column, not a field inside the PrivacySettings JSON beside AllowPrivateMessages:
+    // UpdatePrivacySettingsAsync replaces that JSON group wholesale from the privacy form, which
+    // would reset this on every privacy save. Default on (a derived default, roadmap decision row 28
+    // (a)); the bool-true shape of layer1-data-model.md §"Column Conventions" — the initializer is
+    // the load-bearing half (HasDefaultValue(true).HasSentinel(true) in IdentityConfigurations).
+    public bool EmailOnNewMessage { get; set; } = true;
     public AuthorSettings AuthorSettings { get; set; } = new AuthorSettings();
     
     // --- Other Settings ---

@@ -43,4 +43,15 @@ public class ClientMessagingReadService(HttpClient http) : IMessagingReadService
     public async Task<MessagingParticipantDto?> FindUserByUsernameAsync(string username) =>
         await Http.GetNullableFromJsonAsync<MessagingParticipantDto?>(
             $"api/messaging/users/lookup?username={Uri.EscapeDataString(username)}");
+
+    /// <summary>
+    /// The new-message email preference (owner ruling D18). Wrapped in <c>ExecuteAsync</c> server-side,
+    /// so a 401 becomes <see cref="SessionExpiredException"/> through the shared read translator.
+    /// </summary>
+    public async Task<bool> GetMyNewMessageEmailEnabledAsync()
+    {
+        HttpResponseMessage response = await Http.GetAsync("api/messaging/email-preference");
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
+        return await response.Content.ReadFromJsonAsync<bool>();
+    }
 }

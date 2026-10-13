@@ -53,6 +53,7 @@ $retiredTerms = [ordered]@{
     'UserStoryInteractionFilterSettingId (surrogate key dropped for the natural composite PK, WU-SchemaHardening 2026-10-13)' = '\bUserStoryInteractionFilterSettingId\b|\buser_story_interaction_filter_setting_id\b'
     'SelectedCoverFile (the two-step cover protocol, retired by owner ruling D14, WU-BlobCleanup 2026-10-13)' = '\bSelectedCoverFile\b'
     'rateLimitedAction / ReadRetryAfterSecondsAsync (the client reads the throttled kind off the 429 body, WU-ThrottleCoverage 2026-10-13)' = '\brateLimitedAction\b|\bReadRetryAfterSecondsAsync\b'
+    'NotificationEmailBuffer / Worker / Flusher (generalized to the (kind, id) OutboundEmail* pipeline in Server/Email/, owner ruling D18, WU-PrivateMessageEmail 2026-10-13)' = '\bNotificationEmail(Buffer|Worker|Flusher)\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

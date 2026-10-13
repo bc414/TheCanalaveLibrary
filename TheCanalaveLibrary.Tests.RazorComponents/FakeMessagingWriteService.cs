@@ -147,4 +147,39 @@ public class FakeMessagingWriteService : IMessagingWriteService
 
         return Task.CompletedTask;
     }
+
+    // ── New-message email preference (owner ruling D18) ────────────────────────────
+
+    /// <summary>The stored preference <see cref="GetMyNewMessageEmailEnabledAsync"/> returns (default on,
+    /// like <c>User.EmailOnNewMessage</c>).</summary>
+    public bool NewMessageEmailEnabled { get; set; } = true;
+
+    /// <summary>Every <see cref="SetMyNewMessageEmailEnabledAsync"/> call, in order.</summary>
+    public List<bool> SetNewMessageEmailCalls { get; } = [];
+
+    /// <summary>When set, <see cref="SetMyNewMessageEmailEnabledAsync"/> records the call and then
+    /// throws this instead of storing the value (a refused write).</summary>
+    public Exception? SetNewMessageEmailException { get; set; }
+
+    /// <summary>When set, <see cref="SetMyNewMessageEmailEnabledAsync"/> awaits it before answering, so a
+    /// test can observe the page while the write is in flight.</summary>
+    public TaskCompletionSource? SetNewMessageEmailGate { get; set; }
+
+    public int GetNewMessageEmailCalls { get; private set; }
+
+    public Task<bool> GetMyNewMessageEmailEnabledAsync()
+    {
+        GetNewMessageEmailCalls++;
+        return Task.FromResult(NewMessageEmailEnabled);
+    }
+
+    public async Task SetMyNewMessageEmailEnabledAsync(bool enabled)
+    {
+        SetNewMessageEmailCalls.Add(enabled);
+        if (SetNewMessageEmailGate is not null)
+            await SetNewMessageEmailGate.Task;
+        if (SetNewMessageEmailException is not null)
+            throw SetNewMessageEmailException;
+        NewMessageEmailEnabled = enabled;
+    }
 }

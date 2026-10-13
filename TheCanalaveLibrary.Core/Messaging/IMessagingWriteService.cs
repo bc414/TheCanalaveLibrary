@@ -47,4 +47,12 @@ public interface IMessagingWriteService : IMessagingReadService
     /// Throws <see cref="KeyNotFoundException"/> if the current user is not a participant.
     /// </summary>
     Task SetArchivedAsync(int conversationId, bool archived);
+
+    /// <summary>
+    /// Turns the current user's new-message email on or off (<c>User.EmailOnNewMessage</c>; owner
+    /// ruling D18). Self-scoped and idempotent. The one-click unsubscribe link in the email can only
+    /// turn it off; this is the only way back on. Throws <see cref="InvalidOperationException"/> when
+    /// anonymous.
+    /// </summary>
+    Task SetMyNewMessageEmailEnabledAsync(bool enabled);
 }

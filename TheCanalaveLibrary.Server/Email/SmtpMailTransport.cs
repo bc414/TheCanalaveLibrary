@@ -100,7 +100,7 @@ public sealed class SmtpMailTransport(IOptions<EmailOptions> options, ILogger<Sm
         }
         catch (Exception ex)
         {
-            // Not logged here: the unsent tail is retried, and the caller (NotificationEmailFlusher,
+            // Not logged here: the unsent tail is retried, and the caller (OutboundEmailFlusher,
             // or Identity through SendAsync) is the one log site (logging.md no-double-log).
             throw new MailBatchInterruptedException(processed, ex, deferred);
         }

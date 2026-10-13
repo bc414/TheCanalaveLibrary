@@ -120,6 +120,13 @@ public enum NotificationCategoryEnum : short
     YourReports = 8
 }
 
+/// <summary>
+/// The notification catalogue's discriminator: one member per seeded <c>NotificationType</c> row.
+/// <para><b>Private messages deliberately have no member</b> (owner ruling D18, 2026-08-07): a private
+/// message is durable correspondence, not a notification event, and PM email is Messaging-owned,
+/// sharing only the transport (<c>cross-cutting.md</c> §"Two unread systems";
+/// <c>layer2-services.md</c> §"Private-Message Email"). Do not add one.</para>
+/// </summary>
 public enum NotificationTypeEnum : short
 {
     SiteAnnouncement = 0,

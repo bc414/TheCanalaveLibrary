@@ -110,19 +110,21 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                 TestAuthenticationHandler.SchemeName, _ => { });
 
-            // Notification email fan-out (WU-NotifEmail). The host boots with Email:Provider unset,
-            // so Program.cs takes the NoOp branch: a disabled buffer, NoOpMailTransport, and no
-            // flusher registration. Tests need the path live but not actually sending, so all three
-            // are re-registered here — an ENABLED buffer, a recording transport, and the flusher
-            // itself. The worker deliberately stays absent (it isn't registered on the NoOp branch
+            // Outbound email pipeline (WU-NotifEmail; shared with private-message email since
+            // WU-PrivateMessageEmail). The host boots with Email:Provider unset, so Program.cs takes the
+            // NoOp branch: a disabled buffer, NoOpMailTransport, and no flusher or composers. Tests need
+            // the path live but not actually sending, so they are re-registered here — an ENABLED
+            // buffer, a recording transport, the flusher, and BOTH composers (one per kind). The worker deliberately stays absent (it isn't registered on the NoOp branch
             // anyway, and is listed in the removal loop below as a guard in case that changes):
             // tests call FlushAsync() directly rather than racing a 30s timer.
-            services.RemoveAll<NotificationEmailBuffer>();
-            services.AddSingleton(new NotificationEmailBuffer(isEnabled: true));
+            services.RemoveAll<OutboundEmailBuffer>();
+            services.AddSingleton(new OutboundEmailBuffer(isEnabled: true));
             services.RemoveAll<IMailTransport>();
             services.AddSingleton<RecordingMailTransport>();
             services.AddSingleton<IMailTransport>(sp => sp.GetRequiredService<RecordingMailTransport>());
-            services.AddScoped<NotificationEmailFlusher>();
+            services.AddScoped<OutboundEmailFlusher>();
+            services.AddScoped<IOutboundEmailComposer, NotificationEmailComposer>();
+            services.AddScoped<IOutboundEmailComposer, PrivateMessageEmailComposer>();
 
             // Swap the real per-user write throttle for a pass-through — tests legitimately
             // hammer write services in loops (paging seeds, at-limit fills). WriteThrottleTests
@@ -141,7 +143,7 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
                          typeof(DiscoveryMartWorker), typeof(UserActivityFlushWorker),
                          typeof(SiteDailyStatWorker), typeof(SpotlightGoLiveWorker),
                          typeof(PollEditNotificationWorker), typeof(NotificationCleanupWorker),
-                         typeof(UserStatRecalculationWorker), typeof(NotificationEmailWorker),
+                         typeof(UserStatRecalculationWorker), typeof(OutboundEmailWorker),
                          // Mandatory: the shared host would otherwise sweep its upload folder 5 s
                          // after boot, while tests are writing to it (WU-BlobCleanup).
                          typeof(ImageOrphanSweepWorker),

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
@@ -21,17 +20,11 @@ namespace TheCanalaveLibrary.Server;
 ///   anything.</item>
 /// </list>
 ///
-/// <para><b>Why raw HTML instead of a Razor page.</b> These pages must render for a signed-out
-/// visitor arriving cold from a mail client, and must keep working when the interactive stack does
-/// not. A self-contained response has no render mode, no circuit, no auth dependency, and no layout
-/// to fail. That is not a hypothetical: tracker H10 had every layout-bearing static-SSR page —
-/// the whole Identity funnel — returning a raw 500 for eighteen days (2026-07-13 → 07-31) because
-/// one chrome component in <c>MainLayout</c> registered persistent state with no render mode to
-/// infer. These two pages would have been immune. The trade is that they do not carry the site's
-/// design system; that is an accepted, deliberate exception for two pages. Revisit only if they
-/// ever need to look like the site — the isolation is the feature, not a temporary workaround.
-/// <c>check-design-tokens.ps1</c> governs <c>.razor</c> markup and does not see this file — that is
-/// not a loophole being exploited, it is why the exception is written down here.</para>
+/// <para><b>Raw HTML, not a Razor page</b>, through the shared <see cref="UnsubscribeLandingPage"/>
+/// shell (extracted from this class at WU-PrivateMessageEmail, 2026-10-13, which also gave
+/// private-message email its own route, <see cref="MessagingEmailEndpoints"/>). The shell's doc has
+/// the reasoning. The token and the one action stay this feature's own (<c>security.md</c>
+/// §"One-click unsubscribe tokens").</para>
 ///
 /// <para><b>Rate limited</b> via the "Unsubscribe" policy (Program.cs): the token space is not
 /// enumerable, but an unauthenticated endpoint that does database writes should never be
@@ -88,10 +81,10 @@ public static class NotificationEmailEndpoints
                 logger.LogWarning(
                     "Unsubscribe token carried unknown notification type {NotificationType} for user {UserId}.",
                     notifType, userId);
-                return Results.Content(Page(
+                return UnsubscribeLandingPage.Result(
                     "Something went wrong",
                     "<p>We couldn't apply that change.</p>",
-                    settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
+                    StatusCodes.Status400BadRequest);
             }
 
             string typeName = await DisplayNameAsync(readDb, notifType, cancellationToken);
@@ -99,11 +92,10 @@ public static class NotificationEmailEndpoints
                 "Unsubscribed user {UserId} from {NotificationType} emails via one-click link.",
                 userId, notifType);
 
-            return Results.Content(Page(
+            return UnsubscribeLandingPage.Result(
                 "You're unsubscribed",
                 $"<p>You will no longer receive <strong>{WebUtility.HtmlEncode(typeName)}</strong> emails.</p>" +
-                "<p>You'll still see these notifications on the site.</p>",
-                settingsLink: true), "text/html", Encoding.UTF8);
+                "<p>You'll still see these notifications on the site.</p>");
         }).DisableAntiforgery();
 
         // Human-facing confirmation. Read-only by design — see the class doc.
@@ -126,13 +118,12 @@ public static class NotificationEmailEndpoints
             // markup here, so it is HTML-encoded like any other interpolated value.
             string action = WebUtility.HtmlEncode(UnsubscribeTokenService.PathFor(token));
 
-            return Results.Content(Page(
+            return UnsubscribeLandingPage.Result(
                 "Unsubscribe",
                 $"<p>Stop receiving <strong>{WebUtility.HtmlEncode(typeName)}</strong> emails?</p>" +
                 $"<form method=\"post\" action=\"{action}\">" +
                 "<button type=\"submit\">Unsubscribe</button></form>" +
-                "<p>You'll still see these notifications on the site.</p>",
-                settingsLink: true), "text/html", Encoding.UTF8);
+                "<p>You'll still see these notifications on the site.</p>");
         });
 
         return app;
@@ -150,32 +141,9 @@ public static class NotificationEmailEndpoints
     /// valid token whose account has since been deleted — deliberately indistinguishable.
     /// </summary>
     private static IResult InvalidLinkPage() =>
-        Results.Content(Page(
+        UnsubscribeLandingPage.Result(
             "Link no longer valid",
             "<p>This unsubscribe link has expired or is not valid.</p>" +
             "<p>You can still manage every notification setting from your account.</p>",
-            settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
-
-    /// <summary>
-    /// Minimal self-contained HTML shell. Inline styles only — this page must render identically
-    /// whether or not the app's stylesheet loads, and it is never composed with site layout.
-    /// </summary>
-    private static string Page(string title, string bodyHtml, bool settingsLink) =>
-        $"""
-         <!doctype html>
-         <html lang="en">
-         <head>
-         <meta charset="utf-8">
-         <meta name="viewport" content="width=device-width,initial-scale=1">
-         <meta name="robots" content="noindex,nofollow">
-         <title>{WebUtility.HtmlEncode(title)} — The Canalave Library</title>
-         </head>
-         <body style="font-family:system-ui,sans-serif;line-height:1.6;max-width:34rem;margin:4rem auto;padding:0 1rem">
-         <h1 style="font-size:1.4rem">{WebUtility.HtmlEncode(title)}</h1>
-         {bodyHtml}
-         {(settingsLink ? "<p><a href=\"/settings\">Manage all notification settings</a></p>" : "")}
-         <p><a href="/">Return to The Canalave Library</a></p>
-         </body>
-         </html>
-         """;
+            StatusCodes.Status400BadRequest);
 }

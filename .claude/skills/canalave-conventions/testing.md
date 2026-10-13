@@ -426,9 +426,9 @@ D24's `GroupsJoined` oscillation would have been caught.
 - Assert `UserStatRecalcResult.RowsInserted == 0` too when every user was seeded: it proves the
   convergence assertion compared real rows.
 
-## Unit of work, partial sends, drains and tiebreaks (WU-NotificationCorrectness)
+## Unit of work, partial sends, drains and tiebreaks (WU-NotificationCorrectness; email bullets extended WU-PrivateMessageEmail)
 
-Six Integration shapes and one Unit shape from the notification and messaging fixes (2026-10-12, review fixes 2026-10-13):
+Integration and Unit shapes from the notification and messaging fixes (2026-10-12, review fixes 2026-10-13) and from private-message email (WU-PrivateMessageEmail, 2026-10-13):
 - **"One save" is asserted, and so is the rollback.** Resolve the `ApplicationDbContext` and the
   service from **one** scope, count `db.SavedChanges` events around the call, and assert exactly one
   (`MessagingWriteServiceTests.StartConversation_CommitsTheWholeGraphInOneSave`). Pair it with an
@@ -443,14 +443,14 @@ Six Integration shapes and one Unit shape from the notification and messaging fi
   every message to that user comes back in the deferred list until `AcceptUser(id)` or `Clear()`. Key
   it by user, not by batch index, because the flusher's compose order is unordered. To put a deferral
   inside an aborted batch's processed prefix, make `FailAfter(n, …)` cover the whole batch. Assert the
-  requeue and the deferral count with `NotificationEmailBuffer.DeferralsOf(id)`, and loop `FlushAsync`
+  requeue and the deferral count with `OutboundEmailBuffer.DeferralsOf(item)` (an `OutboundEmailWork`; the buffer was `NotificationEmailBuffer` until WU-PrivateMessageEmail renamed it, 2026-10-13), and loop `FlushAsync`
   `MaxDeferrals` times for the drop (WU-NotificationCorrectness review fixes, 2026-10-13).
 - **The SMTP transport itself is Unit-tested over the wire** against an in-process loopback stub
   (`SmtpMailTransportClassificationTests.StubSmtpServer`: a `TcpListener` on port 0, one connection,
   no extensions advertised, a per-recipient `RCPT TO` reply). It drives the real MailKit client with
   no host, container or database, so it stays in the Unit tier. Run each call under a deadline token
   plus `WaitAsync`, so a protocol mismatch fails instead of hanging.
-- **Shutdown drains** are driven through `NotificationEmailFlusher.DrainAllAsync(budget)`, never the
+- **Shutdown drains** are driven through `OutboundEmailFlusher.DrainAllAsync(budget)`, never the
   worker (it is removed from the test host, like every timer worker). To put a real notification
   past the first batch, enqueue ids no row has first (they drain as ineligible); pass an
   already-cancelled token for the expired-budget case.
@@ -460,6 +460,18 @@ Six Integration shapes and one Unit shape from the notification and messaging fi
   pages). Then page with size 1 and assert distinct ids in key order
   (`NotificationServiceTests.GetNotificationsAsync_OldestUnreadFirst_TiesOnTimestamp_*`). Pinned in
   insertion order, the tie happens to come back in id order and the test passes either way.
+- **The shared outbound email flusher is Unit-tested; the composers are Integration-tested**
+  (WU-PrivateMessageEmail, 2026-10-13). `OutboundEmailFlusher` takes `IOutboundEmailComposer`s and an
+  `IMailTransport`, so its routing, unroutable-kind and after-send rules run over stub composers and a
+  stub transport with no host (`OutboundEmailFlusherTests`; `FakeLogger` for the Error lines). Each
+  composer's eligibility query needs Postgres: `NotificationEmailFanOutTests`,
+  `PrivateMessageEmailTests`.
+- **A "never mailed again" test re-enqueues; it does not just flush twice.** A second flush of an
+  empty buffer proves nothing. Put the already-mailed item back
+  (`Buffer.Enqueue([new OutboundEmailWork(OutboundEmailKind.PrivateMessage, messageId)])`) and assert
+  the flush sends 0 — that exercises the run predicate itself
+  (`PrivateMessageEmailTests.AStandingUnreadState_IsNeverMailedAgain`). Assert the stamp on the
+  participant row (`LastNotifiedTimestamp`), and that it stays NULL after a failed send.
 - **A mutated row in an ignored table is restored in `finally`.** `notification_types` (and the other
   seeded lookup tables) is in Respawn's `TablesToIgnore`, so a test that flips a type's default
   (`ExecuteUpdateAsync`) restores it in a `finally`, or every later test inherits the change.

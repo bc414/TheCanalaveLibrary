@@ -8,10 +8,12 @@ namespace TheCanalaveLibrary.Tests.Integration;
 
 /// <summary>
 /// End-to-end coverage for the write-behind notification email fan-out (WU-NotifEmail, tracker B1):
-/// create-core enqueues → <see cref="NotificationEmailFlusher"/> resolves eligibility, composes, and
-/// hands the batch to <see cref="IMailTransport"/>.
+/// create-core enqueues → <see cref="OutboundEmailFlusher"/> hands the notification ids to
+/// <see cref="NotificationEmailComposer"/>, which resolves eligibility and composes, and sends the batch
+/// to <see cref="IMailTransport"/> (the pipeline was notification-only until WU-PrivateMessageEmail,
+/// 2026-10-13; the private-message side is <c>PrivateMessageEmailTests</c>).
 ///
-/// <para><b>Driven through the flusher, never the worker.</b> <see cref="NotificationEmailWorker"/>
+/// <para><b>Driven through the flusher, never the worker.</b> <see cref="OutboundEmailWorker"/>
 /// is removed from the test host; tests call <c>FlushAsync</c> directly so nothing races a 30-second
 /// timer — the same deterministic-flush rule the reading-progress and view-count buffers follow
 /// (<c>testing.md</c>).</para>
@@ -278,7 +280,7 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         (await FlushAsync()).Should().Be(2, "the deferred mail is not counted as taken");
         Transport.Sent.Select(m => m.UserId).Should().BeEquivalentTo(others);
         Buffer.Count.Should().Be(1, "only the deferred mail is queued again");
-        Buffer.DeferralsOf(fullId).Should().Be(1);
+        Buffer.DeferralsOf(NotificationItem(fullId)).Should().Be(1);
 
         // Later mail still flows while the deferred one keeps being retried beside it.
         int later = await SeedUserAsync("email-d3");
@@ -286,14 +288,14 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         (await FlushAsync()).Should().Be(1);
         Transport.Sent.Select(m => m.UserId).Should().Contain(later);
         Buffer.Count.Should().Be(1);
-        Buffer.DeferralsOf(fullId).Should().Be(2);
+        Buffer.DeferralsOf(NotificationItem(fullId)).Should().Be(2);
 
         // The mailbox recovers: the retry sends it once, and its deferral count is forgotten.
         Transport.AcceptUser(full);
         (await FlushAsync()).Should().Be(1);
         Transport.Sent.Count(m => m.UserId == full).Should().Be(1);
         Buffer.Count.Should().Be(0);
-        Buffer.DeferralsOf(fullId).Should().Be(0, "a sent mail leaves no deferral state behind");
+        Buffer.DeferralsOf(NotificationItem(fullId)).Should().Be(0, "a sent mail leaves no deferral state behind");
     }
 
     [Fact]
@@ -302,10 +304,10 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         await NotifyNewFollowerAsync();
         Transport.DeferUser(_recipientId);
 
-        for (int attempt = 1; attempt < NotificationEmailBuffer.MaxDeferrals; attempt++)
+        for (int attempt = 1; attempt < OutboundEmailBuffer.MaxDeferrals; attempt++)
         {
             (await FlushAsync()).Should().Be(0);
-            Buffer.Count.Should().Be(1, $"deferral {attempt} of {NotificationEmailBuffer.MaxDeferrals} requeues the mail");
+            Buffer.Count.Should().Be(1, $"deferral {attempt} of {OutboundEmailBuffer.MaxDeferrals} requeues the mail");
         }
 
         (await FlushAsync()).Should().Be(0);
@@ -350,7 +352,7 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
 
         stranded.Should().Be(1, "the mail the server keeps deferring is reported, not burned through");
         Transport.Sent.Should().ContainSingle().Which.UserId.Should().Be(_recipientId);
-        Buffer.DeferralsOf(fullId).Should().Be(2,
+        Buffer.DeferralsOf(NotificationItem(fullId)).Should().Be(2,
             "one deferral in the batch that also sent, one in the batch that settled nothing — then it stops");
     }
 
@@ -571,13 +573,13 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
     private RecordingMailTransport Transport =>
         Factory.Services.GetRequiredService<RecordingMailTransport>();
 
-    private NotificationEmailBuffer Buffer =>
-        Factory.Services.GetRequiredService<NotificationEmailBuffer>();
+    private OutboundEmailBuffer Buffer =>
+        Factory.Services.GetRequiredService<OutboundEmailBuffer>();
 
     private async Task<int> FlushAsync()
     {
         using IServiceScope scope = Factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<NotificationEmailFlusher>().FlushAsync();
+        return await scope.ServiceProvider.GetRequiredService<OutboundEmailFlusher>().FlushAsync();
     }
 
     private async Task NotifyNewFollowerAsync(int? recipientId = null, int? followerId = null)
@@ -590,7 +592,7 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
     private async Task<int> DrainAllAsync(CancellationToken budget)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<NotificationEmailFlusher>().DrainAllAsync(budget);
+        return await scope.ServiceProvider.GetRequiredService<OutboundEmailFlusher>().DrainAllAsync(budget);
     }
 
     /// <summary>The id of <paramref name="recipientId"/>'s one notification.</summary>
@@ -604,9 +606,14 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
             .SingleAsync();
     }
 
+    /// <summary>The buffer item a notification id travels as.</summary>
+    private static OutboundEmailWork NotificationItem(long notificationId) =>
+        new(OutboundEmailKind.Notification, notificationId);
+
     /// <summary>Queues ids no notification row has — they drain as ineligible and are dropped.</summary>
     private void EnqueueMissingIds(int count) =>
-        Buffer.Enqueue(Enumerable.Range(0, count).Select(i => 9_000_000_000L + i));
+        Buffer.Enqueue(Enumerable.Range(0, count)
+            .Select(i => new OutboundEmailWork(OutboundEmailKind.Notification, 9_000_000_000L + i)));
 
     private async Task SeedFollowAsync(int userId, int storyId)
     {

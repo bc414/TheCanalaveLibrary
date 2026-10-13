@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// configuration — the server-only run path, and the integration-test host.
 ///
 /// <para>Registering this instead of <see cref="SmtpMailTransport"/> is also what stops
-/// <see cref="NotificationEmailWorker"/> from being registered at all (Program.cs), so an
+/// <see cref="OutboundEmailWorker"/> from being registered at all (Program.cs), so an
 /// unconfigured host does no drain work rather than draining into a sink.</para>
 /// </summary>
 public sealed class NoOpMailTransport(ILogger<NoOpMailTransport> logger) : IMailTransport

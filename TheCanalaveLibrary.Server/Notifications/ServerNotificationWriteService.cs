@@ -30,19 +30,21 @@ namespace TheCanalaveLibrary.Server;
 /// separate transaction covering only the notification rows.</para>
 ///
 /// <para><b>Email fan-out (WU-NotifEmail):</b> create-core <em>enqueues</em>, it never sends.
-/// After the notification rows commit, their ids go onto <see cref="NotificationEmailBuffer"/> and
-/// <see cref="NotificationEmailWorker"/> drains them out-of-band. Hooking the fan-out here rather
+/// After the notification rows commit, their ids go onto the shared <see cref="OutboundEmailBuffer"/>
+/// as <see cref="OutboundEmailKind.Notification"/> items and <see cref="OutboundEmailWorker"/> drains
+/// them out-of-band (the pipeline is shared with private-message email since WU-PrivateMessageEmail,
+/// 2026-10-13; owner ruling D18). Hooking the fan-out here rather
 /// than at each semantic method inherits both invariants for free — only rows that survived
 /// drop-self and dedup, and were actually inserted, become candidates for email. Eligibility
 /// (per-type <c>EmailEnabled</c>, confirmed address, still-unread) is resolved at drain time by
-/// <see cref="NotificationEmailFlusher"/>, not here. See <c>layer2-services.md</c>
-/// §"Email fan-out".</para>
+/// <see cref="NotificationEmailComposer"/>, not here. See <c>layer2-services.md</c>
+/// §"Outbound email pipeline".</para>
 /// </summary>
 public class ServerNotificationWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    NotificationEmailBuffer emailBuffer,
+    OutboundEmailBuffer emailBuffer,
     ILogger<ServerNotificationWriteService> logger)
     : ServerNotificationReadService(readDbFactory, activeUser), INotificationWriteService
 {
@@ -533,12 +535,12 @@ public class ServerNotificationWriteService(
         // (identity values are populated by SaveChangesAsync). Enqueue is an in-memory append and
         // cannot throw for a caller-visible reason, but it is still not allowed to break the
         // notification: the in-app row is the contract, mail is the side-channel.
-        int dropped = emailBuffer.Enqueue(rows.Select(r => r.NotificationId));
+        int dropped = emailBuffer.Enqueue(rows.Select(r => new OutboundEmailWork(OutboundEmailKind.Notification, r.NotificationId)));
         if (dropped > 0)
         {
             logger.LogError(
-                "Notification email buffer at capacity ({MaxDepth}); dropped {DroppedCount} of {RowCount} {NotificationType} notification(s) without sending. The drain has stalled.",
-                NotificationEmailBuffer.MaxDepth, dropped, rows.Count, type);
+                "Outbound email buffer at capacity ({MaxDepth}); dropped {DroppedCount} of {RowCount} {NotificationType} notification(s) without sending. The drain has stalled.",
+                OutboundEmailBuffer.MaxDepth, dropped, rows.Count, type);
         }
     }
 

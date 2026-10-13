@@ -72,7 +72,47 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
    and conversation-watermark (messaging) are differently shaped read-state; unifying creates two
    unread truths to sync. The substantive/infrequent use case offers none of the value the
    notification dedup/batch machinery provides. See `cross-cutting.md` "Private Messaging
-   Architecture" for full analysis.
+   Architecture" for full analysis. **Ratified by owner ruling D18 (2026-08-07), which supplies the
+   reason:** a notification is an event, pruned at 60 days; a private message is durable
+   correspondence with no expiry. PM email exists since WU-PrivateMessageEmail (2026-10-13), but it
+   is Messaging-owned and touches nothing in the Notification cluster (settled note below).
+
+## D18 — Private-message email (owner ruling answered 2026-08-07; built WU-PrivateMessageEmail 2026-10-13)
+
+**D18's own text (settled, do not revisit):**
+- PMs never create `Notification` rows and never take a `NotificationTypeEnum` value. No category,
+  seed row, `RelatedEntityKind` arm, presenter arm or Messaging→Notifications edge.
+- Messaging owns PM email end to end: the preference (`EmailOnNewMessage`), the unread-run
+  suppression (`ConversationParticipant.LastNotifiedTimestamp`, nullable), the body, and its own
+  unsubscribe token (purpose `TheCanalaveLibrary.MessagingUnsubscribe.v1`, payload = user id, one
+  action, never enables).
+- Shared with Notifications: only `IMailTransport` and the buffer/worker, generalized to a
+  `(kind, id)` payload. The unsubscribe pattern and the RFC 8058 header pair are a shared
+  *convention*, not shared code (`security.md` §"One-click unsubscribe tokens").
+- One email per unread run, never a re-nag: a burst sends one, reading then a new message sends
+  another, a standing unread state is never re-poked. No nudge sweeper.
+- The notification settings page renders a second section for messaging email, sourced from
+  Messaging's own service. Standing rider: every outbound non-transactional email appears on that
+  page, enforced by review, not by a registry.
+- General rule: sharing a transport is not coupling two features; sharing an identity is.
+- Drain interval: left to the build ("decide when the composer is written").
+
+**Derived by WU-PrivateMessageEmail (built defaults, owner confirmation in `roadmap.md` decision
+row 28 / tracker F25):**
+- (a) `EmailOnNewMessage` defaults to **on**.
+- (b) The mail carries **no sender-authored text** (neither the message nor the conversation subject).
+- (c) **Archived conversations never mail** (from the settled "archiving mutes" rule).
+- (d) The suppression predicate is the **run reading**: mail when the run is not yet notified
+  (`LastNotifiedTimestamp` NULL, or at or before `LastReadTimestamp`) and an unread other-party
+  message exists. D18's literal "newer than both watermarks" would re-mail every drain cycle during
+  one unread run, contradicting its own outcomes.
+
+**Decided by the build, as D18 directed:** the drain interval is the shared 30 s worker (a PM waits
+0–30 s for the next tick); no second knob. The preference is a scalar column on `User`, not a field
+in the `PrivacySettings` JSON, because the privacy form replaces that JSON wholesale.
+
+Rules: `layer2-services.md` §"Private-Message Email" and §"Outbound email pipeline";
+`cross-cutting.md` §"Two unread systems"; `security.md` §"One-click unsubscribe tokens".
 
 ## Feature 49 — Private Messaging
 
@@ -102,14 +142,15 @@ tests for the anonymous refusal stay green. Messaging keeps its `RequireAuthenti
 one-line wrapper over the shared guard (the Lineage/Acknowledgment shape); its message text is now the
 shared one.
 
-- **L1 — Stage 5.** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
+- **L1 — Stage 5 (two columns added by WU-PrivateMessageEmail, 2026-10-13 — `User.EmailOnNewMessage`, `ConversationParticipant.LastNotifiedTimestamp`, owner ruling D18; Integration-tested, stage unchanged, see its note below).** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
-  `IdentityConfigurations.cs`. No further L1 work needed.
-- **L2 — Stage 5 (WU35, 2026-06-24; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
-  `Server/Messaging/`. Interfaces: `IMessagingReadService` (4 methods: `GetConversationsAsync`,
-  `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`) and
-  `IMessagingWriteService : IMessagingReadService` (4 mutations: `StartConversationAsync` [gated],
-  `SendMessageAsync`, `MarkConversationReadAsync`, `SetArchivedAsync`). Server impls:
+  `IdentityConfigurations.cs`.
+- **L2 — Stage 5 (WU35, 2026-06-24; new-message email — both sends enqueue, `PrivateMessageEmailComposer` mails one email per unread run, the preference methods and the one-click unsubscribe — WU-PrivateMessageEmail, 2026-10-13, owner ruling D18, Integration- and Unit-tested, stage unchanged, see its note below; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
+  `Server/Messaging/`. Interfaces: `IMessagingReadService` (5 methods: `GetConversationsAsync`,
+  `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`,
+  `GetMyNewMessageEmailEnabledAsync` — the last added WU-PrivateMessageEmail) and
+  `IMessagingWriteService : IMessagingReadService` (5 mutations: `StartConversationAsync` [gated],
+  `SendMessageAsync`, `MarkConversationReadAsync`, `SetArchivedAsync`, `SetMyNewMessageEmailEnabledAsync`). Server impls:
   `ServerMessagingReadService` (partial — `[GeneratedRegex]` requires it), `ServerMessagingWriteService`.
   DTOs: `ConversationSummaryDto`, `MessageDto`, `ConversationThreadDto`, `MessagingParticipantDto`,
   `StartConversationDto`. Validations: `MessagingValidations` (static ext methods) +
@@ -145,14 +186,16 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** A deleted
+- **L4.5 — Stage 1 (5→1 at WU-PrivateMessageEmail, 2026-10-13: the new-message email and its two
+  unsubscribe pages have never been seen in Mailpit or a browser — no browser was available to the WU;
+  tracker **H35** holds the pass that returns it to 5).** Before that: Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13). A deleted
   participant reads "[deleted user]" in the list, the thread header and on their messages, seen on both
   render phases (tracker **H29** closed; the WU-UserDeletion note below). Before that it went 5→1 at the WU-NotificationCorrectness
   review fixes (2026-10-13): the compose modal now gets a 400 ("Subject must be 2048 characters or
   fewer.") where it got a 500. It went 1→5 at that WU's browser pass the same day, which drove the
   refusal on both render phases (tracker **H26** step 4; the WU-NotificationCorrectness note below).
   The browser verification of 2026-07-02 below covers everything else.
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A).** The flip makes every
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; `GET`/`PUT /api/messaging/email-preference` and their client calls added by WU-PrivateMessageEmail, 2026-10-13 — Integration- and Unit-tested, stage unchanged, see its note below).** The flip makes every
   injected service need a client impl, so the old "no REST endpoints to wasm-enable" N/A no longer
   holds: endpoints + client impl live (WU-L5Sweep), and messaging read+send verified in a real WASM
   runtime during the flip's browser wave (thread render + reply persisted). Statelessness stands —
@@ -469,6 +512,60 @@ starting a conversation was refused with "This user does not accept private mess
     gone. Y's open report on X's message became Resolved – No Action with no moderator and the
     "both participants" note.
   - No console error and no `fail:` line. The one bug found is the reply-box fix above.
+
+### WU-PrivateMessageEmail note (2026-10-13) — owner ruling D18 built; F49 L1/L2/L5 stay 5, L4.5 5→1
+
+What changed (rules: `layer2-services.md` §"Private-Message Email" and §"Outbound email pipeline";
+`security.md` §"One-click unsubscribe tokens"; the settled note "D18" above):
+- **L1:** migration `20261013183147_WU_PrivateMessageEmail` adds `AspNetUsers.email_on_new_message`
+  (NOT NULL DEFAULT true — the bool-true shape, which also backfilled the dev DB's 7 users on) and
+  `conversation_participants.last_notified_timestamp` (nullable, no backfill). Applied, rolled back
+  and re-applied on the server-only dev DB. No index: the composer's query rides the participant PK
+  and `ix_private_messages_conversation_id_date_sent`. SeedTool's COPY omits the new column like
+  `can_auto_approve` and gets the DB default (a deviation from the WU spec, which asked for an explicit
+  `true`; the default keeps one source).
+- **L2:** `StartConversationAsync` and `SendMessageAsync` enqueue `(PrivateMessage, messageId)` on the
+  shared `OutboundEmailBuffer` after their save (a full buffer logs Error, never fails the send).
+  `PrivateMessageEmailComposer` (write context, untracked) mails a participant row when its run is not
+  yet notified, an unread other-party message exists, it is not archived, and the user has the
+  preference on and a confirmed address; the after-send hook stamps `LastNotifiedTimestamp` to the
+  newest covered `DateSent`. `PrivateMessageEmailBodies` carries no sender-authored text.
+  `MessagingUnsubscribeTokenService` (purpose `…MessagingUnsubscribe.v1`, payload = user id) and
+  `MessagingEmailEndpoints` (`/unsubscribe/messages/{token}`: read-only GET, one-action POST; a
+  foreign-purpose, tampered or deleted-account token answers the same 400 page, the notification
+  routes' rule rather than the spec's "success page") are new.
+  `GetMyNewMessageEmailEnabledAsync` / `SetMyNewMessageEmailEnabledAsync` are new; the write is
+  set-based and detaches the tracked `User`.
+- **L5:** `GET`/`PUT /api/messaging/email-preference` (`ExecuteAsync`, `RequireAuthorization`) and the
+  matching `ClientMessagingReadService`/`ClientMessagingWriteService` calls.
+- **L4.5 5→1:** no browser or Mailpit was available. Tracker **H35** holds the pass (Mailpit loop,
+  unsubscribe pages, the settings section on both render phases).
+- **Derived, not ruled:** default on, no sender text, archive mutes, the run reading of D18's formula —
+  `roadmap.md` decision row 28 / tracker **F25**. Inherited: the shared 30 s drain (D18 left it to the
+  build).
+
+**Verified:** `dotnet build` green (no new warnings); `dotnet test` green — Unit 1,304, RazorComponents
+859, Integration 1,610. Tiers: **Integration** `PrivateMessageEmailTests` (20: one mail per run, burst,
+re-fire after read, standing unread re-enqueued sends nothing, read before drain, the stamp value, a
+NULL sender counts as the other party, preference off, unconfirmed address, archive and unarchive, a
+connection failure restores unstamped, a mixed notification+PM flush, the preference service and
+endpoints with 401s, the tracked-copy detach through one scope, the unsubscribe GET/POST/re-POST and
+the four refusals); **Unit** `PrivateMessageEmailBodiesTests`, `MessagingUnsubscribeTokenServiceTests`
+(both cross-purpose directions), `ClientMessagingEmailPreferenceTests`, `OutboundEmailFlusherTests`,
+`OutboundEmailBufferTests`; **RazorComponents** `NotificationSettingsPageTests` (F43). Mutation-checked:
+dropping the run predicate, the archive gate, the after-send stamp or the detach each fails its test.
+
+**Live smoke, no browser (2026-10-13).** The server-only host ran on the `Smtp` branch against a
+throwaway local SMTP sink (no Mailpit); requests went through `curl` with `/dev/wu12/login-as`
+cookies. The real worker, flusher, `SmtpMailTransport` and composer behaved as the rule says:
+TestUser → AuthorAlpha produced one mail ("New private message from TestUser", both RFC 8058
+headers, a `/messages/{id}` link, neither the subject nor the body text in it) and stamped
+`last_notified_timestamp` = the message's `date_sent`; two more sends produced no second mail after
+the next tick; a read then a send produced the second. The mail's unsubscribe GET rendered the
+confirmation and changed nothing, its POST set `email_on_new_message` false, and `PUT
+/api/messaging/email-preference?enabled=true` set it back. The settings page's prerender carried the
+Private messages section. The smoke conversation was deleted from the dev DB afterwards. Not a browser
+pass: interactivity on both render phases and real-client rendering stay with **H35**.
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

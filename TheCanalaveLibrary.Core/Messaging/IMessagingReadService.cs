@@ -44,4 +44,12 @@ public interface IMessagingReadService
     /// (no <c>IUserProfileReadService</c> exists until WU30).
     /// </summary>
     Task<MessagingParticipantDto?> FindUserByUsernameAsync(string username);
+
+    /// <summary>
+    /// Whether the current user receives an email when someone sends them a private message
+    /// (<c>User.EmailOnNewMessage</c>; owner ruling D18 — the preference is Messaging-owned, read
+    /// here and never through the notification settings service). Throws
+    /// <see cref="InvalidOperationException"/> when anonymous.
+    /// </summary>
+    Task<bool> GetMyNewMessageEmailEnabledAsync();
 }

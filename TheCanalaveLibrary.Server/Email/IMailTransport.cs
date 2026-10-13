@@ -3,8 +3,9 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// One outbound email, fully composed. Deliberately a dumb payload — subject/body composition
 /// belongs to the caller (<see cref="EmailBodies"/> for Identity's transactional mail,
-/// <see cref="NotificationEmailBodies"/> for notification fan-out), so the exact rendered shape
-/// stays unit-testable without a live SMTP connection.
+/// <see cref="NotificationEmailBodies"/> for notification fan-out, <see cref="PrivateMessageEmailBodies"/>
+/// for private-message email), so the exact rendered shape stays unit-testable without a live SMTP
+/// connection.
 /// </summary>
 /// <param name="ToAddress">Recipient address.</param>
 /// <param name="Subject">Subject line.</param>
@@ -28,7 +29,7 @@ public sealed record OutgoingMail(
 /// <summary>
 /// The single outbound-mail seam for the whole app. Extracted from <see cref="SmtpEmailSender"/>
 /// at WU-NotifEmail (2026-07-31) so notification fan-out and Identity's transactional mail share one
-/// transport, one <see cref="EmailOptions"/> binding, one provider switch, and one set of
+/// transport (private-message email joined them at WU-PrivateMessageEmail, 2026-10-13), one <see cref="EmailOptions"/> binding, one provider switch, and one set of
 /// <see cref="Core.CanalaveTelemetry.Email"/> signals.
 ///
 /// <para><b>Why notification mail does not ride <c>IEmailSender&lt;User&gt;</c>:</b> that is
@@ -57,9 +58,9 @@ public interface IMailTransport
     /// Sends a batch over <b>one</b> connection — the reason this method exists. Notification
     /// fan-out routinely produces tens of messages per drain cycle; a connect/auth/disconnect per
     /// message is the cost the write-behind design exists to avoid
-    /// (<c>layer2-services.md</c> §"Email fan-out").
+    /// (<c>layer2-services.md</c> §"Outbound email pipeline").
     ///
-    /// <para><b>Failure contract, relied on by <see cref="NotificationEmailFlusher"/>
+    /// <para><b>Failure contract, relied on by <see cref="OutboundEmailFlusher"/>
     /// (WU-NotificationCorrectness, 2026-10-12; the deferral class added by its review fixes,
     /// 2026-10-13).</b> Besides success, a message has one of three outcomes:</para>
     /// <list type="bullet">

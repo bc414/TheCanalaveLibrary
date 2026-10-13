@@ -98,6 +98,24 @@ public static class MessagingEndpoints
                     }))
             .RequireAuthorization();
 
+        // ── New-message email preference (owner ruling D18, WU-PrivateMessageEmail) ──
+        // Messaging-owned; the notification settings page reads and writes it through these. Both
+        // wrap in ExecuteAsync: RequireAuthenticatedUser's InvalidOperationException → 401.
+        // Unthrottled, a self-scoped setting (security.md's unthrottled-surface enumeration).
+
+        group.MapGet("/email-preference", (IMessagingReadService messaging) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                    Results.Ok(await messaging.GetMyNewMessageEmailEnabledAsync())))
+            .RequireAuthorization();
+
+        group.MapPut("/email-preference", (IMessagingWriteService messaging, bool enabled) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                {
+                    await messaging.SetMyNewMessageEmailEnabledAsync(enabled);
+                    return Results.NoContent();
+                }))
+            .RequireAuthorization();
+
         return app;
     }
 }

@@ -100,6 +100,22 @@ within one TTL window regardless of which node handled the write, with zero cros
 
 **Action, whenever N≥2 happens:** none. The design is self-healing by construction.
 
+## 6. The outbound email buffer — no shared store needed, one caveat
+
+`OutboundEmailBuffer` (`layer2-services.md` §"Outbound email pipeline") is in-process too, but it
+does **not** join the Valkey body-swap list. Every item is enqueued by exactly the node whose request
+created the row it names (a notification, a private message), and each node drains only what it
+enqueued, so no item is ever split across nodes and nothing needs merging. A node that dies loses
+its queued mail; the rows the mail announced are durable either way (the same bounded loss as a
+hard crash at N=1).
+
+**Caveat — private-message email at N≥2** (WU-PrivateMessageEmail, 2026-10-13). The
+private-message composer mails once per unread run and stamps the run's watermark *after* the send
+(exactly-once at N=1). If two nodes each hold an item of the same conversation (two messages whose
+requests landed on different nodes) and drain in the same window, both can see the recipient's run
+unstamped and both can mail it: a duplicate email, never a lost one.
+Closing it needs claim-before-send with an un-claim on failure. Not built; revisit when N≥2 is real.
+
 ## Summary: the whole N≥2 story in one table
 
 | Concern | Needed? | What it takes |
@@ -109,3 +125,4 @@ within one TTL window regardless of which node handled the write, with zero cros
 | Signal-buffer store swap | **Yes, when N≥2 happens** | Body swap to Valkey behind the unchanged buffer interface — already designed, not yet built |
 | Data Protection keyring | **No further action** | Already Postgres-backed; works today, unchanged at N≥2 |
 | Process-local reference-data caches (tag hierarchy) | **No further action** | TTL converges every node independently — no shared store, ever |
+| Outbound email buffer | **No shared store** | Each node drains what it enqueued; accepted caveat: a private-message run drained by two nodes in one window can mail twice (§6) |

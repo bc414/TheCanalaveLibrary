@@ -1742,7 +1742,7 @@ gets built (the audit is right that it is the highest-value email on the site); 
 routing it through the notification cluster.
 
 *The pipeline is welded to the type, and the type means two things.* Email eligibility inner-joins
-`NotificationTypes` (`NotificationEmailFlusher.cs:92`) for `DefaultEmailEnabled`, the subject line,
+`NotificationTypes` (`NotificationEmailFlusher.cs:92`, renamed `NotificationEmailComposer.cs` by WU-PrivateMessageEmail) for `DefaultEmailEnabled`, the subject line,
 and the category; the preference is the sparse `UserNotificationSetting` override at `:105`; the RFC
 8058 `List-Unsubscribe` pair at `:164-171` carries a token whose payload is literally
 `"{userId}:{(int)notificationType}"` (`UnsubscribeTokenService.cs:54`). So "reserve the enum value as
@@ -1829,6 +1829,8 @@ one-action write; the settings-page section; Integration coverage for the suppre
 false). Schema footprint on the hardening migration is **two columns** — no enum member, no category,
 no seed row, no `RelatedEntityKind` arm, no presenter arm, no new DAG edge.
 
+**Built:** WU-PrivateMessageEmail (2026-10-13) — rule now stated in `layer2-services.md` §"Outbound email pipeline" (shared pipeline, feature-owned email rule, standing rider) and §"Private-Message Email" (the run rule, the 30 s drain); `cross-cutting.md` §"Two unread systems"; `security.md` §"One-click unsubscribe tokens". The two columns landed on the WU's own migration (the hardening migration had already merged). Derived choices for confirmation: `roadmap.md` decision row 28.
+
 ### D19. UserNotificationSetting granularity
 
 *Source: service §3.17; drift §4.7.*
@@ -1897,7 +1899,7 @@ the §4 class. **Reads** — three coalescing sites, all keeping the file's exis
 `s != null ? … : …` style rather than relying on `??` translation:
 [GetSettingsAsync:189-190](TheCanalaveLibrary.Server/Notifications/ServerNotificationReadService.cs#L189-L190),
 `GetNotificationsAsync`'s Collapsed LEFT JOIN, and the flusher's eligibility predicate
-([NotificationEmailFlusher.cs:105](TheCanalaveLibrary.Server/Notifications/NotificationEmailFlusher.cs#L105)).
+([NotificationEmailFlusher.cs:105](TheCanalaveLibrary.Server/Notifications/NotificationEmailComposer.cs) — the file was renamed `NotificationEmailComposer.cs` by WU-PrivateMessageEmail).
 **DTO** — `IsDefault` is replaced by per-field `EmailIsDefault` / `CollapsedIsDefault`; row-level
 "no override row exists" stops being a meaningful answer once a row can be half-NULL. Cheap: the
 only consumers are three assertions in `NotificationServiceTests`, and the UI gains a free

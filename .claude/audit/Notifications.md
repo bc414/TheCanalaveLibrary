@@ -90,6 +90,22 @@ for WU-NotifEmail.
 stays open after this WU: the code path is complete and Mailpit-verifiable, but no mail reaches a
 real inbox until Phase 7's deliverability work lands.
 
+**Owner ruling D18 (answered 2026-08-07; built WU-PrivateMessageEmail 2026-10-13) — settled, do not
+revisit:**
+- **Private messages are absent from the notification catalogue, by ratification.** No
+  `NotificationTypeEnum` member, category, seed row, `RelatedEntityKind` arm or presenter arm, and no
+  Messaging→Notifications dependency. PM email is Messaging-owned (`audit/Messaging.md` §"D18").
+  The doc comments on `NotificationTypeEnum` and `INotificationWriteService` say so.
+- **The email pipeline is shared infrastructure, not this cluster's.** The buffer and worker moved to
+  `Server/Email/` and the flusher's send half became `OutboundEmailFlusher` there, carrying `(kind,
+  id)` items; this cluster keeps only `NotificationEmailComposer` (the eligibility query and
+  composition the flusher used to do) and `NotificationEmailBodies`. Every rule above about
+  eligibility, recipient gating and one-click unsubscribe is unchanged and is now the notification
+  composer's (`layer2-services.md` §"Outbound email pipeline").
+- **The settings page also hosts Messaging's section** (D18's standing rider: every outbound
+  non-transactional email appears on `/notifications/settings`), sourced from
+  `IMessagingWriteService`, never from this cluster's services.
+
 ## WU-TagFanon slice (2026-07-26) — F41/F42 L2 stay Stage 5
 
 `TagUpdateSuggestion = 26` finally has a sender. The seam was fully provisioned (enum value,
@@ -419,9 +435,46 @@ these notifications are in `audit/Groups.md` F40's.
   D5's threat model and routed to the owner as roadmap decision row **23** (the Settled bullet below,
   `layer2-services.md`, the interface doc and the code comments say so). Behaviour unchanged.
 
+## WU-PrivateMessageEmail Stage note (2026-10-13) — F41 L2 and F43 L3/L3.5/L5 stay 5; F43 L4.5 5→1
+
+Owner ruling D18 built (Shared Context's D18 note above has the settled rules; private-message email
+itself is `audit/Messaging.md` F49).
+- **F41 L2 — the pipeline is shared now.** The notification buffer and worker became
+  `Server/Email/OutboundEmailBuffer`/`OutboundEmailWorker` (`git mv`, renamed), carrying
+  `OutboundEmailWork(Kind, Id)` items. The old flusher split in two: the send and every restore rule
+  (WU-NotificationCorrectness's, unchanged in substance — compose failure, `ProcessedCount`,
+  deferrals and `MaxDeferrals`, cancellation, `DrainAllAsync` and the 15 s shutdown budget) moved to
+  the domain-free `Server/Email/OutboundEmailFlusher`; the eligibility query and composition stayed
+  here as `NotificationEmailComposer` (an `IOutboundEmailComposer`), verbatim, D19's per-field
+  `EmailEnabled` expression included. New flusher rules: per-kind routing with one send for every
+  kind, a duplicate composer refused at startup, an unroutable kind dropped with an Error, after-send
+  hooks for taken mails only (notifications register none). Create-core enqueues
+  `(Notification, id)`. The class doc's reference to a test class that never existed now names
+  `NotificationEmailFanOutTests.Email_IsStillSentToRestrictedAccounts`.
+- **F43 — the unsubscribe page shell is shared and its link is fixed.** The HTML shell moved to
+  `Server/Email/UnsubscribeLandingPage`; its settings link said "Manage all notification settings"
+  and pointed at `/settings`, which has none. It now reads "Manage your email settings" and goes to
+  `/notifications/settings`.
+- **F43 L3/L3.5/L5 — the "Private messages" section** (D18's standing rider: every outbound
+  non-transactional email appears on this page). It reads and writes Messaging's own value through
+  `IMessagingWriteService` (`[PersistentState] bool? NewMessageEmailEnabled`, restore-or-fetch), shows
+  only an Email toggle, writes optimistically one write at a time, and rolls back with an inline
+  `ErrorAlert` on a refusal. The existing category toggles still have no catch; not changed here
+  (tracker **H36**).
+- **F43 L4.5 5→1** — no browser was available; tracker **H35**.
+
+**Verified:** `dotnet build` green; `dotnet test` green — Unit 1,304, RazorComponents 859, Integration
+1,610. Tiers: **Integration** `NotificationEmailFanOutTests` (unchanged in substance, helpers renamed;
+all green) and `PrivateMessageEmailTests.ANotificationAndAMessage_LeaveInOneFlush`; **Unit**
+`OutboundEmailFlusherTests` (9) and `OutboundEmailBufferTests` (8); **RazorComponents**
+`NotificationSettingsPageTests` (7 cases, the page's first bUnit class — WU33's deferral below is
+paid). Mutation-checked: skipping the aborted batch's after-send call, or passing it a cancellable
+token, fails `OutboundEmailFlusherTests`; dropping the section's rollback or its busy-disable fails
+`NotificationSettingsPageTests`.
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-10-13, WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
@@ -439,7 +492,9 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
   sort, bounded by the 60-day cleanup worker). Detail: `layer6-indexes.md`.
 
 - **L2 — Stage 2 → 5 (WU22; extended WU-NotifEmail 2026-07-31 — create-core now also enqueues the
-  email fan-out, stage unchanged; a Private author's profile post fans out to nobody since the
+  email fan-out, stage unchanged; the fan-out rides the shared outbound pipeline as
+  `(Notification, id)` items and its eligibility query lives in `NotificationEmailComposer`,
+  WU-PrivateMessageEmail 2026-10-13, owner ruling D18 — stage unchanged, Integration- and Unit-tested; a Private author's profile post fans out to nobody since the
   WU-AccessGateSweep2 review fixes, 2026-09-30 — see that slice below, stage unchanged; nullable
   source, de-identified moderation band, report-id anchors, `GroupStory` anchor, hidden favoriters in
   15 and the new-chapter fan-out, WU-InertFeatures 2026-09-30 — stage unchanged, Stage note at the end
@@ -881,15 +936,21 @@ write class in place of `CurrentUserId` (CS9107 shape).
     as NULL; the row is deleted only when both are NULL; otherwise one race-free
     `INSERT … ON CONFLICT DO UPDATE`. Self-scoped via `IActiveUserContext`.
   - Not built, by ruling: a three-state default/on/off control (D19's accepted cost).
-  - **L3/L3.5 — Stage 5** (built WU33, 2026-06-24 — see its Stage-5 note below). Settings page driven
-    by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
+  - **L3/L3.5 — Stage 5** (built WU33, 2026-06-24 — see its Stage-5 note below; a "Private messages"
+    section read and written through `IMessagingWriteService` added by WU-PrivateMessageEmail,
+    2026-10-13, owner ruling D18's standing rider — RazorComponents-tested, stage unchanged, Stage note
+    above Feature 41). Settings page driven by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
     read "Stage 2 … deferred to WU33" against the grid's 5/5.)
-  - **L4.5 — Stage 5.** It went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13),
+  - **L4.5 — Stage 1 (5→1 at WU-PrivateMessageEmail, 2026-10-13: the new "Private messages" section has
+    not been driven in a browser on either render phase — no browser was available to the WU; tracker
+    **H35** returns it to 5).** Before that it was 5: it went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13),
     because the page now reads the per-field `NotificationSettingDto` on WASM and the one-click
     unsubscribe writes one column. It went 1→5 at the browser pass the same day. That pass drove
     the per-field toggles on both render phases and the Mailpit unsubscribe, with `psql` as ground
     truth (tracker **H26** closed; browser verification note above Feature 41).
-  - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; the Private messages section's WASM path is Messaging's
+    new `email-preference` endpoints and client calls, WU-PrivateMessageEmail 2026-10-13 — Unit- and
+    Integration-tested, stage unchanged).** Endpoints + client impl live (WU-L5Sweep) and the
     site now runs global InteractiveAuto; the notification settings page loads in a real WASM
     runtime during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed:
     `workplan.md` WU-GlobalFlip.

@@ -878,6 +878,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_archived");
 
+                    b.Property<DateTime?>("LastNotifiedTimestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_notified_timestamp");
+
                     b.Property<DateTime?>("LastReadTimestamp")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_read_timestamp");
@@ -3826,6 +3830,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean")
                         .HasColumnName("email_confirmed");
+
+                    b.Property<bool>("EmailOnNewMessage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("email_on_new_message");
 
                     b.Property<DateTime?>("LastActiveUtc")
                         .HasColumnType("timestamp with time zone")

@@ -1634,6 +1634,20 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     Opening the full editor for a taken-down story (property edits, `content-safety.md`'s "so they
     can often fix it") is a separate question no ruling reaches; the build keeps it closed, as before
     D15.
+- [ ] **F25 — Four choices D18's private-message email left to the build** `[decision · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail. Promoted the same day to `roadmap.md` decision row 28.*
+  - Grid: no cell moves on its account (F49 L1/L2/L5 and F43 L3/L3.5/L5 stay 5).
+  - (a) **Default on.** `User.EmailOnNewMessage` defaults to `true` (migration backfills existing
+    users on). D18 calls PM email "the highest-value email on the site" and sets no default.
+  - (b) **No sender-authored text.** `PrivateMessageEmailBodies.Compose` takes no message or subject
+    parameter, so the mail names the sender and links to the thread, nothing more (spam-relay and
+    privacy reasoning in `layer2-services.md` §"Private-Message Email").
+  - (c) **Archive mutes email.** An archived participant row is never mailed; unarchiving mails nothing
+    by itself. Derived from `layer2-services.md` §"Conversation Archiving Is Sticky".
+  - (d) **The run reading of D18's suppression formula.** The composer mails when the run is not yet
+    notified and an unread other-party message exists. D18's literal "newer than both watermarks"
+    would mail on every drain cycle of one unread run, against D18's own outcomes. Pinned by
+    Integration `PrivateMessageEmailTests` (burst, standing unread, re-fire after read).
+  - Each answer is a one-line change in `PrivateMessageEmailComposer` / `User` / the bodies.
 
 ---
 
@@ -2298,6 +2312,46 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        `/story/{id}/chapter/new` for that story is not found too.
     10. *(Review fixes.)* Save a title with a double space (`A  B`): the dialog's label shows `A B`, and
         typing `A B` enables the delete.
+- [ ] **H35 — WU-PrivateMessageEmail browser pass: the settings page's Private messages section, the new-message email in Mailpit, and its unsubscribe pages** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail; no browser was available to it.*
+  - Grid: **F43 and F49 L4.5 5→1** (`status.md`). F43's page gained a section read and written through
+    Messaging's service (both render phases need it, since the WASM path is the new client methods);
+    F49 gained an outbound email and two anonymous landing pages. This pass returns both to 5.
+    Integration (`PrivateMessageEmailTests`), Unit (`OutboundEmailFlusherTests`,
+    `PrivateMessageEmailBodiesTests`, `MessagingUnsubscribeTokenServiceTests`,
+    `ClientMessagingEmailPreferenceTests`) and RazorComponents (`NotificationSettingsPageTests`) cover the
+    behavior.
+  - Already exercised without a browser (2026-10-13, server-only `Smtp` branch against a local SMTP
+    sink, `curl`): steps 2–4, step 6's GET/POST, and the endpoints behind step 1. What this pass adds is
+    the browser itself — the section's interactivity on both render phases, the mail as Mailpit renders
+    it, and the landing pages in a real client (`audit/Messaging.md` F49 note).
+  - Run on the **Aspire path** (`Email:Provider = Smtp`, Mailpit), two users A and B, `psql` beside it.
+    1. `/notifications/settings` as B, on the circuit and again on a WASM revisit: a "Private messages"
+       section after the categories, one Email checkbox (checked), no Collapsed column. Untick it:
+       `email_on_new_message` reads false; reload: it stays unticked. Tick it back.
+    2. A starts a conversation with B. Within 30 s Mailpit holds one mail to B, subject "New private
+       message from A", with no message text or subject in it, a working "Read it on the site" link,
+       and both `List-Unsubscribe` headers. `last_notified_timestamp` on B's row equals the message's
+       `date_sent`.
+    3. A sends three more without B reading: no second mail after the next tick.
+    4. B opens the thread, A sends again: a second mail.
+    5. B archives the thread, A sends: no mail. B unarchives: still none until A's next message.
+    6. The footer's "Unsubscribe from message emails" link opens a confirmation page (GET changes
+       nothing in `psql`); its button turns `email_on_new_message` off. "Manage your email settings" goes to
+       `/notifications/settings`. Re-submitting shows the same page.
+    7. A notification email's unsubscribe page (any type) now links "Manage your email settings" to
+       `/notifications/settings` (it pointed at `/settings` before this WU).
+    8. Stop the server while a PM mail is queued (inside 30 s): the shutdown drain sends it.
+- [ ] **H36 — The notification settings page's category toggles let a refused write escape to the page boundary** `[polish · low · beta]` — *Filed 2026-10-13 by WU-PrivateMessageEmail (found while adding the page's Private messages section; not built, out of the WU's scope).*
+  - Grid: F43 L3-Logic stays 5 (pre-existing since WU33; no behavior of this WU depends on it).
+  - `NotificationSettingsPage.HandleToggleAsync` updates `Settings` optimistically and awaits
+    `SetSettingAsync` with no catch. A refusal — an expired session on WASM (`SessionExpiredException`),
+    an account deleted under a live session — escapes to `MainLayout`'s `CanalaveErrorBoundary` and
+    replaces the whole page, and the optimistic state is never rolled back. `layer3-logic.md`
+    §"Optimistic Updates & Debounce" rule 4 says a self-contained write catches, rolls back and shows
+    `ExceptionPresenter`'s message inline.
+  - Fix shape: the Private messages section's handler (`HandleNewMessageEmailToggleAsync`, same file)
+    — keep the previous row, a per-row busy flag, roll back on failure, one `ErrorAlert` under the
+    category. RazorComponents tests beside `NotificationSettingsPageTests`' refusal case.
 
 ---
 

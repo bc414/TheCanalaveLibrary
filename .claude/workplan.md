@@ -17,19 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-AuthorStoryDelete (2026-10-13) — worksheet D15. An author can hard-delete their
-  own story (`DeleteStoryAsync`, `DELETE /api/stories/{id}`), primary author only, under any moderation
-  state: one transaction (story-scope `TptDelete`, the Spotlight slot return, the story row), everything
-  else by cascade, the cover blob after the commit, no counter touched. An unstarted booking's slot goes
-  back to its sponsor (`SpotlightPlacementRelease`). `StoryDeleteDialog` asks for the **saved** title and
-  offers Unpublish instead and a download first. **D15's "`daily_story_stats` has no FK" was false.** Its
-  review fixes built the taken-down case D15 rules (the editor opens **delete-only**), locked the chapters
-  against a mid-delete comment, stopped a lost commit acknowledgement replaying into a 404, and matched
-  the title as the label shows it. It flipped **F4 and F52 L4.5 5→1**; its browser pass the same day
-  drove the dialog, both outs, the taken-down editor and the slot return on both render phases (Local
-  and Garage), returned both to 5 (H34 closed) and found no runtime bug. Filed: decision row 27 /
-  tracker F24, D19; F13/F3/B25 annotated. `dotnet test`: Unit 1,263, RazorComponents 852, Integration
-  1,590. **Pointer:** its DONE entry.
+- **Last landed:** WU-PrivateMessageEmail (2026-10-13) — worksheet D18. Private messages stay out of
+  the notification catalogue (ratified); Messaging owns PM email end to end. Two columns
+  (`EmailOnNewMessage`, `LastNotifiedTimestamp`); **one email per unread run**, stamped after the send;
+  archive mutes it; no sender-authored text; its own unsubscribe purpose and `/unsubscribe/messages/{token}`;
+  a "Private messages" section on `/notifications/settings`. The two domains share only the transport
+  and the outbound pipeline, now `(kind, id)`-typed in `Server/Email/` (`OutboundEmailBuffer`/
+  `Flusher`/`Worker`, renamed from their notification names; the notification query is
+  `NotificationEmailComposer`). It flipped **F43 and F49 L4.5 5→1** (no browser; tracker **H35**).
+  Filed: decision row 28 / tracker F25 (four derived defaults), H36. `dotnet test`: Unit 1,304,
+  RazorComponents 859, Integration 1,610. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-BlobCleanup — worksheet D14 (inline post-commit blob deletes plus a daily orphan sweep, cover upload persists its own reference; F22/row 25 filed, H31/H3 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
@@ -246,7 +244,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13); **WU-PrivateMessageEmail** is next in the campaign's build order.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13); **WU-ParityAndRemaining** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -275,7 +273,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36**,
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -283,7 +281,7 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–27** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–28** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -297,7 +295,10 @@ references it, does not restate it.
   WU-BlobCleanup; 26 — three follow-ups of D20's throttle half (the provisional `Vote`/`Reveal` numbers,
   group story-add, first-request friction) — added the same day by WU-ThrottleCoverage; 27 — five
   edges of D15's author story delete (a live block, the moderator path, telling the sponsor, the
-  download's scope, how an author finds a taken-down story's editor) — added the same day by WU-AuthorStoryDelete).
+  download's scope, how an author finds a taken-down story's editor) — added the same day by WU-AuthorStoryDelete;
+  28 — four defaults D18's private-message email left to the build (on by default, no sender text,
+  archive mutes, the run reading of its formula) — added the same day by WU-PrivateMessageEmail).
+  Owed: tracker **H35**, WU-PrivateMessageEmail's browser and Mailpit pass (F43/F49 L4.5 1→5).
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -464,6 +465,71 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-PrivateMessageEmail — private-message email, Messaging-owned: one email per unread run, its own preference and unsubscribe, on a shared `(kind, id)` outbound pipeline (worksheet D18; service audit §3.18; extends `Messaging/`, `Email/`, `Notifications/`, `Identity/`, `Data/`) — DONE ✓ (2026-10-13)
+
+- **Cells:** **F43 L4.5 5→1** (the settings page's new Private messages section) and **F49 L4.5 5→1**
+  (the new email and its unsubscribe pages); no browser or Mailpit was available, tracker **H35** holds
+  the pass. Built beneath Stage-5 cells: F49 L1/L2/L5, F41 L2, F43 L3/L3.5/L5. Dated 2026-10-13, the
+  session's `currentDate`, as the WUs before it.
+- **Trigger:** worksheet D18 (answered 2026-08-07) and its spec `wu-specs/WU-PrivateMessageEmail.md`
+  (no amendment). WU-NotificationCorrectness's hand-off: keep the composed pairing, the restore rules
+  and `DrainAllAsync`; WU-ThrottleCoverage's: enumerate the new surfaces.
+- **What landed:**
+  1. **Schema** (migration `WU_PrivateMessageEmail`, two columns, nothing else): `User.EmailOnNewMessage`
+     (bool-true shape, backfills on) and `ConversationParticipant.LastNotifiedTimestamp` (nullable).
+  2. **Shared pipeline in `Server/Email/`:** the notification buffer and worker renamed to
+     `OutboundEmailBuffer`/`OutboundEmailWorker` (`git mv`) over `OutboundEmailWork(Kind, Id)`; the old
+     flusher split into the domain-free `OutboundEmailFlusher` (per-kind routing, one send, every
+     restore rule kept, unroutable kinds dropped with an Error, after-send hooks for taken mails only —
+     the processed head of an aborted batch included, `CancellationToken.None`, never a restore) and
+     `Notifications/NotificationEmailComposer` (the query, verbatim). `UnsubscribeLandingPage` extracted;
+     its settings link fixed (`/settings` → `/notifications/settings`).
+  3. **Messaging:** both sends enqueue after commit; `PrivateMessageEmailComposer` (write context; the
+     run predicate, archive mutes, preference + confirmed address; stamps after the send);
+     `PrivateMessageEmailBodies` (no sender-authored text); `MessagingUnsubscribeTokenService` +
+     `MessagingEmailEndpoints` (`/unsubscribe/messages/{token}`); `Get`/`SetMyNewMessageEmailEnabledAsync`
+     (set-based, tracked `User` detached), `GET`/`PUT /api/messaging/email-preference`, client calls.
+  4. **UI:** the "Private messages" section of `/notifications/settings` (Email only, optimistic, one
+     write at a time, inline rollback).
+  5. **Ratified in code:** doc comments on `NotificationTypeEnum` and `INotificationWriteService`.
+  6. **Docs:** moment 1 — `layer2-services.md` §"Outbound email pipeline" (retitled from "Email fan-out";
+     the feature-owned-email rule, the standing rider) and §"Private-Message Email" (new);
+     `cross-cutting.md` §"Two unread systems"; `security.md` §"One-click unsubscribe tokens" (new), the
+     edge-policy bullet and two enumeration rows; `horizontal-scaling.md` §6 (new); `layer1-data-model.md`;
+     `SKILL.md`, `folder_clusters.md`; audit settled notes (Messaging §"D18", Notifications Shared
+     Context); roadmap Resolved D18 and **decision row 28**; tracker **F25**; the worksheet Built line;
+     the retired `NotificationEmail(Buffer|Worker|Flusher)` names in `check-doc-hygiene.ps1`. Moment 2 —
+     `testing.md` (flusher Unit-tier, the re-enqueue shape). Moment 3 — Stage notes + headlines
+     (Messaging F49, Notifications F41/F43), **H35** and **H36** filed, `status.md` F43/F49 L4.5.
+- **Deviations from the spec, each with its reason:** the after-send hook takes the **taken indices**,
+  not a bare callback (WU-NotificationCorrectness's partial sends and deferrals postdate the spec, so
+  "after a successful send" had to become "for what the transport took"); the bool default is the
+  model's `HasDefaultValue(true).HasSentinel(true)` (layer-1 rule), not a hand-edited migration
+  default, so SeedTool's COPY omits the column like `can_auto_approve`; a valid token for a deleted
+  account answers the shared 400 page (the notification routes' rule since 2026-10-13), not a success
+  page; the N≥2 note is a new `horizontal-scaling.md` §6, not a §3 paragraph; F43's stale "Stage 2"
+  line the spec named was already corrected.
+- **Left alone:** decision row 28 / tracker F25 (default on, no sender text, archive mutes, the run
+  reading — built as defaults). Inherited, as D18 directed the build to decide: the shared 30 s drain.
+  Exactly-once at N≥2 (claim-before-send) not built (`horizontal-scaling.md` §6). The category
+  toggles' missing catch (**H36**). No throttle on the preference (self-scoped setting; D20 bounds
+  pending).
+- **Verification:** build 0 errors, no new warnings; **Unit 1,304** (+41: `OutboundEmailFlusherTests`
+  9, `OutboundEmailBufferTests` 8, `MessagingUnsubscribeTokenServiceTests` 10,
+  `PrivateMessageEmailBodiesTests` 8, `ClientMessagingEmailPreferenceTests` 6), **RazorComponents
+  859** (+7:
+  `NotificationSettingsPageTests`), **Integration 1,610** (+20: `PrivateMessageEmailTests`), all green;
+  the existing `NotificationEmailFanOutTests` pass unchanged in substance. Mutation-checked, each
+  failing a test: no run predicate, no archive gate, no after-send stamp, no detach, no aborted-batch
+  hook, a cancellable hook token, no rollback, no busy-disable. Migration applied, rolled back and
+  re-applied on the server-only dev DB. Gates: doc-hygiene, design-tokens, render-modes, a11y pass.
+  **No browser was available** (H35). A live smoke without one: the server on the `Smtp` branch against
+  a local SMTP sink, driven by `curl` — one mail per run, the burst, the re-fire after a read, the
+  stamp, the unsubscribe GET/POST and the preference endpoints all behaved as the rule says
+  (`audit/Messaging.md` F49 note); the smoke conversation was deleted from the dev DB after.
+- **Pointers:** `audit/Messaging.md` §"D18" + F49 note; `audit/Notifications.md` WU-PrivateMessageEmail
+  Stage note; `layer2-services.md` §"Private-Message Email"; decision row 28; tracker F25, H35, H36.
 
 ## WU-AuthorStoryDelete — an author's hard delete of their own story, under any moderation state, with an unstarted Spotlight booking's slot returned and a typed-title dialog that offers unpublish and a download first (worksheet D15; service audit §3.20; extends `Stories/`, `Spotlight/`, `Identity/`) — DONE ✓ (2026-10-13)
 

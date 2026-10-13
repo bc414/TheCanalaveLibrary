@@ -265,6 +265,22 @@ public partial class ServerMessagingReadService(
             .FirstOrDefaultAsync();
     }
 
+    public async Task<bool> GetMyNewMessageEmailEnabledAsync()
+    {
+        int userId = RequireAuthenticatedUser();
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Messaging-owned preference (owner ruling D18). Nullable projection so a missing row (an
+        // account deleted under a live session) is a 404, not a silent "off".
+        bool? enabled = await readDb.Users
+            .Where(u => u.Id == userId)
+            .Select(u => (bool?)u.EmailOnNewMessage)
+            .FirstOrDefaultAsync();
+
+        return enabled ?? throw new KeyNotFoundException($"User {userId} not found.");
+    }
+
     // -----------------------------------------------------------------------
     // Shared helpers
     // -----------------------------------------------------------------------
