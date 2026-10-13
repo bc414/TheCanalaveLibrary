@@ -158,6 +158,10 @@ through**, not in a big-bang move. These are the known stragglers so none is inv
 
 Move each when its cluster is next touched (grep the old dotted-path namespace per SKILL.md's rename rule).
 
+> **Status 2026-10-13 (WU-TrackerFixes; tracker H8):** `UserDeletionService` moved to `Server/Identity/`
+> (WU-ModerationIntegrity, 2026-09-30); the device-detection files and the `Core/Models/` scaffold are
+> gone. Still open: MA-012's `MainLayout.razor` and `SharedUI/Pages/{NotFound,Welcome}.razor`.
+
 ---
 
 ## 6. 🧑 Small cleanups the audit surfaced but no pass claimed

@@ -145,9 +145,27 @@ as `ReturnUrl`; the user stays on the page so `DraftAutosave` keeps unsaved work
 redirect); unexpected/5xx → `ExceptionPresenter`'s generic message with the server trace id,
 boundary-caught if it escapes a component catch site. Toast stays reserved for non-blocking
 system events only — never any of the above. `ErrorAlert` is the presentation counterpart to
-`ExceptionPresenter`: components hold the caught `Exception` and render `<ErrorAlert
-Error="_error" />` instead of hand-rolling `ExceptionPresenter.GetUserMessages` +
-`InlineAlert` each site.
+`ExceptionPresenter`. It takes the messages (`Message` or `Messages`) and `ShowSignIn`, which the
+catch site sets from `ex is SessionExpiredException`. It holds no exception itself.
+
+**Every inline error surface that can show a caught exception is an `ErrorAlert`** (the
+WU-ErrorHandling2 follow-up, built by WU-TrackerFixes 2026-10-13). Three rules keep its Sign-in link
+honest:
+- **The flag travels with the message.** Whatever sets the message sets the flag in the same
+  statement block. That includes a fixed early-return string such as "A reason is required.", which
+  sets the flag to `false`; a stale `true` would offer Sign in beside a validation message. A
+  component that shows either a local string or a parent's error shows the parent's flag only while
+  the parent's message is the one on screen (`AccountActionPanel`).
+- **Editor forms keep the server error on their view model.** The form view models
+  (`StoryPropertiesViewModel`, `ChapterEditorViewModel`, `BlogPostPropertiesViewModel`,
+  `SiteAnnouncementPropertiesViewModel`) derive from `EditorFormViewModel` (`SharedUI/Errors/`).
+  Pages call `ShowServerError(ex)`, which replaces the list and sets the flag, and
+  `ClearServerErrors()`; they never write the list and the flag separately. The form renders
+  `<ErrorAlert Messages="@ViewModel.ServerValidationErrors" ShowSignIn="@ViewModel.ServerErrorIsSessionExpired" />`.
+  A handler's failure replaces the previous one's messages; it never appends to them.
+- **A refusal is never a toast.** A page's own operations (join, leave, add or remove a story)
+  show their refusal in an `ErrorAlert` beside the controls that caused it, and log an unexpected
+  failure at `Error` like any other catch site (`GroupPage`).
 
 **Logging note:** `ServerFaultException` is deliberately **not** user-facing
 (`ExceptionPresenter.IsUserFacing` excludes it — it's the generic-message path) but must not be

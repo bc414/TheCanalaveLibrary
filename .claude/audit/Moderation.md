@@ -138,6 +138,21 @@ Detail: `audit/Notifications.md` F41's browser note. Band-wide rules: the cluste
 - **The allow-set rejection is a `ModerationValidationException` (400)**, not the
   `InvalidOperationException` (401) it was.
 
+**Settled — report entry points (tracker B17, recorded 2026-10-13 at WU-TrackerFixes' Doc-Touch moment
+1; do not revisit).** Rule text: `layer2-services.md` §"Moderation Services" → "Report entry points".
+- **Every allow-set type has at least one UI entry point.** BlogPost: `BlogPostCard` (profile Blog tab,
+  group page) and a "Report post" control on `BlogPostPage`. Recommendation: `RecommendationCard`,
+  wired by `RecommendationSection`, which hosts its own `ReportDialog` (the `CommentSection` pattern).
+  Message: `MessageItem`, bubbled through `MessageThread` to `MessagesPage`'s dialog.
+- **`OnReport` is wired for signed-in viewers only, and the leaf hides it on the viewer's own
+  content** (the `CommentItem` precedent).
+- **A Message target's visibility means participation** (kind (g)): the reporter must be a participant
+  of the message's conversation, so a null reporter fails. This is a defect fix under the settled
+  kind-(g) rule, not a new decision; it is the one behavior change in B17.
+- **Scope boundary, not a deferral:** `NewsPage` announcement cards stay unwired (moderator-authored;
+  whether they are reportable is an open owner call), as do the rec cards on `DeepDiveTab`,
+  `ExploreTab` and `CommunitySpotlightDisplay` (every rec stays reportable from its story).
+
 **Stage note (WU34 — 2026-06-25):** L1=5, L2=5, L3=5, L3.5=5 (all verified: `dotnet test` green,
 298 integration tests + 417 unit tests). `IModerationReadService`/`IModerationWriteService` implemented in
 `Core/Moderation/` + `Server/Moderation/`. `ServerModerationWriteService.SubmitReportAsync` validated by

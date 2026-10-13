@@ -246,6 +246,10 @@ decision work that has no row at all.
     `workplan.md` WU-UserModeration; convention: `layer2-services.md` §"Account actions — target
     resolution and the report-as-audit-record rule".
   - Opened alongside: **B17**, **B18**, **B19** below.
+  - Original entry (superseded — see closure above; moved here from under B19, where it had been
+    pasted, by WU-TrackerFixes 2026-10-13):
+    - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
+    - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
 - [ ] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.*
   - Grid: F46 L1–L3.5=5 — invisible there, same shape as the User half this item's sibling closed.
@@ -282,8 +286,6 @@ decision work that has no row at all.
   - Context: moderators can only be created by editing the seeder and rebuilding the database. That
     is fine for a solo dev pre-beta and blocking the moment a second moderator is recruited — which
     is a Phase-6 beta-logistics dependency (`roadmap.md` decision row 6), not a launch one.
-  - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
-  - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
 - [x] **B20 — The new-chapter fan-out is never produced — DONE (WU-InertFeatures, 2026-09-30)** `[inert · high · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.1).* `SetPublishedAsync` now fires `NotifyNewChapterAsync` on the `FirstPublishedDate` stamp only, to the story's `IsFollowed` interactions, while the story is publicly published (that last part a default — roadmap row 17). Narrative: `audit/Chapters.md` F6, `audit/Notifications.md` F41.
   - Grid: F6 L2 and F41 L2 read 5. `NotificationTypeEnum.NewChapterOnFollowedStory` (10) is seeded
@@ -1783,7 +1785,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Context (each grid-5, flagged "future pass" in its audit file):
     - ~~Group **last-admin-leave** unhandled — `layer2-services.md:625`~~ — **FIXED 2026-10-13 (WU-UserDeletion, owner ruling D13 edge (b))**: an admin-less group is a waiting state a moderator ends with `AssignGroupAdminAsync`, and the sole admin's Leave warns first. Rule: `layer2-services.md` §"Group Membership and Role Model".
     - **Self-likes** accepted on own comment (F25) — `audit/Comments.md`.
-    - **Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`.
+    - ~~**Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`~~ — **FIXED 2026-10-13 (WU-ParityAndRemaining, service audit §2.12 R5)**: a chapter comment's spoiler flag is editable through `UpdateCommentDto.IsSpoiler` and the edit form's toggle. Struck by WU-TrackerFixes (2026-10-13), which found the bullet still open.
     - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
     - ~~**VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit~~ — **FIXED 2026-09-20 (WU-QuickFixes)**: `FollowButton` raises `OnFollowChanged`, `ProfileBanner` mirrors it into the vouch gate; new `ProfileBannerTests` cover it. Detail: `audit/Following.md` §"WU-QuickFixes slice".
     - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md:1022`.
@@ -1791,8 +1793,8 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [ ] **H7 — Open test-hygiene backlog** `[test-gap · low · anytime]`
   - Source: `test-hygiene-manifest.md` (retired 2026-07-27 — this item is now the ledger of record; the manifest's §5 table lists the individual merge targets).
-  - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5); Integration `NotificationServiceTests` flake fix; Integration format-dupes; Unit tautology trim. The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists. Suite is green, so nothing signals the pending cleanup.
-  - Note: `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a known pre-existing intermittent flake (passes on isolated re-run).
+  - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5). The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists, so the manifest's two mobile merge rows are void. Suite is green, so nothing signals the pending cleanup.
+  - **Corrected 2026-10-13 (WU-TrackerFixes):** the three non-bUnit phases this item listed as open were already executed by commit `3adfba0` (2026-07-18, "Test cleanup"): the `NotificationServiceTests` `Task.Delay` → `SetNotificationDateCreatedAsync` flake fix, the Integration format-dupes (`GroupServiceTests`, `ImageStorageServiceTests`, `S3ImageStorageServiceTests`, `SavedTagSelectionServiceTests`, `RecommendationWriteServiceTests`) and the Unit tautology trim (`ModerationValidationsTests`, `EmailBodiesTests`, `EmailOptionsTests`, `SocialDescriptionHelperTests`). The manifest header was written mid-commit. The `CanalaveTypeaheadTests` "known flake" note was stale too: it was root-caused and fixed 2026-07-18 (`workplan-archive.md` §"WU-IntTestPerf follow-ups"). WU-TrackerFixes takes the open remainder (the 25 merges), the last `Task.Delay` ordering hack (`SiteAnnouncementServiceTests`) and the `SeedUserStatAsync` hoist WU-CounterSymmetry pointed at.
 
 - [x] **H8 — MA-610 Identity scaffold prune-vs-keep — DECISION RECORDED: KEEP (2026-07-31, WU-SweepRiders)** `[decision · low · pre-launch]`
   - Grid: F1 mostly 5 (L4=1, unchanged — this WU didn't touch L4).
@@ -1813,6 +1815,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     touched `Errors/`/`Seo/`, not those clusters, so they stay open here. **`UserDeletionService`
     done 2026-09-30 (WU-ModerationIntegrity):** moved to `Server/Identity/` when that WU touched it,
     leaving `Server/Services/` empty; the other three stay open.
+    **Re-verified 2026-10-13 (WU-TrackerFixes):** the `Core/Models` scaffold is gone too (no tracked
+    file; deleted in `e323073`), as are the device-detection files MA-608 listed. Two moves remain:
+    `Server/Components/Layout/MainLayout.razor` (MA-012) and `SharedUI/Pages/{NotFound,Welcome}.razor`.
+    Both still move when their cluster is next touched.
 
 - [ ] **H9 — Identity alternate-login flows never verified end-to-end** `[test-gap · low · pre-launch]`
   - Grid: F1 mostly 5 (L4=1); no cell captures this specifically.

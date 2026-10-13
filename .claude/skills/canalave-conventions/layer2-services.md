@@ -1477,7 +1477,10 @@ The comment and profile-blog seams are wired through five semantic methods. Rule
   `NotifyNewProfileBlogPostAsync` reads the author's setting and returns before resolving
   recipients. `UsersOnly` needs no check: every recipient is signed in. This is the one recipient-side
   visibility rule in the fan-outs — the "recipients are ground truth, Personal plane" posture is about
-  rating and audience (Class B); profile privacy is Class A and is never bypassed.
+  rating and audience (Class B); profile privacy is Class A and is never bypassed. Its read-time
+  twin: a notification already sent stops naming the post once the author goes Private or the post
+  is unpublished (the `BlogPostDirect` kind in §"Polymorphic RelatedEntityId" below; tracker D8,
+  WU-TrackerFixes 2026-10-13).
 - **Fan-out precedence-dedup:** `NotifyNewProfileBlogPostAsync` resolves four recipient sets —
   author-followers (`FollowedUser.ReceiveAlerts`, type 13) and, when story-linked, story
   followers/favoriters/read-it-later (`UserStoryInteraction.IsFollowed/IsFavorite/IsReadItLater`,
@@ -1553,7 +1556,7 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
    non-unique order lets offset paging skip or repeat rows across pages.
 2. **Classify** each materialized row's `RelatedEntityId` by a private
    `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
-   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | GroupStory | BlogPost | BlogPostDirect | Tag`.
+   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | GroupStory | BlogPost | BlogPostDirect | OwnBlogPost | Tag`.
 3. **Batch-load** each kind present on the page in one query per kind:
    - Group the materialized row ids by kind; skip empty sets. Every kind's PK is `int`, so each
      `long` id set is narrowed to `int` first (ids above `int.MaxValue` simply miss) — the SQL stays
@@ -1575,20 +1578,32 @@ as the `Group` kind. `Chapter` → Title = chapter title, ContextTitle = story t
 A deleted junction row (`RemoveStoryAsync`) is a miss → title-less, non-navigating — the designed
 graceful path, accepted by D16.
 
-**Extra queries:** at most as many as distinct kinds appearing on the page (max 8 — one per non-`None` kind; typically 1–3). Never N+1.
+**Extra queries:** at most as many as distinct kinds appearing on the page (max 9 — one per non-`None` kind; typically 1–3). Never N+1.
 
 **Forward-compat:** kinds whose triggering feature isn't built yet produce no rows, but their `KindFor` branch
 is coded now — dormant branches compile and need no future edit.
 
-**Two blog-post kinds (WU-B2, 2026-07-25):** `BlogPost` resolves via `GroupBlogPosts` and deliberately
-links to the *group* (`/group/{GroupId}`) — used by `NewGroupBlogPost` only. `BlogPostDirect` resolves
-via the TPT-root `BlogPosts` DbSet and links to the *post* (`/blog/{BlogPostId}` — the unified
-`BlogPostPage` route serves both post kinds) — used by the followed-content blog types (13–16),
-`NewCommentOnBlog`, and `PollUpdated` (remapped: its group-only lookup left profile-post poll
-notifications title-less). The `BlogPostDirect` lookup applies **no `IgnoreQueryFilters`**: blog posts
-carry no audience/rating global filter (rating is an explicit `.Where` in the blog read service), and
-the `IsTakenDown` named filter stays active deliberately — a taken-down post drops out → null target →
-graceful fallback text. `NewStoryComment` maps to `Chapter` (deep-links the comment to its chapter);
+**Three blog-post kinds (WU-B2, 2026-07-25; split by tracker D8, WU-TrackerFixes 2026-10-13):**
+`BlogPost` resolves via `GroupBlogPosts` and deliberately links to the *group* (`/group/{GroupId}`) —
+used by `NewGroupBlogPost` only. The other two resolve via the TPT-root `BlogPosts` DbSet and link to
+the *post* (`/blog/{BlogPostId}` — the unified `BlogPostPage` route serves every post kind). They
+differ in who the recipient is:
+- **`OwnBlogPost`** — `NewCommentOnBlog` (33), whose recipient is always the post's author. The author
+  can open their own post whatever its state, so it resolves the post as stored.
+- **`BlogPostDirect`** — the followed-content blog types (13–16) and `PollUpdated` (100), whose
+  recipients are never the author (drop-self removes the author; 100's source is the poll owner). It
+  drops a post the recipient could no longer open: an unpublished post of any subtype, and a profile
+  post whose author's `ProfileVisibility` is `Private`. `UsersOnly` needs no check, because every
+  recipient is signed in. A dropped post is a miss: no title, no link.
+
+The split keeps the enricher recipient-agnostic, which the email composer needs (it has no active
+user). It mirrors `BlogPostVisibilityGuard`'s Class-A half (publish state, profile privacy) only;
+rating, audience and reveals are Class B, and notifications are Personal plane, so they never filter
+here. Neither lookup applies `IgnoreQueryFilters`: the `IsTakenDown` named filter stays active on
+purpose, so a taken-down post drops out to the graceful no-title fallback. Before the split, a
+notification minted while the author was visible kept showing the post's current title, and a
+title edited after the author went Private, beside a link that 404'd; `PollUpdated`'s copy was held
+title-free until it was fixed. `NewStoryComment` maps to `Chapter` (deep-links the comment to its chapter);
 `NewCommentOnYourProfile` maps to `User`; `CommentReply` stays `None` (one cross-context type cannot
 map to one table — non-navigating, known minor UX gap).
 
@@ -2734,6 +2749,32 @@ throttle → kind (g) target existence and visibility (`KeyNotFoundException`; `
   reported this — a moderator will review your open report.")`. Once that report is resolved the
   reporter may file again. Anonymous reports are not deduped: a NULL reporter is distinct in the index.
   The index is also what makes D7's "notify every sibling reporter" exactly-once by construction.
+- **A `Message` target is visible only to a participant of its conversation** (kind (g); tracker B17's
+  rider, WU-TrackerFixes 2026-10-13). The check is
+  `PrivateMessages.Any(m => m.MessageId == id && ConversationParticipants.Any(p => p.ConversationId ==
+  m.ConversationId && p.UserId == viewer))`, so a null reporter fails it. Before this the arm answered
+  `true` on the assumption that a non-participant cannot learn a message id. Message ids are
+  sequential `long`s, so that assumption let any signed-in user put a stranger's private message in
+  front of moderators.
+
+**Report entry points (tracker B17, WU-TrackerFixes 2026-10-13).** Every type in
+`AllowedReportTargets` has at least one UI entry point that opens the page's `ReportDialog`:
+- `Story`: `StoryCard`, through `StoryDeck`'s `OnReport`.
+- `User`: `UserCard` and the profile banner.
+- `Comment`: `CommentItem`.
+- `BlogPost`: `BlogPostCard` on the profile Blog tab and the group page, and a "Report post" control
+  on `BlogPostPage`.
+- `Recommendation`: `RecommendationCard`, wired by `RecommendationSection`, which hosts its own dialog.
+- `Message`: `MessageItem`, through `MessageThread`'s `OnReportMessage` to `MessagesPage`.
+
+The rules for every wiring:
+- A host passes `OnReport` only when the viewer is signed in, because
+  `POST /api/moderation/reports` requires authorization.
+- The leaf hides the control on the viewer's own content.
+- Not wired, as a scope boundary: `NewsPage` announcement cards (site announcements are
+  moderator-authored, and whether they are reportable is an open owner call), and the rec cards on
+  `DeepDiveTab`, `ExploreTab` and `CommunitySpotlightDisplay` (every rec stays reportable from its
+  story's `RecommendationSection`).
 
 **`ReportedUserId` (owner ruling D8) — the account answerable for the reported artifact at the moment
 the report was filed.** Nullable FK → `AspNetUsers`, `ON DELETE SET NULL` (reports outlive the accounts

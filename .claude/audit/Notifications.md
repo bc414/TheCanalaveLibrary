@@ -106,6 +106,19 @@ revisit:**
   non-transactional email appears on `/notifications/settings`), sourced from
   `IMessagingWriteService`, never from this cluster's services.
 
+**Settled — blog-post targets by recipient (tracker D8, recorded 2026-10-13 at WU-TrackerFixes'
+Doc-Touch moment 1; do not revisit).** Rule text: `layer2-services.md` §"Polymorphic RelatedEntityId"
+→ "Three blog-post kinds". The tracker's recommended shape, the type split, is the one built:
+- **`NewCommentOnBlog` (33) gets its own kind, `OwnBlogPost`,** which resolves the post as stored. Its
+  recipient is always the post's author, who can still open their own post.
+- **`BlogPostDirect` (13–16, 100) drops a post the recipient can no longer open:** unpublished (any
+  subtype), or a profile post whose author is `Private`. Those recipients are never the author.
+- **The enricher stays recipient-agnostic** (the email composer has no active user). Only the Class-A
+  half of `BlogPostVisibilityGuard` applies; rating, audience and reveals stay unfiltered (Personal
+  plane).
+- **`PollUpdated` (100) names its post again** ("A poll you voted on in {post} was changed"), the copy
+  the WU-NotificationCorrectness review fixes held back until this was built.
+
 ## WU-TagFanon slice (2026-07-26) — F41/F42 L2 stay Stage 5
 
 `TagUpdateSuggestion = 26` finally has a sender. The seam was fully provisioned (enum value,

@@ -971,6 +971,17 @@ and `TagFilter`:
   `SearchPage.ResolveTagChipsAsync` → `InitialIncludedTags`/`InitialExcludedTags`; ship member
   display names → `InitialIncludedShips`/`InitialExcludedShips` + their name lists. The dispatcher
   already holds `ITagReadService`; the axis components must not re-fetch what they were handed.
+- **Page size is a seed too, and the one the interaction guard never freezes** (tracker B16,
+  WU-TrackerFixes 2026-10-13). `StoryFilterDto.PageSize` reaches `ResultsFilterPanel` through
+  `InitialFilter`. The dispatcher resolves it from the viewer's
+  `ReaderSettingsDto.DefaultPaginationSize` (signed-in viewers only: anonymous viewers keep the DTO's
+  20, and the WASM settings read requires auth) in `OnInitializedAsync`, before the first listing
+  load, on both render passes. The panel copies it in `OnParametersSet` **before** the
+  `_userHasInteracted` early return, because no panel control edits it, and echoes it on Apply; it
+  never writes a literal. A device-local restore keeps the viewer's size, since the snapshot stores ids
+  only. Consumers: `SearchPage`, `BookshelvesPage`, `ProfilePage`'s story tabs. `TreeSearchPage`
+  pages by `TreeSearchRequest` and ignores it. Server-side bounds on `PageSize` are worksheet D20's
+  bounds half (pending).
 
 Consequences worth stating: `ResultsFilterPanel`, `TagFilter` and `UserStoryInteractionFilter`
 inject **nothing** — the first two because they delegate every live query to leaves, the third

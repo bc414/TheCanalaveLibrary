@@ -249,6 +249,15 @@ re-seed guard from the start.
   at SeedTool volume; FTS GIN pre-existed; tag-probe additions rejected (PK already optimal,
   measured neutral). Detail: `layer6-indexes.md`, `TheCanalaveLibrary.PerfBaseline/results/`.
 
+  **Settled — the panel's page size (tracker B16, recorded 2026-10-13 at WU-TrackerFixes' Doc-Touch
+  moment 1; do not revisit).** `ResultsFilterPanel` echoes `InitialFilter.PageSize` on Apply and never
+  hardcodes it. Each dispatcher (`SearchPage`, `BookshelvesPage`, `ProfilePage`'s story tabs) resolves
+  it from the signed-in viewer's `ReaderSettingsDto.DefaultPaginationSize` before its first listing
+  load; anonymous viewers keep 20. The panel copies it ahead of its `_userHasInteracted` guard, so a
+  late seed still lands. No new parameter: `StoryFilterDto` already carries `PageSize`. No server cap
+  is added (D20's bounds half, pending). Rule text: `layer3.5-structure.md` §"Seed state vs. live
+  fetch in filter components".
+
   **Settled for WU23 (2026-06-23, do not revisit):**
   - **Filter axes are the unit of reuse, not the panel.** `TagFilter` and `UserStoryInteractionFilter`
     are standalone axis components — the tree search page (WU28) reuses them directly without the panel.
