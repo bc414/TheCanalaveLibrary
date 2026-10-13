@@ -73,6 +73,6 @@ public sealed class ClientMessagingWriteService(HttpClient http)
         }
 
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new MessagingValidationException([detail]));
+            response, errs => new MessagingValidationException([.. errs]));
     }
 }

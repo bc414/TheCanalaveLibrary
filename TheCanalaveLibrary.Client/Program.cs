@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.Logging;
 using TheCanalaveLibrary.Client;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
@@ -25,9 +26,16 @@ builder.Services.AddScoped<DiscoveryFilterStore>();
 // DraftAutosave resolve identically after the L5 WASM flip.
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<DraftStore>();
-// OptimisticSpriteReadService is stateless; base URL uses same wwwroot default as Server.
-// Both sides share the Core impl — see audit/Sprites.md L5 and layer2-services.md §"Sprite URLs Are Resolved At Render Time."
-builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+// The server's deploy-time settings (GET /api/client-config), loaded once below before RunAsync —
+// layer5-wasm.md §"Server configuration the client needs" (WU-ParityAndRemaining).
+builder.Services.AddSingleton<ClientRuntimeConfig>();
+// OptimisticSpriteReadService is stateless; both sides share the Core impl (audit/Sprites.md L5,
+// layer2-services.md §"Sprite URLs Are Resolved At Render Time"). Its root is the server's
+// Sprites:BaseUrl, read lazily from ClientRuntimeConfig — never a hardcoded copy, which made the
+// config seam a server-only cutover. Nothing resolves this before LoadAsync (WASM has no hosted
+// services), so the factory always sees the loaded value.
+builder.Services.AddSingleton<ISpriteReadService>(sp =>
+    new OptimisticSpriteReadService(sp.GetRequiredService<ClientRuntimeConfig>().SpriteBaseUrl));
 // Public URL resolution (Seo/, WU-Seo) — Client uses the browser's own origin (NavigationManager
 // isn't available yet at registration time, so resolve it lazily via the factory overload).
 // Crawlers never reach the Client host (they only ever see the Server prerender), so exactness
@@ -110,13 +118,23 @@ builder.Services.AddScoped<IContentImportService, ClientContentImportService>();
 builder.Services.AddScoped<IUserActivityWriteService, ClientUserActivityWriteService>();
 builder.Services.AddScoped<IAccountStatusReadService, ClientAccountStatusReadService>();
 // Remaining unregistered interfaces are deliberate structural exclusions — never client-implemented
-// (server-only infra) or already WASM-native via a shared impl. See layer5-wasm.md "Scope
-// Inventory"/"Avoid": IImageStorageService, IHtmlSanitizationService, IWriteRateLimitService,
-// ISpriteReadService (OptimisticSpriteReadService above), IExportService (anchor-link download,
-// no client impl).
+// (server-only infra) or with no client consumer. See layer5-wasm.md "Avoid": IImageStorageService,
+// IHtmlSanitizationService, IWriteRateLimitService, IExportService (anchor-link download, no client
+// impl). ISpriteReadService is registered above: the shared Core OptimisticSpriteReadService over the
+// server's sprite root from ClientRuntimeConfig.
 
 // Register HttpClient for dependency injection into services
 // The base address is configured to point to the server application.
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
-await builder.Build().RunAsync();
+WebAssemblyHost host = builder.Build();
+
+// One same-origin GET before the app runs: the server's deploy-time settings. A failure logs a
+// Warning and keeps the defaults; it never blocks boot (ClientRuntimeConfig.LoadAsync).
+using (HttpClient configHttp = new() { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) })
+{
+    await host.Services.GetRequiredService<ClientRuntimeConfig>().LoadAsync(
+        configHttp, host.Services.GetRequiredService<ILoggerFactory>().CreateLogger<ClientRuntimeConfig>());
+}
+
+await host.RunAsync();

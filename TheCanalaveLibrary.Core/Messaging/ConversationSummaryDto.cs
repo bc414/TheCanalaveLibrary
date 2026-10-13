@@ -19,11 +19,16 @@ namespace TheCanalaveLibrary.Core;
 /// it was requested under. The per-thread flag lives on
 /// <see cref="ConversationThreadDto.IsArchived"/>, where direct-URL navigation needs it.
 /// </para>
+/// <para>
+/// <see cref="OtherParticipant"/> is null when the other participant's account was deleted (their
+/// participant row goes with the account); the UI shows the default avatar and "[deleted user]". It is
+/// never a placeholder participant with a made-up id (WU-ParityAndRemaining, 2026-10-13).
+/// </para>
 /// </summary>
 public record ConversationSummaryDto(
     int ConversationId,
     string Subject,
-    MessagingParticipantDto OtherParticipant,
+    MessagingParticipantDto? OtherParticipant,
     string? LastMessagePreview,
     DateTime? LastMessageDate,
     int UnreadCount);

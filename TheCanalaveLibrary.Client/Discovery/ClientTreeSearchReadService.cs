@@ -43,7 +43,7 @@ public class ClientTreeSearchReadService(HttpClient http) : ITreeSearchReadServi
         HttpResponseMessage response = await Http.PostAsJsonAsync(
             "api/tree-search/search", new TreeSearchListingRequest(request, filter));
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new StoryValidationException([detail]));
+            response, errs => new StoryValidationException([.. errs]));
         return (await response.Content.ReadFromJsonAsync<TreeSearchListingResultDto>())!;
     }
 }

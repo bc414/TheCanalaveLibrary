@@ -58,5 +58,5 @@ public sealed class ClientSeriesWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of SeriesEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new SeriesValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new SeriesValidationException([.. errs]));
 }

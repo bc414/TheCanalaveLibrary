@@ -156,7 +156,7 @@ shared one.
 - **L1 — Stage 5 (two columns added by WU-PrivateMessageEmail, 2026-10-13 — `User.EmailOnNewMessage`, `ConversationParticipant.LastNotifiedTimestamp`, owner ruling D18; Integration-tested, stage unchanged, see its note below).** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`.
-- **L2 — Stage 5 (WU35, 2026-06-24; new-message email — both sends enqueue, `PrivateMessageEmailComposer` mails one email per unread run, the preference methods and the one-click unsubscribe — WU-PrivateMessageEmail, 2026-10-13, owner ruling D18, Integration- and Unit-tested, stage unchanged, see its note below; its review fixes recorded the no-account-status-gate default as decision row 28 (e) and pinned it, Integration-tested, stage unchanged; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; new-message email — both sends enqueue, `PrivateMessageEmailComposer` mails one email per unread run, the preference methods and the one-click unsubscribe — WU-PrivateMessageEmail, 2026-10-13, owner ruling D18, Integration- and Unit-tested, stage unchanged, see its note below; its review fixes recorded the no-account-status-gate default as decision row 28 (e) and pinned it, Integration-tested, stage unchanged; a deleted participant is a null `OtherParticipant`, never a fabricated id 0 — WU-ParityAndRemaining, 2026-10-13, Integration-tested, stage unchanged, see its note below; a deleted participant reads "[deleted user]" and account deletion removes the conversations it leaves empty — WU-UserDeletion, 2026-10-13, Integration-tested, stage unchanged, see its note below; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (5 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`,
   `GetMyNewMessageEmailEnabledAsync` — the last added WU-PrivateMessageEmail) and
@@ -197,7 +197,11 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 5 (5→1 at WU-PrivateMessageEmail, 1→5 at its browser pass, both 2026-10-13: the
+- **L4.5 — Stage 1 (5→1 at WU-ParityAndRemaining, 2026-10-13):** a deleted participant is now a
+  null `OtherParticipant`, rendered by `ConversationListItem` and `MessageThread` themselves (default
+  avatar, a muted "[deleted user]"), and no browser was available; tracker **H37** holds the pass (the
+  WU-ParityAndRemaining note below). Before that:
+  Stage 5 (5→1 at WU-PrivateMessageEmail, 1→5 at its browser pass, both 2026-10-13: the
   new-message email read in Mailpit, its run rule, archive mute and shutdown drain driven with `psql`,
   and its two unsubscribe pages, on the Aspire path; tracker **H35** closed; the browser verification
   in the WU-PrivateMessageEmail note below).** Before that: Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13). A deleted
@@ -524,6 +528,22 @@ starting a conversation was refused with "This user does not accept private mess
     gone. Y's open report on X's message became Resolved – No Action with no moderator and the
     "both participants" note.
   - No console error and no `fail:` line. The one bug found is the reply-box fix above.
+
+### WU-ParityAndRemaining note (2026-10-13) — F49 L2/L3.5 stay 5; L4.5 5→1: no fabricated participant
+
+Service audit §2.12 ("`MessagingParticipantDto` fabricates `/user/0` links"). WU-UserDeletion had
+already renamed the placeholder to "[deleted user]" on the same lines (amendment R12) but still built a
+participant with `UserId = 0` for a missing other-participant row, a made-up id that read as a real user.
+- **L2:** `ConversationSummaryDto.OtherParticipant` and `ConversationThreadDto.OtherParticipant` are
+  `MessagingParticipantDto?`; `ServerMessagingReadService` emits null at all three sites. A missing
+  participant row arises only from account deletion. `FindUserByUsernameAsync` and the compose path keep
+  the non-null DTO. Tier: Integration — `UserDeletionServiceTests.DeleteUserAsync_OneOfTwoParticipants_*`
+  now asserts null on both the thread and the summary (it asserted the fabricated row's label before);
+  mutation-checked by restoring the fabricated participant.
+- **L3.5/L4:** both leaves render the default avatar and a muted "[deleted user]" (the comment/rec
+  precedent: `text-(--color-text-muted)`, not the bold name style) from null, with no link. Tier:
+  RazorComponents `ConversationListItemTests` and `MessageThreadTests` (one each).
+- **L4.5 5→1:** no browser was available; tracker **H37**.
 
 ### WU-PrivateMessageEmail note (2026-10-13) — owner ruling D18 built; F49 L1/L2/L5 stay 5, L4.5 5→1 and 1→5 at its browser pass
 

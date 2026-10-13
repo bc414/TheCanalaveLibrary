@@ -68,5 +68,5 @@ public sealed class ClientCustomListWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of CustomListEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new CustomListValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new CustomListValidationException([.. errs]));
 }

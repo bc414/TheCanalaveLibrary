@@ -864,7 +864,14 @@ unless noted. All sit under Stage-5 cells.
     "isn't a member" refusal (a 400), detaching the two pending entries first so the circuit's context
     does not retry them. Not built: D23 did not route the site, and the window is a moderator's click
     against a member's leave.
-  - **Handled elsewhere, not in this list:** `VoteAsync`'s create-create races (both `poll_votes`
+  - **Create-create (chapter number)**, added by WU-ParityAndRemaining (2026-10-13).
+    `CreateChapterAsync` reads `MAX(chapter_number) + 1` and inserts; two concurrent creates on one
+    story read the same number and the loser hits `ix_chapters_story_id_chapter_number` as a 500. The
+    WU made the create one transaction (no orphan pointer) but did not change the numbering; at Read
+    Committed the transaction does not serialize the read. Fix shape: catch 23505 on that index and
+    retry the delegate once, or take the story row `FOR UPDATE` first.
+  - **Handled elsewhere, not in this list:** `CreateGroupAsync`'s duplicate-name race is a 400 since
+    WU-ParityAndRemaining (2026-10-13; the index-named backstop). `VoteAsync`'s create-create races (both `poll_votes`
     unique indexes) and its delete-delete race are never a 500 since WU-PollVoteIntegrity (2026-10-13),
     which made single-choice a database constraint (D23's poll row). Each answers a 400, except that
     since its review fixes a race whose rows already stand as asked (the voter's own double submit)
@@ -1696,6 +1703,18 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     `PrivateMessageEmailTests.ABannedRecipient_IsMailedOncePerConversation_AndNeverAgain`.
   - Each answer is a one-line change in `PrivateMessageEmailComposer` / `User` / the bodies.
 
+- [ ] **F26 — Owner edits to taken-down content: freeze, or let the author remediate?** `[decision · low · beta]` — *Filed 2026-10-13 by WU-ParityAndRemaining (its spec's X10). Promoted the same day to `roadmap.md` decision row 29.*
+  - Grid: no cell moves on its account (F23/F26 L2, F4 L2, F35 L2 and F28 L2 stay 5).
+  - Source: service audit §2.12, `EditCommentAsync` clause 2 ("no takedown check — author can rewrite a
+    moderation-frozen comment"). The same shape is in `UpdateStoryAsync`, the profile blog-post update
+    and the recommendation edit: each checks ownership only. Editing in a context that has since become
+    invisible to the author is the same class.
+  - Tension: `content-safety.md` §"Content Removal" sends the author `NotifyContentRemovedAsync` "so
+    they can often fix it", which reads as remediation; the audit reads the takedown as a freeze. No
+    takedown-reversal path is built, so a remediated item stays hidden either way.
+  - As built: edits allowed (the status quo). A freeze is one `IsTakenDown` guard per edit method plus
+    a refusal message; remediation needs a re-review path first.
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1802,7 +1821,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Unblocked 2026-07-31: H10 had the whole `/Account/*` funnel returning 500, so none of these
     flows could be driven at all until it was fixed. Natural next candidate.
 
-- [ ] **H12 — Story-lifecycle UI: browser-verified 2026-09-30; one WASM re-check waits on WU-ParityAndRemaining P1** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available. Narrowed 2026-09-30 by the WU-StoryLifecycle browser pass.*
+- [ ] **H12 — Story-lifecycle UI: browser-verified 2026-09-30; one WASM re-check, now step 1 of H37** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available. Narrowed 2026-09-30 by the WU-StoryLifecycle browser pass. P1 landed 2026-10-13 (WU-ParityAndRemaining); the re-check is folded into **H37** step 1, and closing H37 closes this entry.*
   - Grid: **F4, F47 and F48 L4.5 are back at 5.** The review fixes had flipped them 5→1; the browser
     pass drove all four surfaces this entry listed, on circuit and WASM against `psql`:
     1. the lifecycle panel (untrusted and trusted submit, withdraw, revise, published moves, the
@@ -1819,6 +1838,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     P1 to fix. Once P1 lands, re-drive one refused lifecycle move and one refused save on WASM and
     confirm the server's sentence arrives; then close this entry. Moderator messages already
     round-trip.
+  - **P1 landed (WU-ParityAndRemaining, 2026-10-13).** A validation 400 now carries an `errors` array
+    and the WASM client rebuilds the exception from it; Integration
+    `ApiErrorEnvelopeTests.StoryCreate_TheWasmClientRebuildsTheSameErrorList_TheCircuitShows` drives the
+    real client over the real host. No browser was available, so the live re-drive is **H37** step 1.
 
 - [x] **H13 — Access-gate sweep behavior: browser-verified 2026-09-30 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available. Closed 2026-09-30 by its browser pass.*
   - Grid: F16, F20, F23, F35, F36, F37, F44, F49 — all unchanged. This WU flipped no L4.5 cell (F16's
@@ -2418,6 +2441,33 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - The defect it named, `NotificationSettingsPage`'s category toggles with no catch, was already
     H17's first bullet. Its detail (no rollback, the same-file precedent, the test location) now lives
     there. The id stays retired so citations of it resolve here; track the work under **H17**.
+
+- [ ] **H37 — WU-ParityAndRemaining browser pass: WASM error lists, the edited marker and edit spoiler toggle, the deleted participant, the client config, the re-split** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ParityAndRemaining, which ran with no browser available. Closing it closes **H12**.*
+  - Grid: **F24, F26 and F49 L4.5 went 5→1** (new markup). F3, F4, F7, F33 and F63 stay 5 (no markup
+    changed), but their WASM steps are below. Returns F24/F26/F49 L4.5 to 5.
+  - Steps (force WASM by a revisit; force the circuit by clearing the Auto-mode localStorage hash and a
+    full load; check writes with `psql`):
+    1. **WASM error lists (H12's re-check).** On `/story/new`, Save with an empty form: the editor
+       lists each missing field (title, descriptions, Setting, Genre) as on the circuit, not "Story
+       validation failed.". Then refuse one lifecycle move (submit a story whose "Status when
+       published" is not an entry status) and confirm the server's sentence.
+    2. **"(edited)".** Edit one of your chapter comments' text: a muted "(edited)" follows the date,
+       its tooltip names the day; `base_comments.date_edited` is set. Save again without changing
+       anything: the column is unchanged.
+    3. **Edit spoiler toggle.** Edit a chapter root comment: the toggle appears, seeded from the
+       comment; tick it, Save: the comment blurs and `chapter_comments.is_spoiler` is true. Edit a reply,
+       a blog-post comment and a profile comment: no toggle, and Save succeeds.
+    4. **Deleted participant.** With a conversation whose other participant was deleted (delete a seeded
+       user's account), the list row and the thread header show the default avatar and a muted
+       "[deleted user]", with no profile link. Both render phases.
+    5. **Client config.** On a WASM load, the network panel shows one `GET /api/client-config` (200,
+       `{"spriteBaseUrl":"/sprites/themes"}`) before the first API call, and tag sprites still render.
+    6. **Anonymous reader.** Signed out, on WASM, scroll chapter 1 of a story past 90%, and the last
+       chapter of a Completed story: no `POST` to the USI start/complete routes and no console error.
+    7. **Re-split on WASM.** Import a multi-chapter document ("One file, many chapters"), switch the
+       delimiter: the drafts keep their titles and text (they came back blank before).
+    8. **Legacy encoding.** Import a `.txt` saved as Windows-1252 with curly quotes: they read correctly
+       and the review panel shows the "wasn't saved as UTF-8" warning.
 
 ---
 

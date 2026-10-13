@@ -117,6 +117,6 @@ public sealed class ClientGroupWriteService(HttpClient http)
         }
 
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new GroupValidationException([detail]));
+            response, errs => new GroupValidationException([.. errs]));
     }
 }

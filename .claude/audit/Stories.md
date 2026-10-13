@@ -114,7 +114,11 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   lifecycle move goes through `TransitionStatusAsync` (author) or approve/reject (moderator).
   `PostApprovalStatus` stays an ordinary editable property. Rule of record: `layer2-services.md`
   §"Story Lifecycle".
-- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); browser-driven on both render phases with `psql` by its browser pass the same day, on Local and on Garage; see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+- **L2 — Stage 5 (the structured-tag gate trusts only `Tag` rows and refuses a doubled pairing member,
+  WU-ParityAndRemaining 2026-10-13 — Integration-tested, stage unchanged, rule and Stage note in
+  `audit/Tags.md` Feature 12; a refused save's error list now reaches WASM line for line instead of
+  "Story validation failed." (service audit §2.7.1), Unit- and Integration-tested — the
+  WU-ParityAndRemaining note under Feature 4's Stage notes; re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); browser-driven on both render phases with `psql` by its browser pass the same day, on Local and on Garage; see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -201,6 +205,24 @@ Rule of record: `layer2-services.md` §"Author story deletion".
 - **L6 — Stage 5 (WU-L6, 2026-07-07 — resolved, no creation-side DDL).** The write path needs no
   index beyond the existing PK/unique/slug set; the story-table read indexes ("to be added by
   query need") landed as the sort spines under Feature 5 (see its L6 note).
+
+### Feature 4 — WU-ParityAndRemaining Stage note (2026-10-13) — no flip: a refused save reads the same on WASM
+
+Service audit §2.7.1, worst for stories: the server put a validation exception's error list into
+`ProblemDetails.Detail` only, joined, and `StoryValidationException`'s message is the fixed "Story
+validation failed.", so on WASM a refused save or transition showed that sentence instead of the
+errors (the gap WU-StoryLifecycle's browser pass recorded; tracker **H12**). Since 2026-10-13
+`EndpointHelpers.ExecuteAsync` adds an `errors` string array for every `CanalaveValidationException`,
+and `ClientHttpHelpers.ThrowIfWriteFailedAsync` feeds it to the client's factory, now
+`Func<IReadOnlyList<string>, Exception>` — a compile-enforced sweep of every client validation factory
+(list families pass the list; Tag, Import and the BCL types join it). The read is tolerant: any other
+`errors` shape, or none, falls back to `[detail]`. Rule: `layer5-wasm.md` §"The Error-Translation
+Contract", `error-handling.md` §"The API error envelope". Tier: Unit `ValidationErrorsWireContractTests`
+(11: both server halves, the round trip, the joined family, five fallback shapes, two non-JSON bodies)
+and Integration `ApiErrorEnvelopeTests` (+3: `POST /api/stories` carries every `CanSave` message; the
+real `ClientStoryWriteService` over the real host rebuilds the exact list; a non-validation 400 has no
+`errors`). Mutation-checked by suppressing the extension. No browser was available: H12's remaining WASM
+re-check is now step 1 of tracker **H37**. F4 L4.5 stays 5 (no markup changed).
 
 ### Feature 4 / Feature 5 — WU-StoryLifecycle Stage note (2026-09-30) — the story lifecycle is enforced; publish dates mean "first went live"
 

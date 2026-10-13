@@ -367,10 +367,17 @@ builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadServi
 builder.Services.AddScoped<ITreeSearchReadService, ServerTreeSearchReadService>();
 // Manual Tree Search (Feature 33 / WU40): stateless degree-1 pivots over live tables.
 builder.Services.AddScoped<IManualTreeSearchReadService, ServerManualTreeSearchReadService>();
+// The deploy-time settings the WASM client must honor, read ONCE here (layer5-wasm.md §"Server
+// configuration the client needs"; WU-ParityAndRemaining). The server's own consumers below and
+// GET /api/client-config (ClientConfigEndpoints) both read this one instance, so the circuit and the
+// WASM client cannot disagree — the sprite seam's "one config value is the complete cutover" holds on
+// both render phases.
+ClientConfigDto clientConfig = new(
+    SpriteBaseUrl: builder.Configuration["Sprites:BaseUrl"] ?? ClientConfigDto.DefaultSpriteBaseUrl);
+builder.Services.AddSingleton(clientConfig);
 // Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
 // SpriteBaseUrl defaults to /sprites/themes (dev wwwroot); override in production for R2/CDN.
-var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes";
-builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(spriteBaseUrl));
+builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(clientConfig.SpriteBaseUrl));
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
 // Tag hierarchy roll-up map (WU-ApplyFiltersPurity, closes hidden-deferrals-tracker B12) — the
@@ -698,6 +705,8 @@ app.MapAdditionalIdentityEndpoints();
 
 // Mature-content consent endpoints (Feature 66, WU-AccessGate).
 app.MapContentGateEndpoints();
+// GET /api/client-config — anonymous; the WASM host reads it once at boot (ClientConfigEndpoints).
+app.MapClientConfigEndpoints();
 
 // One-click unsubscribe for notification email (WU-NotifEmail). Mapped unconditionally, unlike the
 // worker: a link mailed while Email:Provider was "Smtp" must keep working on a host that has since

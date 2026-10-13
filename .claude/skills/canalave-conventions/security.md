@@ -82,6 +82,23 @@ which is expected, not a regression. Constants live on `ImageUploadProcessor`.
   `ImageUploadProcessorAdvisoryTests` guards the TIFF and ICC halves with the advisories' own
   payloads.
 
+### Archive imports (EPUB / DOCX)
+
+Chapter import (Feature 63) reads two ZIP containers: EPUB and DOCX. `ImportLimits.MaxFileBytes`
+(20 MB) bounds the **upload**, but a compressed size bounds nothing about the decompressed size — a
+kilobyte-scale entry can inflate to gigabytes, and a parser that reads it holds all of it. So after
+the ZIP magic sniff, **both** paths call `ArchiveGuard.EnsureWithinLimits`
+(`Server/Import/`, WU-ParityAndRemaining, 2026-10-13):
+- **Entry cap:** more than `ImportLimits.MaxArchiveEntries` (10 000) entries → `ImportException`.
+- **Decompressed-byte cap:** every entry is stream-decompressed into a counting sink, and the read
+  aborts the moment the running total passes `ImportLimits.MaxDecompressedBytes` (100 MB — 5× the
+  upload cap; a million-word story is about 6 MB of text) → `ImportException`. It counts the **real**
+  bytes, never the central directory's declared sizes, which the uploader controls.
+- A malformed archive (`InvalidDataException`) is an `ImportException` too, with the same friendly text.
+- Cost: a legitimate archive is decompressed twice (guard, then parser). Bounded by the cap and by the
+  `ImportParse` concurrency limiter.
+`ImportLimits.MaxEpubChapters` is a spine-length cap, not a bomb guard.
+
 ## Write Throttling (service layer — the transport-agnostic boundary)
 
 **Why the service layer:** user writes reach L2 services over BOTH transports — the SignalR

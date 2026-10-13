@@ -27,6 +27,11 @@ public class ServerGroupWriteService(
     private const string GroupStoryIndex = "ix_group_stories_group_id_story_id";
     private const string FolderNameIndex = "ix_group_folders_group_id_parent_folder_id_name";
     private const string FolderParentForeignKey = "fk_group_folders_group_folders_parent_folder_id";
+    private const string GroupNameIndex = "ix_groups_group_name";
+
+    /// <summary>The refusal for a name another group already holds (byte-wise, the index's
+    /// comparison; case-insensitive names are D29, pending).</summary>
+    internal static string GroupNameTakenMessage(string name) => $"A group named “{name}” already exists.";
 
     // ── Group CRUD ────────────────────────────────────────────────────────────────
 
@@ -47,28 +52,47 @@ public class ServerGroupWriteService(
             ? sanitizer.Sanitize(dto.Description)
             : null;
 
+        // A taken name is a refusal, not the unique index's raw 500 (service audit §2.12). `==` is
+        // Postgres `=`, byte-wise — exactly ix_groups_group_name's comparison (layer2-services.md
+        // §"Group Rating Waterfall" → "Group names are unique"; D29 owns case-insensitivity).
+        string name = dto.GroupName.Trim();
+        if (await writeDb.Groups.AnyAsync(g => g.GroupName == name))
+            throw new GroupValidationException([GroupNameTakenMessage(name)]);
+
+        DateTime now = DateTime.UtcNow;
         Group group = new()
         {
             CreatorId       = creatorId,
-            GroupName       = dto.GroupName.Trim(),
+            GroupName       = name,
             Description     = sanitizedDesc,
             AudienceRating  = audienceRating,
             MaxContentRating = maxContentRating,
-            DateCreated     = DateTime.UtcNow
+            DateCreated     = now
         };
-
-        writeDb.Groups.Add(group);
-        await writeDb.SaveChangesAsync();
-
-        // Creator is automatically the first Admin member.
-        writeDb.GroupMembers.Add(new GroupMember
+        // The creator is the first Admin member, added through the navigation so the group and its
+        // admin commit in ONE SaveChanges (one implicit transaction). Two saves left an admin-less
+        // group behind when the second failed (service audit §2.12).
+        GroupMember creatorMembership = new()
         {
-            GroupId    = group.GroupId,
             UserId     = creatorId,
             Role       = GroupRole.Admin,
-            DateJoined = DateTime.UtcNow
-        });
-        await writeDb.SaveChangesAsync();
+            DateJoined = now
+        };
+        group.GroupMembers.Add(creatorMembership);
+        writeDb.Groups.Add(group);
+
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, GroupNameIndex))
+        {
+            // A concurrent create took the name after the pre-check. Same refusal; detach both rows so
+            // the circuit-scoped context never retries them on its next save.
+            writeDb.Entry(creatorMembership).State = EntityState.Detached;
+            writeDb.Entry(group).State = EntityState.Detached;
+            throw new GroupValidationException([GroupNameTakenMessage(name)]);
+        }
 
         // Creating a group counts as joining it (owner ruling D24): the creator's row IS a
         // group_members row, and the recompute (COUNT(*) FROM group_members) counts it. Without this
@@ -93,12 +117,28 @@ public class ServerGroupWriteService(
 
         (Rating audienceRating, Rating maxContentRating) = GroupAudienceTypeMapper.ToRatings(dto.AudienceType);
 
-        group.GroupName       = dto.GroupName.Trim();
+        // Renaming onto another group's name: the same refusal as create, instead of a raw 500. Keeping
+        // its own name is not a clash.
+        string name = dto.GroupName.Trim();
+        if (await writeDb.Groups.AnyAsync(g => g.GroupName == name && g.GroupId != dto.GroupId))
+            throw new GroupValidationException([GroupNameTakenMessage(name)]);
+
+        group.GroupName       = name;
         group.Description     = dto.Description is not null ? sanitizer.Sanitize(dto.Description) : null;
         group.AudienceRating  = audienceRating;
         group.MaxContentRating = maxContentRating;
 
-        await writeDb.SaveChangesAsync();
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, GroupNameIndex))
+        {
+            // A concurrent create or rename took the name after the pre-check. Detach the pending edit
+            // so the circuit's next save does not retry it; the next read reloads the stored row.
+            writeDb.Entry(group).State = EntityState.Detached;
+            throw new GroupValidationException([GroupNameTakenMessage(name)]);
+        }
     }
 
     // ── Membership ────────────────────────────────────────────────────────────────

@@ -34,6 +34,6 @@ public sealed class ClientBadgeWriteService(HttpClient http) : ClientBadgeReadSe
     {
         HttpResponseMessage response = await Http.PutAsJsonAsync("api/badges/display-order", orderedVisibleKeys);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new BadgeValidationException([detail]));
+            response, errs => new BadgeValidationException([.. errs]));
     }
 }

@@ -10,8 +10,11 @@ namespace TheCanalaveLibrary.Core;
 /// (<c>webp → png → unknown.png</c>).</para>
 ///
 /// <para>The base URL comes from configuration (<c>Sprites:BaseUrl</c>, defaulting to
-/// <c>/sprites/themes</c>). R2/CDN cutover = change that one value + Rclone sync, zero
-/// code change needed here.</para>
+/// <see cref="ClientConfigDto.DefaultSpriteBaseUrl"/>). The server reads it once into its
+/// <see cref="ClientConfigDto"/> singleton; the WASM client receives the same value from
+/// <c>GET /api/client-config</c> at boot (<c>ClientRuntimeConfig</c>; WU-ParityAndRemaining,
+/// 2026-10-13). So an R2/CDN cutover is that one value + an Rclone sync on both render phases, with
+/// zero code change here.</para>
 /// </summary>
 public sealed class OptimisticSpriteReadService(string baseUrl) : ISpriteReadService
 {

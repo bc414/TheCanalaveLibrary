@@ -127,8 +127,11 @@ no JSON contract to protect).
 
 **Client side.** `ClientHttpHelpers` is the single translation seam: `ThrowIfWriteFailedAsync`
 covers writes, `ThrowIfReadFailedAsync` (added by this WU) covers reads with no per-feature
-validation type. Both read the envelope's `traceId` off the response body. Two new Core
-exception types complete the table:
+validation type. Both read the envelope's `traceId` off the response body. A validation 400 also
+carries an **`errors`** extension — the exception's whole error list — and the client rebuilds the
+feature's exception from it, so a form shows the same bullets on WASM as on the circuit
+(WU-ParityAndRemaining, 2026-10-13; `layer5-wasm.md` §"The Error-Translation Contract" has the
+tolerant read and the factory shape). Two new Core exception types complete the table:
 
 | Status | Exception | Note |
 |---|---|---|

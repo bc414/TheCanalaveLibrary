@@ -35,5 +35,5 @@ public sealed class ClientSpotlightSlotAllocator(HttpClient http) : ISpotlightSl
             $"api/spotlight-slots/recent-grants?take={take}") ?? [];
 
     private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new SpotlightValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new SpotlightValidationException([.. errs]));
 }

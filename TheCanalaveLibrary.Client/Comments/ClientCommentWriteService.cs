@@ -70,5 +70,5 @@ public sealed class ClientCommentWriteService(HttpClient http)
     /// shared MA-008 shape, including the 429 write-throttle reconstruction.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            msg => new CommentValidationException([msg]));
+            errs => new CommentValidationException([.. errs]));
 }

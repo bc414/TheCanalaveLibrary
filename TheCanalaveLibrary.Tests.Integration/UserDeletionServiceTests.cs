@@ -369,11 +369,13 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
         SetActiveUser(b);
         IMessagingReadService messaging = scope.ServiceProvider.GetRequiredService<IMessagingReadService>();
         ConversationThreadDto thread = await messaging.GetConversationThreadAsync(conversationId, page: 1, pageSize: 20);
-        thread.OtherParticipant.Username.Should().Be("[deleted user]");
+        // No fabricated participant (service audit §2.12; WU-ParityAndRemaining): the UI renders the
+        // deleted state from null, never from a made-up id 0 that could become a /user/0 link.
+        thread.OtherParticipant.Should().BeNull();
         thread.Messages.Where(m => m.SenderUserId is null).Should().HaveCount(2)
             .And.OnlyContain(m => m.SenderUsername == "[deleted user]" && !m.IsOwnMessage);
         (await messaging.GetConversationsAsync()).Should().ContainSingle(c => c.ConversationId == conversationId)
-            .Which.OtherParticipant.Username.Should().Be("[deleted user]");
+            .Which.OtherParticipant.Should().BeNull();
     }
 
     [Fact]

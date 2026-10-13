@@ -13,7 +13,7 @@ public class ClientFanonWriteService(HttpClient http) : ClientFanonReadService(h
     public async Task<int> LinkGroupAsync(FanonLinkCreateDto dto)
     {
         HttpResponseMessage response = await Http.PostAsJsonAsync("api/fanon/links", dto);
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
@@ -21,21 +21,21 @@ public class ClientFanonWriteService(HttpClient http) : ClientFanonReadService(h
     {
         HttpResponseMessage response = await Http.PostAsync(
             $"api/fanon/links/notify?name={Uri.EscapeDataString(name)}&baseTagId={baseTagId}", null);
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
     public async Task<AdoptResultDto> AdoptAsync(int targetTagId, int storyId)
     {
         HttpResponseMessage response = await Http.PostAsync($"api/fanon/adopt/{targetTagId}/story/{storyId}", null);
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await response.Content.ReadFromJsonAsync<AdoptResultDto>() ?? new AdoptResultDto(0, 0);
     }
 
     public async Task<AdoptResultDto> AdoptAllAsync(int targetTagId)
     {
         HttpResponseMessage response = await Http.PostAsync($"api/fanon/adopt/{targetTagId}/all", null);
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await response.Content.ReadFromJsonAsync<AdoptResultDto>() ?? new AdoptResultDto(0, 0);
     }
 
@@ -43,6 +43,6 @@ public class ClientFanonWriteService(HttpClient http) : ClientFanonReadService(h
     {
         HttpResponseMessage response = await Http.PutAsync(
             $"api/fanon/adopt/{targetTagId}/dismissed?dismissed={(dismissed ? "true" : "false")}", null);
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
     }
 }

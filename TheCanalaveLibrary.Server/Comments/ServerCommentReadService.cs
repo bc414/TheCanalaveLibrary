@@ -75,7 +75,8 @@ public class ServerCommentReadService(
                 c.IsSpoiler,
                 // EXISTS subquery for per-viewer like state. Always false for anonymous — EF won't
                 // emit a join when currentUserId is null because the outer && short-circuits.
-                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId),
+                c.DateEdited))
             .ToListAsync();
 
         // In-memory ordering: roots DatePosted DESC (per rootIds order), replies DatePosted ASC.
@@ -142,7 +143,8 @@ public class ServerCommentReadService(
                 c.LikeCount,
                 // Group comments have no spoiler flag — always false.
                 false,
-                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId),
+                c.DateEdited))
             .ToListAsync();
 
         Dictionary<long, int> rootOrder = rootIds
@@ -205,7 +207,8 @@ public class ServerCommentReadService(
                 c.LikeCount,
                 // Profile-wall comments have no spoiler flag — always false.
                 false,
-                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId),
+                c.DateEdited))
             .ToListAsync();
 
         Dictionary<long, int> rootOrder = rootIds
@@ -267,9 +270,10 @@ public class ServerCommentReadService(
                 c.CommentText,
                 c.DatePosted,
                 c.LikeCount,
-                // Blog-post comments have no spoiler flag — always false (IsSpoiler is BaseComment).
+                // Blog-post comments have no spoiler flag — always false (IsSpoiler is on ChapterComment only).
                 false,
-                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId),
+                c.DateEdited))
             .ToListAsync();
 
         Dictionary<long, int> rootOrder = rootIds

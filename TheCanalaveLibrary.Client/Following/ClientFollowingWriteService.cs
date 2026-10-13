@@ -56,5 +56,5 @@ public sealed class ClientFollowingWriteService(HttpClient http)
 
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new FollowingValidationException([detail]));
+            response, errs => new FollowingValidationException([.. errs]));
 }

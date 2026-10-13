@@ -24,6 +24,6 @@ public sealed class ClientReportSubmissionService(HttpClient http) : IReportSubm
     {
         HttpResponseMessage response = await http.PostAsJsonAsync("api/moderation/reports", request);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            detail => new ModerationValidationException([detail]));
+            errs => new ModerationValidationException([.. errs]));
     }
 }

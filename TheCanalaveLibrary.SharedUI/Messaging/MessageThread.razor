@@ -21,14 +21,22 @@ else
         @* Header *@
         <div class="flex items-center gap-3 border-b border-(--color-border) px-4 py-3">
             @* alt="" (WU-A11y, 2026-07-31): the adjacent name <p> already carries the name. *@
-            <img src="@Thread.OtherParticipant.AvatarUrl"
+            <img src="@(Thread.OtherParticipant?.AvatarUrl ?? DefaultAvatarUrl)"
                  alt=""
                  class="h-9 w-9 rounded-full object-cover"
-                 data-fallback-src="/img/default-avatar.svg" />
+                 data-fallback-src="@DefaultAvatarUrl" />
             <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-(--color-text)">
-                    @Thread.OtherParticipant.Username
-                </p>
+                @if (Thread.OtherParticipant is { } other)
+                {
+                    <p class="truncate text-sm font-semibold text-(--color-text)">
+                        @other.Username
+                    </p>
+                }
+                else
+                {
+                    @* Deleted account (OtherParticipant null since WU-ParityAndRemaining). *@
+                    <p class="truncate text-sm text-(--color-text-muted)">[deleted user]</p>
+                }
                 <p class="truncate text-xs text-(--color-text-muted)">
                     @Thread.Subject
                 </p>
@@ -91,6 +99,8 @@ else
 }
 
 @code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
     /// <summary>
     /// The current thread data. Messages should be newest-first for correct flex-col-reverse
     /// rendering. When null, a "no conversation selected" placeholder is shown.

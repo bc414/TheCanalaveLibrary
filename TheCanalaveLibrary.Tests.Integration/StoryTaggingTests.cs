@@ -256,6 +256,111 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
         await act.Should().ThrowAsync<StoryValidationException>("pairing member index out of range");
     }
 
+    // ── Tag existence and stored type (service audit §2.12; WU-ParityAndRemaining) ─────
+    // ValidateStructuredTagGatesAsync's first block trusts only Tag rows. Before it, a forged
+    // TagTypeEnum passed CanSave's required-Setting/Genre rule, a missing id reached the database as a
+    // raw FK DbUpdateException (a 500), and a Character tag in StoryTags or a non-Character tag as a
+    // CharacterTagId was stored silently.
+
+    [Fact]
+    public async Task CreateStory_AForgedTagType_IsRefused()
+    {
+        // No real Setting tag: the ContentWarning tag claims to be one, so CanSave's
+        // "at least one Setting" rule passed on the DTO's word.
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(flatTagsInsteadOfTheDefaults:
+        [
+            new StoryTagDTO { TagId = _cwTagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary },
+            new StoryTagDTO { TagId = _genreTagId, TagTypeEnum = TagTypeEnum.Genre, Priority = TagPriority.Primary },
+        ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains(_cwTagId.ToString()) && e.Contains("stored type"));
+        (await StoryCountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateStory_ANonexistentTagId_IsAValidationRefusal_NotAForeignKeyFault()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(extraFlatTags:
+        [
+            new StoryTagDTO { TagId = int.MaxValue, TagTypeEnum = TagTypeEnum.Genre, Priority = TagPriority.Supporting }
+        ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().Contain($"Tag(s) {int.MaxValue} don't exist.");
+    }
+
+    [Fact]
+    public async Task CreateStory_ANonexistentCharacterTagId_IsAValidationRefusal()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = int.MaxValue - 1 }
+        ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().Contain($"Tag(s) {int.MaxValue - 1} don't exist.");
+    }
+
+    [Fact]
+    public async Task CreateStory_ACharacterTagInTheFlatTagList_IsRefused()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(extraFlatTags:
+        [
+            new StoryTagDTO { TagId = _charTagId, TagTypeEnum = TagTypeEnum.Character, Priority = TagPriority.Primary }
+        ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains("character tags"));
+        (await StoryCountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateStory_AGenreTagAsACharacter_IsRefused()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = _genreTagId }
+        ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().Contain($"Tag(s) {_genreTagId} aren't character tags.");
+        (await StoryCountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateStory_APairingListingOneCharacterTwice_IsRefused_NotARawPrimaryKeyFault()
+    {
+        // [0, 0, 1] has two distinct members, so the ≥2 rule passed, and the mapper then added two
+        // members with one primary key — a DbUpdateException (500) before WU-ParityAndRemaining.
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(
+            characters:
+            [
+                new StoryCharacterDto { CharacterTagId = _charTagId },
+                new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId },
+            ],
+            pairings:
+            [
+                new StoryCharacterPairingDto { PairingType = CharacterPairingType.Romantic, MemberIndexes = [0, 0, 1] }
+            ]);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().Equal(["A pairing can't list the same character twice."]);
+    }
+
+    private async Task<int> StoryCountAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Stories
+            .CountAsync(s => s.AuthorId == _authorId);
+    }
+
     // ── Pairing persistence ────────────────────────────────────────────────────
 
     [Fact]
@@ -409,14 +514,17 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
     private async Task<int> CreateStoryViaServiceAsync(
         IReadOnlyList<StoryCharacterDto>? characters = null,
         IReadOnlyList<StoryCharacterPairingDto>? pairings = null,
-        IReadOnlyList<StoryTagDTO>? extraFlatTags = null)
+        IReadOnlyList<StoryTagDTO>? extraFlatTags = null,
+        IReadOnlyList<StoryTagDTO>? flatTagsInsteadOfTheDefaults = null)
     {
-        List<IStoryTag> flatTags =
-        [
-            new StoryTagDTO { TagId = _settingTagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary },
-            new StoryTagDTO { TagId = _genreTagId, TagTypeEnum = TagTypeEnum.Genre, Priority = TagPriority.Primary },
-            ..( extraFlatTags ?? [])
-        ];
+        List<IStoryTag> flatTags = flatTagsInsteadOfTheDefaults is not null
+            ? [.. flatTagsInsteadOfTheDefaults]
+            :
+            [
+                new StoryTagDTO { TagId = _settingTagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary },
+                new StoryTagDTO { TagId = _genreTagId, TagTypeEnum = TagTypeEnum.Genre, Priority = TagPriority.Primary },
+                ..( extraFlatTags ?? [])
+            ];
 
         CreateStoryDTO dto = new()
         {

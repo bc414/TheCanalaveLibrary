@@ -93,7 +93,9 @@ public static class StoryMappers
         actualStory.StoryDetail.PostApprovalStatus = tempStory.PostApprovalStatus;
 
         // ── StoryTags (Genre / ContentWarning / CrossoverFandom / Setting flat rows) ──
-        // ContentWarning gets no priority picker — server coerces it to Primary regardless.
+        // ContentWarning gets no priority picker — server coerces it to Primary regardless. The DTO's
+        // TagTypeEnum is trustworthy here because the server proved it equals Tag.TagTypeId first
+        // (ValidateStructuredTagGatesAsync, WU-ParityAndRemaining).
         actualStory.StoryTags.Clear();
         foreach (IStoryTag tempTag in tempStory.StoryTags)
         {
@@ -125,6 +127,11 @@ public static class StoryMappers
 
         // ── StoryCharacterPairings (members reference rebuilt StoryCharacter rows BY INDEX —
         //    WU-TagFanon: tag ids are ambiguous once two OCs share a species) ──
+        // The in-range check below is defensive only and never decides a rule: the WU37 pairing rules
+        // (≥2 distinct members, every member in range, no member listed twice) are enforced upstream by
+        // ServerStoryWriteService.ValidateStructuredTagGatesAsync before this mapper runs, and a
+        // violating DTO is refused there, not silently trimmed here (layer2-services.md §"Legality
+        // rules"; service audit §4 #5 resolved by enforcing, WU-ParityAndRemaining 2026-10-13).
         foreach (StoryCharacterPairingDto pairingDto in tempStory.StoryCharacterPairings)
         {
             StoryCharacterPairing pairing = new()

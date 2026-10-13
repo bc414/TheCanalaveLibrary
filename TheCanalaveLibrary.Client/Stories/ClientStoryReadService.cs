@@ -60,7 +60,7 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
         // write-shaped translator is reused here (not ThrowIfReadFailedAsync) because this is the
         // one story read with a genuine validation factory to reconstruct.
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new StoryValidationException([detail]));
+            response, errs => new StoryValidationException([.. errs]));
         PagedResult<StoryListingDto> result =
             (await response.Content.ReadFromJsonAsync<PagedResult<StoryListingDto>>())!;
         return (result.Items, result.TotalCount);
@@ -82,7 +82,7 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
         HttpResponseMessage response =
             await Http.PostAsJsonAsync($"api/stories/random-batch?batchSize={batchSize}", filter);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new StoryValidationException([detail]));
+            response, errs => new StoryValidationException([.. errs]));
         return await response.Content.ReadFromJsonAsync<StoryListingDto[]>() ?? [];
     }
 
@@ -94,7 +94,7 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
         string query = string.Join('&', candidateIds.Select(id => $"candidateIds={id}"));
         HttpResponseMessage response = await Http.PostAsJsonAsync($"api/stories/filter-candidates?{query}", filter);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new StoryValidationException([detail]));
+            response, errs => new StoryValidationException([.. errs]));
         return await response.Content.ReadFromJsonAsync<List<int>>() ?? [];
     }
 

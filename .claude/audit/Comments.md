@@ -27,6 +27,18 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `CommentWriteServiceTests.DeleteComment_ReparentsReplies_ToTopLevel` (Integration).
 
 ## Feature 23 — Comment Posting
+- **Settled — one-level threading is service-enforced (worksheet D12's "Left open" paragraph names
+  service audit §2.12 as its home; built WU-ParityAndRemaining, 2026-10-13).** A reply's parent must be
+  top-level; every `Post*CommentAsync` refuses a reply-to-a-reply with `CommentValidationException`
+  (400) after its same-context parent check. `CommentSection` withholding Reply from replies is the
+  affordance, not the guard. Rule: `layer2-services.md` §"Group Comments — Per-Context Method Pattern"
+  → "Rules every context shares", which also carries the edit rules below (Feature 26).
+- **Settled — comment edits (WU-ParityAndRemaining, 2026-10-13; service audit §2.12 `EditCommentAsync`
+  clauses 3–4).** `BaseComment.DateEdited` is stamped only on a real change (text or spoiler flag) and
+  rendered as a muted "(edited)"; `UpdateCommentDto.IsSpoiler` (`bool?`, null = unchanged) is legal on
+  chapter comments only. The other two clauses are not built: no edit throttle (D20 — edits exempt,
+  conditional on text caps) and no takedown check (owner-open — `roadmap.md` decision row 29, tracker
+  F26).
 - **Settled — FK posture (owner rulings D10 and D12, 2026-08-06; built WU-TptHardDelete 2026-09-30).**
   A content parent's FK to its comment child table is RESTRICT (`chapter_comments.chapter_id`,
   `blog_post_comments.blog_post_id`, `group_comments.group_id`; `user_profile_comments.profile_user_id`
@@ -76,7 +88,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
-- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
+- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note; one-level threading service-enforced in all four contexts since WU-ParityAndRemaining, 2026-10-13 — see the Features 23 + 24 + 26 Stage note below Feature 26):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
   in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
   `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
   verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
@@ -162,7 +174,11 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
 - Narrative: `audit/AccessGate.md` F66.
 
 ## Feature 24 — Comment Display & Pagination
-- **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
+- **L4.5 — Stage 1 (WU-ParityAndRemaining, 2026-10-13).** The "(edited)" marker is new markup on
+  `CommentItem` and no browser was available; tracker **H37** holds the pass. Every other layer below
+  stays 5.
+- **L1 — Stage 5** (`base_comments.date_edited` since WU-ParityAndRemaining, 2026-10-13 — Stage note
+  below Feature 26). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
   (WU-L5Sweep) and the site now runs global InteractiveAuto; comment display + pagination verified
   in a real WASM runtime during the flip's browser wave. Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip. **L6 — Stage 5 (WU-L6, 2026-07-07** — golden index built +
@@ -211,7 +227,8 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
     will supply live `ChapterId`, `CurrentUserId`, `UserHasCompletedStory` when that work-unit builds;
     `CommentSection` is a standalone self-contained injectable region, so standalone-build sign-off
     is sufficient here.
-- **L2 — Stage 5 (WU19, 2026-06-23; column placement verified WU31.5):**
+- **L2 — Stage 5 (WU19, 2026-06-23; column placement verified WU31.5; `CommentDto.DateEdited` projected
+  by all four reads since WU-ParityAndRemaining, 2026-10-13):**
   `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)` in
   `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
   `ChapterComments` DbSet (`DatePosted DESC`); (2) fetch roots-on-page + direct replies in one query,
@@ -275,7 +292,10 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
     showed "♥ 4", the landed count, not the stale 2 + 1. `like_count` read 4, with four like rows.
 
 ## Feature 26 — Spoiler Comments
-- **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.
+- **L4.5 — Stage 1 (WU-ParityAndRemaining, 2026-10-13).** The edit form of a chapter root now offers
+  the spoiler toggle, and no browser was available; tracker **H37** holds the pass.
+- **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23; the edit-time spoiler toggle since
+  WU-ParityAndRemaining, 2026-10-13 — Stage note below):** See Feature 24 Stage-5 note.
   Completion-gated reveal built in `CommentItem`: `HandleRevealClick()` → immediate reveal if
   `UserHasCompletedStory`, else sets `_showSpoilerConfirm` (in-item `ConfirmDialog` — no service
   needed); `_isRevealed` is ephemeral (re-hides on page load, §5.9.1). Blur cover uses Tailwind
@@ -299,7 +319,8 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
   migration also corrected a stale FK name: `fk_base_comments_base_comments_chapter_comment_comment_id` →
   `fk_base_comments_chapter_comments_chapter_comment_comment_id` (was pointing at `base_comments` instead
   of `chapter_comments`). Applied via `DataSeeder.MigrateAsync()` on startup.
-- **L2 — Stage 5 (WU19, 2026-06-23):** `IsSpoiler` flows through `PostChapterCommentDto.IsSpoiler` →
+- **L2 — Stage 5 (WU19, 2026-06-23; editable through `UpdateCommentDto.IsSpoiler` since
+  WU-ParityAndRemaining, 2026-10-13 — Stage note below):** `IsSpoiler` flows through `PostChapterCommentDto.IsSpoiler` →
   `PostChapterCommentAsync` sets `ChapterComment.IsSpoiler` → stored in DB → projected into `CommentDto.IsSpoiler`
   in the read service → surfaces to WU20's `CommentItem` as a `[Parameter]`. No separate write method —
   spoiler flag is set at post time only; editing a comment does not change its spoiler state (WU20 may
@@ -358,6 +379,47 @@ and `CommentSection.HandlePostAsync` clears the composer via `@ref` after a succ
 and edit composers unmount, so only the persistent composer needed this). **Verified:** browser —
 post → comment appears, composer shows placeholder; second post confirms. Not bUnit-coverable
 (Quill JS interop is faked in that tier).
+
+### Features 23 + 24 + 26 — WU-ParityAndRemaining Stage note (2026-10-13): one-level threading enforced; the edited marker and the edit-time spoiler flag
+
+Service audit §2.12's comment items, and the reply-depth defect worksheet D12's "Left open" paragraph
+homed there. Grid: **F24 and F26 L4.5 5→1** (new markup, no browser; tracker **H37**). Every other
+touched cell stays 5: these close gaps beneath sound cells.
+- **F23 L2 — one-level threading.** `ServerCommentWriteService.RequireTopLevelParentAsync` runs in all
+  four `Post*CommentAsync` methods after the same-context parent check: a parent that is itself a reply
+  is a `CommentValidationException` ("Replies can only be made to top-level comments.", 400). Before,
+  only `CommentSection` withholding Reply kept threads one level deep; a direct API call made a depth-3
+  reply no read path renders, and D12's reparent promoted it to root when its parent was deleted. A
+  reply whose parent was later deleted is top-level by then and may be answered. Tier: Integration
+  `CommentThreadingAndEditTests` (a four-context theory, plus the still-legal reply and the
+  reparented case).
+- **F24 L1/L2 — edited marker.** Migration `WU_ParityAndRemaining_CommentDateEdited`: one nullable
+  `base_comments.date_edited` (NULL = never edited, so no backfill; SeedTool's explicit COPY column list
+  leaves it NULL). On the base table, not the children: editing is context-agnostic and this is not a
+  sort key. `EditCommentAsync` stamps it only when the sanitized text or the spoiler flag changes; an
+  identical re-save writes nothing. `CommentDto` gains a trailing `DateEdited`, projected by all four
+  reads. Tier: Integration `CommentThreadingAndEditTests` (stamp, no-op re-save, the read carries it).
+  Migration rehearsed Down and Up on the server-only dev DB.
+- **F24 L3.5/L4 — "(edited)".** `CommentItem` renders a muted "(edited)" after the date, inside the same
+  `text-(--color-text-muted)` metadata span, with a `title` naming the edit date (no new token, no new
+  role). Tier: RazorComponents `CommentItemTests.CommentItem_EditedOnlyWhenTheServerStampedIt`.
+- **F26 L2 — the spoiler flag is editable.** `UpdateCommentDto.IsSpoiler` is `bool?` (null = unchanged).
+  A non-null value on a non-chapter comment is a `CommentValidationException` ("Only chapter comments
+  can be marked as spoilers."), tested on the TPT child `writeDb.BaseComments` materializes. Tier:
+  Integration (persists on a chapter root and stamps; null leaves it; refused on blog/group/profile
+  with nothing written).
+- **F26 L3-Logic — the edit toggle.** `CommentItem` gains `AllowSpoilerEdit`/`EditSpoiler`/
+  `EditSpoilerChanged`, forwarded to `CommentEditor`'s existing toggle. `CommentSection` owns
+  `_editSpoiler` (seeded from the comment on Edit) and offers the toggle on chapter-context roots
+  only; `HandleEditSaveAsync` sends `IsSpoiler` for those and null for everything else. Tier:
+  RazorComponents `CommentSectionTests` (chapter root sends the toggle; a blog edit and a chapter reply
+  send null, the blog edit offers no toggle).
+- **Not built (recorded):** `EditCommentAsync`'s other two §2.12 clauses. No edit throttle: D20 makes
+  edits exempt, conditional on text caps (`security.md` enumeration). No takedown check: owner-open,
+  `roadmap.md` decision row 29 / tracker **F26** (freeze, or let the author remediate, across all four
+  `IModeratableContent` types).
+- Mutation-checked: dropping the depth refusal fails all four theory cases; stamping on a no-op fails
+  the re-save test.
 
 ## L4.5-Browser verification (2026-07-01) — F23 + F24 + F25 + F26 → Stage 5, no new bugs
 

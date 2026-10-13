@@ -108,26 +108,30 @@ public class ServerFanonWriteService(
     /// <summary>
     /// Invite every author of the group's matching rows who has never been told about the target
     /// tag. Drafts count for notification (personal plane) though not for public reach; taken-down
-    /// stories are excluded (the IsTakenDown filter stays active); rows with no author are skipped.
+    /// stories are excluded; rows with no author are skipped. The write context carries no query
+    /// filters (layer2-services.md §"Scalar projections" → "The write context carries no query
+    /// filters"), so the takedown exclusion is the explicit <c>!IsTakenDown</c> below. This doc used to
+    /// claim an "IsTakenDown filter" stayed active; there was none, and moderator-removed stories drew
+    /// adoption invites (service audit §2.12; fixed WU-ParityAndRemaining, 2026-10-13).
     /// </summary>
     private async Task<int> NotifyNewAuthorsCoreAsync(FanonLink link, TagTypeEnum axis)
     {
         List<int> authorIds = axis == TagTypeEnum.Character
             ? await writeDb.StoryCharacters
-                .IgnoreQueryFilters(["ContentRating"])
                 .Where(sc => sc.CharacterTagId == link.BaseTagId
                     && sc.CustomName != null
                     && sc.CustomName!.ToLower().Trim() == link.NormalizedName
-                    && sc.Story.AuthorId != null)
+                    && sc.Story.AuthorId != null
+                    && !sc.Story.IsTakenDown)
                 .Select(sc => sc.Story.AuthorId!.Value)
                 .Distinct()
                 .ToListAsync()
             : await writeDb.StoryTags
-                .IgnoreQueryFilters(["ContentRating"])
                 .Where(st => st.TagId == link.BaseTagId
                     && st.CustomName != null
                     && st.CustomName!.ToLower().Trim() == link.NormalizedName
-                    && st.Story.AuthorId != null)
+                    && st.Story.AuthorId != null
+                    && !st.Story.IsTakenDown)
                 .Select(st => st.Story.AuthorId!.Value)
                 .Distinct()
                 .ToListAsync();
@@ -201,7 +205,6 @@ public class ServerFanonWriteService(
             if (link.BaseTypeId == TagTypeEnum.Character)
             {
                 List<StoryCharacter> mine = await writeDb.StoryCharacters
-                    .IgnoreQueryFilters(["ContentRating"])
                     .Where(sc => sc.Story.AuthorId == authorId
                         && sc.CharacterTagId == link.BaseTagId
                         && sc.CustomName != null
@@ -241,7 +244,6 @@ public class ServerFanonWriteService(
             else
             {
                 List<StoryTag> mine = await writeDb.StoryTags
-                    .IgnoreQueryFilters(["ContentRating"])
                     .Where(st => st.Story.AuthorId == authorId
                         && st.TagId == link.BaseTagId
                         && st.CustomName != null

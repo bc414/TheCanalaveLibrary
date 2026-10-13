@@ -16,6 +16,10 @@ namespace TheCanalaveLibrary.Client;
 /// </summary>
 internal static class ClientHttpHelpers
 {
+    /// <summary>The fallback error line when a 400 carries neither <c>errors</c> nor a
+    /// <c>detail</c>.</summary>
+    private const string GenericValidationMessage = "The request failed validation.";
+
     /// <summary>Reads <c>ProblemDetails.Detail</c> off a 4xx response body. Null if absent —
     /// including a body-less response (e.g. the cookie handler's bare 401), which the strict
     /// <c>ReadFromJsonAsync</c> would reject as malformed JSON.</summary>
@@ -23,11 +27,22 @@ internal static class ClientHttpHelpers
         (await ReadNullableFromJsonAsync<ProblemPayload>(response.Content))?.Detail;
 
     /// <summary>
+    /// The synchronous twin of <see cref="ReadProblemDetailAsync"/>, for the one client method whose
+    /// interface signature is synchronous (<c>ClientContentImportService.Resplit</c>). It shares
+    /// <see cref="ProblemPayload"/> and the web JSON options with the async path, so the two cannot
+    /// drift (the hand-rolled sync copy read with case-sensitive defaults and never bound
+    /// <c>detail</c> — WU-ParityAndRemaining, 2026-10-13).
+    /// </summary>
+    public static string? ReadProblemDetail(HttpResponseMessage response) =>
+        ReadNullableFromJson<ProblemPayload>(response.Content)?.Detail;
+
+    /// <summary>
     /// The standard write-response translation — the inverse of the server's
-    /// <c>EndpointHelpers.ExecuteAsync</c>. 400 → <paramref name="validationFactory"/> over
-    /// <c>ProblemDetails.Detail</c> (the server-side exception's user-facing message; the server
-    /// joins each feature's error list into one string via <c>ex.Message</c>, so list-shaped
-    /// exceptions reconstruct as a single-element list — per-item errors don't round-trip); 401 →
+    /// <c>EndpointHelpers.ExecuteAsync</c>. 400 → <paramref name="validationFactory"/> over the body's
+    /// <c>errors</c> extension (the server-side <c>CanalaveValidationException.Errors</c> list, line for
+    /// line — WU-ParityAndRemaining, 2026-10-13), or <c>[detail]</c> when the body has no usable
+    /// <c>errors</c> array (a non-validation 400 such as <c>ArgumentException</c>, or a shape this
+    /// client doesn't know — see <see cref="ReadValidationErrorsAsync"/>); 401 →
     /// <see cref="SessionExpiredException"/> (the cookie handler's bare 401 and the server's
     /// "…requires an authenticated user" arm both land here — a session signal, not an
     /// authorization denial; error-handling.md §"The API error envelope"); 403 →
@@ -43,17 +58,21 @@ internal static class ClientHttpHelpers
     /// MessagingPermissionException, Groups' content-rating 403 disambiguation) keep their own
     /// private translation for that one arm and delegate everything else here.
     /// </summary>
+    /// <param name="response">The response to translate; a success status returns without reading it.</param>
+    /// <param name="validationFactory">Builds the feature's validation exception from the error
+    /// lines (never empty). List-ctor families pass them through (<c>errs => new
+    /// XValidationException([.. errs])</c>); single-message types join them
+    /// (<c>errs => new TagValidationException(string.Join(" ", errs))</c>).</param>
     public static async Task ThrowIfWriteFailedAsync(
         HttpResponseMessage response,
-        Func<string, Exception> validationFactory)
+        Func<IReadOnlyList<string>, Exception> validationFactory)
     {
         if (response.IsSuccessStatusCode) return;
 
         switch (response.StatusCode)
         {
             case HttpStatusCode.BadRequest:
-                string? detail = await ReadProblemDetailAsync(response);
-                throw validationFactory(detail ?? "The request failed validation.");
+                throw validationFactory(await ReadValidationErrorsAsync(response));
             case HttpStatusCode.Unauthorized:
                 throw new SessionExpiredException();
             case HttpStatusCode.Forbidden:
@@ -100,6 +119,26 @@ internal static class ClientHttpHelpers
         }
     }
 
+    /// <summary>
+    /// The validation 400's error lines: the body's <c>errors</c> extension when it is a non-empty
+    /// array of strings, else <c>[detail]</c>, else a generic line — never empty. The read is
+    /// tolerant: <c>errors</c> arrives as a raw <see cref="JsonElement"/>, so any other shape (the
+    /// framework's <c>ValidationProblemDetails</c> field → messages dictionary, a number, an array
+    /// holding a non-string) falls back to the detail instead of throwing a <see cref="JsonException"/>,
+    /// and so does a body that is not JSON at all.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> ReadValidationErrorsAsync(HttpResponseMessage response)
+    {
+        ProblemPayload? problem = await ReadProblemTolerantlyAsync(response);
+        if (problem?.Errors is { ValueKind: JsonValueKind.Array } errors
+            && errors.GetArrayLength() > 0
+            && errors.EnumerateArray().All(e => e.ValueKind == JsonValueKind.String))
+        {
+            return errors.EnumerateArray().Select(e => e.GetString()!).ToList();
+        }
+        return [problem?.Detail ?? GenericValidationMessage];
+    }
+
     /// <summary>Shared 5xx fall-through for both translators — reconstructs
     /// <see cref="ServerFaultException"/> off the <c>ApiExceptionHandler</c> envelope's
     /// <c>traceId</c> extension when present; otherwise falls back to
@@ -136,13 +175,27 @@ internal static class ClientHttpHelpers
     /// <see cref="GetNullableFromJsonAsync{T}"/> for why this exists. Also correct for 204s and for
     /// write responses whose contract returns a nullable (e.g. <c>ITagWriteService.UpdateTagAsync</c>'s
     /// <c>string?</c>).</summary>
-    public static async Task<T?> ReadNullableFromJsonAsync<T>(HttpContent content)
+    public static async Task<T?> ReadNullableFromJsonAsync<T>(HttpContent content) =>
+        DeserializeNullable<T>(await content.ReadAsStringAsync());
+
+    /// <summary>
+    /// The synchronous twin of <see cref="ReadNullableFromJsonAsync{T}"/> (empty body → default, web
+    /// JSON options), for the one synchronous client method (<c>ClientContentImportService.Resplit</c>).
+    /// Every client JSON read — sync or async — goes through <see cref="DeserializeNullable{T}"/>, so
+    /// none can fall back to the case-sensitive default options (layer5-wasm.md §"Client Service
+    /// Implementations").
+    /// </summary>
+    public static T? ReadNullableFromJson<T>(HttpContent content)
     {
-        string raw = await content.ReadAsStringAsync();
-        return string.IsNullOrWhiteSpace(raw) || raw == "null"
+        using Stream body = content.ReadAsStream();
+        using StreamReader reader = new(body);
+        return DeserializeNullable<T>(reader.ReadToEnd());
+    }
+
+    private static T? DeserializeNullable<T>(string raw) =>
+        string.IsNullOrWhiteSpace(raw) || raw == "null"
             ? default
             : JsonSerializer.Deserialize<T>(raw, JsonSerializerOptions.Web);
-    }
 
     /// <summary>
     /// The 429 arm (WU-ThrottleCoverage, 2026-10-13). The service throttle's 429 is a
@@ -190,7 +243,10 @@ internal static class ClientHttpHelpers
     /// in WASM. <c>TraceId</c> is the <c>ApiExceptionHandler</c> envelope's extension
     /// (WU-ErrorHandling2, 2026-07-30), present only on the unhandled-5xx path;
     /// <c>RetryAfterSeconds</c> and <c>WriteActionKind</c> are the service throttle's 429
-    /// extensions (<c>EndpointHelpers</c>).</summary>
+    /// extensions (<c>EndpointHelpers</c>); <c>Errors</c> is the validation 400's error list
+    /// (WU-ParityAndRemaining), kept as a raw <see cref="JsonElement"/> so an unexpected shape never
+    /// fails the read (<see cref="ReadValidationErrorsAsync"/>).</summary>
     private sealed record ProblemPayload(
-        string? Detail, double? RetryAfterSeconds, string? TraceId, string? WriteActionKind);
+        string? Detail, double? RetryAfterSeconds, string? TraceId, string? WriteActionKind,
+        JsonElement? Errors);
 }

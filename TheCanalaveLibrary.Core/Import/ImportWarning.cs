@@ -17,7 +17,12 @@ public enum ImportWarningKind
     UnsupportedFormatting,
 
     /// <summary>The file (or a split segment) produced no readable text.</summary>
-    EmptyContent
+    EmptyContent,
+
+    /// <summary>A text file (TXT/HTML/Markdown) wasn't valid UTF-8 and was read as Windows-1252
+    /// (<c>ImportTextDecoder</c>; WU-ParityAndRemaining, 2026-10-13). Appended last: the enum travels
+    /// over JSON by number.</summary>
+    EncodingFallback
 }
 
 /// <summary>One import warning, shown to the importing author in the review UI.</summary>

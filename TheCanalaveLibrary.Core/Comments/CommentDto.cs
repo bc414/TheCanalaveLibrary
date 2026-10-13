@@ -6,7 +6,9 @@ namespace TheCanalaveLibrary.Core;
 /// Author fields are nullable so WU20 can render the deleted-account ("[deleted user]") state.
 /// <c>IsLikedByCurrentUser</c> is computed by the read service in its projection (per-viewer EXISTS
 /// subquery on <see cref="CommentLike"/>); it then flows to the <c>CommentItem</c> leaf as a
-/// <c>[Parameter]</c> — the leaf never injects a service.
+/// <c>[Parameter]</c> — the leaf never injects a service. <c>DateEdited</c> is
+/// <see cref="BaseComment.DateEdited"/>: null when never edited, else the "(edited)" marker's date
+/// (WU-ParityAndRemaining, 2026-10-13).
 /// </summary>
 public record CommentDto(
     long CommentId,
@@ -18,4 +20,5 @@ public record CommentDto(
     DateTime DatePosted,
     int LikeCount,
     bool IsSpoiler,
-    bool IsLikedByCurrentUser);
+    bool IsLikedByCurrentUser,
+    DateTime? DateEdited);

@@ -449,6 +449,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("text")
                         .HasColumnName("comment_text");
 
+                    b.Property<DateTime?>("DateEdited")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_edited");
+
                     b.Property<bool>("IsTakenDown")
                         .HasColumnType("boolean")
                         .HasColumnName("is_taken_down");

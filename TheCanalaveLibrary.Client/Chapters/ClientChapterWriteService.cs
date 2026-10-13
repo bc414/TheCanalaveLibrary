@@ -68,5 +68,5 @@ public sealed class ClientChapterWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of ChapterEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new ChapterValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new ChapterValidationException([.. errs]));
 }

@@ -21,8 +21,10 @@
 @* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
    Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC and version list, and
    wires reading-progress scroll JS. Scroll progress → RecordProgressAsync; Ch.1 ≥90% →
-   MarkStartedAsync (carrying the ?rec= direct-link attribution, owner ruling D3 — nothing is written
-   on page load; the carrier is then dropped from the address, used once) → fetch the helpful prompt.
+   MarkStartedAsync for a signed-in reader (carrying the ?rec= direct-link attribution, owner ruling
+   D3 — nothing is written on page load; the carrier is then dropped from the address, used once) →
+   fetch the helpful prompt. MarkStarted/MarkCompleted are durable writes behind RequireAuthorization,
+   so an anonymous reader never calls them (layer5-wasm.md "anonymous → no-op is caller-gated").
    [PersistentState] on Chapter/Toc/Versions eliminates the prerender→interactive double fetch;
    every reading-progress/read-mark signal stays ephemeral (layer5-wasm.md §"Avoiding the double
    fetch"). *@
@@ -392,8 +394,13 @@ else
         {
             _progressReached90 = true;
             // MarkStarted first: it is where a ?rec= direct link becomes an attribution (D3), so the
-            // prompt read below can already see it.
-            await UserStoryInteractionWriteService.MarkStartedAsync(StoryId, _queryRecId);
+            // prompt read below can already see it. Signed-in readers only: the service treats an
+            // anonymous call as a no-op, but its endpoint is RequireAuthorization (a durable write), so
+            // on WASM an anonymous reader's scroll threw SessionExpiredException out of this
+            // [JSInvokable] (service audit §2.7.6; WU-ParityAndRemaining). The flag is still set, so
+            // nothing else about the page changes.
+            if (_currentUserId.HasValue)
+                await UserStoryInteractionWriteService.MarkStartedAsync(StoryId, _queryRecId);
             if (_queryRecId is not null)
                 await ConsumeRecCarrierAsync();
             if (_currentUserId.HasValue)
@@ -408,7 +415,9 @@ else
         if (Chapter.NextChapterNumber is null && Chapter.StoryIsComplete && progress >= 0.9f && !_completedMarked)
         {
             _completedMarked = true;
-            await UserStoryInteractionWriteService.MarkCompletedAsync(StoryId);
+            // Signed-in readers only — the same caller gate as MarkStarted above.
+            if (_currentUserId.HasValue)
+                await UserStoryInteractionWriteService.MarkCompletedAsync(StoryId);
             await InvokeAsync(StateHasChanged);
         }
     }

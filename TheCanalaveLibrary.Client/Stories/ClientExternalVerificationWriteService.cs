@@ -71,5 +71,5 @@ public sealed class ClientExternalVerificationWriteService(HttpClient http)
     }
 
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ExternalVerificationValidationException([detail]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new ExternalVerificationValidationException([.. errs]));
 }

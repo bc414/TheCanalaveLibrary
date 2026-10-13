@@ -80,10 +80,27 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   lambda (inner-double-quote limitation in Razor attributes — see `layer3-logic.md` §"Razor attribute
   quoting"). Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
-- **L5 — Stage 5 (resolved 2026-06-27).** The prior Stage-4 divergence (two separate impls with
+- **L5 — Stage 5 (resolved 2026-06-27; the client's sprite root comes from the server since
+  WU-ParityAndRemaining, 2026-10-13 — Unit- and Integration-tested, stage unchanged, the note just
+  below).** The prior Stage-4 divergence (two separate impls with
   different behaviors) is resolved: the two impls collapsed into one `OptimisticSpriteReadService` in
-  Core (registered on both Server and Client). No endpoint needed (pure URL construction). No WASM
-  proxy required; SharedUI components inject the Core service directly on both sides.
+  Core (registered on both Server and Client). No endpoint is needed for the URL construction itself.
+  No WASM proxy required; SharedUI components inject the Core service directly on both sides.
+  **WU-ParityAndRemaining note (2026-10-13) — no flip (service audit §2.7.3; §4 #6).** The server read
+  `Sprites:BaseUrl`, but `Client/Program.cs` hardcoded `"/sprites/themes"`, so the documented "one
+  config value is the complete cutover" was false for every WASM render. Now the server reads the key
+  once into a registered `ClientConfigDto` singleton (its own `OptimisticSpriteReadService` reads the same
+  instance), `GET /api/client-config` (anonymous, `Server/Http/ClientConfigEndpoints.cs`) serves it, and
+  the WASM host loads it once into `ClientRuntimeConfig` after `builder.Build()` and before `RunAsync()`;
+  a failed load logs a Warning and keeps the default. The client's `ISpriteReadService` is a singleton
+  factory over `ClientRuntimeConfig.SpriteBaseUrl`. Rule: `layer5-wasm.md` §"Server configuration the
+  client needs"; `layer2-services.md` and `render-and-layout.md`'s seam paragraphs now name the
+  transport. Tier: Unit `WasmParityClientTests` (adopt on 200; default kept and a Warning logged on a
+  500, a non-JSON body, an empty value and a network throw) and Integration `ApiErrorEnvelopeTests`
+  (the anonymous GET, and the loader adopting the host's registered value). The `Client/Program.cs`
+  wiring has no test tier (no WASM host in the suite); a WASM boot showing the
+  `/api/client-config` request and sprites is a step of tracker **H37**. L4.5 stays 5: with the key
+  unset the root is unchanged.
 - **L6/L8 — N/A.** (L7 dissolved 2026-07-06.)
 
 - **L4.5-Browser verification (2026-07-02) — Feature 3 → L4.5=5.** The optimistic-URL design was

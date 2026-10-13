@@ -9,7 +9,9 @@ namespace TheCanalaveLibrary.Server;
 /// allowlist, count losses) → <c>IHtmlSanitizationService</c> per draft (trust boundary) →
 /// word count. Splitting exists ONLY in the document/EPUB paths; <see cref="ParseSingleAsync"/>
 /// can never shred a one-chapter file. Buffers non-seekable uploads to memory under
-/// <see cref="ImportLimits.MaxFileBytes"/> and sniffs ZIP magic for the container formats.
+/// <see cref="ImportLimits.MaxFileBytes"/>, sniffs ZIP magic for the container formats and bounds their
+/// decompressed size (<see cref="ArchiveGuard"/>), and decodes the text formats through
+/// <see cref="ImportTextDecoder"/>.
 /// Stateless — registered as a singleton (the sanitizer it wraps is one too).
 /// </summary>
 public class ServerContentImportService(
@@ -67,6 +69,9 @@ public class ServerContentImportService(
     {
         using MemoryStream buffered = await BufferAsync(file, "upload.epub");
         SniffZipMagic(buffered, "This file isn't an EPUB (not a valid archive).");
+        // Entry count + real decompressed bytes, before the parser inflates anything
+        // (security.md §"Archive imports (EPUB / DOCX)").
+        ArchiveGuard.EnsureWithinLimits(buffered, "upload.epub");
 
         EpubImportReader.EpubContent content = await EpubImportReader.ReadAsync(buffered);
 
@@ -119,13 +124,15 @@ public class ServerContentImportService(
                     SniffZipMagic(buffered,
                         "This file isn't a Word document (.docx). If it came from Google Docs, use " +
                         "File → Download → Microsoft Word (.docx).");
+                    // A .docx is a ZIP, so it gets the same decompression bound as an EPUB.
+                    ArchiveGuard.EnsureWithinLimits(buffered, fileName);
                     return DocxReader.Read(buffered);
                 case ImportFormat.Html:
-                    return (HtmlFileReader.Read(buffered), []);
+                    return HtmlFileReader.Read(buffered);
                 case ImportFormat.Txt:
-                    return (TxtReader.Read(buffered), []);
+                    return TxtReader.Read(buffered);
                 case ImportFormat.Markdown:
-                    return (MarkdownReader.Read(buffered), []);
+                    return MarkdownReader.Read(buffered);
                 default:
                     throw new ImportException($"Unsupported import format: {format}.");
             }

@@ -23,6 +23,11 @@ public partial class ServerMessagingReadService(
     /// </summary>
     internal const string DeletedUserLabel = "[deleted user]";
 
+    // A conversation whose other participant row is gone (account deletion is the only cause) carries
+    // OtherParticipant = null — never a fabricated participant with id 0, which read as a real user
+    // and could become a /user/0 link (service audit §2.12; WU-ParityAndRemaining, 2026-10-13). The
+    // UI renders the default avatar and DeletedUserLabel's wording itself.
+
     /// <summary>
     /// Exposed as a protected property so the derived write service can access the user context
     /// without double-capturing the constructor parameter (eliminates CS9107/CS9124 warnings).
@@ -124,7 +129,7 @@ public partial class ServerMessagingReadService(
                 r.ConversationId,
                 r.Subject,
                 r.OtherParticipant is null
-                    ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
+                    ? null
                     : new MessagingParticipantDto(
                         r.OtherParticipant.UserId,
                         r.OtherParticipant.Username ?? DeletedUserLabel,
@@ -185,7 +190,7 @@ public partial class ServerMessagingReadService(
                 conversationId,
                 header.Subject,
                 header.OtherParticipant is null
-                    ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
+                    ? null
                     : new MessagingParticipantDto(
                         header.OtherParticipant.UserId,
                         header.OtherParticipant.Username ?? DeletedUserLabel,
@@ -213,7 +218,7 @@ public partial class ServerMessagingReadService(
             .ToListAsync();
 
         var otherParticipantDto = header.OtherParticipant is null
-            ? new MessagingParticipantDto(0, DeletedUserLabel, DefaultAvatarUrl)
+            ? null
             : new MessagingParticipantDto(
                 header.OtherParticipant.UserId,
                 header.OtherParticipant.Username ?? DeletedUserLabel,

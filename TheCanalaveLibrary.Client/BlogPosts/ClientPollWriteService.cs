@@ -71,5 +71,5 @@ public sealed class ClientPollWriteService(HttpClient http) : ClientPollReadServ
     /// <summary>Status-code → contract-exception translation (inverse of PollEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new PollValidationException(msg));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new PollValidationException([.. errs]));
 }

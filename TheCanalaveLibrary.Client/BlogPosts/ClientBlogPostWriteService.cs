@@ -84,5 +84,5 @@ public sealed class ClientBlogPostWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of BlogPostEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new BlogPostValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new BlogPostValidationException([.. errs]));
 }

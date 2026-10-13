@@ -159,7 +159,15 @@ requires an authenticated user.") became the shared text; no test asserted them,
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
   (`RecommendationLikesAndConstraints`). Now fully stage 5.
-- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count under a hidden story since its review fixes — see its Stage note; returns the landed count, and the like and helpful counts have a reconciler, since WU-CounterSymmetry, 2026-09-30 — see its Stage note).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
+- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count under a hidden story since its review fixes — see its Stage note; returns the landed count, and the like and helpful counts have a reconciler, since WU-CounterSymmetry, 2026-09-30 — see its Stage note; the author probe lifts `ContentRating`, so a mature-off author with a reveal sees the recs they must act on, WU-ParityAndRemaining 2026-10-13 — Integration-tested, stage unchanged, the note just below).**
+  **WU-ParityAndRemaining note (2026-10-13) — no flip (service audit §2.12).** `GetForStoryAsync`'s
+  `isStoryAuthor` probe ran on the rating-filtered read set: a mature-off author who had revealed their
+  own M story passed the visibility guard (which honors the reveal) but the probe could not see the
+  story, so they were treated as a public viewer and never saw the NeedsRevision/Rejected recs they
+  must act on. The probe now carries `.IgnoreQueryFilters(["ContentRating"]) // elevated read:` —
+  visibility is the guard's job, settled just above it. The false comment "it only ever returns false"
+  is rewritten. Tier: Integration `RecommendationReadServiceTests.GetForStory_AMatureOffAuthorWithAReveal_SeesTheNeedsRevisionRec`;
+  mutation-checked by removing the lift. `GetForStoryAsync`: Approved only; highlighted/spotlighted
   first then DatePosted desc; per-viewer `IsLikedByCurrentUser` via short-circuited EXISTS subquery
   (EF Core anonymous-safe pattern). `ToggleLikeAsync`: load rec with filtered `Likes` include,
   add/remove, atomic counter update, return `RecommendationLikeResultDto`. **No notification

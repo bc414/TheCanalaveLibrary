@@ -38,14 +38,14 @@ public class ClientFanonReadService(HttpClient http) : IFanonReadService
     {
         HttpResponseMessage response = await Http.GetAsync($"api/fanon/my-adoptions/{targetTagId}");
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await ClientHttpHelpers.ReadNullableFromJsonAsync<TagAdoptionPageDto>(response.Content);
     }
 
     public async Task<IReadOnlyList<MyTagAdoptionSummaryDto>> GetMyAdoptionIndexAsync()
     {
         HttpResponseMessage response = await Http.GetAsync("api/fanon/my-adoptions");
-        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
         return await response.Content.ReadFromJsonAsync<List<MyTagAdoptionSummaryDto>>() ?? [];
     }
 

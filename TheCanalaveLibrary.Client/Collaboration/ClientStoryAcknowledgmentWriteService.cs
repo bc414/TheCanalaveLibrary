@@ -45,5 +45,5 @@ public sealed class ClientStoryAcknowledgmentWriteService(HttpClient http)
 
     /// <summary>Status-code → contract-exception translation — the shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryAcknowledgmentValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new StoryAcknowledgmentValidationException([.. errs]));
 }

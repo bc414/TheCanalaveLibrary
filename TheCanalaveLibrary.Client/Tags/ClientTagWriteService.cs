@@ -41,5 +41,5 @@ public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadServic
     /// <summary>Status-code → contract-exception translation (inverse of TagEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new TagValidationException(string.Join(" ", errs)));
 }

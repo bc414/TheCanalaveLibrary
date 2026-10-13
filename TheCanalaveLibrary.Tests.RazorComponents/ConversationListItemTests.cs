@@ -32,6 +32,22 @@ public class ConversationListItemTests : BunitContext
             LastMessageDate: DateTime.UtcNow.AddMinutes(-5),
             UnreadCount: unreadCount);
 
+    // ── Deleted participant (WU-ParityAndRemaining) ──────────────────────────────
+
+    /// <summary>A conversation whose other participant's account was deleted carries a null
+    /// <c>OtherParticipant</c> (never a fabricated id-0 participant): the row shows the default avatar
+    /// and "[deleted user]", and links nowhere but the conversation.</summary>
+    [Fact]
+    public void ConversationListItem_ADeletedParticipant_ReadsDeletedUser_WithTheDefaultAvatar()
+    {
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
+            .Add(c => c.Conversation, MakeConversation() with { OtherParticipant = null }));
+
+        cut.Markup.Should().Contain("[deleted user]");
+        cut.Find("img").GetAttribute("src").Should().Be("/img/default-avatar.svg");
+        cut.FindAll("a").Select(a => a.GetAttribute("href")).Should().Equal("/messages/1");
+    }
+
     // ── Unread badge ──────────────────────────────────────────────────────────────
 
     [Fact]

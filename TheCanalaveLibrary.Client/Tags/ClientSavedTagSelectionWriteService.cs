@@ -47,5 +47,5 @@ public sealed class ClientSavedTagSelectionWriteService(HttpClient http)
     /// — the shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
-            msg => new SavedTagSelectionValidationException([msg]));
+            errs => new SavedTagSelectionValidationException([.. errs]));
 }

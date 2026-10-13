@@ -120,6 +120,40 @@ public class RecommendationReadServiceTests(PostgresFixture postgres) : Integrat
             "the author sees removed recs (to unblock them)");
     }
 
+    /// <summary>
+    /// Service audit §2.12 (WU-ParityAndRemaining, 2026-10-13): a mature-off author who revealed their
+    /// own M story passes the visibility guard, but the ownership probe ran on the rating-filtered set,
+    /// could not see the story, and answered "not the author" — so the NeedsRevision rec they must act on
+    /// was hidden from them. The probe now lifts ContentRating (visibility is the guard's job).
+    /// FK parents: the author and the recommender via SeedUserAsync, the M story via SeedStoryAsync, the
+    /// reveal row inline.
+    /// </summary>
+    [Fact]
+    public async Task GetForStory_AMatureOffAuthorWithAReveal_SeesTheNeedsRevisionRec()
+    {
+        int authorId = await SeedUserAsync();
+        int storyId = await SeedStoryAsync(authorId, Rating.M);
+        int needsRevisionId = await SeedRecAsync(_otherUserId, storyId,
+            statusId: RecommendationStatusEnum.NeedsRevision, note: "drop the spoiler");
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.UserContentReveals.Add(new UserContentReveal
+            {
+                UserId = authorId, EntityType = RevealedEntityType.Story, EntityId = storyId,
+                DateRevealed = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(authorId, showMatureContent: false));
+        List<RecommendationDto> recs = await CallGetForStoryAsync(storyId);
+
+        recs.Should().ContainSingle(r => r.RecommendationId == needsRevisionId,
+                "the author must see the rec they are asked to act on")
+            .Which.RevisionRequestNote.Should().Be("drop the spoiler");
+    }
+
     [Fact]
     public async Task GetForStory_Recommender_SeesOwnHiddenRecWithNote()
     {

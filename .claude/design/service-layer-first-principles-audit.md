@@ -398,7 +398,10 @@ change that is free today and painful after UI/tests encode current behavior.
 The class that stays invisible until the WASM flip, then changes user-visible behavior with no
 code change:
 
-1. **Validation error lists don't round-trip. MEDIUM, CONFIRMED.** Server joins `List<string>`
+1. > **Built:** WU-ParityAndRemaining (2026-10-13) — a validation 400 carries an `errors` array; client factories take the list
+   > (`layer5-wasm.md` §"The Error-Translation Contract"). The finding below is history.
+
+   **Validation error lists don't round-trip. MEDIUM, CONFIRMED.** Server joins `List<string>`
    errors into one `Detail` string; the shared client helper reconstructs a single-element list
    (`ClientHttpHelpers.cs:29-31`, self-documented). Three inline bullets on the circuit become one
    blob on WASM. Fix now: an `errors[]` ProblemDetails extension + translator preference — one
@@ -409,12 +412,18 @@ code change:
    records as a fixed bug, with dedicated read impls present on disk for every one. Read consumers
    get the full write impl (least-privilege void); two write instances per scope. Mechanical
    sweep; pick binding-vs-forwarding as the canonical shape (§3.12).
-3. **Sprite base-URL config seam doesn't reach WASM. MEDIUM (latent), CONFIRMED.** Server reads
+3. > **Built:** WU-ParityAndRemaining (2026-10-13) — `GET /api/client-config` + `ClientRuntimeConfig` (`layer5-wasm.md`
+   > §"Server configuration the client needs"). The finding below is history.
+
+   **Sprite base-URL config seam doesn't reach WASM. MEDIUM (latent), CONFIRMED.** Server reads
    `Sprites:BaseUrl`; `Client/Program.cs:30` hardcodes `"/sprites/themes"`. The doctrine's
    "changing this one config value is the complete cutover" promise is false for the client half;
    at CDN cutover every WASM render breaks/flickers. Needs a client config transport before that
    day.
-4. **WASM import re-split returns blank drafts. HIGH (WASM only), CONFIRMED.** The one hand-rolled
+4. > **Built:** WU-ParityAndRemaining (2026-10-13) — the sync path reads through `ClientHttpHelpers`' sync helpers (web
+   > options). The finding below is history.
+
+   **WASM import re-split returns blank drafts. HIGH (WASM only), CONFIRMED.** The one hand-rolled
    sync JSON path deserializes camelCase with case-sensitive defaults
    (`ClientContentImportService.cs:91,145`) — `title`/`html` never bind. Two-line fix + extract a
    shared `JsonSerializerOptions(Web)` so the sync twin can't drift again.
@@ -428,12 +437,17 @@ code change:
    `ClientModerationWriteService.cs:96-97` maps 400 → `ArgumentException`, which
    `ExceptionPresenter.IsUserFacing` excludes — WASM re-flattens to the generic message. Every
    sibling reconstructs its concrete type; finish the migration (+ the stale comments).
-6. **Anonymous reader scroll produces "session expired" on WASM. MEDIUM, CONFIRMED contract.**
+6. > **Built:** WU-ParityAndRemaining (2026-10-13) — `OnScrollProgress` calls the durable marks only for a signed-in reader
+   > (the caller-gate rule in `layer5-wasm.md` §"Client Service Implementations"). History below.
+
+   **Anonymous reader scroll produces "session expired" on WASM. MEDIUM, CONFIRMED contract.**
    `MarkStarted/MarkCompleted` are anon-no-op in the service but sit behind `RequireAuthorization`,
    and `ChapterReadingPage.OnScrollProgress` calls them without a user gate — circuit silently
    no-ops, WASM throws `SessionExpiredException` inside a `[JSInvokable]` for a user who never had
    a session (MA-302 class; `RecordProgressAsync` handled it, these two didn't).
-7. **Explore user-pivot errors lose their message on WASM. LOW, CONFIRMED.** Bare
+7. > **Built:** WU-ParityAndRemaining (2026-10-13) — `GetUserNeighborsAsync` rebuilds `StoryValidationException`. History below.
+
+   **Explore user-pivot errors lose their message on WASM. LOW, CONFIRMED.** Bare
    `EnsureSuccessStatusCode` where the endpoint deliberately ships a 400 detail
    (`ClientManualTreeSearchReadService`); the sibling tree-search client reconstructs.
 
@@ -509,29 +523,41 @@ Clamp to [0,1] + reject non-finite in the service; write the invariant into the 
 
 ### 2.12 Remaining confirmed defects (batch into nearby WUs)
 
-Reply depth unbounded at write and invisible at read (four one-line root checks); polls: archived
+> **Built by WU-ParityAndRemaining (2026-10-13)** (each also marked inline below): reply depth, `CreateGroupAsync`, `CreateChapterAsync`,
+> the Fanon takedown filter, `EditCommentAsync`'s edited marker and spoiler flag, structured-tag trust,
+> the WU37 pairing residual, the EPUB/DOCX decompressed bound, legacy encodings, the `GetForStoryAsync`
+> author probe, the fabricated messaging participant. Left: `EditCommentAsync`'s throttle (D20: edits
+> exempt) and takedown check (owner-open, `roadmap.md` row 29 / tracker F26); the site-poll
+> `RelatedEntityId = 0` (D16's re-point backlog, tracker B23, "not urgent"); the other items name their
+> own owners.
+
+Reply depth unbounded at write and invisible at read (four one-line root checks) [built WU-ParityAndRemaining 2026-10-13]; polls: archived
 site polls remain votable, single-choice vote race leaves two standing votes, site-poll edit
 notifications carry `RelatedEntityId = 0`; vouch 5-limit and hidden-gem/highlight limits are
 check-then-act with no backstop (ratify or advisory-lock per §3.15); `CreateGroupAsync` two
-commits no transaction + raw-500 on duplicate name; `CreateChapterAsync` two-step save unwrapped
-(permanent `PrimaryContentId=null` chapter on crash); Fanon write service claims takedown
+commits no transaction + raw-500 on duplicate name [built WU-ParityAndRemaining 2026-10-13]; `CreateChapterAsync` two-step save unwrapped
+(permanent `PrimaryContentId=null` chapter on crash) [built WU-ParityAndRemaining 2026-10-13]; Fanon write service claims takedown
 filtering its unfiltered write context cannot provide (adoption invites fire for removed stories;
-dead `IgnoreQueryFilters` decoration); `EditCommentAsync` — no rate limit, no takedown check
+dead `IgnoreQueryFilters` decoration) [built WU-ParityAndRemaining 2026-10-13]; `EditCommentAsync` — no rate limit, no takedown check
 (author can rewrite a moderation-frozen comment), no edited-marker, no `IsSpoiler` in the update
-DTO; structured-tag validation trusts client `TagTypeEnum` and never verifies tag existence
-(forged types bypass required-Setting/Genre and priority caps; nonexistent ids → raw FK 500);
+DTO [marker and `IsSpoiler` built WU-ParityAndRemaining 2026-10-13; throttle D20-exempt; takedown
+check owner-open, roadmap row 29]; structured-tag validation trusts client `TagTypeEnum` and never verifies tag existence
+(forged types bypass required-Setting/Genre and priority caps; nonexistent ids → raw FK 500)
+[built WU-ParityAndRemaining 2026-10-13];
 WU37 pairing rules (member count ≥2, member-in-story) are silently dropped instead of rejected —
-doctrine table and code disagree; `UserDeletionService` and moderation hard-delete never delete
+doctrine table and code disagree [both rules were already enforced in the service since 2026-07-26;
+the residual doubled member is refused since WU-ParityAndRemaining 2026-10-13]; `UserDeletionService` and moderation hard-delete never delete
 avatar/cover blobs (and abandoned cover uploads orphan — ownership decision §3.16) [ruled D14; built WU-BlobCleanup 2026-10-13]; saved-selection
 and tag-name app-level case-insensitive checks sit over case-sensitive DB indexes (mixed-case race
 persists a duplicate the app can never recreate — schema §3.1's service half); N+1 in
 `GetPublicSelectionsByUserAsync`; EPUB decompressed-size unbounded; legacy-encoding imports garble
-without a warning; `banned (int?)` scalar projection shipped verbatim in `UploadCoverArtAsync` [closed WU-BlobCleanup 2026-10-13: the method loads the story and compares `AuthorId`, so an authorless story is 403, not 404];
+without a warning [both built WU-ParityAndRemaining 2026-10-13, DOCX bounded too]; `banned (int?)` scalar projection shipped verbatim in `UploadCoverArtAsync` [closed WU-BlobCleanup 2026-10-13: the method loads the story and compares `AuthorId`, so an authorless story is 403, not 404];
 ExternalVerification `SingleAsync` → 401-instead-of-404 error class (same class as nonexistent
 report id → 401 in moderation); mod-report queue unbounded; unresolvable zombie sibling reports on
 removed targets; `GetForStoryAsync` author-probe uses the filtered set (mature-off author can't see
-the NeedsRevision recs they must manage); notification-cluster `MessagingParticipantDto` fabricates
-`/user/0` links; USI all-null date-partition rows retained on HasStarted-only rows.
+the NeedsRevision recs they must manage) [built WU-ParityAndRemaining 2026-10-13]; notification-cluster
+`MessagingParticipantDto` fabricates `/user/0` links [built WU-ParityAndRemaining 2026-10-13: null,
+rendered "[deleted user]"]; USI all-null date-partition rows retained on HasStarted-only rows.
 
 ---
 
@@ -678,8 +704,8 @@ unless noted):
 | 2 | §Group Rating Waterfall Tier 1: write-side story load "already filtered… never bypassed" | Write context carries **no** filters post-WU38 (stated elsewhere in the same file); code correctly uses the confidentiality-only guard | Rewrite the Tier-1 row — display-side filter, not an add-time gate |
 | 3 | §Notification Generation: "composes read services for recipient resolution… will inject" | Every fan-out queries `writeDb` directly (defensible, DAG-clean) | Align doc to reality; kill the stale future tense — *fixed WU-InertFeatures, 2026-09-30 (doc + the `ServerNotificationWriteService` class comment)* |
 | 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example |
-| 5 | WU37 validation table: pairing member-count/in-story → Reject | `StoryMappers` silently drops bad indexes and persists degenerate pairings | Enforce or amend (defect §2.12) |
-| 6 | "SpriteBaseUrl is a config seam… no code changes" | False for WASM (§2.7.3) | Amend + fix |
+| 5 | WU37 validation table: pairing member-count/in-story → Reject | `StoryMappers` silently drops bad indexes and persists degenerate pairings | Enforce or amend (defect §2.12) — *resolved by enforcing, WU-ParityAndRemaining 2026-10-13: the service already rejected both; the mapper's check is defensive only, and a doubled member is now rejected too* |
+| 6 | "SpriteBaseUrl is a config seam… no code changes" | False for WASM (§2.7.3) | Amend + fix — *fixed WU-ParityAndRemaining 2026-10-13: the client takes the value from `GET /api/client-config`; both docs name the transport* |
 | 7 | §Filtering semantics: "NULL for either field means use the default" | Columns are non-nullable; sparseness is row-level | Decision §3.17, then align — *CLOSED: schema aligned to doctrine (worksheet D19), WU-NotificationCorrectness 2026-10-12* |
 | 8 | DAG rule: write→write only Notification/Badge | `ChapterReadMarkWrite → IUserStoryInteractionWriteService` (deliberate, described elsewhere in the same file) | Amend the sanctioned list |
 | 9 | "GetListingsAsync two-step" sketch | Pre-TagFanon shape (no roll-up, no StoryCharacters branch) presented as current | Mark historical like the WU37 sketch |
@@ -690,7 +716,8 @@ class the repo's CORRECTION-note convention exists for): `DeleteFolderAsync`'s p
 (fixed WU-SchemaHardening, 2026-10-13);
 blog-delete's "cascades handle it" ×2 + interface docs; lineage-reject's phantom spam guard
 (*fixed WU-ThrottleCoverage, 2026-10-13* — the `RepeatRequest` bucket is the real bound);
-Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb; `RejectLineageAsync`
+Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb (*fixed WU-ParityAndRemaining,
+2026-10-13*); `RejectLineageAsync`
 (*fixed WU-ThrottleCoverage, 2026-10-13*, the interface doc's same claim);
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —
 the explicit window now suppresses the author-exception, which must be said or a future

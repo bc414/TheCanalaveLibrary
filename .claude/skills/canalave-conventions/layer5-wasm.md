@@ -296,7 +296,7 @@ service layer (audited 2026-07-12):
 
 | Contract exception | Status | Message channel |
 |---|---|---|
-| `{Feature}ValidationException` (the per-feature family, all sharing the `CanalaveValidationException` base — MA-008), `ArgumentException`/`ArgumentOutOfRangeException`, `VouchLimitException`, `ImportException` | 400 | `Results.Problem(detail: ex.Message, statusCode: 400)` — `ProblemDetails.Detail` carries the user-facing message verbatim; client rethrows it. **Business-rule rejections that are not auth failures belong here, not in the 401 row** (self-follow/self-vouch/not-following → `FollowingValidationException`, Hidden-Gem/spotlight limits → `RecommendationValidationException`, unowned badge key → `BadgeValidationException`, unpinnable story → `UserSettingsValidationException`; MA-505/MA-611, 2026-07-18) |
+| `{Feature}ValidationException` (the per-feature family, all sharing the `CanalaveValidationException` base — MA-008), `ArgumentException`/`ArgumentOutOfRangeException`, `VouchLimitException`, `ImportException` | 400 | `Results.Problem(detail: ex.Message, statusCode: 400)` — `ProblemDetails.Detail` carries the user-facing message verbatim; client rethrows it. **A `CanalaveValidationException` also carries an `errors` extension** — a string array of `ex.Errors` (WU-ParityAndRemaining, 2026-10-13) — so the list survives the hop line for line; before it, a `StoryValidationException` (whose `Message` is the fixed "Story validation failed.") reached a WASM user as that sentence instead of the real errors. The other 400 types stay detail-only. `Results.ValidationProblem` is never used on `/api`: its `errors` is a field → messages dictionary, the same key in another shape. **Business-rule rejections that are not auth failures belong here, not in the 401 row** (self-follow/self-vouch/not-following → `FollowingValidationException`, Hidden-Gem/spotlight limits → `RecommendationValidationException`, unowned badge key → `BadgeValidationException`, unpinnable story → `UserSettingsValidationException`; MA-505/MA-611, 2026-07-18) |
 | `UnauthorizedAccessException` | 403 (401 if unauthenticated — cookie handler emits it before the service runs) | none |
 | `MessagingPermissionException`, `ContentRatingExceededException` | 403 | `Detail` carries the message |
 | `KeyNotFoundException` | 404 — `Results.Problem(statusCode: 404)` | none |
@@ -348,11 +348,20 @@ the three clients that passed the since-retired `rateLimitedAction` argument reb
 other throttled write (story, chapter, blog post, poll, group, messaging, verification, avatar)
 showed "Something went wrong on our end" on WASM instead of "wait N seconds". The parameter is
 gone. Exception **construction** stays per-class in each
-`Client{Feature}WriteService`'s own `ThrowIfWriteFailedAsync(HttpResponseMessage)` — the
-`{Feature}ValidationException` constructor shapes differ too much to share (some take `string
-message`, others `List<string>`/`IReadOnlyList<string> errors`) — mirror the
-switch-on-status-code shape from `ClientTagWriteService`, call the shared detail-reader, and
-construct the feature's own exception type per row above. **Every arm that matches the table's
+`Client{Feature}WriteService`'s own `ThrowIfWriteFailedAsync(HttpResponseMessage)`, through the
+validation factory it hands the shared helper — the `{Feature}ValidationException` constructor
+shapes differ too much to share (some take `string message`, others
+`List<string>`/`IReadOnlyList<string> errors`). **The factory is `Func<IReadOnlyList<string>,
+Exception>`** (WU-ParityAndRemaining, 2026-10-13): the helper feeds it the body's `errors` array
+when that is a non-empty array of strings, and `[detail ?? "The request failed validation."]`
+otherwise. The read is **tolerant**: `errors` is parsed as a raw `JsonElement`, so any other shape
+(a framework `ValidationProblemDetails` dictionary, a number) falls back to the detail and never
+throws a `JsonException`. List-ctor families pass the list through (`errs => new
+XValidationException([.. errs])`; Poll and Spotlight have both ctors, so the list one); string
+families join it (`errs => new TagValidationException(string.Join(" ", errs))`, likewise
+`ImportException` and the BCL types). The signature changed rather than gaining an overload, so
+the compiler found every call site: an implicitly typed `msg => new X([msg])` would have bound
+silently to a kept `Func<string, …>`. **Every arm that matches the table's
 standard mapping delegates to `ClientHttpHelpers.ThrowIfWriteFailedAsync`/`ThrowIfReadFailedAsync`
 rather than re-switching** (WU-ErrorHandling2 collapsed ten private near-duplicates onto the
 shared helper) — a private override is reserved for a *documented deviation* from the table
@@ -416,6 +425,44 @@ public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadServic
   `IThemeReadService`, `ISiteDailyStatReadService`) get one client class with no base/subclass
   split at all — the read/write inheritance shape only applies where both sides of a CQRS-lite pair
   exist.
+- **Every JSON read uses the web defaults (`JsonSerializerOptions.Web`)** — camelCase,
+  case-insensitive, the same options `ReadFromJsonAsync`/`GetFromJsonAsync` use. A synchronous read
+  (the one case: `ClientContentImportService.Resplit`, whose interface signature is synchronous)
+  goes through `ClientHttpHelpers`' sync helpers, `ReadNullableFromJson<T>(HttpContent)` and
+  `ReadProblemDetail(HttpResponseMessage)`, which share the async helpers' options and
+  `ProblemPayload`. Never call `JsonSerializer.Deserialize` with default options in a client class:
+  the defaults are case-sensitive, so every camelCase property silently stays default (the re-split
+  returned blank drafts on WASM until WU-ParityAndRemaining, 2026-10-13).
+- **An "anonymous → no-op" method behind `RequireAuthorization()` is caller-gated.** Some service
+  contracts say an anonymous call is a silent no-op (`MarkStartedAsync`, `MarkCompletedAsync`). On the
+  circuit that holds; over HTTP the endpoint's edge gate answers 401 first, and the client throws
+  `SessionExpiredException` at a reader who never had a session. When such a method is a **durable
+  write**, the endpoint keeps its edge gate (it is a write) and every **caller** checks for a signed-in
+  user before calling it. An anonymous-tolerant endpoint (no `RequireAuthorization()`, 2xx for an
+  anonymous caller) is reserved for **buffered signal pings** (`RecordProgressAsync`, the view ping —
+  MA-302). WU-ParityAndRemaining, 2026-10-13 (`ChapterReadingPage.OnScrollProgress`).
+
+### Server configuration the client needs: `GET /api/client-config`
+
+A deploy-time setting the WASM half must honor (the only one as of 2026-10-13: `Sprites:BaseUrl`) reaches the
+client through **one** anonymous endpoint, `GET /api/client-config`, returning the Core
+`ClientConfigDto` — never a second hardcoded copy in `Client/Program.cs` (WU-ParityAndRemaining,
+2026-10-13; the hardcoded `"/sprites/themes"` made the sprite seam's "one config value is the complete
+cutover" false for the client half). Shape:
+- **Server:** `Program.cs` reads each setting **once** into a registered `ClientConfigDto` singleton;
+  the server's own consumers (the `OptimisticSpriteReadService` registration) and the endpoint read
+  that same instance, so the two halves cannot disagree. `Server/Http/ClientConfigEndpoints.cs` maps
+  the GET with no auth (the values are public deploy facts the browser fetches anyway).
+- **Client:** `Client/Program.cs` calls `ClientRuntimeConfig.LoadAsync` **once**, after
+  `builder.Build()` and before `RunAsync()`, into the registered `ClientRuntimeConfig` singleton. A
+  failed fetch (non-2xx, network, malformed body) logs a **Warning** and keeps the built-in defaults —
+  never a silent catch (`logging.md`), never a boot failure. Services that need a value resolve it
+  lazily through a factory (`ISpriteReadService` is a singleton factory reading
+  `ClientRuntimeConfig.SpriteBaseUrl`), so **nothing may resolve them before `LoadAsync` runs** — WASM
+  has no hosted services, so nothing does.
+- **Adding a field:** add it to `ClientConfigDto` (with its default), populate it in the server's one
+  read, copy it in `ClientRuntimeConfig.LoadAsync`, and consume it through a lazy factory. One endpoint,
+  one round trip at WASM boot, off the first-render path (the prerender and the circuit never call it).
 
 ## Authentication in WASM
 

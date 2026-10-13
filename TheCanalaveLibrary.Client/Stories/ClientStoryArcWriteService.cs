@@ -38,5 +38,5 @@ public sealed class ClientStoryArcWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of StoryArcEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryArcValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new StoryArcValidationException([.. errs]));
 }

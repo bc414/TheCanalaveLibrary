@@ -46,5 +46,5 @@ public sealed class ClientStoryLineageWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of StoryLineageEndpoints') —
     /// the shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryLineageValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new StoryLineageValidationException([.. errs]));
 }

@@ -36,6 +36,8 @@ else
                          IsOwnComment="@(root.AuthorId is not null && root.AuthorId == CurrentUserId)"
                          ViewerIsStoryAuthor="@ViewerIsStoryAuthor"
                          IsEditing="@(_editingId == root.CommentId)"
+                         AllowSpoilerEdit="@(_target == CommentTarget.Chapter)"
+                         @bind-EditSpoiler="_editSpoiler"
                          UserHasCompletedStory="@UserHasCompletedStory"
                          OnToggleLike="HandleLike"
                          OnReply="HandleReplyClick"
@@ -183,6 +185,9 @@ else
     private long? _editingId;
     private long? _replyingToId;
     private bool _composeSpoiler;
+    // The open edit's spoiler flag — seeded from the comment on Edit, sent only for a chapter root
+    // (CanEditSpoiler); the same shape as _composeSpoiler (WU-ParityAndRemaining).
+    private bool _editSpoiler;
     private bool _showDeleteConfirm;
     private long _pendingDeleteId;
     private bool _busy;
@@ -365,12 +370,18 @@ else
     private void HandleEditClick(long id)
     {
         _editingId    = id;
+        _editSpoiler  = _comments.FirstOrDefault(c => c.CommentId == id)?.IsSpoiler ?? false;
         _replyingToId = null; // close any open reply composer
         _error        = null;
         _errorIsSessionExpired = false;
     }
 
     private void HandleEditCancel() => _editingId = null;
+
+    /// <summary>True for a chapter-context root: the only comment whose edit shows the spoiler toggle.</summary>
+    private bool CanEditSpoiler(long commentId) =>
+        _target == CommentTarget.Chapter
+        && _comments.Any(c => c.CommentId == commentId && c.ParentCommentId is null);
 
     private async Task HandleEditSaveAsync(string html)
     {
@@ -383,7 +394,10 @@ else
             await Comments.EditCommentAsync(new UpdateCommentDto
             {
                 CommentId   = _editingId.Value,
-                CommentText = html
+                CommentText = html,
+                // Spoilers are chapter-only and offered on roots only; null = leave the flag alone,
+                // so a blog/group/profile edit never trips the server's chapter-only refusal.
+                IsSpoiler   = CanEditSpoiler(_editingId.Value) ? _editSpoiler : null
             });
             _editingId = null;
             await LoadAsync();

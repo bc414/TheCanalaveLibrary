@@ -17,16 +17,25 @@
     <div class="flex items-start gap-3">
         @* alt="" (WU-A11y, 2026-07-31): the adjacent username <span> already carries the name -
            see AccessibleNameAssertions/check-a11y.ps1 rule F for the site-wide avatar convention. *@
-        <img src="@Conversation.OtherParticipant.AvatarUrl"
+        <img src="@(Conversation.OtherParticipant?.AvatarUrl ?? DefaultAvatarUrl)"
              alt=""
              class="h-10 w-10 flex-none rounded-full object-cover"
-             data-fallback-src="/img/default-avatar.svg" />
+             data-fallback-src="@DefaultAvatarUrl" />
 
         <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between gap-2">
-                <span class="truncate text-sm font-semibold text-(--color-text)">
-                    @Conversation.OtherParticipant.Username
-                </span>
+                @if (Conversation.OtherParticipant is { } other)
+                {
+                    <span class="truncate text-sm font-semibold text-(--color-text)">
+                        @other.Username
+                    </span>
+                }
+                else
+                {
+                    @* The other participant's account was deleted (OtherParticipant null since
+                       WU-ParityAndRemaining — never a fabricated id-0 participant). *@
+                    <span class="truncate text-sm text-(--color-text-muted)">[deleted user]</span>
+                }
                 <div class="flex flex-none items-center gap-1.5">
                     @if (Conversation.UnreadCount > 0)
                     {
@@ -60,6 +69,8 @@
 </a>
 
 @code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
     [Parameter, EditorRequired] public ConversationSummaryDto Conversation { get; set; } = null!;
 
     /// <summary>Highlights this item when its conversation is the currently viewed one.</summary>

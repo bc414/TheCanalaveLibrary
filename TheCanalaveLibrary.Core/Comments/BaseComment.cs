@@ -21,6 +21,15 @@ public partial class BaseComment : IModeratableContent
 
     public int ActiveReportCount { get; set; }
 
+    /// <summary>
+    /// When the author last changed the comment's text or spoiler flag; null = never edited. Stamped by
+    /// <c>EditCommentAsync</c> only on a real change, so an identical re-save leaves it alone
+    /// (WU-ParityAndRemaining, 2026-10-13; service audit §2.12). On the base table, not the children:
+    /// editing is context-agnostic, and this is display metadata, never a sort key (the per-child
+    /// <c>DatePosted</c> denormalization exists for sort keys).
+    /// </summary>
+    public DateTime? DateEdited { get; set; }
+
     // Soft-delete (IsTakenDown named filter) — WU34; renamed from IsHidden/DateModeratedRemoved/ModerationRemovalReason in pre-integration cleanup
     public bool IsTakenDown { get; set; }
     public DateTime? TakedownDate { get; set; }

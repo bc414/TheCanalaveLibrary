@@ -266,6 +266,60 @@ public class CommentSectionTests : BunitContext
         _fakeService.EditCalls[0].CommentId.Should().Be(commentId);
     }
 
+    /// <summary>
+    /// The edit's spoiler toggle (WU-ParityAndRemaining): offered on chapter-context roots only, seeded
+    /// from the comment, and sent as <c>IsSpoiler</c>; every other edit sends null ("leave it alone"),
+    /// so a blog/group/profile edit never trips the server's chapter-only refusal.
+    /// </summary>
+    [Fact]
+    public async Task CommentSection_EditingAChapterRoot_TheSpoilerToggleIsSent()
+    {
+        _fakeService.SetGetResult(new CommentPageDto([MakeComment(20L, authorId: 42, isSpoiler: false)], 1));
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
+            .Add(c => c.ChapterId, 1)
+            .Add(c => c.CurrentUserId, 42));
+
+        await cut.Find("button[aria-label='Edit comment']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        // The edit's toggle comes first; the "Leave a comment" composer's own toggle is below the tree.
+        IReadOnlyList<IElement> toggles = cut.FindAll("input[type=checkbox]");
+        toggles.Should().HaveCount(2, "the edit offers the toggle beside the composer's");
+        toggles[0].HasAttribute("checked").Should().BeFalse("seeded from the comment's flag");
+        await toggles[0].ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = true });
+        await cut.Find("button[aria-label='Save']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        _fakeService.EditCalls.Should().ContainSingle().Which.IsSpoiler.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CommentSection_EditingABlogComment_SendsNoSpoilerFlag_AndOffersNoToggle()
+    {
+        _fakeService.SetGetResult(new CommentPageDto([MakeComment(21L, authorId: 42)], 1));
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
+            .Add(c => c.BlogPostId, 1)
+            .Add(c => c.CurrentUserId, 42));
+
+        await cut.Find("button[aria-label='Edit comment']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.FindAll("input[type=checkbox]").Should().BeEmpty("spoilers are chapter-only");
+        await cut.Find("button[aria-label='Save']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        _fakeService.EditCalls.Should().ContainSingle().Which.IsSpoiler.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CommentSection_EditingAChapterReply_SendsNoSpoilerFlag()
+    {
+        _fakeService.SetGetResult(new CommentPageDto(
+            [MakeComment(30L, authorId: 7), MakeComment(31L, parentId: 30L, authorId: 42)], 1));
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
+            .Add(c => c.ChapterId, 1)
+            .Add(c => c.CurrentUserId, 42));
+
+        await cut.Find("button[aria-label='Edit comment']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("button[aria-label='Save']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        _fakeService.EditCalls.Should().ContainSingle().Which.IsSpoiler.Should().BeNull("replies get no toggle");
+    }
+
     // ── Delete (confirm dialog) ───────────────────────────────────────────────────
 
     [Fact]
@@ -398,7 +452,8 @@ public class CommentSectionTests : BunitContext
         bool isSpoiler = false,
         bool isLiked = false,
         int likeCount = 0,
-        string text = "<p>Test comment.</p>") =>
+        string text = "<p>Test comment.</p>",
+        DateTime? dateEdited = null) =>
         new(commentId, parentId, authorId, authorId is null ? null : $"User{authorId}",
-            null, text, DateTime.UtcNow, likeCount, isSpoiler, isLiked);
+            null, text, DateTime.UtcNow, likeCount, isSpoiler, isLiked, dateEdited);
 }

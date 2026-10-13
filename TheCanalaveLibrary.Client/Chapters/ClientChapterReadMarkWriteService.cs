@@ -20,7 +20,7 @@ public sealed class ClientChapterReadMarkWriteService(HttpClient http) : IChapte
         HttpResponseMessage response = await http.PutAsync(
             $"api/chapter-read-marks/{chapterId}?isRead={isRead}", content: null);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new InvalidOperationException(detail));
+            response, errs => new InvalidOperationException(string.Join(" ", errs)));
     }
 
     public async Task SetAllChaptersReadAsync(int storyId, bool isRead)
@@ -28,6 +28,6 @@ public sealed class ClientChapterReadMarkWriteService(HttpClient http) : IChapte
         HttpResponseMessage response = await http.PutAsync(
             $"api/chapter-read-marks/story/{storyId}?isRead={isRead}", content: null);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new InvalidOperationException(detail));
+            response, errs => new InvalidOperationException(string.Join(" ", errs)));
     }
 }

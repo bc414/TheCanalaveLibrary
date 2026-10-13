@@ -26,5 +26,5 @@ public sealed class ClientDiscoveryFilterSettingsService(HttpClient http) : IDis
     }
 
     private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new InvalidOperationException(detail));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new InvalidOperationException(string.Join(" ", errs)));
 }

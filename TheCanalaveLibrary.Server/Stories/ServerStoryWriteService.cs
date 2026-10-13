@@ -440,14 +440,57 @@ public class ServerStoryWriteService(
             .Select(g => g.First())
             .ToList();
 
+    /// <summary>The refusal for a pairing that lists one character more than once.</summary>
+    internal const string DuplicatePairingMemberMessage = "A pairing can't list the same character twice.";
+
     /// <summary>
     /// Server-side gate checks that require DB reads.
     /// CanSave() handles client-verifiable rules; this handles rules that trust only server Tag state.
+    /// The first block makes the DTO's tag types the database's (WU-ParityAndRemaining, 2026-10-13;
+    /// service audit §2.12): <c>CanSave</c> ran on the DTO's declared <c>TagTypeEnum</c>, so a forged
+    /// type passed its required Setting/Genre rule and Primary-Genre cap, and a missing id reached the
+    /// database as a raw FK 500. Once this passes, <c>CanSave</c>'s type rules and the mapper's
+    /// ContentWarning coercion were applied to the true types (layer2-services.md §"Legality rules").
     /// </summary>
     private static async Task ValidateStructuredTagGatesAsync(
         IEditableStoryProperties dto, ApplicationDbContext writeDb)
     {
         List<string> errors = [];
+
+        // ── Tag existence and type (trust only Tag rows) ─────────────────────────────────
+        List<int> referencedIds = dto.StoryTags.Select(st => st.TagId)
+            .Concat(dto.StoryCharacters.Select(sc => sc.CharacterTagId))
+            .Distinct().ToList();
+        Dictionary<int, TagTypeEnum> storedTypes = referencedIds.Count == 0
+            ? []
+            : await writeDb.Tags
+                .Where(t => referencedIds.Contains(t.TagId))
+                .ToDictionaryAsync(t => t.TagId, t => t.TagTypeId);
+
+        List<int> missing = referencedIds.Where(id => !storedTypes.ContainsKey(id)).Order().ToList();
+        if (missing.Count > 0)
+            errors.Add($"Tag(s) {string.Join(", ", missing)} don't exist.");
+
+        // Flat rows: a Character tag never belongs here (it lives in StoryCharacters); any other tag's
+        // declared type must be its stored type.
+        List<int> characterInFlat = dto.StoryTags
+            .Where(st => storedTypes.TryGetValue(st.TagId, out TagTypeEnum t) && t == TagTypeEnum.Character)
+            .Select(st => st.TagId).Distinct().Order().ToList();
+        if (characterInFlat.Count > 0)
+            errors.Add($"Tag(s) {string.Join(", ", characterInFlat)} are character tags — add them as characters, not as tags.");
+
+        List<int> mistyped = dto.StoryTags
+            .Where(st => storedTypes.TryGetValue(st.TagId, out TagTypeEnum t)
+                         && t != TagTypeEnum.Character && t != st.TagTypeEnum)
+            .Select(st => st.TagId).Distinct().Order().ToList();
+        if (mistyped.Count > 0)
+            errors.Add($"Tag(s) {string.Join(", ", mistyped)} don't match their stored type — remove and re-add them.");
+
+        List<int> notCharacters = dto.StoryCharacters
+            .Where(sc => storedTypes.TryGetValue(sc.CharacterTagId, out TagTypeEnum t) && t != TagTypeEnum.Character)
+            .Select(sc => sc.CharacterTagId).Distinct().Order().ToList();
+        if (notCharacters.Count > 0)
+            errors.Add($"Tag(s) {string.Join(", ", notCharacters)} aren't character tags.");
 
         // ── Custom-name gate (WU-TagFanon; replaced the OC/SettingDetail gates) ──────────
         // Custom naming (IsOc on characters; CustomName on either table) requires
@@ -503,6 +546,11 @@ public class ServerStoryWriteService(
         // Pairing member count: each pairing needs ≥2 distinct members.
         if (dto.StoryCharacterPairings.Any(p => p.MemberIndexes.Distinct().Count() < 2))
             errors.Add("Each character pairing must include at least 2 distinct members.");
+
+        // A member listed twice ([0, 0, 1] passes the rule above) would make the mapper add two
+        // members with one primary key — a raw 500 (WU-ParityAndRemaining).
+        if (dto.StoryCharacterPairings.Any(p => p.MemberIndexes.Count != p.MemberIndexes.Distinct().Count()))
+            errors.Add(DuplicatePairingMemberMessage);
 
         // Pairing members are indexes into the story's character list — must all be in range.
         int characterCount = dto.StoryCharacters.Count;

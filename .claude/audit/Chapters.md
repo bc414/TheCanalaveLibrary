@@ -72,7 +72,21 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — second Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12, browser-driven on both render phases by its browser pass the same day — first Stage note below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; `CreateChapterAsync` one transaction since WU-ParityAndRemaining, 2026-10-13, Integration-tested — the first Stage note below; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — second Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12, browser-driven on both render phases by its browser pass the same day — first Stage note below).**
+  **WU-ParityAndRemaining Stage note (2026-10-13) — no flip.** `CreateChapterAsync`'s two saves (insert
+  the chapter with its first version, then point `PrimaryContentId` at it) committed separately, so a
+  failure between them left a chapter whose primary pointer stayed NULL for good (service audit §2.12).
+  The number read, the graph and both saves now run in one execution-strategy transaction, the tracker
+  cleared first so a retry builds fresh entities; the throttle charge, the author gate and validation
+  stay outside, so a retry never charges twice. A failed attempt also clears the tracker before
+  rethrowing, because the first save had marked rows Unchanged whose keys the rollback erased. The
+  false "`PrimaryContentId = 0` (temporary placeholder)" comment is rewritten (the code uses null).
+  `RefreshStoryWordCountAsync` stays post-commit (D22). Tier: Integration
+  `ChapterCreateAtomicityTests` fails the pointer `UPDATE` with `InterleavingCommandInterceptor` and
+  finds no chapter or version row and an empty tracker; mutation-checked by committing after the first
+  save. Not built, recorded on tracker **D11**: two concurrent creates still read the same max chapter
+  number, and the loser hits `ix_chapters_story_id_chapter_number` as a 500 (the create-create class).
+
   **WU-DependencyCVEs Stage note (2026-10-12; tracker E2 closed) — no flip.** The sanitizer
   (`ServerHtmlSanitizationService`, the write path's trust boundary) now runs on HtmlSanitizer
   9.2.1039 over AngleSharp **1.8.4**. It used to run on 9.0.892 over AngleSharp 0.17.1, which
@@ -388,8 +402,21 @@ browser-verification Stage note.
   `ChapterList` (WU25 new leaf in `SharedUI/Chapters/`).
   Verified: see WU25 stage note in `audit/Stories.md` Feature 5 L3-Logic.
 - **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24; attribution and prompt rebuilt WU-InertFeatures and
-  its review fixes, 2026-09-30 — see "Features 7 and 44 — WU-InertFeatures" below; the WU26 wording
-  that follows is history).** `ChapterReadingPage` dispatcher built with content-rating
+  its review fixes, 2026-09-30 — see "Features 7 and 44 — WU-InertFeatures" below; the durable marks
+  caller-gated on a signed-in reader since WU-ParityAndRemaining, 2026-10-13 — RazorComponents
+  `ChapterReadingPageAttributionTests`, stage unchanged, the note just below; the WU26 wording that
+  follows is history).**
+  **WU-ParityAndRemaining note (2026-10-13) — no flip (service audit §2.7.6).** `OnScrollProgress`
+  calls `MarkStartedAsync` and `MarkCompletedAsync` only when `_currentUserId` is set; the once-per-visit
+  flags are still set, so nothing else about the page changes. Both are durable writes behind
+  `RequireAuthorization`: on the circuit an anonymous call was a silent no-op, but on WASM the 401 came
+  back as `SessionExpiredException` thrown out of the `[JSInvokable]` at a reader who never had a
+  session. Rule: `layer5-wasm.md` §"Client Service Implementations" ("an anonymous → no-op method behind
+  `RequireAuthorization()` is caller-gated"; anonymous-tolerant endpoints stay reserved for buffered
+  pings, MA-302). Tier: RazorComponents — the anonymous test now asserts no call to either mark (it
+  pinned the call before), plus a signed-in final-chapter test; mutation-checked by removing the gate.
+  No browser was available: the WASM anonymous-scroll check is tracker **H37**. L4.5 stays 5 (no
+  markup changed). `ChapterReadingPage` dispatcher built with content-rating
   handling, scroll-progress JS interop, attribution capture, helpful-prompt gate. Reader settings cascade
   provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` officially
   cut 2026-07-24 (was never "post-MVP" scope, just unexamined scope — traced to a Gemini brainstorm

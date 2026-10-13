@@ -1148,6 +1148,7 @@ Integration tier) is now a ratified-behavior test rather than a description of a
 No new tests are owed.
 
 **Built:** WU-TptHardDelete review fixes (2026-09-30) — rule now stated in `cross-cutting.md` §"Delete Policy Summary" (FK level: hard delete, reparent by SET NULL, excluded from D10) and `content-safety.md` §"Author-Controlled Content Actions" (invisible by design; a moderation-visible log if ever needed). "[Deleted Comment]" is in `check-doc-hygiene.ps1`'s registry; `grid_axes.md` F24, `folder_clusters.md` and `audit/Identity.md`'s WU38a note are corrected; `DeletePersonalData.razor` gets the D12-minimal copy fix (the commit 93c8bd9 had routed both halves elsewhere; the review restored this ruling's routing). D13's full survival-set rewrite of that copy stays with WU-UserDeletion, because poll-vote survival is not built yet.
+**Built:** WU-ParityAndRemaining (2026-10-13) — the "Left open" reply-depth defect (homed in service audit §2.12): rule now stated in `layer2-services.md` §"Group Comments — Per-Context Method Pattern" → "Rules every context shares" (a reply's parent must be top-level, refused with `CommentValidationException`).
 
 ### D13. User-deletion survival set ratification
 

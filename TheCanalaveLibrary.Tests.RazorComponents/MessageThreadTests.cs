@@ -33,6 +33,18 @@ public class MessageThreadTests : BunitContext
     private static IElement? TryFindButton(IRenderedComponent<MessageThread> cut, string text) =>
         cut.FindAll("button").FirstOrDefault(b => b.TextContent.Trim() == text);
 
+    /// <summary>WU-ParityAndRemaining: a deleted participant is a null <c>OtherParticipant</c>; the
+    /// header shows the default avatar and "[deleted user]" instead of a made-up participant.</summary>
+    [Fact]
+    public void Header_ADeletedParticipant_ReadsDeletedUser_WithTheDefaultAvatar()
+    {
+        IRenderedComponent<MessageThread> cut = Render<MessageThread>(p => p
+            .Add(c => c.Thread, NewThread(isArchived: false) with { OtherParticipant = null }));
+
+        cut.Markup.Should().Contain("[deleted user]");
+        cut.Find("img").GetAttribute("src").Should().Be("/img/default-avatar.svg");
+    }
+
     [Theory]
     [InlineData(false, "Archive")]
     [InlineData(true, "Unarchive")]

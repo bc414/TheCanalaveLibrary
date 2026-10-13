@@ -110,5 +110,5 @@ public sealed class ClientModerationWriteService(HttpClient http)
     }
 
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ModerationValidationException([detail]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new ModerationValidationException([.. errs]));
 }

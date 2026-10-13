@@ -22,6 +22,6 @@ public sealed class ClientSiteSettingsWriteService(HttpClient http)
         HttpResponseMessage response =
             await Http.PostAsJsonAsync($"api/site-settings/{Uri.EscapeDataString(settingKey)}", value);
         await ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new InvalidOperationException(detail));
+            response, errs => new InvalidOperationException(string.Join(" ", errs)));
     }
 }

@@ -52,6 +52,21 @@ public class CommentItemTests : BunitContext
             "no profile link must be rendered for a deleted author");
     }
 
+    // ── Edited marker (WU-ParityAndRemaining) ──────────────────────────────────────
+
+    [Fact]
+    public void CommentItem_EditedOnlyWhenTheServerStampedIt()
+    {
+        DateTime edited = new(2026, 10, 13, 9, 30, 0, DateTimeKind.Utc);
+        IRenderedComponent<CommentItem> stamped = Render<CommentItem>(p => p
+            .Add(c => c.Comment, MakeComment(1, dateEdited: edited)));
+        IRenderedComponent<CommentItem> never = Render<CommentItem>(p => p
+            .Add(c => c.Comment, MakeComment(2)));
+
+        stamped.Find("span[title='Edited Oct 13, 2026']").TextContent.Trim().Should().Be("(edited)");
+        never.Markup.Should().NotContain("(edited)", "DateEdited null means never edited");
+    }
+
     // ── RichTextView vs CommentEditor swap ────────────────────────────────────────
 
     [Fact]
@@ -331,7 +346,8 @@ public class CommentItemTests : BunitContext
         bool isSpoiler = false,
         bool isLiked = false,
         int likeCount = 0,
-        string text = "<p>Test comment.</p>") =>
+        string text = "<p>Test comment.</p>",
+        DateTime? dateEdited = null) =>
         new(commentId, parentId, authorId, authorId is null ? null : username,
-            null, text, DateTime.UtcNow, likeCount, isSpoiler, isLiked);
+            null, text, DateTime.UtcNow, likeCount, isSpoiler, isLiked, dateEdited);
 }

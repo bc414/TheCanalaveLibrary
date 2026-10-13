@@ -10,11 +10,16 @@ namespace TheCanalaveLibrary.Core;
 /// not read off the conversation list — so the archive control resolves correctly when a thread is
 /// opened by direct URL, where the sidebar list may not contain that conversation at all.
 /// </para>
+/// <para>
+/// <see cref="OtherParticipant"/> is null when the other participant's account was deleted (their
+/// participant row goes with the account); the UI shows the default avatar and "[deleted user]". It is
+/// never a placeholder participant with a made-up id (WU-ParityAndRemaining, 2026-10-13).
+/// </para>
 /// </summary>
 public record ConversationThreadDto(
     int ConversationId,
     string Subject,
-    MessagingParticipantDto OtherParticipant,
+    MessagingParticipantDto? OtherParticipant,
     IReadOnlyList<MessageDto> Messages,
     int TotalMessageCount,
     bool IsArchived);

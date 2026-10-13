@@ -18,6 +18,11 @@ public static class EndpointHelpers
     /// <see cref="WriteActionKind"/> (its enum name).</summary>
     public const string WriteActionKindExtension = "writeActionKind";
 
+    /// <summary>The validation 400 body's <c>ProblemDetails</c> extension carrying the
+    /// <see cref="CanalaveValidationException.Errors"/> list as a string array
+    /// (WU-ParityAndRemaining, 2026-10-13).</summary>
+    public const string ErrorsExtension = "errors";
+
     public static async Task<IResult> ExecuteAsync(Func<Task<IResult>> action)
     {
         try
@@ -30,7 +35,20 @@ public static class EndpointHelpers
             // CanalaveValidationException base — MA-008) plus
             // ArgumentException/ArgumentOutOfRangeException, VouchLimitException, and
             // ImportException: all are "the request was malformed/rejected, message is user-facing."
-            return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            // The validation family also ships its whole error list as an `errors` string array, so
+            // the WASM client rebuilds the same bullets the circuit shows: Detail alone carried one
+            // joined string, and for StoryValidationException only the fixed "Story validation
+            // failed." (WU-ParityAndRemaining). Never Results.ValidationProblem: its `errors` is a
+            // field → messages dictionary, the same key in another shape.
+            return ex is CanalaveValidationException { Errors.Count: > 0 } validation
+                ? Results.Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    extensions: new Dictionary<string, object?>
+                    {
+                        [ErrorsExtension] = validation.Errors.ToArray(),
+                    })
+                : Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
         catch (UnauthorizedAccessException)
         {

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -40,65 +41,93 @@ public class ServerChapterWriteService(
         string? sanitizedBottom  = string.IsNullOrWhiteSpace(dto.BottomAuthorsNote) ? null : sanitizer.Sanitize(dto.BottomAuthorsNote);
         int wordCount            = ChapterText.CountWords(sanitizedText);
 
-        // Assign the next chapter number (max + 1, or 1 if the story has no chapters yet).
-        int nextChapterNumber = await writeDb.Chapters
-            .Where(c => c.StoryId == dto.StoryId)
-            .Select(c => (int?)c.ChapterNumber)
-            .MaxAsync() ?? 0;
-        nextChapterNumber++;
-
-        string title = string.IsNullOrWhiteSpace(dto.Title)
-            ? $"Chapter {nextChapterNumber}"  // spec intent: nullable title defaults to "Chapter N"
-            : dto.Title;
-
-        // Build the connected graph. Chapter.PrimaryContentId is a Restrict FK to ChapterContent —
-        // both rows must exist before it can point at anything.  Strategy:
-        // 1. Insert Chapter with PrimaryContentId = 0 (temporary placeholder; not the real FK yet).
-        // 2. Let EF cascade-insert the first ChapterContent (SortOrder = 0) via the
-        //    ChapterContents collection nav.
-        // 3. After SaveChanges we have real PKs for both rows; set PrimaryContentId correctly and
-        //    save again.  Two round-trips for the initial create only — version adds/edits are one.
-
-        ChapterContent firstVersion = new()
+        // One transaction for the number read, both inserts and the primary pointer (service audit
+        // §2.12). The two saves used to commit separately, so a failure between them left a chapter
+        // whose PrimaryContentId stayed NULL for good. The throttle charge, the author gate and
+        // validation stay outside the delegate, so an execution-strategy retry never charges twice.
+        IExecutionStrategy strategy = writeDb.Database.CreateExecutionStrategy();
+        int chapterId;
+        try
         {
-            AuthorId         = userId,
-            SortOrder        = 0,
-            ChapterText      = sanitizedText,
-            TopAuthorsNote   = sanitizedTop,
-            BottomAuthorsNote = sanitizedBottom,
-            WordCount        = wordCount,
-            Rating           = dto.Rating,
-            VersionName      = dto.VersionName,
-            // Null: the chapter is created unpublished (below), so this version isn't publicly
-            // readable yet. SetPublishedAsync stamps it on the chapter's first publish (D2).
-            PublishDate      = null
-        };
+            chapterId = await strategy.ExecuteAsync(async () =>
+            {
+                // A retried attempt must not inherit the failed one's tracked graph (the Spotlight
+                // precedent). Safe because circuit writes are discrete actions: nothing else is
+                // mid-flight on this context.
+                writeDb.ChangeTracker.Clear();
+                await using IDbContextTransaction tx = await writeDb.Database.BeginTransactionAsync();
 
-        Chapter chapter = new()
+                // Assign the next chapter number (max + 1, or 1 if the story has no chapters yet).
+                int nextChapterNumber = await writeDb.Chapters
+                    .Where(c => c.StoryId == dto.StoryId)
+                    .Select(c => (int?)c.ChapterNumber)
+                    .MaxAsync() ?? 0;
+                nextChapterNumber++;
+
+                string title = string.IsNullOrWhiteSpace(dto.Title)
+                    ? $"Chapter {nextChapterNumber}"  // spec intent: nullable title defaults to "Chapter N"
+                    : dto.Title;
+
+                // Build the connected graph inside the delegate, so a retry builds fresh entities.
+                // Chapter.PrimaryContentId is a Restrict FK to ChapterContent and the two rows point at
+                // each other, so:
+                // 1. Insert the Chapter with PrimaryContentId = null (the column is nullable, which
+                //    breaks the cycle), cascade-inserting the first ChapterContent (SortOrder = 0)
+                //    through the ChapterContents navigation.
+                // 2. With both keys generated, point PrimaryContentId at the version and save again.
+                // Both saves sit in this transaction, so the null pointer is never committed.
+                ChapterContent firstVersion = new()
+                {
+                    AuthorId         = userId,
+                    SortOrder        = 0,
+                    ChapterText      = sanitizedText,
+                    TopAuthorsNote   = sanitizedTop,
+                    BottomAuthorsNote = sanitizedBottom,
+                    WordCount        = wordCount,
+                    Rating           = dto.Rating,
+                    VersionName      = dto.VersionName,
+                    // Null: the chapter is created unpublished (below), so this version isn't publicly
+                    // readable yet. SetPublishedAsync stamps it on the chapter's first publish (D2).
+                    PublishDate      = null
+                };
+
+                Chapter chapter = new()
+                {
+                    StoryId          = dto.StoryId,
+                    ChapterNumber    = nextChapterNumber,
+                    Title            = title,
+                    PrimaryContentId = null,  // set by the second save below
+                    IsPublished      = false, // author explicitly publishes via SetPublishedAsync
+                    VersionCount     = 1,
+                    ChapterContents  = [firstVersion]
+                };
+
+                // graph-tracked Add: Chapter + ChapterContent inserted in one SaveChanges,
+                // same as the Stories pattern (ServerStoryWriteService / WU12 lesson — no Attach()).
+                writeDb.Chapters.Add(chapter);
+                await writeDb.SaveChangesAsync();
+
+                chapter.PrimaryContentId = firstVersion.ChapterContentId;
+                await writeDb.SaveChangesAsync();
+
+                await tx.CommitAsync();
+                return chapter.ChapterId;
+            });
+        }
+        catch
         {
-            StoryId          = dto.StoryId,
-            ChapterNumber    = nextChapterNumber,
-            Title            = title,
-            PrimaryContentId = null, // null breaks the circular FK; set after first SaveChanges
-            IsPublished      = false, // author explicitly publishes via SetPublishedAsync
-            VersionCount     = 1,
-            ChapterContents  = [firstVersion]
-        };
-
-        // graph-tracked Add: Chapter + ChapterContent inserted in one SaveChanges,
-        // same as the Stories pattern (ServerStoryWriteService / WU12 lesson — no Attach()).
-        writeDb.Chapters.Add(chapter);
-        await writeDb.SaveChangesAsync();
-
-        // PKs are now populated; wire the primary-version pointer and save again.
-        chapter.PrimaryContentId = firstVersion.ChapterContentId;
-        await writeDb.SaveChangesAsync();
+            // A rolled-back attempt leaves the tracker holding rows the database never kept (the
+            // first save marked them Unchanged, with keys the rollback erased). Drop them so the
+            // circuit's next save does not act on them. Rethrown untouched: cleanup, not handling.
+            writeDb.ChangeTracker.Clear();
+            throw;
+        }
 
         // Recompute Story.WordCount (published primary versions only — a new chapter is a draft, so
-        // this is delta 0 until SetPublishedAsync).
+        // this is delta 0 until SetPublishedAsync). Post-commit, the D22 posture.
         await RefreshStoryWordCountAsync(dto.StoryId);
 
-        return chapter.ChapterId;
+        return chapterId;
     }
 
     public async Task<long> AddAlternateVersionAsync(int chapterId, CreateChapterDto dto)

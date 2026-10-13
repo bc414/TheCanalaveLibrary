@@ -38,8 +38,8 @@ public class ServerRecommendationReadService(
         // Kind (g): recommendations are exactly as visible as the story they endorse. The query
         // below filters on the bare StoryId FK, so none of Story's three filters reached it — full
         // rec text and recommender cards were readable for M-unrevealed, Draft/PendingApproval/
-        // Rejected and taken-down stories. (The isStoryAuthor probe below uses the filtered set, but
-        // it only ever returns false — it never gated the main query.)
+        // Rejected and taken-down stories. The guard is the gate; the isStoryAuthor probe below only
+        // decides which rows the (already permitted) viewer sees.
         if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
             return [];
 
@@ -47,7 +47,12 @@ public class ServerRecommendationReadService(
         // sees NeedsRevision/Rejected (to act on them); a recommender also sees their own hidden
         // rec (with the author's note). Status/RevisionRequestNote are projected only on those
         // elevated rows — public viewers only ever receive Approved rows, so nothing leaks.
+        // The ownership probe lifts ContentRating: visibility was settled by the guard above (which
+        // honors a reveal), and the filter would otherwise hide the author's own M story from a
+        // mature-off author who revealed it — they passed the guard but could not see the
+        // NeedsRevision/Rejected recs they must act on (service audit §2.12; WU-ParityAndRemaining).
         bool isStoryAuthor = currentUserId != null && await readDb.Stories
+            .IgnoreQueryFilters(["ContentRating"]) // elevated read: ownership probe; visibility already established by the guard above
             .AnyAsync(s => s.StoryId == storyId && s.AuthorId == currentUserId);
 
         return await readDb.Recommendations

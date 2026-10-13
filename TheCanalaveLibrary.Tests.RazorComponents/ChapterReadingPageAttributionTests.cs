@@ -13,7 +13,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Render tests for <see cref="ChapterReadingPage"/>'s recommendation-attribution flow (Feature 30,
 /// owner ruling D3, WU-InertFeatures): nothing is written on page load — the <c>?rec=</c> direct-link
 /// carrier rides <c>MarkStartedAsync</c> at the Ch.1 ≥90% moment, the helpful prompt is fetched only
-/// then, Yes records the success and X dismisses, and the widget closes after either.
+/// then, Yes records the success and X dismisses, and the widget closes after either. Also the
+/// scroll handler's caller gate on the durable marks (WU-ParityAndRemaining): an anonymous reader
+/// never calls <c>MarkStartedAsync</c>/<c>MarkCompletedAsync</c>.
 /// <para>The page's comment thread is stubbed (<c>ComponentFactories.AddStub&lt;CommentSection&gt;</c>) —
 /// its own dependency closure is covered by <c>CommentSectionTests</c> and is irrelevant here.</para>
 /// Tier: RazorComponents (bUnit, no host or DB; the scroll callback is invoked directly — the JS
@@ -23,11 +25,12 @@ public class ChapterReadingPageAttributionTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _recs = new();
     private readonly FakeUserStoryInteractionWriteService _interactions = new();
+    private readonly SingleChapterReadService _chapters = new();
     private readonly BunitAuthorizationContext _auth;
 
     public ChapterReadingPageAttributionTests()
     {
-        Services.AddScoped<IChapterReadService>(_ => new SingleChapterReadService());
+        Services.AddScoped<IChapterReadService>(_ => _chapters);
         Services.AddScoped<IStoryArcReadService>(_ => new FakeStoryArcReadService());
         Services.AddScoped<IStoryReadService>(_ => new FakeRelatedStoriesStoryReadService());
         Services.AddScoped<IReadingProgressWriteService>(_ => new NoOpReadingProgress());
@@ -160,29 +163,58 @@ public class ChapterReadingPageAttributionTests : BunitContext
         nav.History.Should().HaveCount(entries, "no navigation happens when there is nothing to consume");
     }
 
+    /// <summary>
+    /// Service audit §2.7.6 (WU-ParityAndRemaining, 2026-10-13): MarkStarted/MarkCompleted are durable
+    /// writes behind <c>RequireAuthorization</c>. Their contract makes an anonymous call a no-op, which
+    /// held on the circuit; on WASM the endpoint's 401 became <see cref="SessionExpiredException"/>
+    /// thrown out of this <c>[JSInvokable]</c> at a reader who never had a session. The page is the
+    /// gate: an anonymous reader never calls them (layer5-wasm.md, "anonymous → no-op is
+    /// caller-gated").
+    /// </summary>
     [Fact]
-    public async Task AnonymousReader_MarkStartedCarriesNoRec_AndNoPromptIsFetched()
+    public async Task AnonymousReader_NeverCallsTheDurableMarks_AndNoPromptIsFetched()
     {
+        _chapters.FinalChapterOfACompletedStory = true;
         IRenderedComponent<ChapterReadingPage> cut = RenderChapterOne("/story/1/1?rec=5");
 
         await ScrollTo(cut, 0.95f);
 
-        _interactions.MarkStartedCalls.Should().Equal([(1, (int?)null)]);
+        _interactions.MarkStartedCalls.Should().BeEmpty("an anonymous reader has no interaction row to start");
+        _interactions.MarkCompletedCalls.Should().BeEmpty("nor one to complete");
         _recs.GetHelpfulPromptCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SignedInReader_OnTheFinalChapterOfACompletedStory_MarksStartedAndCompletedOnce()
+    {
+        SignIn();
+        _chapters.FinalChapterOfACompletedStory = true;
+        IRenderedComponent<ChapterReadingPage> cut = RenderChapterOne("/story/1/1");
+
+        await ScrollTo(cut, 0.95f);
+        await ScrollTo(cut, 0.97f);
+
+        _interactions.MarkStartedCalls.Should().Equal([(1, (int?)null)]);
+        _interactions.MarkCompletedCalls.Should().Equal([1], "once per page visit");
     }
 
     // ── Local fakes ──────────────────────────────────────────────────────────────
 
-    /// <summary>Serves one published chapter 1 of story 1; everything else empty.</summary>
+    /// <summary>Serves one published chapter 1 of story 1; everything else empty. With
+    /// <see cref="FinalChapterOfACompletedStory"/> it is the last chapter of a Completed story, the
+    /// page's <c>MarkCompletedAsync</c> trigger.</summary>
     private sealed class SingleChapterReadService : IChapterReadService
     {
+        public bool FinalChapterOfACompletedStory { get; set; }
+
         public Task<ChapterReadingDto?> GetChapterForReadingAsync(int storyId, int chapterNumber, int? versionOrder = null) =>
             Task.FromResult<ChapterReadingDto?>(new ChapterReadingDto(
                 ChapterId: 11, StoryId: 1, ChapterNumber: 1, Title: "The Beginning",
                 ChapterText: "<p>Once upon a time.</p>", TopAuthorsNote: null, BottomAuthorsNote: null,
                 WordCount: 4, Rating: Rating.E, AuthorId: 42, AuthorName: "Author", VersionOrder: 0,
                 VersionName: null, PublishDate: new DateTime(2026, 1, 1), PreviousChapterNumber: null,
-                NextChapterNumber: 2, StoryRating: Rating.E));
+                NextChapterNumber: FinalChapterOfACompletedStory ? null : 2, StoryRating: Rating.E,
+                StoryIsComplete: FinalChapterOfACompletedStory));
         public Task<GatedMetadataDto?> GetChapterGateAsync(int storyId, int chapterNumber, int? versionOrder = null) =>
             Task.FromResult<GatedMetadataDto?>(null);
         public Task<IReadOnlyList<ChapterTocEntryDto>> GetChapterTocAsync(int storyId) =>

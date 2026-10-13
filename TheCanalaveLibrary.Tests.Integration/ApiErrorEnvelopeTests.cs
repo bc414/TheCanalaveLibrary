@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using TheCanalaveLibrary.Client;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Tests.Integration;
@@ -135,5 +139,91 @@ public class ApiErrorEnvelopeTests(PostgresFixture postgres) : IntegrationTestBa
         HttpResponseMessage response = await client.GetAsync("/api/messaging/conversations");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    // ── The validation 400's error list (WU-ParityAndRemaining, 2026-10-13) ─────────
+    // Service audit §2.7.1: the server joined a validation exception's error list into Detail only, so
+    // WASM rebuilt a one-line list. For stories Detail is the fixed "Story validation failed.", so the
+    // user saw that sentence instead of the real errors.
+
+    [Fact]
+    public async Task StoryCreate_EmptyFields_Returns400_WhoseErrorsExtensionListsEveryMessage()
+    {
+        int userId = await SeedUserAsync("EnvelopeAuthor");
+        SetActiveUser(userId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/stories", new CreateStoryDTO
+        {
+            Title = "", ShortDescription = "", LongDescription = "",
+            Rating = Rating.E, PostApprovalStatus = StoryStatusEnum.InProgress,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("detail").GetString().Should().Be("Story validation failed.");
+        body.RootElement.GetProperty("errors").EnumerateArray().Select(e => e.GetString())
+            .Should().Contain(["Title is required", "Short description is required", "Long description is required"]);
+    }
+
+    [Fact]
+    public async Task StoryCreate_TheWasmClientRebuildsTheSameErrorList_TheCircuitShows()
+    {
+        // The whole hop: the real endpoint answers, the real client service translates. The list the
+        // client's exception carries must be the one the service threw.
+        int userId = await SeedUserAsync("EnvelopeClient");
+        SetActiveUser(userId);
+        CreateStoryDTO invalid = new()
+        {
+            Title = "", ShortDescription = "", LongDescription = "",
+            Rating = Rating.E, PostApprovalStatus = StoryStatusEnum.InProgress,
+        };
+        List<string> expected = invalid.CanSave();
+
+        ClientStoryWriteService client = new(Factory.CreateClient());
+        Func<Task> act = () => client.CreateStoryAsync(invalid);
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Errors.Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task ANonValidation400_CarriesNoErrorsExtension()
+    {
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/tree-search/traverse", new TreeSearchRequest
+        {
+            RootStoryId = null, RootUserId = null, EdgeTypes = [TreeSearchEdgeType.Favorite],
+            MaxDegrees = 2, ResultCap = 50,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.TryGetProperty("errors", out _).Should().BeFalse("an ArgumentException 400 stays detail-only");
+    }
+
+    // ── GET /api/client-config (WU-ParityAndRemaining; service audit §2.7.3) ─────────
+
+    [Fact]
+    public async Task ClientConfig_IsAnonymous_AndCarriesTheServersSpriteRoot()
+    {
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/client-config");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "the WASM host fetches it before any sign-in state matters");
+        ClientConfigDto? config = await response.Content.ReadFromJsonAsync<ClientConfigDto>();
+        config.Should().Be(new ClientConfigDto("/sprites/themes"), "the shared host leaves Sprites:BaseUrl unset");
+    }
+
+    [Fact]
+    public async Task ClientConfig_TheWasmLoaderAdoptsWhatTheServerServes()
+    {
+        ClientRuntimeConfig runtime = new();
+
+        await runtime.LoadAsync(Factory.CreateClient(), NullLogger.Instance);
+
+        runtime.SpriteBaseUrl.Should().Be(
+            Factory.Services.GetRequiredService<ClientConfigDto>().SpriteBaseUrl,
+            "the client half reads the server's one registered value, never a second copy");
     }
 }

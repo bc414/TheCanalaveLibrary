@@ -27,5 +27,5 @@ public sealed class ClientSpotlightWriteService(HttpClient http)
     /// <summary>Status-code → contract-exception translation (inverse of SpotlightEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new SpotlightValidationException(msg));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new SpotlightValidationException([.. errs]));
 }

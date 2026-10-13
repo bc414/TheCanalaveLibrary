@@ -197,6 +197,45 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
         }
     }
 
+    /// <summary>
+    /// Service audit §2.12 (WU-ParityAndRemaining, 2026-10-13): the invite sweep runs on the write
+    /// context, which carries no query filters, so its doc's "the IsTakenDown filter stays active" was
+    /// false and a moderator-removed story drew an adoption invitation. The exclusion is now an explicit
+    /// <c>!IsTakenDown</c> in the author query.
+    /// </summary>
+    [Fact]
+    public async Task LinkGroupAsync_AnAuthorWhoseOnlyMatchingStoryIsTakenDown_IsNotInvited()
+    {
+        string name = $"Down{Guid.NewGuid():N}"[..12];
+        await SeedClusterStoryAsync(_authorA, name);
+        int removedStoryId = await SeedClusterStoryAsync(_authorB, name);
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Stories.Where(st => st.StoryId == removedStoryId)
+                .ExecuteUpdateAsync(u => u.SetProperty(st => st.IsTakenDown, true));
+        }
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using (IServiceScope scope = NewScope())
+        {
+            IFanonWriteService fanon = scope.ServiceProvider.GetRequiredService<IFanonWriteService>();
+            (await fanon.LinkGroupAsync(new FanonLinkCreateDto(name, _baseTagId, _targetTagId)))
+                .Should().Be(1, "only the live story's author is invited");
+        }
+
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Notifications.Where(n => n.NotificationTypeId == NotificationTypeEnum.TagUpdateSuggestion)
+                    .Select(n => n.RecipientUserId).ToListAsync())
+                .Should().Equal([_authorA]);
+            (await db.TagAdoptionStates.Where(st => st.TargetTagId == _targetTagId && st.DateNotified != null)
+                    .Select(st => st.UserId).ToListAsync())
+                .Should().Equal([_authorA], "the removed story's author is not marked as told either");
+        }
+    }
+
     [Fact]
     public async Task LinkGroupAsync_TheLinkingModeratorsOwnUse_GetsNoInvitation()
     {

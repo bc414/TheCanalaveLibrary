@@ -61,5 +61,5 @@ public class ClientUserStoryInteractionReadService(HttpClient http) : IUserStory
     /// </summary>
     protected static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new ArgumentOutOfRangeException(null, detail));
+            response, errs => new ArgumentOutOfRangeException(null, string.Join(" ", errs)));
 }

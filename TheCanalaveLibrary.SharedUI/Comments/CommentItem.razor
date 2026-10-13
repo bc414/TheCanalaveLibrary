@@ -6,8 +6,10 @@
    are EventCallback-driven (.HasDelegate idiom): like, reply, edit, and delete render only when
    the owning composite wires the callback. Edit and delete are additionally gated on IsOwnComment.
    Edit mode is section-owned (_editingId in CommentSection), passed in as IsEditing; in edit mode
-   CommentEditor swaps in for RichTextView in-place. No service injection — the section owns all
-   writes. See §5.9 (comments), §5.9.1 (spoiler reveal). *@
+   CommentEditor swaps in for RichTextView in-place, with the spoiler toggle when the section allows
+   it (AllowSpoilerEdit — chapter roots). A server-stamped DateEdited renders a muted "(edited)".
+   No service injection — the section owns all writes. See §5.9 (comments), §5.9.1 (spoiler
+   reveal). *@
 
 <div class="rounded-lg bg-(--color-surface) p-4 flex flex-col gap-3">
 
@@ -31,10 +33,15 @@
             {
                 <span class="text-sm text-(--color-text-muted)">[deleted user]</span>
             }
-            <time class="text-xs text-(--color-text-muted)"
-                  datetime="@Comment.DatePosted.ToString("O")">
-                @Comment.DatePosted.ToString("MMM d, yyyy")
-            </time>
+            <span class="text-xs text-(--color-text-muted)">
+                <time datetime="@Comment.DatePosted.ToString("O")">@Comment.DatePosted.ToString("MMM d, yyyy")</time>
+                @* Edited marker (WU-ParityAndRemaining): muted metadata beside the date; the title
+                   carries when. Set only on a real change of text or spoiler flag (server-stamped). *@
+                @if (Comment.DateEdited is DateTime edited)
+                {
+                    <span title="@($"Edited {edited:MMM d, yyyy}")"> (edited)</span>
+                }
+            </span>
         </div>
     </div>
 
@@ -42,7 +49,9 @@
     @if (IsEditing)
     {
         <CommentEditor Html="@Comment.CommentText"
-                       ShowSpoilerToggle="false"
+                       ShowSpoilerToggle="AllowSpoilerEdit"
+                       Spoiler="EditSpoiler"
+                       SpoilerChanged="EditSpoilerChanged"
                        SaveLabel="Save"
                        OnSave="OnEditSave"
                        OnCancel="OnEditCancel" />
@@ -175,6 +184,18 @@
 
     /// <summary>Section-owned edit flag (_editingId == Comment.CommentId). Swaps body to CommentEditor.</summary>
     [Parameter] public bool IsEditing { get; set; }
+
+    /// <summary>
+    /// Shows the spoiler toggle in edit mode. The section sets it for chapter-context roots only —
+    /// spoilers are chapter-only, and the server refuses a flag on any other context
+    /// (WU-ParityAndRemaining). Forwarded to <c>CommentEditor.ShowSpoilerToggle</c>.
+    /// </summary>
+    [Parameter] public bool AllowSpoilerEdit { get; set; }
+
+    /// <summary>The section-owned edit spoiler flag (two-way with <see cref="EditSpoilerChanged"/>).</summary>
+    [Parameter] public bool EditSpoiler { get; set; }
+
+    [Parameter] public EventCallback<bool> EditSpoilerChanged { get; set; }
 
     [Parameter] public EventCallback<long> OnToggleLike { get; set; }
     [Parameter] public EventCallback<long> OnReply { get; set; }

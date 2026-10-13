@@ -566,7 +566,13 @@ each "off".
   WU-InertFeatures review fixes because Explore's family rows and Deep Dive's panel changed with no
   browser, and back to 5 when the WU-InertFeatures browser pass drove both, 2026-09-30 — tracker H14
   closed, note at the end of this feature).**
-  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; the user pivot's 400 keeps its message on WASM since
+  WU-ParityAndRemaining, 2026-10-13 — service audit §2.7.7: `GetUserNeighborsAsync` rebuilds
+  `StoryValidationException` through `ClientHttpHelpers.ThrowIfWriteFailedAsync` instead of a bare
+  `EnsureSuccessStatusCode`, the `ClientTreeSearchReadService` shape; the story pivot and node displays
+  stay `EnsureSuccessStatusCode` because their endpoints never answer a typed 400; the class doc that
+  denied any translation is corrected; Unit `WasmParityClientTests`, mutation-checked, stage
+  unchanged)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
   WU-GlobalFlip. **L6 — Stage 2** (no

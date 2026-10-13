@@ -57,7 +57,7 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     }
 
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new InvalidOperationException(detail));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new InvalidOperationException(string.Join(" ", errs)));
 
     // ── Internal-only (server-to-server; never invoked from a WASM component) ────
 

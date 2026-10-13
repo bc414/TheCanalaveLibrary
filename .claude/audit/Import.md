@@ -13,14 +13,16 @@ docs, and Google Docs, import is essential authoring infrastructure; UX bar is t
 `SplitStrategy`, `ImportParseResult`, `ResplitRequest`, `ImportLimits`, `IContentImportService`),
 Server readers + splitter (`ServerContentImportService`, `DocxReader`, `EpubImportReader`,
 `HtmlFileReader`, `TxtReader`, `MarkdownReader`, `ChapterSplitter`, `ImportHtmlNormalizer`,
-`ContentImportEndpoints`), SharedUI mode/review components (`StoryChapterImport` — entry + mode
+`ArchiveGuard` and `ImportTextDecoder` (both WU-ParityAndRemaining, 2026-10-13), `ContentImportEndpoints`), SharedUI mode/review components (`StoryChapterImport` — entry + mode
 selection, `ImportReviewPanel`, `ChapterFileImport`). **No entities** — imported chapters are
 ordinary chapters created through `IChapterWriteService`; external story links belong to
 Feature 53. *(As-built names corrected 2026-07-27; the build note below always had them right.)*
 
 ## Feature 63 — Chapter Import (file ingestion)
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).
-- **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
+- **L2 / L3-Logic / L3.5 / L4 — Stage 5 (archive decompression bound, legacy-encoding fallback with a
+  warning, and the WASM re-split's camelCase read, WU-ParityAndRemaining 2026-10-13 — Unit-tested, stage
+  unchanged, the Stage note below; WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
   1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12, and browser-driven on both render
   phases by its browser pass the same day — Stage note below; tracker H25 holds two pre-existing
   editor defects that pass found; the three parse routes' `ImportParse` limiter is pinned by an Integration metadata test since WU-ThrottleCoverage, 2026-10-13, which also filed tracker D16 — an import of more than five chapters commits five and then refuses; Stage note below).** **L4.5 —
@@ -113,6 +115,36 @@ WU moved was driven through the real import UIs, with `psql` after each commit:
   The Markdown import's blockquote lost its quote and gained empty paragraphs once Quill loaded it.
   Saving the draft chapter then landed the author on "Page not found".
 
+### L2/L5 Stage note (WU-ParityAndRemaining, 2026-10-13) — no cell flips; F63 stays 5
+
+Service audit §2.12 (two import items) and §2.7.4.
+- **Archive bound (EPUB and DOCX).** New `Server/Import/ArchiveGuard.EnsureWithinLimits`, called after
+  the ZIP magic sniff on both container paths: more than `ImportLimits.MaxArchiveEntries` (10 000)
+  entries, or more than `ImportLimits.MaxDecompressedBytes` (100 MB) of **real** decompressed bytes
+  (stream-counted; declared sizes are never trusted), is an `ImportException`, and so is a corrupt
+  archive. `MaxEpubChapters`' doc no longer calls itself a zip-bomb guard (the Settled bullet above is
+  corrected too). Rule: `security.md` §"Archive imports (EPUB / DOCX)".
+- **Legacy encodings.** New `Server/Import/ImportTextDecoder`: BOM, then strict UTF-8, then Windows-1252
+  with the new `ImportWarningKind.EncodingFallback` (appended last; the enum travels by number). The TXT,
+  HTML and Markdown readers now return `(Html, Warnings)` like `DocxReader`, and `ReadSingleDocument`
+  passes the warnings through; `ImportReviewPanel` renders `Message`, so no UI change. Before, a
+  Notepad file's curly quotes became U+FFFD with no warning. Rule: `layer2-services.md` §"Export &
+  Import" → "Text decoding".
+- **L5 — the WASM re-split.** `ClientContentImportService.Resplit` read its JSON with the case-sensitive
+  default options, so the server's camelCase `title`/`html` never bound and every re-split draft came
+  back blank on WASM; its 400/401 detail never bound either. It now reads through
+  `ClientHttpHelpers.ReadNullableFromJson`/`ReadProblemDetail` (the sync twins of the async helpers,
+  same web options and payload); the private `ProblemPayload` copy is gone. Rule: `layer5-wasm.md`
+  §"Client Service Implementations" ("Every JSON read uses the web defaults").
+- Tier: Unit — `ImportArchiveAndEncodingTests` (14: the byte cap by real bytes and across entries, the
+  entry cap, rewind, a corrupt archive, both service paths with the production entry cap, four decoder
+  cases, and all three text readers passing the warning to the draft) and `WasmParityClientTests` (the
+  re-split binds camelCase; 400 and 401 details). The existing EPUB/DOCX round-trips in
+  `ContentImportTests` prove legitimate archives still parse. Mutation-checked: dropping the EPUB
+  guard call, dropping a reader's warning, and the default-options re-split each fail a test. No
+  browser was available: a WASM re-split is a step of tracker **H37**; no markup changed, so L4.5
+  stays 5.
+
 ### L2 Stage note (WU-ThrottleCoverage, 2026-10-13) — no cell flips; F63 stays 5
 - **Pinned, not changed:** `ExportServiceTests.ImportParseRoutes_CarryTheImportParseLimiter` (Integration)
   asserts the three parse routes carry the `"ImportParse"` concurrency limiter and `/resplit` none — the
@@ -154,8 +186,15 @@ WU moved was driven through the real import UIs, with `psql` after each commit:
   becomes segment 0 (droppable). `PageBreak` strategy only if Mammoth exposes docx page breaks
   (verify at build; drop the option if not).
 - **Security:** per-file cap + multi-file count cap; extension AND magic-byte sniff (mirrors
-  `ImageUploadProcessor` discipline, `security.md`); EPUB zip-bomb guards; parse failures are
-  caught per-file — never a circuit crash. Review state lives in circuit memory (no temp storage).
+  `ImageUploadProcessor` discipline, `security.md`); parse failures are caught per-file — never a
+  circuit crash. Review state lives in circuit memory (no temp storage). *Correction
+  (WU-ParityAndRemaining, 2026-10-13):* this bullet used to list "EPUB zip-bomb guards". There were
+  none: `MaxEpubChapters` caps the spine and `MaxFileBytes` the upload, and neither bounds the
+  decompressed size. The archive guard (entry cap + real decompressed-byte cap, EPUB **and** DOCX) is
+  now `ArchiveGuard`, rule in `security.md` §"Archive imports (EPUB / DOCX)".
+- **Text encoding (WU-ParityAndRemaining, 2026-10-13):** TXT/HTML/Markdown decode BOM → strict UTF-8
+  → Windows-1252 with an `EncodingFallback` warning; never silently garbled
+  (`layer2-services.md` §"Export & Import").
 - **Paste-from-Word is a verification item, not a build item** — Quill clipboard normalization +
   sanitize-on-save should already cover it; record fidelity during the browser pass; a Quill paste
   matcher becomes its own follow-up only if inadequate.

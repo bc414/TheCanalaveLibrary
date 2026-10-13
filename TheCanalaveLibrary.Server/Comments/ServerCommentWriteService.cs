@@ -112,6 +112,29 @@ public class ServerCommentWriteService(
         }
     }
 
+    /// <summary>The refusal for a reply to a reply (one-level threading).</summary>
+    internal const string ReplyToReplyMessage = "Replies can only be made to top-level comments.";
+
+    /// <summary>
+    /// One-level threading, enforced here rather than only in the UI (worksheet D12's "Left open"
+    /// paragraph, homed in service audit §2.12; WU-ParityAndRemaining, 2026-10-13 —
+    /// layer2-services.md §"Group Comments — Per-Context Method Pattern"). A reply's parent must itself
+    /// be top-level. <c>CommentSection</c> withholds Reply from replies, but a direct API call could
+    /// create a depth-3 reply that no read path renders, and D12's reparent then promoted it to root
+    /// when its parent was deleted. Each post method calls this after its own same-context parent
+    /// check, so the parent is known to exist; the anonymous projection keeps "row missing" apart from
+    /// "column null" (layer2-services.md §"Scalar projections").
+    /// </summary>
+    private async Task RequireTopLevelParentAsync(long parentCommentId)
+    {
+        var parent = await writeDb.BaseComments
+            .Where(c => c.CommentId == parentCommentId)
+            .Select(c => new { c.ParentCommentId })
+            .FirstOrDefaultAsync();
+        if (parent?.ParentCommentId is not null)
+            throw new CommentValidationException([ReplyToReplyMessage]);
+    }
+
     /// <summary>
     /// Resolves the parent comment's author for a reply, or null for a top-level comment or a
     /// SET-NULL'd (deleted) parent author. Used only by the best-effort notification blocks.
@@ -155,6 +178,7 @@ public class ServerCommentWriteService(
             if (!parentOnSameChapter)
                 throw new KeyNotFoundException(
                     $"Parent comment {dto.ParentCommentId} not found on chapter {dto.ChapterId}.");
+            await RequireTopLevelParentAsync(dto.ParentCommentId.Value);
         }
 
         string sanitizedText = sanitizer.Sanitize(dto.CommentText);
@@ -236,6 +260,7 @@ public class ServerCommentWriteService(
             if (!parentOnSamePost)
                 throw new KeyNotFoundException(
                     $"Parent comment {dto.ParentCommentId} not found on blog post {dto.BlogPostId}.");
+            await RequireTopLevelParentAsync(dto.ParentCommentId.Value);
         }
 
         string sanitizedText = sanitizer.Sanitize(dto.CommentText);
@@ -317,6 +342,7 @@ public class ServerCommentWriteService(
             if (!parentOnSameGroup)
                 throw new KeyNotFoundException(
                     $"Parent comment {dto.ParentCommentId} not found on group {dto.GroupId}.");
+            await RequireTopLevelParentAsync(dto.ParentCommentId.Value);
         }
 
         string sanitizedText = sanitizer.Sanitize(dto.CommentText);
@@ -394,6 +420,7 @@ public class ServerCommentWriteService(
             if (!parentOnSameProfile)
                 throw new KeyNotFoundException(
                     $"Parent comment {dto.ParentCommentId} not found on profile {dto.ProfileUserId}.");
+            await RequireTopLevelParentAsync(dto.ParentCommentId.Value);
         }
 
         string sanitizedText = sanitizer.Sanitize(dto.CommentText);
@@ -457,9 +484,28 @@ public class ServerCommentWriteService(
             throw new UnauthorizedAccessException(
                 "You can only edit your own comments.");
 
-        comment.CommentText = sanitizer.Sanitize(dto.CommentText);
+        // Spoilers are chapter-only. The base-set query materializes the TPT child, so the type test
+        // is on the loaded row; null means "leave the flag alone" (WU-ParityAndRemaining).
+        ChapterComment? chapterComment = comment as ChapterComment;
+        if (dto.IsSpoiler is not null && chapterComment is null)
+            throw new CommentValidationException([SpoilerNotChapterMessage]);
+
+        string sanitizedText = sanitizer.Sanitize(dto.CommentText);
+        bool textChanged = sanitizedText != comment.CommentText;
+        bool spoilerChanged = dto.IsSpoiler is bool spoiler && chapterComment!.IsSpoiler != spoiler;
+
+        // An identical re-save writes nothing: "(edited)" marks a real change only (service audit
+        // §2.12; layer2-services.md §"Group Comments — Per-Context Method Pattern").
+        if (!textChanged && !spoilerChanged) return;
+
+        comment.CommentText = sanitizedText;
+        if (spoilerChanged) chapterComment!.IsSpoiler = dto.IsSpoiler!.Value;
+        comment.DateEdited = DateTime.UtcNow;
         await writeDb.SaveChangesAsync();
     }
+
+    /// <summary>The refusal for a spoiler flag on a non-chapter comment.</summary>
+    internal const string SpoilerNotChapterMessage = "Only chapter comments can be marked as spoilers.";
 
     public async Task DeleteCommentAsync(long commentId)
     {

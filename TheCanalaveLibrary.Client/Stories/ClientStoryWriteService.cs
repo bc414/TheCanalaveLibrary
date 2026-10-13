@@ -76,5 +76,5 @@ public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadSe
     /// <summary>Status-code → contract-exception translation (inverse of StoryEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryValidationException([msg]));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, errs => new StoryValidationException([.. errs]));
 }

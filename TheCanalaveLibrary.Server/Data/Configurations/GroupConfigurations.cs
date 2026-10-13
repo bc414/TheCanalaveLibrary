@@ -42,8 +42,9 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             .HasForeignKey(gbp => (gbp as GroupBlogPost)!.GroupId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Group names must be unique across the site
-        builder.HasIndex(e => e.GroupName).IsUnique();
+        // Group names must be unique across the site (byte-wise; D29 owns case-insensitivity). The name
+        // is pinned because ServerGroupWriteService's create/rename race backstop matches on it.
+        builder.HasIndex(e => e.GroupName).IsUnique().HasDatabaseName("ix_groups_group_name");
         // Future indexes for querying (e.g., by CreatorId, Rating)...
     }
 }

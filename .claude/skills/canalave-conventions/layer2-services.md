@@ -296,13 +296,19 @@ if (authorId is null) throw new KeyNotFoundException(...); // fires even for aut
 
 // CORRECT — reference-type result is null only when no row exists.
 var row = await writeDb.Stories
-    .IgnoreQueryFilters(["ContentRating"])
     .Where(s => s.StoryId == id)
     .Select(s => new { s.AuthorId })
     .FirstOrDefaultAsync();
 if (row is null) throw new KeyNotFoundException(...);
 int? authorId = row.AuthorId; // may still be null (authorless story) — guard before .Value
 ```
+
+**The write context carries no query filters.** Every named filter (`ContentRating`, `StoryStatus`,
+`IsTakenDown`, `GroupAudience`) is declared on `ReadOnlyApplicationDbContext` only, so
+`.IgnoreQueryFilters([...])` on `writeDb` is a no-op that reads as a promise — and a write path that
+must exclude, say, taken-down stories has to say so in its own `Where`. (The sample above once carried
+that decoration and seeded it into `ServerFanonWriteService`, whose doc then claimed an `IsTakenDown`
+filter its context never had; removed WU-ParityAndRemaining, 2026-10-13.)
 
 Also guard any downstream `.Value` access on `authorId` — authorless stories are valid (`AuthorId`
 may be null even when the story exists).
@@ -691,7 +697,10 @@ is not usable for restore (`error-handling.md` — prerender-handoff only).
 
 **`SpriteBaseUrl` is a config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`
 for wwwroot). At R2/CDN time, changing this one config value — together with an Rclone sync of the
-assets — is the complete cutover; no code changes. Uploads have the analogous seam:
+assets — is the complete cutover; no code changes. That holds for **both** halves: the server reads the
+key once into its `ClientConfigDto` singleton, and the WASM client receives the same value from
+`GET /api/client-config` at boot (`layer5-wasm.md` §"Server configuration the client needs";
+WU-ParityAndRemaining, 2026-10-13 — before it, `Client/Program.cs` hardcoded the default). Uploads have the analogous seam:
 `S3ImageStorageService` has existed since WU-S3Garage (2026-07-05), and `ImageStorage:PublicBaseUrl`
 is wired but unset, because every upload is still served same-origin through the app (static files in
 Local mode, the `/uploads/{**key}` endpoint in S3 mode). The two features converge on one CDN but do
@@ -848,6 +857,15 @@ every format conversion** in both directions:
   for file-derived content, exactly as it is for editor output. Unrepresentable source formatting
   is stripped **with an `ImportWarning` surfaced to the author** (e.g. images dropped — the
   allowlist has no `img`), never silently.
+- **Text decoding** (TXT, HTML, Markdown — WU-ParityAndRemaining, 2026-10-13): every text reader
+  decodes through `ImportTextDecoder.Decode`. A byte-order mark wins; otherwise strict UTF-8; and if
+  the bytes are not valid UTF-8, the file is re-read as **Windows-1252** (the legacy encoding of
+  Word/Notepad fanfic files, whose curly quotes are 0x93/0x94) **with an
+  `ImportWarningKind.EncodingFallback` warning** telling the author to check accented letters, quotes
+  and dashes. Before it, a non-UTF-8 file decoded leniently to U+FFFD replacement characters with no
+  warning. The warning is the minimum; the 1252 fallback is the implementer's default (no ruling
+  needed: it only replaces garbage). Archive formats (EPUB, DOCX) carry their own encoding and are
+  bounded by `security.md` §"Archive imports".
 
 **Export permission rule: "export = what you can read."** `ExportStoryAsync` composes the existing
 read services, so the content-rating master filter is the only gate — no author-only restriction,
@@ -892,6 +910,16 @@ a folder's ceiling cannot exceed the group ceiling. Attempting to create a folde
 
 **`ContentRatingExceededException`** lives in `Core/Groups/` (not `Core/` root) — it is a domain
 exception specific to the group content model, not a general cross-cutting concern.
+
+**Group names are unique, byte-wise (WU-ParityAndRemaining, 2026-10-13).** `ix_groups_group_name` is
+UNIQUE. `CreateGroupAsync` and a renaming `UpdateGroupAsync` pre-check the trimmed name with `==`
+(exactly the index's comparison; case-insensitive names are D29, pending) and refuse a taken name with
+`GroupValidationException` (400) instead of the raw 23505 500. A concurrent create or rename that passes
+the pre-check hits the index; that save catches 23505 **on this index's name only**, answers the same
+refusal and detaches the rejected entity (the folder backstop's shape below). `CreateGroupAsync` adds
+the creator's Admin `GroupMember` through `group.GroupMembers` before its **single**
+`SaveChangesAsync`, so the group and its first admin commit together — a crash between two saves used
+to leave an admin-less group. The D24 `GroupsJoined +1` stays post-commit.
 
 ## Group Folder Integrity (schema §2.4, service §2.10; WU-SchemaHardening 2026-10-13)
 
@@ -966,6 +994,24 @@ same two-step root-paging + per-viewer like-EXISTS projection as the blog-post a
 branch verifies `writeDb.Chapters` + parent-same-chapter cross-check). Sharing a single generic
 method with a `target` parameter does not simplify the verification logic and would produce a branchy
 switch that obscures what each context requires. The per-context pattern already exists; extend it.
+
+**Rules every context shares (WU-ParityAndRemaining, 2026-10-13):**
+- **One-level threading is service-enforced.** A reply's parent must itself be top-level
+  (`ParentCommentId IS NULL`). Each `Post*CommentAsync` runs its same-context parent check (a parent
+  on another chapter/post/group/wall is a 404) and then the shared `RequireTopLevelParentAsync`: a
+  parent that is itself a reply is a `CommentValidationException` ("Replies can only be made to
+  top-level comments.", 400). Before this the rule was UI-only (`CommentSection` withholds Reply from
+  replies), so a direct API call created a depth-3 reply no read path renders — and under D12's
+  reparent, deleting its parent then promoted it to root. A reply whose parent was later deleted is
+  top-level by then (SET NULL) and may itself be replied to.
+- **`EditCommentAsync` stamps `BaseComment.DateEdited` only on a real change** — the sanitized text
+  differs from the stored text, or the spoiler flag changes. An identical re-save writes nothing, so
+  "(edited)" never appears for a no-op. `CommentDto.DateEdited` carries it to every read.
+- **`UpdateCommentDto.IsSpoiler` is `bool?`: null means unchanged.** A non-null value is legal only on a
+  `ChapterComment` (spoilers are chapter-only); on any other context it is a
+  `CommentValidationException` ("Only chapter comments can be marked as spoilers."). The edit loads
+  through `writeDb.BaseComments`, which materializes the TPT child, so the type test is on the loaded
+  entity. `CommentSection` sends it only for chapter-context roots and null otherwise.
 
 ## Group Membership and Role Model
 
@@ -2067,6 +2113,17 @@ All rules are enforced by `ServerStoryWriteService` via `StoryValidationExceptio
 | ContentWarning priority coercion | Priority != Primary | Coerce to Primary (not an error) |
 | Pairing member count | Members < 2 | Reject |
 | Pairing members in-story | Member `StoryCharacterId` must exist in this story's `StoryCharacters` | Reject |
+| Pairing member listed twice | A pairing's `MemberIndexes` repeats an index (`[0,0,1]` passes the ≥2-distinct rule, then the mapper adds two members with one primary key — a raw 500) | Reject ("A pairing can't list the same character twice.") |
+| Tag exists | Every `StoryTags.TagId` and `StoryCharacters.CharacterTagId` is a `Tag` row (a missing id was a raw FK 500) | Reject ("Tag(s) … don't exist.") |
+| Declared type = stored type | `StoryTagDTO.TagTypeEnum` equals the row's `Tag.TagTypeId` (a forged type bypassed `CanSave`'s required Setting/Genre rule and the Primary-Genre cap) | Reject |
+| Character tags only in `StoryCharacters` | A Character-type tag in `StoryTags`, or a non-Character tag as `CharacterTagId` | Reject |
+
+Rows 7–10 were added by WU-ParityAndRemaining (2026-10-13). The first block of
+`ValidateStructuredTagGatesAsync` loads `TagId → TagTypeId` for every referenced id; once it passes, the
+DTO's types are the database's, so `CanSave`'s type rules and the mapper's ContentWarning coercion are
+sound. **Both WU37 pairing rules were already enforced here** (since 2026-07-26); service audit §4 #5
+read `StoryMappers` in isolation, where the in-range check is **defensive only** — it never decides a
+rule, because the DTO is validated upstream before the mapper runs.
 
 No DB trigger (`TR_StoryCharacters_EnforceOCLogic` is SQL-Server-era; superseded). A DB CHECK is
 post-MVP defense-in-depth if wanted.

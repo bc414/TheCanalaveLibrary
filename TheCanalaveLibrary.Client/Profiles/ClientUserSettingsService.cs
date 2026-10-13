@@ -84,5 +84,5 @@ public sealed class ClientUserSettingsService(HttpClient http) : IUserSettingsSe
     /// </summary>
     private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
         ClientHttpHelpers.ThrowIfWriteFailedAsync(
-            response, detail => new UserSettingsValidationException([detail]));
+            response, errs => new UserSettingsValidationException([.. errs]));
 }

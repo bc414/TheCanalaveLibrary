@@ -363,7 +363,36 @@ unchanged).
   **L1 additions in WU37:** `Tag.AllowSettingDetails`; `StoryCharacterPairing` rename + `PairingType`
   field + `CharacterPairingType` enum; new `StoryCharacterPairingMember` first-class join; `UNIQUE(StoryId,
   BaseTagId)` on `SettingDetail`; `TagChipDto.AllowSettingDetails`.
-- **L2 — Stage 5. L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
+- **WU-ParityAndRemaining Stage note (2026-10-13) — no flip (service audit §2.12; §4 #5 and the Fanon
+  line of §4's false-comment inventory).**
+  - **Tag existence and stored type.** `ServerStoryWriteService.ValidateStructuredTagGatesAsync` first
+    loads `TagId → TagTypeId` for every `StoryTags.TagId` and `StoryCharacters.CharacterTagId`, and
+    refuses: a missing id ("Tag(s) … don't exist.", was a raw FK 500); a declared `TagTypeEnum` that is
+    not the stored type (a forged type passed `CanSave`'s required Setting/Genre rule and the
+    Primary-Genre cap); a Character tag in `StoryTags`; a non-Character tag as a `CharacterTagId` (both
+    stored silently before). After the block the DTO's types are the database's, so `CanSave`'s type
+    rules and the mapper's ContentWarning coercion are sound.
+  - **Pairings: §4 #5 resolved by enforcing.** Both WU37 rules were already enforced (since
+    2026-07-26); the audit read `StoryMappers` in isolation. The residual was a member listed twice
+    (`[0, 0, 1]` passed the ≥2-distinct rule, then the mapper added two members with one primary key — a
+    raw 500); it is now "A pairing can't list the same character twice." The mapper's comment says its
+    in-range check is defensive only.
+  - **Fanon invitations skip taken-down stories.** `ServerFanonWriteService.NotifyNewAuthorsCoreAsync`
+    runs on the write context, which has no query filters, so its doc's "the IsTakenDown filter stays
+    active" was false and a removed story drew an adoption invitation. The author query now says
+    `!IsTakenDown` itself; the four `.IgnoreQueryFilters(["ContentRating"])` no-ops on the write context
+    are gone (the decoration came from `layer2-services.md`'s scalar-projection sample, also fixed).
+    `AdoptCoreAsync` stays author-scoped: adopting on one's own taken-down story is harmless.
+  - Rule: `layer2-services.md` §"Legality rules — enforced at service layer" (four new rows) and
+    §"Scalar projections" ("The write context carries no query filters"). Tier: Integration —
+    `StoryTaggingTests` +6 (forged type, missing tag id, missing character id, Character tag as a flat
+    tag, Genre tag as a character, a doubled pairing member; before the fix the missing id and the
+    doubled member threw `DbUpdateException`, the rest were accepted) and `FanonPipelineTests` +1 (a
+    taken-down story's author is neither invited nor marked told). Mutation-checked: dropping the
+    stored-type check, the doubled-member check or the `!IsTakenDown` each fails its test.
+- **L2 — Stage 5 (tag existence, stored type and the doubled pairing member enforced, and fanon invites
+  skip taken-down stories, WU-ParityAndRemaining 2026-10-13 — Integration-tested, stage unchanged, the
+  note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
   sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 5 (WU-L6, 2026-07-07 — resolved
   as already-covered, no DDL: the tag-filter probes are correlated EXISTS on `(story_id, tag_id)`
   = the `story_tags` PK, and no probe reads `priority`; the proposed reverse composite
