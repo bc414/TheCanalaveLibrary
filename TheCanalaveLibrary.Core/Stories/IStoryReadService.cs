@@ -21,7 +21,11 @@ public interface IStoryReadService
 
     /// <summary>
     /// Gets the data required to edit a story: its editable properties plus read echoes (status,
-    /// rejection reason, and the cover — owner ruling D14 keeps the cover off the write DTO).
+    /// rejection reason, and the cover — owner ruling D14 keeps the cover off the write DTO). Author
+    /// only (<see cref="UnauthorizedAccessException"/> otherwise). A taken-down story is returned to its
+    /// author with <see cref="StoryEditDTO.IsTakenDown"/> set (owner ruling D15: the delete stays
+    /// reachable under a takedown); null means the story does not exist or, for anyone but its author,
+    /// is taken down (the same answer as a missing id).
     /// </summary>
     /// <param name="storyId">The ID of the story to edit.</param>
     /// <returns>A DTO containing the story's editable properties and its current cover.</returns>

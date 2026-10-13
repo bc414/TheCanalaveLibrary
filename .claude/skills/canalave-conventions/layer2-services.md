@@ -377,6 +377,13 @@ partial delete.
   owner probe; `TptDelete.BlogPostAsync` returns the rows deleted, and the loser (0) throws
   `KeyNotFoundException` inside the delegate, so it rolls back and never reaches the counter
   decrement — the counter moves only on the actual delete.
+- **Two transaction edges are closed at story scope only** (WU-AuthorStoryDelete review fixes,
+  2026-10-13): `TptDelete.StoryCommentsAsync` locks the story's chapters before deleting their
+  comments, and `DeleteStoryAsync` passes `verifySucceeded` so a lost commit acknowledgement is not
+  replayed (§"Author story deletion", steps 2 and 4). The chapter, blog-post and profile-wall scopes
+  still have both windows: a child row inserted between the helper and the parent delete fails the
+  parent delete with 23001, and a replayed delegate answers a completed delete as not found — tracker
+  **D19**.
 - **Callers today:** `ServerChapterWriteService.DeleteChapterAsync` (clears the tracker since the
   WU-TptHardDelete review fixes, 2026-09-30);
   `ServerBlogPostWriteService.DeleteBlogPostAsync`/`DeleteGroupBlogPostAsync`/`DeleteSiteBlogPostAsync`
@@ -410,18 +417,28 @@ cooldown, no mod approval, no `IsWithdrawn` soft state. Unpublish (D1's `publish
   needed. The moderation record survives without the content: `reports` has no FK to `stories`,
   `ReportedUserId` (D8) keeps the author answerable, and sanctions are account-level.
 
-**The order** — one `CreateExecutionStrategy().ExecuteAsync` + `BeginTransactionAsync`, never a loop
-of `DeleteChapterAsync` (that would renumber and refresh word counts for a parent that is going away,
-in O(chapters) transactions):
+**The order** — one `CreateExecutionStrategy().ExecuteInTransactionAsync(operation, verifySucceeded)`,
+never a loop of `DeleteChapterAsync` (that would renumber and refresh word counts for a parent that is
+going away, in O(chapters) transactions):
 1. *Before the strategy:* `RequireUserId()`, then a projected owner gate on the write context
    (`KeyNotFoundException` / `UnauthorizedAccessException`). No `IWriteRateLimitService` call — deletes
    are unthrottled (`security.md` §"Write Throttling").
-2. *Inside the delegate:* `ChangeTracker.Clear()` first, then the transaction.
+2. *The strategy owns the transaction*, so it can ask `verifySucceeded` (is the story gone?) before
+   retrying a transient failure (WU-AuthorStoryDelete review fixes, 2026-10-13). A commit that reached
+   the database but whose acknowledgement was lost would otherwise be replayed, find the story gone, and
+   answer 404 for a delete that happened, skipping the blob delete and the trace. The check runs only
+   for a transient failure, so a lost race (step 6) still throws. *Inside the operation:*
+   `ChangeTracker.Clear()` first.
 3. Capture the cover path (`story_listings.cover_art_relative_url`) inside the transaction, before the
-   row delete (D14 rule 2) — a retried delegate recaptures it.
+   row delete (D14 rule 2). Only a rolled-back attempt is retried, so a retry recaptures the same path.
 4. `TptDelete.StoryCommentsAsync` — every chapter comment and reply of the story, one statement
    through `base_comments` (D10 at story scope). Must precede step 6: `chapter_comments.chapter_id` is
-   RESTRICT.
+   RESTRICT. **It locks the story's chapter rows first** (`FOR UPDATE`, in `chapter_id` order, held to
+   the commit; review fixes, 2026-10-13): steps 4–6 are separate statements, step 5 can wait on the
+   booking lock, and a comment committed in between would pass its FK check and then fail step 6's
+   cascade with 23001. A comment insert's FK check takes `FOR KEY SHARE` on its chapter, which waits on
+   `FOR UPDATE`, so the post waits and then fails its own FK check once the chapter is gone. The lock
+   lives in the helper, so the moderation hard delete has it too.
 5. `SpotlightPlacementRelease.ReleaseUnstartedForStoryAsync` — returns the slots of unstarted
    placements (§"Community Spotlight" → "Slot return when a story is deleted"). Must precede step 6:
    the cascade removes the placement rows that name the slots.
@@ -429,7 +446,7 @@ in O(chapters) transactions):
    `Story` is not TPT, so the LINQ set delete is legal. **0 rows is a lost race** (another tab deleted
    it first): throw `KeyNotFoundException` inside the delegate, so the transaction rolls back and the
    loser answers 404 exactly as a sequential re-delete does.
-7. Commit. *After the strategy returns:* the cover blob, best-effort in its own `try` (a Warning naming
+7. The strategy commits. *After it returns:* the cover blob, best-effort in its own `try` (a Warning naming
    the path; the orphan sweep is the backstop), then one `LogInformation` recording the deletion
    (story, author, slots returned) — the durable trace of an irreversible user act.
 
@@ -459,6 +476,19 @@ click sites guard a null `TargetUrl`, so a dangling row is inert and never throw
 `user_content_reveals.entity_id` (no FK; serial ids are never reused) and the L8 marts, whose readers
 join `stories`. **Open reports** against the story or its chapter comments stay Open and drop out of
 the queue (the target no longer materializes) — owner-open, tracker **F13** site 5.
+
+**A taken-down story keeps its delete** (D15: a takedown never blocks it, and the control lives on the
+edit surface; WU-AuthorStoryDelete review fixes, 2026-10-13). `GetStoryForEditAsync` lifts the
+`"IsTakenDown"` filter beside `"ContentRating"` — the author reads their own taken-down content
+(`content-safety.md` §"Content Removal") — and echoes `StoryEditDTO.IsTakenDown`. The lift is for the
+author only: anyone else gets `null` for a taken-down story, the answer a missing id gets, never the
+403 that would confirm a hidden id. `StoryEditorPage` then renders **delete-only**: a notice and the
+Delete story section, no form, no lifecycle panel (a taken-down story's status is frozen, §"Story
+Lifecycle"), no chapter panels, and the dialog offers neither out (no unpublish; the export 404s, Export
+being "what you can read"). `ChapterEditorPage` treats the flag as not found, as before. **Open:**
+nothing on the site links an author to a taken-down story's editor — the Authored tab and the story page
+filter it, and the takedown notification carries the report, not the story — so the author reaches it
+by its address (`roadmap.md` decision row 27 (e)).
 
 ## Signal Buffering — in-process write buffers for loss-tolerant signals
 
@@ -3123,9 +3153,13 @@ The limit checks themselves: §"Recommendation Write Conventions" → "Count-lim
 
 **Advisory locks are not banned.** They remain the right tool where a genuine constraint is both
 non-declarative **and** unrestructurable. No family above qualifies. A WU that reaches for one must
-clear that bar and record the lock-based invariant, because an undocumented convention decays. The one
-on record: Spotlight redemption's `pg_advisory_xact_lock` (§"Community Spotlight" → "Redemption is the
-concurrency-sensitive write"), which serializes a count-then-insert against block capacity.
+clear that bar and record the lock-based invariant, because an undocumented convention decays. On
+record, both on one lock (`SpotlightLocks.BookingLockSql`): Spotlight redemption's
+`pg_advisory_xact_lock` (§"Community Spotlight" → "Redemption is the concurrency-sensitive write"), which
+serializes a count-then-insert against block capacity; and `SpotlightPlacementRelease`, which takes it
+inside the author story delete so no booking can land on the story between the slot release and the
+cascade that removes its placements (§"Community Spotlight" → "Slot return when a story is deleted";
+WU-AuthorStoryDelete, 2026-10-13).
 
 **The ensure-row mechanism (USI).** `ServerUserStoryInteractionWriteService` has four tracked-create
 sites (`SetUserStoryInteractionStateAsync`, `SetReadItLaterFromRecommendationAsync`, `MarkStartedAsync`,

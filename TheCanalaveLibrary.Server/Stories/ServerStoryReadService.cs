@@ -157,7 +157,11 @@ public class ServerStoryReadService(
             // elevated read: an author edits their own story regardless of their personal rating
             // setting — the mature-off-author lockout was bug B5 (WU-AccessGate Phase 1). Safe:
             // the ownership comparison below is the gate; non-authors get null either way.
-            .IgnoreQueryFilters(["ContentRating"])
+            // IsTakenDown too (WU-AuthorStoryDelete review fixes, 2026-10-13): the author reads their
+            // own taken-down content (content-safety.md §"Content Removal"), and owner ruling D15 puts
+            // the delete on this surface under any takedown. The DTO echoes IsTakenDown, and the editor
+            // then offers only the delete. A non-author still gets null for it below, as before.
+            .IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
             .Where(s => s.StoryId == storyId)
             .Select(s => new
             {
@@ -177,6 +181,8 @@ public class ServerStoryReadService(
                 RejectionReason = s.StoryStatusId == StoryStatusEnum.Rejected ? s.TakedownReason : null,
                 // Read echo (StoryEditDTO, owner ruling D14) — never read by the write path.
                 CoverArtRelativeUrl = s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
+                // Read echo (owner ruling D15): the editor shows a taken-down story delete-only.
+                IsTakenDown = s.IsTakenDown,
                 LongDescription = s.StoryDetail != null ? s.StoryDetail.LongDescription : null,
                 PostApprovalStatus = s.StoryDetail != null ? s.StoryDetail.PostApprovalStatus : default,
                 StoryTags = s.StoryTags.Select(st => new StoryTagDTO
@@ -222,7 +228,11 @@ public class ServerStoryReadService(
         if (row is null) return null;
         // Explicit-auth check rather than nullable comparison: an anonymous viewer (UserId null)
         // against an authorless story (AuthorId null) must not pass on null == null.
-        if (ActiveUser.UserId is not int viewerId || row.AuthorId != viewerId)
+        bool isAuthor = ActiveUser.UserId is int viewerId && row.AuthorId == viewerId;
+        // The takedown is lifted for the author only. Anyone else gets the absent answer for a taken-down
+        // story, as the filter gave them before (non-disclosure: a 403 would confirm the hidden id exists).
+        if (row.Dto.IsTakenDown && !isAuthor) return null;
+        if (!isAuthor)
             throw new UnauthorizedAccessException("You must be the author of this story.");
 
         // Translate pairing member StoryCharacterIds (projected above) into indexes into the

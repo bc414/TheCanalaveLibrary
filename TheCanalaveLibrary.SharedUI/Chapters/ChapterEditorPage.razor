@@ -242,8 +242,10 @@ else
         // Load story rating for the form's floor/primary invariant UI (skipped when restored).
         if (StoryRating is null)
         {
-            StoryUpdateDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
-            if (story is null)
+            // A taken-down story's edit read reaches its author (owner ruling D15: for the story
+            // editor's delete); its chapters stay closed to editing, as before (IsTakenDown echo).
+            StoryEditDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
+            if (story is null || story.IsTakenDown)
             {
                 NavigationManager.NotFound();
                 return;

@@ -140,8 +140,10 @@ context, since even a genuine replica would trail the primary slightly.
   recommendations, reading state, list/series/group entries, lineage links) goes with it, an unstarted
   Spotlight booking returns its slot, and moderation records survive. Rule: `layer2-services.md`
   §"Author story deletion". The stated test for what survives a deletion is D11/D13's: **does the
-  record keep its meaning once its subject is gone?** A poll vote and a DM do; nothing attached to a
-  story does.
+  record retain meaning once the actor is gone?** A poll vote and a DM do — a poll result is a dated
+  artifact the thread argues about, and a DM is the other participant's mail too. D15 applies the same
+  test to a story's dependents and finds the opposite: a comment, a reading-progress row, a favorite and
+  a recommendation are all *about* the story, so they do not outlive their subject.
 - **Interaction data** (follows, interactions, badges, settings): CASCADE on user. **Poll votes are
   the one exception** (owner ruling D13): see "Account deletion" below.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
@@ -234,9 +236,9 @@ bind every future change:
 1. **The anonymization must be genuine.** The user must be able to delete their own content before
    deleting the account, and the deletion page must say so. Severing the FK does nothing for content
    whose text identifies its author. **Met for stories** since WU-AuthorStoryDelete (owner ruling D15,
-   2026-10-13): Delete story on the story's edit page, which the deletion page names. One gap: a
-   taken-down story's editor does not load (the edit read keeps the takedown filter), so its author has
-   the API but no button (`roadmap.md` decision row 27 (e)). **Not yet met
+   2026-10-13): Delete story on the story's edit page, which the deletion page names. A taken-down
+   story's edit page opens for its author delete-only (its review fixes, the same day); nothing links
+   the author to it yet, so they reach it by its address (`roadmap.md` decision row 27 (e)). **Not yet met
    for blog posts** (the page says so): every subtype has a service delete but no button (tracker
    **B25**, which no WU owns yet). A
    recommendation the story's author removed (`Rejected`, the sticky block record) refuses its

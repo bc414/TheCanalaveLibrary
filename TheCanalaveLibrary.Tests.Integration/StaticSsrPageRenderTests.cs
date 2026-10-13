@@ -145,10 +145,12 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
         html.Should().Contain("The same goes for a cover image that shows you.");
 
         // WU-AuthorStoryDelete (owner ruling D15): stories gained their delete-it-first path, so D13 rider (i)
-        // is met for them; the page names it, says honestly that a taken-down story has no such button
-        // (decision row 27 (e)), and keeps blog posts' "can't be deleted yet" (tracker B25).
+        // is met for them; the page names it, says a taken-down story's edit page still offers it (its review
+        // fixes: the editor opens delete-only), and keeps blog posts' "can't be deleted yet" (tracker B25).
         html.Should().Contain("Stories: use Delete story at the bottom of the story's edit page.");
-        html.Should().Contain("A story a moderator has taken down can't be opened in its editor");
+        html.Should().Contain("This works for a story a moderator has taken down too: its edit page");
+        html.Should().NotContain("can't be opened in its editor",
+            "a taken-down story's editor opens delete-only since the review fixes; the old caveat would now be false");
         html.Should().Contain("Blog posts can't be deleted on the site yet, so they are kept without your name.");
         html.Should().NotContain("Stories and blog posts can't be deleted",
             "stories can be deleted since D15; the old line would now be false");

@@ -1,6 +1,9 @@
+using System.Data.Common;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -11,7 +14,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <see cref="IStoryWriteService.DeleteStoryAsync"/> is a hard delete by the primary author, under any
 /// moderation state, through one transaction (story-scope <c>TptDelete</c>, the Spotlight slot return,
 /// the story row) with everything else left to the database's cascades. D15's own test list, plus the
-/// gate, the lost-race and circuit-tracker cases. The cover blob's inline delete is in
+/// gate, the lost-race and circuit-tracker cases, and (review fixes, 2026-10-13) the chapter lock against
+/// a mid-delete comment, a lost commit acknowledgement, and the taken-down story's edit read that the
+/// editor's delete-only state needs. The cover blob's inline delete is in
 /// <see cref="BlobCleanupTests"/> (D14's inline sites); the HTTP status mapping in
 /// <see cref="StoryEndpointsTests"/>. Tier: Integration.
 /// <para><b>Per-test seeding and FK parents.</b> <see cref="InitializeAsync"/> seeds the author, a reader
@@ -430,14 +435,130 @@ public class StoryDeletionTests(PostgresFixture postgres) : IntegrationTestBase(
             "the release ran inside the delete's transaction, which committed");
     }
 
+    [Fact]
+    public async Task ACommentPostedWhileTheDeleteRuns_WaitsOnTheLockedChapter_AndTheDeleteSucceeds()
+    {
+        // Review fixes (2026-10-13). Between the story-scope comment delete and the story delete the
+        // transaction waits on the booking lock and returns slots. A comment committed in that window on a
+        // chapter nothing held would pass its FK check, and then the cascade's RESTRICT check would fail the
+        // delete (23001). TptDelete.StoryCommentsAsync locks the chapters FOR UPDATE first, so a reader's
+        // post, interleaved just before the story DELETE, waits on its FK check's FOR KEY SHARE; here it
+        // gives up after a short lock_timeout and the delete commits. Without the lock the post lands first.
+        int ch = await CreateChapterAsync("Ch 1");
+        InterleavingCommandInterceptor readerPosts = new(ConnectionString, "DELETE FROM stories",
+            $$"""
+            DO $$
+            BEGIN
+                PERFORM set_config('lock_timeout', '1s', true);
+                WITH b AS (
+                    INSERT INTO base_comments (active_report_count, comment_text, is_taken_down, like_count, user_id)
+                    VALUES (0, 'posted mid-delete', false, 0, {{_readerId}})
+                    RETURNING comment_id)
+                INSERT INTO chapter_comments (comment_id, chapter_id, date_posted, is_spoiler)
+                SELECT comment_id, {{ch}}, now(), false FROM b;
+            EXCEPTION WHEN lock_not_available THEN
+                NULL; -- the delete holds the chapter, so the post waited
+            END $$;
+            """);
+        SetActiveUser(_authorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (ServerStoryWriteService svc, ApplicationDbContext writeDb) = StoryWritesOver(scope, readerPosts);
+            await using (writeDb)
+                await svc.DeleteStoryAsync(_storyId);
+        }
+
+        readerPosts.Fired.Should().BeTrue("the post must be attempted inside the window");
+        (await CountAsync($"SELECT COUNT(*)::int AS \"Value\" FROM stories WHERE story_id = {_storyId}")).Should().Be(0);
+        (await CountAsync($"SELECT COUNT(*)::int AS \"Value\" FROM base_comments WHERE comment_text = 'posted mid-delete'"))
+            .Should().Be(0, "no comment can land on a chapter the delete holds");
+    }
+
+    [Fact]
+    public async Task ACommitWhoseAcknowledgementIsLost_IsNotReplayedIntoA404()
+    {
+        // Review fixes (2026-10-13). The commit reaches the database and the reply is lost (a dropped
+        // connection), so the strategy sees a transient error. A replay would find the story gone and
+        // answer 404 for a delete that happened; verifySucceeded sees it gone and reports success.
+        int slotId = await GrantSlotToReaderAsync();
+        await RedeemAsReaderAsync(slotId, NextBlockStart);
+        LostCommitAcknowledgement lostAck = new();
+        SetActiveUser(_authorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            (ServerStoryWriteService svc, ApplicationDbContext writeDb) = StoryWritesOver(scope, lostAck);
+            await using (writeDb)
+                await svc.DeleteStoryAsync(_storyId);
+        }
+
+        lostAck.Fired.Should().BeTrue("the first commit's acknowledgement must have been lost");
+        (await CountAsync($"SELECT COUNT(*)::int AS \"Value\" FROM stories WHERE story_id = {_storyId}")).Should().Be(0);
+        (await SlotStatusAsync(slotId)).Should().Be(SpotlightSlotStatus.Available, "the committed attempt returned it");
+    }
+
+    // ── The taken-down story's edit surface (review fixes, 2026-10-13) ───────────
+
+    [Fact]
+    public async Task TheEditRead_OfATakenDownStory_ReachesItsAuthorFlagged_AndAnyoneElseGetsTheMissingAnswer()
+    {
+        // D15: the delete lives on the edit surface and a takedown never blocks it, so the author's edit
+        // read lifts the takedown (content-safety.md: the author reads their own taken-down content) and
+        // echoes it, for the editor's delete-only state. Anyone else gets null, as for a missing id: a 403
+        // would confirm a hidden id exists (non-disclosure).
+        int takenDown = await SeedStoryAsync(_authorId);
+        await SeedAsync(db => db.Database.ExecuteSql(
+            $"UPDATE stories SET is_taken_down = true, takedown_date = {DateTime.UtcNow}, takedown_reason = 'x' WHERE story_id = {takenDown}"));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorId, showMatureContent: false));
+        StoryEditDTO? taken, live;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IStoryReadService reads = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
+            taken = await reads.GetStoryForEditAsync(takenDown);
+            live = await reads.GetStoryForEditAsync(_storyId);
+        }
+        taken.Should().NotBeNull("the author reaches their taken-down story's editor, for its delete");
+        taken!.IsTakenDown.Should().BeTrue();
+        live!.IsTakenDown.Should().BeFalse();
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_readerId, showMatureContent: false));
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IStoryReadService reads = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
+            (await reads.GetStoryForEditAsync(takenDown)).Should().BeNull("the same answer as a missing id");
+            Func<Task> live403 = () => reads.GetStoryForEditAsync(_storyId);
+            await live403.Should().ThrowAsync<UnauthorizedAccessException>("a live story's edit read is still author-gated");
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /// <summary>Lets the first commit reach the database, then throws a transient error in place of its
+    /// acknowledgement — what a connection dropped after the commit looks like to the execution strategy.
+    /// Fires once.</summary>
+    private sealed class LostCommitAcknowledgement : DbTransactionInterceptor
+    {
+        private int _fired;
+
+        public bool Fired => Volatile.Read(ref _fired) == 1;
+
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref _fired, 1) == 0)
+                throw new NpgsqlException("The commit's acknowledgement was lost.", new IOException("connection reset"));
+            return Task.CompletedTask;
+        }
+    }
 
     /// <summary>The production service over a write context carrying <paramref name="interceptor"/>, with
     /// the Spotlight release sharing that context (as DI shares the scoped one in production), so both run
     /// in the delete's transaction. <see cref="InterleavingCommandInterceptor.CreateService{TService}"/>
     /// would resolve the release over the scope's own context instead.</summary>
     private (ServerStoryWriteService Service, ApplicationDbContext WriteDb) StoryWritesOver(
-        IServiceScope scope, InterleavingCommandInterceptor interceptor)
+        IServiceScope scope, IInterceptor interceptor)
     {
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseNpgsql(ConnectionString, npgsql => npgsql.EnableRetryOnFailure())

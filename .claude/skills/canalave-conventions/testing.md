@@ -385,6 +385,20 @@ interleaved SQL a `DO` block that raises when `pg_try_advisory_lock(...)` succee
 connection. Precedent: `StoryDeletionTests.TheStoryRowIsDeleted_WhileTheSpotlightBookingLockIsHeld`
 (WU-AuthorStoryDelete, 2026-10-13).
 
+**Proving a row lock makes a concurrent write wait.** When the interleaved write would block on the
+lock under test, the interceptor's synchronous call would wait on the very transaction it interrupts.
+Wrap it in a `DO` block that sets a short `lock_timeout` (`PERFORM set_config('lock_timeout', '1s', true)`)
+and catches `lock_not_available`. With the lock, the write times out and the service under test goes on;
+without it, the write lands, and the test fails on what that write breaks. Precedent:
+`StoryDeletionTests.ACommentPostedWhileTheDeleteRuns_WaitsOnTheLockedChapter_AndTheDeleteSucceeds`
+(WU-AuthorStoryDelete review fixes, 2026-10-13).
+
+**Simulating a lost commit acknowledgement.** A `DbTransactionInterceptor` whose
+`TransactionCommittedAsync` throws a transient error once (an `NpgsqlException` wrapping an
+`IOException`) lets the commit land and then tells the execution strategy it failed — what a connection
+dropped after the commit looks like. It proves that a strategy-run write passes `verifySucceeded`
+instead of replaying. Precedent: `StoryDeletionTests.ACommitWhoseAcknowledgementIsLost_IsNotReplayedIntoA404`.
+
 **A re-entry test must not await the second call before asserting it was refused.** When a gated fake
 makes a call wait (a `TaskCompletionSource` the test releases later), a second call that the guard failed
 to stop waits on the same gate, so awaiting it hangs the run instead of failing the test. Start it, assert

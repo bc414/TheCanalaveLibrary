@@ -23,8 +23,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// immediate commit outside the save, a 403 on it renders the forbidden state, and (its review fixes) a
 /// cover call never overlaps a save or a status change, in either order. Since WU-AuthorStoryDelete (owner
 /// ruling D15): the delete confirms against the SAVED title, clears the draft backup and leaves for the
-/// author's Authored tab; a refusal stays in the dialog; Unpublish instead runs in place; and the delete is
-/// a fourth write that never overlaps the others (the dialog itself: <see cref="StoryDeleteDialogTests"/>).
+/// author's Authored tab with a full document load; a refusal stays in the dialog; Unpublish instead runs in
+/// place; the delete is a fourth write that never overlaps the others (the dialog itself:
+/// <see cref="StoryDeleteDialogTests"/>); and (its review fixes) a taken-down story opens delete-only.
 /// <para>
 /// Setup: the chapter-manager, arc-manager and chapter-import panels (each with services of its own)
 /// are bUnit stubs. <see cref="StoryPropertiesForm"/> and <see cref="DraftAutosave"/> render for real —
@@ -62,7 +63,8 @@ public class StoryEditorPageTests : BunitContext
 
     private IRenderedComponent<StoryEditorPage> RenderEditor(
         StoryStatusEnum status, StoryStatusEnum postApproval = StoryStatusEnum.Completed,
-        string? rejectionReason = null, string? longDescription = null, string? cover = null)
+        string? rejectionReason = null, string? longDescription = null, string? cover = null,
+        bool isTakenDown = false)
     {
         _reads.EditDto = new StoryEditDTO
         {
@@ -75,6 +77,7 @@ public class StoryEditorPageTests : BunitContext
             RejectionReason = rejectionReason,
             LongDescription = longDescription,
             CoverArtRelativeUrl = cover,
+            IsTakenDown = isTakenDown,
         };
         return Render<StoryEditorPage>(p => p.Add(c => c.StoryId, StoryId));
     }
@@ -416,6 +419,8 @@ public class StoryEditorPageTests : BunitContext
             "the device-local backup must not outlive the story");
         Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri
             .Should().EndWith($"/user/{AuthorUserId}/authored");
+        Services.GetRequiredService<BunitNavigationManager>().History.First().Options.ForceLoad.Should().BeTrue(
+            "a full document load: this page hosts Quill, and an in-place re-render crashes the WASM renderer");
     }
 
     [Fact]
@@ -532,6 +537,59 @@ public class StoryEditorPageTests : BunitContext
             _writes.SaveGate.TrySetResult();
         }
         await save;
+    }
+
+    [Fact]
+    public async Task ATakenDownStory_OpensDeleteOnly_AndItsDeleteLeavesForTheAuthorsStories()
+    {
+        // Review fixes (2026-10-13), owner ruling D15: a takedown never blocks the author's delete, and the
+        // delete lives on this page. The edit read reaches the author with IsTakenDown set, and the page
+        // shows a notice and the Delete story section — no form, no lifecycle panel (the status is frozen),
+        // no chapter panels — and the dialog offers neither out.
+        SignInAsTheAuthor();
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.InProgress, isTakenDown: true);
+
+        cut.Markup.Should().Contain("A moderator has taken this story down");
+        cut.FindAll("form").Should().BeEmpty("a taken-down story's properties are not edited here");
+        cut.FindAll("[data-testid=lifecycle-status]").Should().BeEmpty();
+        cut.FindComponents<Stub<ChapterManagerPanel>>().Should().BeEmpty();
+        cut.FindComponents<DraftAutosave>().Should().BeEmpty();
+
+        await OpenDeleteAsync(cut);
+        cut.FindAll("button[aria-label='Unpublish this story instead of deleting it']").Should().BeEmpty(
+            "a published but taken-down story's status is frozen");
+        cut.FindAll("a[download]").Should().BeEmpty("its export 404s");
+        await TypeConfirmationAsync(cut, SavedTitle);
+        await ConfirmDelete(cut).ClickAsync(new());
+
+        _writes.Calls.Should().Equal([$"Delete:{StoryId}"]);
+        BunitNavigationManager nav = Services.GetRequiredService<BunitNavigationManager>();
+        nav.Uri.Should().EndWith($"/user/{AuthorUserId}/authored");
+        nav.History.First().Options.ForceLoad.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheCreateRoute_OnAReusedInstance_NeverShowsTheTakedownState()
+    {
+        // The router reuses this instance between /story/{id}/edit and /story/new without re-running
+        // OnInitializedAsync (tracker D18), so the taken-down flag survives the navigation; the create
+        // route must still show the form, never the takedown notice.
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.InProgress, isTakenDown: true);
+
+        cut.Render(p => p.Add(c => c.StoryId, (int?)null));
+
+        cut.Markup.Should().NotContain("A moderator has taken this story down");
+        cut.FindAll("form").Should().NotBeEmpty();
+        cut.FindAll("button[aria-label='Delete this story']").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ALiveStory_ShowsNoTakedownNotice()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.InProgress);
+
+        cut.Markup.Should().NotContain("A moderator has taken this story down");
+        cut.FindAll("form").Should().NotBeEmpty();
     }
 
     [Fact]

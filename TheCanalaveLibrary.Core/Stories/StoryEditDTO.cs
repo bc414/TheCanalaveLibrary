@@ -12,4 +12,12 @@ public class StoryEditDTO : StoryUpdateDTO
 {
     /// <summary>The stored relative path of the current cover, or null. Read echo only.</summary>
     public string? CoverArtRelativeUrl { get; set; }
+
+    /// <summary>
+    /// Read echo only: a moderator has taken the story down. The author's edit read still returns such
+    /// a story (owner ruling D15: a takedown never blocks the author's delete), and the editor then shows
+    /// only its Delete story section — no property edits, no lifecycle moves (a taken-down story's status
+    /// is frozen), no download (the export 404s). <c>ChapterEditorPage</c> treats it as not found.
+    /// </summary>
+    public bool IsTakenDown { get; set; }
 }

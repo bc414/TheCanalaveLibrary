@@ -11,10 +11,12 @@
    (published stories only; D1's reversible published → Draft) and a download of the story
    (StoryDownloadLinks: plain anchors, which bypass the circuit — and they export published chapters
    only, which the copy says; roadmap.md decision row 27 (d)); the labelled title input; then the
-   footer, Cancel before the filled-danger delete.
+   footer, Cancel before the filled-danger delete. For a taken-down story (IsTakenDown) neither out works,
+   so one line says so in their place.
 
-   The match is ordinal and case-sensitive on trimmed text, against StoryTitle — the SAVED title the
-   page captured at load, never the live form value. The typed text clears whenever the dialog opens. A
+   The match is ordinal and case-sensitive, with whitespace runs collapsed on both sides (the label shows
+   the title in normal flow, which collapses them too), against StoryTitle — the SAVED title the page
+   captured at load, never the live form value. The typed text clears whenever the dialog opens. A
    backdrop click is a Cancel (the ConfirmDialog rule), ignored while a call is in flight. *@
 
 <Modal IsOpen="IsOpen" IsOpenChanged="HandleModalIsOpenChanged"
@@ -34,24 +36,33 @@
             <section class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface) p-3"
                      aria-labelledby="story-delete-outs-heading">
                 <h3 id="story-delete-outs-heading" class="font-semibold">Before you delete</h3>
-                @if (CanUnpublish)
+                @if (IsTakenDown)
                 {
-                    <p class="text-(--color-text-muted)">
-                        Unpublishing hides the story from readers and keeps everything. You can publish it again later,
-                        though it may need a moderator's review first.
+                    <p class="text-(--color-text-muted)" data-testid="story-delete-taken-down">
+                        A moderator has taken this story down, so it can't be unpublished or downloaded first.
                     </p>
-                    <button type="button"
-                            class="self-start rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Unpublish this story instead of deleting it"
-                            disabled="@IsBusy"
-                            @onclick="UnpublishAsync">
-                        Unpublish instead
-                    </button>
                 }
-                <p class="text-(--color-text-muted)">
-                    Keep a copy first. Downloads include only the chapters that are published.
-                </p>
-                <StoryDownloadLinks StoryId="StoryId" />
+                else
+                {
+                    if (CanUnpublish)
+                    {
+                        <p class="text-(--color-text-muted)">
+                            Unpublishing hides the story from readers and keeps everything. You can publish it again
+                            later, though it may need a moderator's review first.
+                        </p>
+                        <button type="button"
+                                class="self-start rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label="Unpublish this story instead of deleting it"
+                                disabled="@IsBusy"
+                                @onclick="UnpublishAsync">
+                            Unpublish instead
+                        </button>
+                    }
+                    <p class="text-(--color-text-muted)">
+                        Keep a copy first. Downloads include only the chapters that are published.
+                    </p>
+                    <StoryDownloadLinks StoryId="StoryId" />
+                }
             </section>
 
             <div class="flex flex-col gap-1">
@@ -100,6 +111,10 @@
     /// <summary>True while the story is in the published set — shows the Unpublish-instead out.</summary>
     [Parameter] public bool CanUnpublish { get; set; }
 
+    /// <summary>A moderator has taken the story down: neither out works (its status is frozen and its
+    /// export 404s), so both are replaced by a line saying so. The delete itself is unchanged (D15).</summary>
+    [Parameter] public bool IsTakenDown { get; set; }
+
     /// <summary>True while the page has a write in flight — disables every control.</summary>
     [Parameter] public bool IsBusy { get; set; }
 
@@ -118,10 +133,23 @@
     private string _typed = "";
     private bool _wasOpen;
 
-    /// <summary>Exact, trimmed, ordinal (case-sensitive) match — a spec choice; D15 asks only for a typed
-    /// title.</summary>
-    private bool TitleMatches =>
-        StoryTitle.Trim().Length > 0 && string.Equals(_typed.Trim(), StoryTitle.Trim(), StringComparison.Ordinal);
+    /// <summary>Exact, ordinal (case-sensitive) match — a spec choice; D15 asks only for a typed title —
+    /// after collapsing whitespace on both sides. The title shows in normal HTML flow, which renders any
+    /// run of whitespace (a double space, a tab, a non-breaking space) as one space, and titles are stored
+    /// as typed; so the author types what they see (WU-AuthorStoryDelete review fixes, 2026-10-13).</summary>
+    private bool TitleMatches
+    {
+        get
+        {
+            string expected = CollapseWhitespace(StoryTitle);
+            return expected.Length > 0 && string.Equals(CollapseWhitespace(_typed), expected, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>Trims, and turns every run of whitespace (<see cref="char.IsWhiteSpace(char)"/>, which
+    /// includes the non-breaking space) into one ordinary space.</summary>
+    private static string CollapseWhitespace(string text) =>
+        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private bool CanConfirm => TitleMatches && !IsBusy;
 
@@ -143,7 +171,7 @@
 
     private async Task UnpublishAsync()
     {
-        if (IsBusy || !CanUnpublish) return;
+        if (IsBusy || !CanUnpublish || IsTakenDown) return;
         await OnUnpublish.InvokeAsync();
     }
 

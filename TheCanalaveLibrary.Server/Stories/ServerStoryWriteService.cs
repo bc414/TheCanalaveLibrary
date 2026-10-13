@@ -305,41 +305,49 @@ public class ServerStoryWriteService(
         string? coverPath = null;
         int slotsReturned = 0;
         var strategy = writeDb.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
-        {
-            // Clear first: the circuit-scoped write context can still track rows of this story (a reply
-            // the author posted, the listing a cover call loaded), and a retried attempt must not
-            // inherit the failed one's state (layer2-services.md §"Hard deletes of content parents").
-            writeDb.ChangeTracker.Clear();
-            await using var tx = await writeDb.Database.BeginTransactionAsync();
+        // The strategy owns the transaction so it can ask verifySucceeded before a retry. A commit that
+        // reached the database but whose acknowledgement was lost would otherwise be replayed: the
+        // replay finds the story gone and reports a completed delete as a 404, with no blob delete and
+        // no trace. Asked only for a transient failure, so a lost race (KeyNotFoundException) still
+        // throws (WU-AuthorStoryDelete review fixes, 2026-10-13).
+        await strategy.ExecuteInTransactionAsync(
+            async ct =>
+            {
+                // Clear first: the circuit-scoped write context can still track rows of this story (a
+                // reply the author posted, the listing a cover call loaded), and a retried attempt must
+                // not inherit the failed one's state (layer2-services.md §"Hard deletes of content
+                // parents").
+                writeDb.ChangeTracker.Clear();
 
-            // Captured inside the transaction, before the row delete (owner ruling D14, rule 2): the
-            // cascade removes the listing row that names the cover. A retry recaptures it.
-            coverPath = await writeDb.StoryListings
-                .Where(l => l.StoryId == storyId)
-                .Select(l => l.CoverArtRelativeUrl)
-                .FirstOrDefaultAsync();
+                // Captured inside the transaction, before the row delete (owner ruling D14, rule 2): the
+                // cascade removes the listing row that names the cover. Only a rolled-back attempt is
+                // retried, so a retry recaptures the same path.
+                coverPath = await writeDb.StoryListings
+                    .Where(l => l.StoryId == storyId)
+                    .Select(l => l.CoverArtRelativeUrl)
+                    .FirstOrDefaultAsync(ct);
 
-            // Every chapter comment and reply of the story, one statement through base_comments (D10 at
-            // story scope). chapter_comments.chapter_id is RESTRICT, so the story delete below would fail
-            // while one remained.
-            await TptDelete.StoryCommentsAsync(writeDb, storyId);
+                // Every chapter comment and reply of the story, one statement through base_comments (D10
+                // at story scope), after locking the story's chapters so no comment can land before the
+                // story delete. chapter_comments.chapter_id is RESTRICT, so the story delete below would
+                // fail while one remained.
+                await TptDelete.StoryCommentsAsync(writeDb, storyId);
 
-            // Before the delete, because the cascade removes the placement rows that name the slots.
-            slotsReturned = await spotlightRelease.ReleaseUnstartedForStoryAsync(storyId, DateTime.UtcNow);
+                // Before the delete, because the cascade removes the placement rows that name the slots.
+                slotsReturned = await spotlightRelease.ReleaseUnstartedForStoryAsync(storyId, DateTime.UtcNow);
 
-            // Story is not TPT, so the LINQ set delete is legal. Everything else cascades at the database
-            // (D15: no hand-enumeration), daily_story_stats included through its raw-DDL FK. The author
-            // predicate rides the WHERE, and 0 rows means another delete won the race: throw inside the
-            // delegate so the transaction rolls back and this call answers as a sequential re-delete does.
-            int deleted = await writeDb.Stories
-                .Where(s => s.StoryId == storyId && s.AuthorId == userId)
-                .ExecuteDeleteAsync();
-            if (deleted == 0)
-                throw new KeyNotFoundException($"Story with ID {storyId} not found.");
-
-            await tx.CommitAsync();
-        });
+                // Story is not TPT, so the LINQ set delete is legal. Everything else cascades at the
+                // database (D15: no hand-enumeration), daily_story_stats included through its raw-DDL FK.
+                // The author predicate rides the WHERE, and 0 rows means another delete won the race:
+                // throw inside the delegate so the transaction rolls back and this call answers as a
+                // sequential re-delete does.
+                int deleted = await writeDb.Stories
+                    .Where(s => s.StoryId == storyId && s.AuthorId == userId)
+                    .ExecuteDeleteAsync(ct);
+                if (deleted == 0)
+                    throw new KeyNotFoundException($"Story with ID {storyId} not found.");
+            },
+            async ct => !await writeDb.Stories.AnyAsync(s => s.StoryId == storyId, ct));
 
         // After the strategy returns, never inside the retried delegate (D14): best-effort, and the
         // orphan sweep collects a blob this misses. No counter moves (D15/D21; ApprovedStorySubmissions

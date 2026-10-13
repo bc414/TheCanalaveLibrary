@@ -363,9 +363,13 @@ stays disabled until that input matches, or extra actions offered first, build a
 directly on `Modal` and leave `ConfirmDialog`'s two-button contract alone for its consumers. First
 instance: `StoryDeleteDialog` (`SharedUI/Stories/`, owner ruling D15, WU-AuthorStoryDelete
 2026-10-13) — presentational (no `@inject`), it offers its two outs (Unpublish instead, a download)
-before a labelled title input, and its filled-danger delete button enables only on an exact, trimmed,
+before a labelled title input, and its filled-danger delete button enables only on an exact,
 case-sensitive match against the **saved** title the page passes in (never the live form value: an
-unsaved title edit must not become the confirmation string). Backdrop dismissal is a Cancel, as in
+unsaved title edit must not become the confirmation string). **Match what the label shows:** the title
+renders in normal flow, which collapses whitespace runs, so both sides are compared with every run
+(NBSP included) collapsed to one space — a raw compare locks out a title saved with a double space
+(WU-AuthorStoryDelete review fixes, 2026-10-13). An out that cannot work is replaced by a line saying
+why, never rendered dead: a taken-down story's dialog offers neither (`IsTakenDown`). Backdrop dismissal is a Cancel, as in
 `ConfirmDialog`, and the typed text is cleared whenever the dialog opens.
 
 **Escape-key dismissal is still deferred, not blocking — this remains settled.** `Modal` carries an

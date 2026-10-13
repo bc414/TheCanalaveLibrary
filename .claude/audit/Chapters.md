@@ -234,7 +234,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   count, versioning, promotion, update, Story.WordCount roll-up, validation). Mutation-sanity confirmed:
   adding `"script"` to the sanitizer allow-list → `SanitizesScriptTag` fails; reverted. Server boot:
   homepage/login `200`, DI resolves both services.
-- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).** `ChapterEditorPage`
+- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5; re-verified by the WU-AuthorStoryDelete review fixes, 2026-10-13 — a taken-down story's chapter editor stays not found now that the story edit read reaches its author; RazorComponents `ChapterEditorPageTakedownTests`; see the Stage note below).** `ChapterEditorPage`
   dispatcher with progressive versioning disclosure, publish toggle, author gate, "Set as default" promote,
   "Add alternate version" action. `ChapterEditorViewModel` shields form from DTO fields. See WU26 Phase 1–3 Stage note.
 - **L3.5-Structure — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom also Stage 5).** `ChapterPropertiesForm`
@@ -337,6 +337,17 @@ when it publishes: `ChapterDraftVisibilityTests`, `ChapterReadMarkServiceTests`,
 
 Tests: **Integration** `SchemaConstraintTests` covers the refusal (23514 by name) and the legal case of
 an unpublished chapter that keeps its anchor.
+
+### Feature 6 — WU-AuthorStoryDelete review-fixes Stage note (2026-10-13) — no cell flips; the chapter editor keeps a taken-down story closed
+
+`ChapterEditorPage` reads its story's rating through `GetStoryForEditAsync`. Since these review fixes that
+read returns a taken-down story to its author, flagged `StoryEditDTO.IsTakenDown`, so the story editor
+can offer its delete (owner ruling D15; `audit/Stories.md` F4). The chapter editor now checks the flag
+and calls `NotFound()`, as it did when the read returned null: a taken-down story's chapters are not
+created or edited here. Behavior is unchanged, so F6 L3-Logic and L4.5 stay 5. **RazorComponents**
+`ChapterEditorPageTakedownTests` (2): a taken-down story raises NotFound and renders no form; a live story
+on the same setup renders the new-chapter form, so removing the check fails the first test.
+`dotnet build` 0 errors and `dotnet test` green on all three tiers.
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.

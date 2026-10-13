@@ -999,6 +999,31 @@ unless noted. All sit under Stage-5 cells.
   - **Fix shape:** per page, either the dispatcher (`SeriesCreateEditPage` is the pattern) or a thin
     route shell rendering the editor body with `@key` on the route id, so a route change builds a
     fresh body.
+  - *WU-AuthorStoryDelete review fixes (2026-10-13):* `StoryEditorPage` gained a `_takenDown` flag that
+    the same reuse would carry to `/story/new`. Its branch also requires `StoryId.HasValue`, so the create
+    route still shows the form (RazorComponents
+    `StoryEditorPageTests.TheCreateRoute_OnAReusedInstance_NeverShowsTheTakedownState`); the reload this
+    item calls for must reset the flag with the rest.
+- [ ] **D19 — Two transaction edges of the content-parent hard deletes, closed at story scope only** `[latent-risk · low · beta]` — *Filed 2026-10-13 by the WU-AuthorStoryDelete review fixes, which closed both for the story scope.*
+  - Grid: no cell moves (F6 L2, F36/F37 L2, F52 L2 stay 5).
+  - **The child-insert window.** `TptDelete` deletes a parent's TPT children, then the caller deletes
+    the parent, with other statements between. A child row committed in that window passes its FK check
+    against a parent row nothing holds, and the parent delete then fails on the RESTRICT with 23001 (a
+    500; the data is safe, the transaction rolls back). `StoryCommentsAsync` now locks the chapters
+    `FOR UPDATE` first (a comment insert's `FOR KEY SHARE` waits on it). Still open: `ChapterCommentsAsync`
+    (`DeleteChapterAsync`: a comment on that chapter), `BlogPostDependentsAsync`/`BlogPostAsync` (a
+    comment or poll on the post), `ProfileWallCommentsAsync` (`UserDeletionService`: a wall post).
+  - **The lost commit acknowledgement.** A strategy-run delete whose commit lands but whose reply is lost
+    is replayed, finds its row gone, and answers a completed delete as not found (and skips its
+    post-commit work). `DeleteStoryAsync` now passes `verifySucceeded`
+    (`ExecuteInTransactionAsync`). Still open: `DeleteChapterAsync`, the blog-post deletes
+    (`DeleteWithDependentsAsync` — the replay's 404 also skips the counter decrement, which the F58
+    recompute corrects), `UserDeletionService` (the replay returns "user not found").
+  - **Fix shape:** the same two moves per scope — lock the parent row(s) `FOR UPDATE` inside the helper
+    (the profile-wall lock is on the user row, which account deletion removes anyway; check it against
+    the conversation locks' order, `cross-cutting.md` §"Account deletion"), and `ExecuteInTransactionAsync`
+    with a "the parent is gone" check. Tests: the two Integration shapes in `testing.md` §"Testing a
+    check-then-act guard" (the lock-timeout `DO` block, the lost-acknowledgement interceptor).
 
 ---
 
@@ -1412,9 +1437,9 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
        hard delete destroys (WU-TptHardDelete).
     Since WU-TptHardDelete, sites 3 and 4 and the moderation hard delete in 5 destroy their comments
     through `TptDelete` (one statement per scope), so the ids to close are reachable with the same
-    child-table subquery the helper uses; the D15 author story delete will reuse
-    `TptDelete.StoryCommentsAsync` once built. Sites 1 and 2 remove one loaded entity each, so the id is
-    already in hand.
+    child-table subquery the helper uses; the D15 author story delete reuses
+    `TptDelete.StoryCommentsAsync` (built WU-AuthorStoryDelete, 2026-10-13). Sites 1 and 2 remove one
+    loaded entity each, so the id is already in hand.
   - The question: what status should an author's own deletion give a report against that content?
     WU-AuthorStoryDelete's spec (its X2) treats it as owner-open. `ResolvedNoAction` with a NULL
     moderator (the user-deletion choice) is the obvious candidate, but an author deleting content
@@ -1596,11 +1621,19 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     and a taken-down story 404s (the read context's `IsTakenDown` filter). The dialog says "published
     chapters only". Widening the export for an author is an Export-cluster call (`layer2-services.md`
     §"Export & Import": "export = what you can read").
-  - (e) **A taken-down story has no Delete button.** `GetStoryForEditAsync` keeps the `IsTakenDown`
-    filter, so the editor 404s on a taken-down story and its author can delete it only over
-    `DELETE /api/stories/{id}` — the case D15 calls the most load-bearing. Options: lift the filter for
-    the author's edit read (which also opens property edits, consistent with `content-safety.md`'s
-    "so they can often fix it"), or a delete entry point elsewhere.
+  - (e) **Nothing links an author to a taken-down story's editor.** The button itself is built (the
+    WU-AuthorStoryDelete review fixes, 2026-10-13, a reviewer finding that D15 already rules it: "an
+    active `IsTakenDown` does not block it" and "a destructive control on the story edit surface"):
+    `GetStoryForEditAsync` lifts the takedown for the author alone, and the editor opens delete-only
+    (no form, no lifecycle moves, neither out). What D15 does not rule is the way there: the author's
+    Authored tab and the story page keep the `IsTakenDown` filter, and the takedown notification
+    (type 70) carries the report id, not the story, so the author reaches `/story/{id}/edit` only by
+    its address. Options: list a taken-down story on its author's own Authored tab (what
+    `content-safety.md`'s "visible to the author" implies, against `identity-and-authorization.md`'s
+    "takedown outranks authorship" for child writes), or link the notification to the editor.
+    Opening the full editor for a taken-down story (property edits, `content-safety.md`'s "so they
+    can often fix it") is a separate question no ruling reaches; the build keeps it closed, as before
+    D15.
 
 ---
 
@@ -2242,8 +2275,16 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        the sponsor's `/spotlight` page offers the slot again.
     7. A Draft or PendingApproval story's dialog shows no Unpublish-instead button.
     8. `/Account/Manage/DeletePersonalData`: the Stories line reads "use Delete story at the bottom of the
-       story's edit page" with the taken-down caveat, and the old "Stories and blog posts can't be
-       deleted" line is gone.
+       story's edit page" and "This works for a story a moderator has taken down too: its edit page offers
+       only Delete story.", and the old "Stories and blog posts can't be deleted" line is gone.
+    9. *(Added by the review fixes, 2026-10-13.)* Take a story down as a moderator (`psql`:
+       `is_taken_down = true`), then open `/story/{id}/edit` as its author: a warning notice and the
+       Delete story section only (no form, no Publication panel, no chapter panels); the dialog shows the
+       "can't be unpublished or downloaded" line instead of the two outs; the delete works and leaves for
+       `/user/{you}/authored`. The same address as another user reads "not found", as before.
+       `/story/{id}/chapter/new` for that story is not found too.
+    10. *(Review fixes.)* Save a title with a double space (`A  B`): the dialog's label shows `A B`, and
+        typing `A B` enables the delete.
 
 ---
 

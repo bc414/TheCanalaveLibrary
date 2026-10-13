@@ -319,8 +319,9 @@ blocks `DeleteStoryAsync`, and no "you can't delete evidence" gate exists. Such 
 nothing: the `Report` row has no FK to the story and survives, `ReportedUserId` (D8) keeps the author
 answerable, and sanctions are account-level, so an author who deletes a reported story stays exactly
 as attributable and sanctionable as before. A gate would also fail the ruling's most load-bearing case,
-the author who wants the work gone *because* it drew attention. Rule: `layer2-services.md` §"Author
-story deletion".
+the author who wants the work gone *because* it drew attention. So a taken-down story's edit page
+opens for its author **delete-only** (the edit read lifts `"IsTakenDown"` for the author alone; WU-AuthorStoryDelete
+review fixes, 2026-10-13). Rule: `layer2-services.md` §"Author story deletion".
 
 **Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
 `HasQueryFilter` in `ReadOnlyApplicationDbContext.OnModelCreating` (composable alongside `"ContentRating"`

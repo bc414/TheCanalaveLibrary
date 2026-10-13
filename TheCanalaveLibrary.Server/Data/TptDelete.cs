@@ -55,12 +55,27 @@ public static class TptDelete
 
     /// <summary>
     /// Deletes every comment on every chapter of one story through <c>base_comments</c> — the
-    /// story-scope entry used by the moderation hard delete (and by the D15 author story delete, once
-    /// built). The caller then deletes the story; its chapters cascade, and the RESTRICT on
+    /// story-scope entry used by the moderation hard delete (<c>ApplyHardDeleteAsync</c>) and by the
+    /// author story delete (<c>ServerStoryWriteService.DeleteStoryAsync</c>, owner ruling D15). The
+    /// caller then deletes the story; its chapters cascade, and the RESTRICT on
     /// <c>chapter_comments.chapter_id</c> is satisfied because no comment row is left.
+    /// <para>
+    /// <b>The story's chapter rows are locked first</b> (<c>FOR UPDATE</c>, held to the end of the
+    /// caller's transaction; WU-AuthorStoryDelete review fixes, 2026-10-13). Both callers run more
+    /// statements between this one and the story delete (the author path waits on the Spotlight booking
+    /// lock). Without the lock, a comment posted in that window passes its FK check against a chapter
+    /// nothing holds, commits, and then the cascade's RESTRICT check on that chapter fails the whole
+    /// delete with 23001. A comment insert's FK check takes <c>FOR KEY SHARE</c> on its chapter, which
+    /// conflicts with <c>FOR UPDATE</c>, so a concurrent post now waits, and then fails its own FK check
+    /// once the chapter is gone. <c>ORDER BY</c> fixes the lock order, so two deletes of one story queue
+    /// instead of deadlocking.
+    /// </para>
     /// </summary>
-    public static Task<int> StoryCommentsAsync(ApplicationDbContext writeDb, int storyId) =>
-        writeDb.Database.ExecuteSqlAsync($"""
+    public static async Task<int> StoryCommentsAsync(ApplicationDbContext writeDb, int storyId)
+    {
+        await writeDb.Database.ExecuteSqlAsync(
+            $"SELECT 1 FROM chapters WHERE story_id = {storyId} ORDER BY chapter_id FOR UPDATE");
+        return await writeDb.Database.ExecuteSqlAsync($"""
             DELETE FROM base_comments
             WHERE comment_id IN (
                 SELECT cc.comment_id
@@ -68,6 +83,7 @@ public static class TptDelete
                 JOIN chapters c ON c.chapter_id = cc.chapter_id
                 WHERE c.story_id = {storyId})
             """);
+    }
 
     /// <summary>
     /// Deletes every comment on one user's profile wall through <c>base_comments</c> — the account

@@ -10,9 +10,10 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <see cref="StoryDeleteDialog"/> — the author story delete's confirm (owner ruling D15,
 /// WU-AuthorStoryDelete 2026-10-13). D15's RazorComponents test: the destructive action stays disabled
 /// until the typed title matches, and the dialog offers its two outs (Unpublish instead, a download)
-/// first. Also: the match is exact (trimmed, case-sensitive), a busy dialog refuses every action, the
-/// typed text clears on reopen, a backdrop click is a Cancel, and the page's error list shows inside the
-/// dialog. Buttons are found by <c>aria-label</c> (testing.md). The page's handlers are covered by
+/// first. Also: the match is exact (case-sensitive; whitespace runs collapsed, since the label shows the
+/// title collapsed — review fixes, 2026-10-13), a busy dialog refuses every action, the typed text clears
+/// on reopen, a backdrop click is a Cancel, the page's error list shows inside the dialog, and a taken-down
+/// story offers neither out (review fixes). Buttons are found by <c>aria-label</c> (testing.md). The page's handlers are covered by
 /// <see cref="StoryEditorPageTests"/>; the delete itself by Integration <c>StoryDeletionTests</c>.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
@@ -28,7 +29,7 @@ public class StoryDeleteDialogTests : BunitContext
 
     private IRenderedComponent<StoryDeleteDialog> RenderDialog(
         bool canUnpublish = true, bool isBusy = false, IReadOnlyList<string>? errors = null,
-        string title = Title) =>
+        string title = Title, bool isTakenDown = false) =>
         Render<StoryDeleteDialog>(p =>
         {
             p.Add(c => c.IsOpen, true);
@@ -36,6 +37,7 @@ public class StoryDeleteDialogTests : BunitContext
             p.Add(c => c.StoryId, StoryId);
             p.Add(c => c.StoryTitle, title);
             p.Add(c => c.CanUnpublish, canUnpublish);
+            p.Add(c => c.IsTakenDown, isTakenDown);
             p.Add(c => c.IsBusy, isBusy);
             p.Add(c => c.ErrorMessages, errors);
             p.Add(c => c.OnConfirmDelete, EventCallback.Factory.Create(this, () => _confirms++));
@@ -57,6 +59,7 @@ public class StoryDeleteDialogTests : BunitContext
     [InlineData("The Lighthouse")]                 // a prefix
     [InlineData("the lighthouse keeper")]          // case differs: the match is ordinal
     [InlineData("The Lighthouse Keeper!")]
+    [InlineData("TheLighthouse Keeper")]           // whitespace is collapsed, never removed
     public async Task Confirm_IsDisabled_UntilTheTypedTitleMatches(string typed)
     {
         IRenderedComponent<StoryDeleteDialog> cut = RenderDialog();
@@ -82,6 +85,42 @@ public class StoryDeleteDialogTests : BunitContext
         await Confirm(cut).ClickAsync(new());
         _confirms.Should().Be(1);
         _cancels.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("The  Lighthouse Keeper", "The Lighthouse Keeper")]       // a saved double space
+    [InlineData("The\tLighthouse Keeper", "The Lighthouse Keeper")]       // a saved tab
+    [InlineData("The\u00A0Lighthouse Keeper", "The Lighthouse Keeper")]   // a saved non-breaking space
+    [InlineData("The Lighthouse Keeper", "The   Lighthouse  Keeper")]     // extra spaces typed
+    public async Task Confirm_MatchesWhatTheLabelShows_WhitespaceRunsCollapsed(string savedTitle, string typed)
+    {
+        // Review fixes (2026-10-13): titles are stored as typed, and the label renders the saved title in
+        // normal flow, which shows any whitespace run as one space. An author who types what they see must
+        // not be locked out of the delete.
+        IRenderedComponent<StoryDeleteDialog> cut = RenderDialog(title: savedTitle);
+
+        await TypeAsync(cut, typed);
+
+        Confirm(cut).HasAttribute("disabled").Should().BeFalse($"\"{typed}\" is what the label shows for \"{savedTitle}\"");
+        await Confirm(cut).ClickAsync(new());
+        _confirms.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ATakenDownStory_OffersNeitherOut_ButStillDeletes()
+    {
+        // Review fixes (2026-10-13): a taken-down story's status is frozen (no unpublish) and its export
+        // 404s (no download), so one line says so in their place; the delete itself is unchanged (D15).
+        IRenderedComponent<StoryDeleteDialog> cut = RenderDialog(canUnpublish: true, isTakenDown: true);
+
+        cut.FindAll("button[aria-label='Unpublish this story instead of deleting it']").Should().BeEmpty();
+        cut.FindAll("a[download]").Should().BeEmpty("the export 404s for a taken-down story");
+        cut.Find("[data-testid=story-delete-taken-down]").TextContent
+            .Should().Contain("taken this story down").And.Contain("can't be unpublished or downloaded");
+
+        await TypeAsync(cut, Title);
+        await Confirm(cut).ClickAsync(new());
+        _confirms.Should().Be(1);
     }
 
     [Fact]
@@ -194,12 +233,14 @@ public class StoryDeleteDialogTests : BunitContext
         cut.Find("[role=dialog]").TextContent.Should().Contain("You don't have permission to do that.");
     }
 
-    [Fact]
-    public async Task AnEmptySavedTitle_NeverEnablesTheDelete()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")] // whitespace only: empty once collapsed
+    public async Task AnEmptySavedTitle_NeverEnablesTheDelete(string savedTitle)
     {
-        IRenderedComponent<StoryDeleteDialog> cut = RenderDialog(title: "");
+        IRenderedComponent<StoryDeleteDialog> cut = RenderDialog(title: savedTitle);
 
-        await TypeAsync(cut, "");
+        await TypeAsync(cut, savedTitle);
 
         Confirm(cut).HasAttribute("disabled").Should().BeTrue("an empty input must not match an empty title");
     }

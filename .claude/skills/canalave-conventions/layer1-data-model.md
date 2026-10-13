@@ -181,6 +181,11 @@ table, one statement per child kind, run inside the caller's transaction —
   `DELETE FROM base_comments WHERE comment_id IN (SELECT cc.comment_id FROM chapter_comments cc JOIN chapters c ON c.chapter_id = cc.chapter_id WHERE c.story_id = @id)`.
   Replies are chapter comments of the same story, so the set is closed. Used by the moderation hard
   delete and the author story delete (owner ruling D15); never a loop of the chapter-scope statement.
+  It first locks the story's chapter rows (`SELECT … FOR UPDATE`, in `chapter_id` order), so a comment
+  insert's FK check (`FOR KEY SHARE`) waits until the caller's story delete commits instead of landing
+  in between and tripping the RESTRICT (WU-AuthorStoryDelete review fixes, 2026-10-13; the other scopes
+  have not been given the lock yet — tracker D19, `layer2-services.md` §"Hard deletes of content
+  parents").
 - **A future group-delete path must add a group-scope method** (`group_comments` and `group_blog_posts`
   plus each post's dependents). None exists today because nothing deletes a group (D47(b) is pending);
   until it is written, the RESTRICT FKs make such a path fail on its first group with children.

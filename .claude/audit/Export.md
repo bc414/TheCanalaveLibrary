@@ -8,7 +8,8 @@ No entities. No components in this folder — the download *trigger* lives in th
 (Stories: per-format anchor links on the story page + StoryCard caret; since WU-AuthorStoryDelete,
 2026-10-13, also `StoryDeleteDialog`'s "keep a copy first" out, owner ruling D15 — it exports what the
 author can read publicly, published chapters only, and whether an author's export should include their
-unpublished chapters is `roadmap.md` decision row 27 (d)). Pure application-layer
+unpublished chapters is `roadmap.md` decision row 27 (d); for a taken-down story, whose export 404s, the
+dialog drops the links and says so — its review fixes, the same day). Pure application-layer
 generation: `IExportService` (Core) + `ServerExportService` + per-format writers + `ExportEndpoints`
 (Server), all in the `Export/` cluster.
 
