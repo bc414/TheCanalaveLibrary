@@ -18,16 +18,16 @@ references it, does not restate it.
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
 - **Last landed:** WU-ThrottleCoverage (2026-10-13) — worksheet D20's throttle-coverage half only.
-  Three new kinds — `Reveal` (the signed-in reveal, now validated, through `ContentRevealRecorder`),
-  `RepeatRequest` (every acknowledgment/lineage request that notifies), `Vote` — plus `ContentCreate` on
-  list create/clone, series and arc creates, an `ExportGenerate` limiter, and `security.md`'s
-  enumeration of every unthrottled write with its reason (edits exempt only conditionally; the view
-  ping ratified). Found and fixed: the WASM client showed "something went wrong" for every throttle but
-  three (the 429 now names its kind), and **`AnonPrefs` shared one mutable default, so one cookieless
-  visitor's mature/reveal consent leaked to every later one**. Not built: D20's caps half and §2.11
-  (tracker D14). Filed: **decision row 26** (provisional `Vote`/`Reveal` numbers, group story-add,
-  first-request friction; tracker F23), **D16/D17**, browser pass **H33**; E7 closed. No cell flips.
-  `dotnet test`: Unit 1,258, RazorComponents 813, Integration 1,557. **Pointer:** its DONE entry.
+  Three new kinds (`Reveal` through `ContentRevealRecorder`, `RepeatRequest` on every notifying
+  acknowledgment/lineage request, `Vote`), `ContentCreate` on list create/clone, series and arc creates,
+  an `ExportGenerate` limiter, and `security.md`'s enumeration of every unthrottled write with its
+  reason. Found and fixed: the WASM client's generic error for every throttle but three, and
+  **`AnonPrefs`' one shared mutable default (one cookieless visitor's consent leaked to every later
+  one)**. Its review fixes closed a reveal existence oracle (the target check is now the viewer's
+  confidentiality predicate), completed the enumeration, proved the lineage placement and flipped
+  **F8/F9/F10/F37/F50/F51/F66 L4.5 5→1** (browser pass **H33**). Not built: D20's caps half and §2.11
+  (tracker D14). Filed: decision row 26, D16/D17/F23; E7 closed. `dotnet test`: Unit 1,259,
+  RazorComponents 813, Integration 1,561. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-BlobCleanup — worksheet D14 (inline post-commit blob deletes plus a daily orphan sweep, cover upload persists its own reference; F22/row 25 filed, H31/H3 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PollVoteIntegrity — worksheet D23's poll paragraph and `ConfigLocked` rider (single-choice a database constraint, `AllowMultiple` frozen under a vote by an FK; F21/row 24 filed, H30 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
@@ -304,8 +304,9 @@ references it, does not restate it.
   WU-TptHardDelete's DONE entry. Tracker **H23**'s pass, WU-CounterSymmetry's badge display, ran
   2026-09-30 too and returned F50 L4.5 to 5; H23 stays open only for Brian's keep-or-revert call on
   the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry. Tracker **H33**, WU-ThrottleCoverage's
-  browser pass — the throttle messages on both render phases and the two-profile check of the consent
-  leak fix — is owed; no browser was available to that WU.)
+  browser pass — the throttle messages on both render phases, the reveal paths and the two-profile
+  check of the consent leak fix — is owed; no browser was available to that WU, and its review fixes
+  flipped F8/F9/F10/F37/F50/F51/F66 L4.5 5→1 for the pass to return.)
 
 ---
 
@@ -458,9 +459,11 @@ is pending except where a bullet says so.
 
 ## WU-ThrottleCoverage — the throttle-coverage enumeration: three new write kinds, `ContentCreate` wired to lists/series/arcs, an `ExportGenerate` limiter, every unthrottled surface named with its reason, and the WASM 429 rebuilt from the wire (worksheet D20, throttle half only; service audit §2.5's throttle rows, §2.8's re-request bullet, §4's lineage-reject comments; extends `Security/`, `ContentGate/`, `BlogPosts/`, `Collaboration/`, `Stories/`, `Series/`, `CustomLists/`, `Export/`, `Client/Http/`) — DONE ✓ (2026-10-13)
 
-- **Cells:** none flipped. Built beneath Stage-5 cells: F8 L2, F9 L2/L3-Logic, F10 L2, F37 L2, F50 L2,
-  F51 L2, F54 L2, F63 L2, F66 (all), plus the cross-cutting client 429 arm (every Client* write
-  service's L5 leg). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+- **Cells:** the build flipped none. Built beneath Stage-5 cells: F8 L2, F9 L2/L3-Logic, F10 L2, F37 L2,
+  F50 L2, F51 L2, F54 L2, F63 L2, F66 (all), plus the cross-cutting client 429 arm (every Client* write
+  service's L5 leg). The review fixes flipped **F8, F9, F10, F37, F50, F51 and F66 L4.5 5→1** (each
+  now meets a refusal or a page no browser has seen; tracker **H33**). F54 stays 5. Dated 2026-10-13,
+  the session's `currentDate`, as the WUs before it.
 - **Trigger:** worksheet D20's throttle-coverage half (answered 2026-08-07) and its spec
   `wu-specs/WU-ThrottleCoverage.md`, with the amendment (a third `rateLimitedAction` caller,
   `ClientReportSubmissionService`). Routed here by earlier WUs: tracker **E7** (story status moves),
@@ -473,8 +476,9 @@ is pending except where a bullet says so.
      `CreateArcAsync`; `Vote` in `VoteAsync` (every call); `RepeatRequest` in
      `RequestAcknowledgmentAsync` (every request) and `RequestLineageAsync` (only when it notifies),
      placed after validation and before the tracked mutation — `security.md`'s placement exception.
-  3. **Reveal:** new server-only `ContentRevealRecorder` (enum check → bucket → unfiltered existence
-     check → idempotent insert; no-ops still redirect); the endpoint answers a refusal with a plain-text
+  3. **Reveal:** new server-only `ContentRevealRecorder` (enum check → bucket → target check →
+     idempotent insert; no-ops still redirect — the build checked the target against ground truth,
+     which its review fixes replaced, item 1 below); the endpoint answers a refusal with a plain-text
      429 + `Retry-After`; the anonymous branch skips an undefined type (was a 500).
   4. **`ExportGenerate`** concurrency limiter (mirrors `ImportParse`) on both export routes.
   5. **WASM leg (found by the spec, decision-free):** the 429 `ProblemDetails` carries
@@ -523,7 +527,41 @@ is pending except where a bullet says so.
   tests), a shared `AnonPrefs` default, the acknowledgment call moved after the mutation, self-owned
   lineage links charged, BlogPost reveals routed to `BlogPosts`. check-doc-hygiene (21 terms),
   check-design-tokens, check-render-modes and check-a11y pass. No browser was available: tracker
-  **H33** holds the pass. No migration; no `status.md` cell changed.
+  **H33** holds the pass. No migration; the build changed no `status.md` cell.
+- **Review fixes (2026-10-13).** Three reviews raised 11 findings, 7 distinct after merging duplicates.
+  All 7 were real; none needed an owner ruling.
+  1. **The reveal's target check was an existence oracle (F66 L2).** It checked ground truth, so a
+     hidden id (another author's draft, pending or rejected story, anything taken down, an unpublished
+     or Private-author post) got a row that `/settings` listed as "(deleted …)", while a missing id got
+     none; before the WU both got rows. The check is now the viewer's confidentiality predicate,
+     `ServerContentRevealService.ResolveVisibleTitlesAsync` (the lookup the list titles with), so a row
+     is minted exactly when the list can title it. `RecordAsync` reads the viewer from
+     `IActiveUserContext` (no `userId` parameter). **Integration**
+     `ContentGateTests.RevealRecorder_AHiddenTarget_LeavesTheSameListAsAMissingOne`.
+  2. **The reveal's 429 was unlabeled (F66).** `Results.Text(…, "text/plain")` adds no charset and the
+     message carries an em dash; now `text/plain; charset=utf-8` through
+     `ContentGateEndpoints.RevealThrottled`. **Unit** `RevealThrottled_IsLabelledUtf8PlainText_WithRetryAfter`.
+  3. **The enumeration missed four writes.** `AcceptAsync`, `DeclineAsync` and `RejectLineageAsync`
+     were named nowhere (now a "Respondent answers" row), though `audit/Badges.md` cited the
+     enumeration for Accept and Decline; `UnfollowAsync` joins the deletes. Spotlight grant/revoke
+     are named under mod-gated. The list was re-checked against every public method of every server
+     write service.
+  4. **`VouchAsync` was under the wrong bound.** It sat under "Hard-capped", but a vouch → remove →
+     vouch loop re-notifies, so the dedup is its bound; it moved to the notifying toggles.
+  5. **The lineage placement was unproven (F10 L2).** **Integration** `WriteThrottleTests` +3:
+     validation failures spend nothing, a refused re-request of a Rejected link leaves no dirty row
+     for the scope's next save, and an authorless target is free (the build's exemption beyond spec
+     R4's "only when `!selfOwned`": nobody to notify; `security.md` now names it).
+  6. **AccessGate's Settled bullet had the recorder's order wrong** (a missing target is dropped after
+     the bucket); rewritten together with the new check.
+  7. **L4.5 flips (the F46/F53 precedent).** F8, F9, F10, F37, F50, F51 and F66 5→1. F54 stays 5: its
+     limiter refuses only under server-wide overload (the PollVoteIntegrity no-flip precedent). H33
+     gains the hidden-target and 429-text steps.
+
+  Mutation-checked, each failing its test: the ground-truth check, the dropped charset, the lineage
+  call at method entry, the call after the mutation, and charging authorless targets. **Unit 1,259**
+  (+1), **RazorComponents 813**, **Integration 1,561** (+4), all green; build 0 errors, no new
+  warnings in touched files; the four gates pass. No browser: **H33**.
 - **Pointers:** `security.md` §"Write Throttling"; decision row 26; tracker D14, D16, D17, E6, E7, F23,
   H33; the Stage notes above.
 

@@ -775,7 +775,7 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
   `StoryEditorPage` edit mode.
 - **L4 — Stage 1.** All design tokens (`check-design-tokens.ps1` clean for these files); visual
   sign-off pending human review (WU13/WU14/WU24 precedent).
-- **L4.5 — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the WU45
+- **L4.5 — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: an arc create can now be refused with a wait message, undriven in a browser — tracker H33; see its Stage note under Feature 10. Was Stage 5 from WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the WU45
   deferral — see Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; arcs data loading verified in a real WASM runtime during the
@@ -893,7 +893,7 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
 - **L2/L3-Logic/L3.5-Structure — Stage 5 (re-verified WU-ThrottleCoverage, 2026-10-13 — L2: `CreateSeriesAsync` spends a `ContentCreate` token, owner ruling D20, Integration `WriteThrottleTests`; L3-Logic: the create/edit page shows a throttle or session refusal through `ExceptionPresenter` instead of a fixed "unexpected error", RazorComponents `SeriesCreateEditPageTests`; see its Stage note under Feature 10).** See test tiers below.
 - **L4-Style — Stage 1** (visual sign-off pending, per WU8/WU13/WU23/WU28/WU37/WU42/WU43 precedent —
   functionally verified live, below, but no dedicated visual/token polish pass).
-- **L4.5-Browser — Stage 5 (2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
+- **L4.5-Browser — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: the create/edit page's error output changed and a series create can be refused with a wait message, undriven in a browser — tracker H33; see its Stage note under Feature 10. Was Stage 5 from 2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
   against the dev server (`AuthorAlpha`/`TestUser` fixtures): My Series (empty state, owner-scoped) →
   Create Series → post-create redirect into edit mode (bug 1 above, found + fixed here) → add two
   stories via the picker → reorder via ↑ (persisted) → public SeriesPage (`StoryDeck` in reordered
@@ -975,7 +975,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
 
 - **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30, and L3-Logic's page reloads its list after a stale approve since that WU's browser pass — see its Stage note; a request that notifies spends a `RepeatRequest` token and the reject comment no longer claims a spam guard, WU-ThrottleCoverage, 2026-10-13 — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
-  close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
+  close this gate). **L4.5-Browser — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: a notifying request can now be refused with a wait message, undriven in a browser — tracker H33; see its Stage note. Was Stage 5 from 2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; lineage page + `StoryTitlePicker` verified in a real WASM
   runtime during the flip's browser wave (picker rebuilt on the new in-house `CanalaveTypeahead`).
@@ -1141,7 +1141,7 @@ read from the network log. AuthorBeta requested three Inspired-By links into Aut
     `StoryLineageApproved`, because an unread one for the same target story (7) already existed: the
     notification service's existing dedup. The console was clean.
 
-### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — no flip
+### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — F8/F9/F10 L4.5 5→1 at its review fixes (tracker H33); every other cell stays 5
 
 D20 (answered 2026-08-07) ruled that every user-reachable write either spends a bucket or is
 enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
@@ -1156,7 +1156,8 @@ enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
   unexpected failure is logged and shown with its error id).
 - **F10 L2 (lineage):** `RequestLineageAsync` spends a `RepeatRequest` token (5 burst, 1 per 3 min —
   D20's report tier) on every request that notifies the target's author. A self-owned link
-  auto-approves, notifies nobody and never draws the bucket; the call sits after validation and before
+  auto-approves, notifies nobody and never draws the bucket, and neither does a request to a target
+  story with no author (its account gone: nobody to tell); the call sits after validation and before
   the tracked mutation (the placement exception — a refused re-request must not leave a dirty row on a
   circuit's write context). First requests are charged too: `DeleteLineageAsync` removes a Rejected
   row from the UI, so delete-then-request takes the fresh-insert branch with no trace of the repeat,
@@ -1173,7 +1174,25 @@ enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:
   `WriteRateLimitExceededException` from the 429 body). RazorComponents
   `SeriesCreateEditPageTests` (+2: the throttle message, the generic message). Mutation-checked:
   charging self-owned lineage links fails the lineage test. No browser pass was run (none available);
-  tracker H33 holds it. No `status.md` cell changes: these are defects beneath Stage-5 cells.
+  tracker H33 holds it. The build changed no `status.md` cell.
+- **Review fixes (2026-10-13).**
+  - **Cells: F8, F9 and F10 L4.5 5→1** (headlines above). Each surface can now refuse a write with a
+    wait message, and F9's page error output changed; none was driven in a browser. This follows the
+    campaign precedent (F46/F53 at WU-ModerationIntegrity: a new refusal changes what users see).
+    Tracker H33's pass returns them to 5.
+  - **F10 L2: the lineage placement was unproven.** `testing.md` requires a throttle call placed
+    off method entry to prove its placement; only the acknowledgment side did. New Integration
+    `WriteThrottleTests`: `LineageRequests_ThatFailValidation_SpendNoToken` (a duplicate Pending
+    request and an unknown type, each repeated past the bucket, refused by validation and spending
+    nothing), `AThrottledLineageReRequest_LeavesNoDirtyRowForTheScopesNextSave` (a refused re-request
+    of a Rejected link, then a self-owned link saved on the same scope: the row is still Rejected),
+    `LineageRequests_ToAnAuthorlessTarget_SpendNothing` (the build's authorless-target exemption,
+    which spec R4's "only when `!selfOwned`" did not name: `RepeatRequest` guards a notification, and
+    there is nobody to notify). Mutation-checked: the call at method entry fails the first (and three
+    others), the call after the mutation fails the second, charging authorless targets fails the
+    third.
+  - **The respondent side is now in `security.md`'s enumeration:** `RejectLineageAsync` (silent,
+    target-owner-scoped, bounded by the requester's `RepeatRequest`) was named nowhere.
 
 ## Feature 45 — View Count Tracking
 

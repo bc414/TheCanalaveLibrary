@@ -337,6 +337,124 @@ public sealed class WriteThrottleTests(PostgresFixture postgres) : IntegrationTe
     }
 
     [Fact]
+    public async Task LineageRequests_ThatFailValidation_SpendNoToken()
+    {
+        // The placement exception (security.md): the call sits after validation, so a refused request
+        // (a duplicate of a Pending link, the double-click case, or an unknown type) spends nothing.
+        int[] ownStories = new int[TightLimit];
+        for (int i = 0; i < ownStories.Length; i++)
+            ownStories[i] = await SeedStoryAsync(authorId: _posterId);
+        int othersStory = await SeedStoryAsync(authorId: _wallOwnerId);
+
+        SetThrottledActiveUser(_posterId);
+        using IServiceScope scope = _throttledFactory.Services.CreateScope();
+        IStoryLineageWriteService lineage = scope.ServiceProvider.GetRequiredService<IStoryLineageWriteService>();
+        CreateStoryLineageDto first = new()
+            { SourceStoryId = ownStories[0], TargetStoryId = othersStory, TypeId = InspiredByTypeId };
+
+        await lineage.RequestLineageAsync(first); // the one token spent before the loop
+
+        for (int i = 0; i < TightLimit + 2; i++)
+        {
+            await lineage.Awaiting(l => l.RequestLineageAsync(first))
+                .Should().ThrowAsync<StoryLineageValidationException>("a Pending link of this type already exists");
+            await lineage.Awaiting(l => l.RequestLineageAsync(new CreateStoryLineageDto
+                    { SourceStoryId = ownStories[1], TargetStoryId = othersStory, TypeId = 999 }))
+                .Should().ThrowAsync<StoryLineageValidationException>("no such lineage type");
+        }
+
+        // The rest of the bucket is intact: every remaining notifying request lands.
+        for (int i = 1; i < TightLimit; i++)
+        {
+            await lineage.RequestLineageAsync(new CreateStoryLineageDto
+                { SourceStoryId = ownStories[i], TargetStoryId = othersStory, TypeId = InspiredByTypeId });
+        }
+
+        (await CountAsync<StoryLineage>(l => l.TargetStoryId == othersStory)).Should().Be(TightLimit);
+    }
+
+    [Fact]
+    public async Task AThrottledLineageReRequest_LeavesNoDirtyRowForTheScopesNextSave()
+    {
+        // The acknowledgment test's lineage twin. The throttle sits before the Rejected row is flipped
+        // back to Pending; were it after, the refused flip would stay tracked on the circuit's write
+        // context and the scope's next successful save would write it — a re-request the bucket refused.
+        int[] ownStories = new int[TightLimit + 2];
+        for (int i = 0; i < ownStories.Length; i++)
+            ownStories[i] = await SeedStoryAsync(authorId: _posterId);
+        int othersStory = await SeedStoryAsync(authorId: _wallOwnerId);
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.StoryLineages.Add(new StoryLineage
+            {
+                SourceStoryId = ownStories[0], TargetStoryId = othersStory, RelationshipTypeId = InspiredByTypeId,
+                StatusId = StoryLineageStatus.Rejected, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        SetThrottledActiveUser(_posterId);
+        using IServiceScope scope = _throttledFactory.Services.CreateScope();
+        IStoryLineageWriteService lineage = scope.ServiceProvider.GetRequiredService<IStoryLineageWriteService>();
+        for (int i = 1; i <= TightLimit; i++)
+        {
+            await lineage.RequestLineageAsync(new CreateStoryLineageDto
+                { SourceStoryId = ownStories[i], TargetStoryId = othersStory, TypeId = InspiredByTypeId });
+        }
+
+        Func<Task> refused = () => lineage.RequestLineageAsync(new CreateStoryLineageDto
+            { SourceStoryId = ownStories[0], TargetStoryId = othersStory, TypeId = InspiredByTypeId });
+        await refused.Should().ThrowAsync<WriteRateLimitExceededException>();
+
+        // The scope's next save: a self-owned link, which auto-approves and is never charged.
+        await lineage.RequestLineageAsync(new CreateStoryLineageDto
+            { SourceStoryId = ownStories[0], TargetStoryId = ownStories[TightLimit + 1], TypeId = InspiredByTypeId });
+
+        using IServiceScope check = Factory.Services.CreateScope();
+        ApplicationDbContext fresh = check.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryLineage rejected = await fresh.StoryLineages.AsNoTracking().SingleAsync(l =>
+            l.SourceStoryId == ownStories[0] && l.TargetStoryId == othersStory && l.RelationshipTypeId == InspiredByTypeId);
+        rejected.StatusId.Should().Be(StoryLineageStatus.Rejected);
+    }
+
+    [Fact]
+    public async Task LineageRequests_ToAnAuthorlessTarget_SpendNothing()
+    {
+        // RepeatRequest guards a notification; a target story with no author (its account deleted)
+        // has nobody to tell, so the request is free, like a self-owned one.
+        int[] ownStories = new int[TightLimit + 2];
+        for (int i = 0; i < ownStories.Length; i++)
+            ownStories[i] = await SeedStoryAsync(authorId: _posterId);
+        int authorlessStory = await SeedStoryAsync(); // InProgress, E, AuthorId null
+        int othersStory = await SeedStoryAsync(authorId: _wallOwnerId);
+
+        SetThrottledActiveUser(_posterId);
+        using IServiceScope scope = _throttledFactory.Services.CreateScope();
+        IStoryLineageWriteService lineage = scope.ServiceProvider.GetRequiredService<IStoryLineageWriteService>();
+
+        foreach (int source in ownStories)
+        {
+            await lineage.RequestLineageAsync(new CreateStoryLineageDto
+                { SourceStoryId = source, TargetStoryId = authorlessStory, TypeId = InspiredByTypeId });
+        }
+
+        // The whole bucket is still there for requests that do notify.
+        for (int i = 0; i < TightLimit; i++)
+        {
+            await lineage.RequestLineageAsync(new CreateStoryLineageDto
+                { SourceStoryId = ownStories[i], TargetStoryId = othersStory, TypeId = InspiredByTypeId });
+        }
+
+        Func<Task> overLimit = () => lineage.RequestLineageAsync(new CreateStoryLineageDto
+            { SourceStoryId = ownStories[TightLimit], TargetStoryId = othersStory, TypeId = InspiredByTypeId });
+
+        (await overLimit.Should().ThrowAsync<WriteRateLimitExceededException>())
+            .Which.Kind.Should().Be(WriteActionKind.RepeatRequest);
+        (await CountAsync<StoryLineage>(l => l.TargetStoryId == authorlessStory)).Should().Be(ownStories.Length);
+    }
+
+    [Fact]
     public async Task PollVotes_ThrottleUnderVote_RetractionsIncluded()
     {
         int moderatorId = await SeedUserAsync("ThrottleModerator");
@@ -384,18 +502,19 @@ public sealed class WriteThrottleTests(PostgresFixture postgres) : IntegrationTe
     {
         int[] stories = [await SeedStoryAsync(rating: Rating.M), await SeedStoryAsync(rating: Rating.M),
                          await SeedStoryAsync(rating: Rating.M)];
+        SetThrottledActiveUser(_posterId); // mature off: the reveal is what admits these
         using IServiceScope scope = _throttledFactory.Services.CreateScope();
         ContentRevealRecorder recorder = scope.ServiceProvider.GetRequiredService<ContentRevealRecorder>();
 
         // An undefined type is dropped before the bucket: more of them than it holds, all free.
         for (int i = 0; i < TightLimit + 2; i++)
-            await recorder.RecordAsync(_posterId, (RevealedEntityType)99, stories[0]);
+            await recorder.RecordAsync((RevealedEntityType)99, stories[0]);
 
-        await recorder.RecordAsync(_posterId, RevealedEntityType.Story, int.MaxValue); // missing: a token, no row
-        await recorder.RecordAsync(_posterId, RevealedEntityType.Story, stories[0]);
-        await recorder.RecordAsync(_posterId, RevealedEntityType.Story, stories[1]);
+        await recorder.RecordAsync(RevealedEntityType.Story, int.MaxValue); // missing: a token, no row
+        await recorder.RecordAsync(RevealedEntityType.Story, stories[0]);
+        await recorder.RecordAsync(RevealedEntityType.Story, stories[1]);
 
-        Func<Task> overLimit = () => recorder.RecordAsync(_posterId, RevealedEntityType.Story, stories[2]);
+        Func<Task> overLimit = () => recorder.RecordAsync(RevealedEntityType.Story, stories[2]);
 
         (await overLimit.Should().ThrowAsync<WriteRateLimitExceededException>())
             .Which.Kind.Should().Be(WriteActionKind.Reveal);
@@ -440,11 +559,12 @@ public sealed class WriteThrottleTests(PostgresFixture postgres) : IntegrationTe
             (groupId, groupPostId, profilePostId) = (group.GroupId, groupPost.BlogPostId, profilePost.BlogPostId);
         }
 
+        SetThrottledActiveUser(_posterId);
         using IServiceScope scope = _throttledFactory.Services.CreateScope();
         ContentRevealRecorder recorder = scope.ServiceProvider.GetRequiredService<ContentRevealRecorder>();
-        await recorder.RecordAsync(_posterId, RevealedEntityType.BlogPost, groupPostId);
-        await recorder.RecordAsync(_posterId, RevealedEntityType.BlogPost, profilePostId);
-        await recorder.RecordAsync(_posterId, RevealedEntityType.Group, groupId);
+        await recorder.RecordAsync(RevealedEntityType.BlogPost, groupPostId);
+        await recorder.RecordAsync(RevealedEntityType.BlogPost, profilePostId);
+        await recorder.RecordAsync(RevealedEntityType.Group, groupId);
 
         using IServiceScope check = Factory.Services.CreateScope();
         ApplicationDbContext fresh = check.ServiceProvider.GetRequiredService<ApplicationDbContext>();

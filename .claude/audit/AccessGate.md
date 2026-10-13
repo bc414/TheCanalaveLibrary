@@ -61,9 +61,14 @@ The model is fully specified outside this file — do not re-derive it here:
 - **Consent-endpoint throttling (owner ruling D20's throttle half, answered 2026-08-07; built
   WU-ThrottleCoverage, 2026-10-13).** The signed-in reveal (`POST /content-gate/reveal`) is a
   throttled write under the `Reveal` kind, recorded through one server-only class,
-  `ContentRevealRecorder`: an undefined `RevealedEntityType` or a missing target is a silent no-op
-  that still redirects (no existence oracle), then the bucket, then the idempotent insert. A
-  rejection is a plain-text 429 with `Retry-After`. **Exempt, with reasons:** the anonymous reveal
+  `ContentRevealRecorder`, in this order: an undefined `RevealedEntityType` is a no-op (no token
+  spent); then the bucket; then the target check, where a target the viewer may not see is a no-op
+  exactly like a missing one (its token already spent); then the idempotent insert. Every no-op
+  still redirects. **The target check is the viewer's confidentiality predicate, not ground truth**
+  (review fixes, 2026-10-13): the read context with only the rating/audience filter lifted, plus
+  the profile post's own visibility rule. That is the lookup the `/settings` list titles its rows
+  with, so a row is minted exactly when the list can title it, and a hidden id and a missing id
+  leave the same list (no existence oracle). A rejection is a plain-text 429 with `Retry-After`. **Exempt, with reasons:** the anonymous reveal
   writes only the viewer's own cookie (LRU-capped at 50; an undefined type is skipped, never a 500);
   `/mature` is a self-scoped setting plus a cookie reissue; `/refresh-claims` is idempotent. Rule
   and limits: `security.md` §"Write Throttling" (the `Reveal` row is provisional — decision row
@@ -336,20 +341,23 @@ Mature-off is a cookie claim refreshed by the settings save (`RefreshSignInAsync
 leaves the claim stale; a raise during that window succeeded, which is by design and was a test
 artifact.
 
-### Stage 5 — WU-ThrottleCoverage: consent-endpoint throttling (owner ruling D20) + a shared-default consent leak fixed (2026-10-13) — no flip
+### Stage note — WU-ThrottleCoverage: consent-endpoint throttling (owner ruling D20) + a shared-default consent leak fixed (2026-10-13) — L4.5 5→1 at its review fixes (tracker H33); every other F66 cell stays 5
 
-All F66 cells stay 5. Built per the Settled-later bullet "Consent-endpoint throttling":
+**Cells:** the build flipped nothing; its review fixes (2026-10-13) flipped **L4.5 5→1**. The
+cookieless consent behaviour, the reveal's 429 page and the anonymous enum guard all changed what a
+viewer meets, and none was driven in a browser. Tracker **H33**'s pass returns it to 5. L1, L2,
+L3-Logic, L3.5, L4, L5, L6 and L8 stay 5. Built per the Settled-later bullet "Consent-endpoint
+throttling":
 - **The signed-in reveal** (`POST /content-gate/reveal`) records through the new server-only
   `ContentRevealRecorder` (`Server/ContentGate/`, scoped, registered beside `IContentRevealService` and
   deliberately not in the Client). Order: an undefined `RevealedEntityType` is a no-op; the `Reveal`
-  bucket (provisional 10 burst / 10 per min, decision row 26 (a)); an existence check against the
-  unfiltered write context (Story → `Stories`, Group → `Groups`, BlogPost → `ProfileBlogPosts`, the
-  `GetMyRevealsAsync` mapping — a group post reveals its group), where a missing target is a no-op; then
+  bucket (provisional 10 burst / 10 per min, decision row 26 (a)); the target check (Story → `Stories`,
+  Group → `Groups`, BlogPost → `ProfileBlogPosts`, the `GetMyRevealsAsync` mapping — a group post
+  reveals its group), where a target the viewer may not see is a no-op exactly like a missing one; then
   the idempotent insert. Before this WU the endpoint inserted any `(type, id)` pair with no check at all
   (service audit §2.5's reveal row; the reveal-list title lookup had been compensating since
-  WU-AccessGateSweep2). Every no-op still redirects, so the response is no existence oracle. A refused
-  reveal answers a plain-text 429 with `Retry-After` — the edge limiters' document-flow shape, not
-  `ProblemDetails`.
+  WU-AccessGateSweep2). Every no-op still redirects. A refused reveal answers a plain-text 429 with
+  `Retry-After` — the edge limiters' document-flow shape, not `ProblemDetails`.
 - **The anonymous reveal** skips an undefined type instead of throwing: `AnonPrefs.ListFor` threw
   `ArgumentOutOfRangeException` on one, a 500 from form input, against the class's own "never throw on
   request input" contract.
@@ -375,3 +383,29 @@ nulled list parses. Mutation-checked: restoring a shared default fails two of th
 reveals to `BlogPosts` fails the mapping test. **Not automated, by design:** the endpoint itself (the
 anonymous enum guard, the 429 shape) — a test of the form POST needs antiforgery plumbing no test has;
 it is a code-review item here and a step in tracker H33's browser pass. No browser pass was run.
+
+**Review fixes (2026-10-13).**
+- **The target check made the `/settings` list an existence oracle.** The build checked ground truth
+  (the unfiltered write context), so a hidden id — another author's draft, pending or rejected story,
+  a taken-down item, an unpublished or Private-author profile post — got a row that listed as
+  "(deleted …)", while a missing id got none. Any signed-in member could post a reveal for id N and
+  read `/settings` to learn whether hidden story N exists, across the whole Stories and profile-post
+  keyspaces. Before the WU both got rows, so the list could not tell them apart; the WU's "no
+  existence oracle" checked only the redirect. Now the check is the viewer's confidentiality
+  predicate: `ServerContentRevealService.ResolveVisibleTitlesAsync`, the lookup the list titles its
+  rows with (rating/audience lifted; status, takedown and the profile post's own rule kept), so a row
+  is minted exactly when the list can title it. The recorder now takes the viewer from
+  `IActiveUserContext` (no `userId` parameter), so the bucket, the row and the predicate share one
+  identity. Rule: `security.md` §"Write Throttling"; the Settled-later bullet above is corrected
+  (it also had the order wrong: a missing target is dropped after the bucket, not before).
+- **The 429 was unlabeled.** `Results.Text(…, "text/plain")` adds no charset, and the message
+  carries an em dash, so a browser that does not sniff UTF-8 showed "too fast â€" please wait". It
+  is now `text/plain; charset=utf-8` through `ContentGateEndpoints.RevealThrottled`.
+
+**How verified (review fixes):** Integration `ContentGateTests.RevealRecorder_AHiddenTarget_LeavesTheSameListAsAMissingOne`
+(missing ids, another author's draft and pending stories, a taken-down story, an unpublished post and
+a Private author's post all leave no row; an M story and the reader's own draft are recorded; the
+list holds no "(deleted …)" row). Unit `WriteThrottleWireContractTests.RevealThrottled_IsLabelledUtf8PlainText_WithRetryAfter`.
+Mutation-checked: restoring the ground-truth check fails the first; dropping the charset fails the
+second. The existing `WriteThrottleTests` reveal tests now set the active user. No browser was
+available: tracker H33 gains the hidden-target and 429-text steps.

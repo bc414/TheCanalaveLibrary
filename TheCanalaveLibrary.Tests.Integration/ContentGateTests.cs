@@ -316,7 +316,80 @@ public class ContentGateTests(PostgresFixture postgres) : IntegrationTestBase(po
         detailBody.Should().BeOneOf("", "null");
     }
 
+    // ── Reveal recording (ContentRevealRecorder) ──────────────────────────────────
+
+    /// <summary>
+    /// The recorder mints a row exactly when the <c>/settings</c> list can title it (WU-ThrottleCoverage
+    /// review fixes, 2026-10-13). Checked against ground truth, a hidden id left a "(deleted …)" row and a
+    /// missing id left none, so the list answered "does hidden story N exist" for any N. Runs on the
+    /// shared host's pass-through throttle: this is the visibility rule, not the bucket.
+    /// </summary>
+    [Fact]
+    public async Task RevealRecorder_AHiddenTarget_LeavesTheSameListAsAMissingOne()
+    {
+        int readerId = await SeedUserAsync("reader", showMature: false);
+        int authorId = await SeedUserAsync("author");
+        int privateAuthorId = await SeedUserAsync("private-author");
+
+        int matureStory = await SeedStoryAsync(authorId, Rating.M);
+        int othersDraft = await SeedStoryAsync(authorId, Rating.M, StoryStatusEnum.Draft);
+        int othersPending = await SeedStoryAsync(authorId, Rating.M, StoryStatusEnum.PendingApproval);
+        int takenDown = await SeedStoryAsync(authorId, Rating.M);
+        int ownDraft = await SeedStoryAsync(readerId, Rating.M, StoryStatusEnum.Draft);
+        int unpublishedPost, privateAuthorsPost;
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Stories.Where(s => s.StoryId == takenDown)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsTakenDown, true));
+
+            ProfileBlogPost draftPost = NewProfilePost(authorId, isPublished: false);
+            ProfileBlogPost privatePost = NewProfilePost(privateAuthorId, isPublished: true);
+            db.ProfileBlogPosts.AddRange(draftPost, privatePost);
+            User privateAuthor = await db.Users.FirstAsync(u => u.Id == privateAuthorId);
+            privateAuthor.PrivacySettings.ProfileVisibility = ProfileVisibility.Private;
+            await db.SaveChangesAsync();
+            (unpublishedPost, privateAuthorsPost) = (draftPost.BlogPostId, privatePost.BlogPostId);
+        }
+
+        SetActiveUser(readerId); // mature off: consent is what admits the M targets
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ContentRevealRecorder recorder = scope.ServiceProvider.GetRequiredService<ContentRevealRecorder>();
+            await recorder.RecordAsync(RevealedEntityType.Story, int.MaxValue);       // missing
+            await recorder.RecordAsync(RevealedEntityType.Story, othersDraft);        // hidden: status
+            await recorder.RecordAsync(RevealedEntityType.Story, othersPending);      // hidden: status
+            await recorder.RecordAsync(RevealedEntityType.Story, takenDown);          // hidden: takedown
+            await recorder.RecordAsync(RevealedEntityType.BlogPost, int.MaxValue);    // missing
+            await recorder.RecordAsync(RevealedEntityType.BlogPost, unpublishedPost); // hidden: unpublished
+            await recorder.RecordAsync(RevealedEntityType.BlogPost, privateAuthorsPost); // hidden: Class A
+            await recorder.RecordAsync(RevealedEntityType.Story, matureStory);        // rating-gated only
+            await recorder.RecordAsync(RevealedEntityType.Story, ownDraft);           // the author's own draft
+        }
+
+        IReadOnlyList<RevealDisplayDto> mine;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            mine = await scope.ServiceProvider.GetRequiredService<IContentRevealService>().GetMyRevealsAsync();
+
+        mine.Select(r => (r.EntityType, r.EntityId)).Should().BeEquivalentTo(
+            new[] { (RevealedEntityType.Story, matureStory), (RevealedEntityType.Story, ownDraft) },
+            "a hidden target is recorded exactly like a missing one: not at all");
+        mine.Should().NotContain(r => r.Title.StartsWith("(deleted"),
+            "a placeholder row for an id that was hidden when revealed would tell it apart from a missing id");
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────────
+
+    private static ProfileBlogPost NewProfilePost(int authorId, bool isPublished) => new()
+    {
+        AuthorId = authorId,
+        Title = $"Gate post {Guid.NewGuid():N}",
+        Content = "<p>body</p>",
+        Rating = Rating.M,
+        IsPublished = isPublished,
+        DateCreated = DateTime.UtcNow,
+        LastUpdatedDate = DateTime.UtcNow,
+    };
 
     private async Task<T> CallStoryReadAsync<T>(Func<IStoryReadService, Task<T>> call)
     {

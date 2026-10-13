@@ -57,6 +57,33 @@ public class WriteThrottleWireContractTests
         ex.RetryAfter.Should().Be(TimeSpan.FromSeconds(42));
     }
 
+    /// <summary>
+    /// The refused reveal is a document flow: plain text plus <c>Retry-After</c>, like the edge
+    /// limiters. Its message carries an em dash, so the content type must name the charset —
+    /// <c>Results.Text</c> adds none to a caller-supplied type, and an unlabeled body is decoded as
+    /// windows-1252 by a browser that does not sniff UTF-8 ("too fast â€” please wait").
+    /// </summary>
+    [Fact]
+    public async Task RevealThrottled_IsLabelledUtf8PlainText_WithRetryAfter()
+    {
+        DefaultHttpContext httpContext = new()
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+        };
+        using MemoryStream body = new();
+        httpContext.Response.Body = body;
+
+        IResult result = ContentGateEndpoints.RevealThrottled(httpContext.Response,
+            new WriteRateLimitExceededException(WriteActionKind.Reveal, TimeSpan.FromSeconds(41.5)));
+        await result.ExecuteAsync(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+        httpContext.Response.ContentType.Should().Be("text/plain; charset=utf-8");
+        httpContext.Response.Headers.RetryAfter.ToString().Should().Be("42", "the seconds are rounded up");
+        string text = Encoding.UTF8.GetString(body.ToArray());
+        text.Should().Contain("—").And.Contain("42 seconds");
+    }
+
     // ── Client half ──────────────────────────────────────────────────────────────
 
     [Fact]

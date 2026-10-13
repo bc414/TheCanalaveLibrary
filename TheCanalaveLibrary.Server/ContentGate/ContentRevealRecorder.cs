@@ -14,37 +14,52 @@ namespace TheCanalaveLibrary.Server;
 /// surface. Putting it on the WASM-registered interface would add a server-only method there.</para>
 ///
 /// <para><b>Order</b> (security.md §"Write Throttling"): an undefined <see cref="RevealedEntityType"/>
-/// is a no-op (no token spent); then the bucket; then an existence check against ground truth (the
-/// unfiltered write context — a reveal is consent, so a target the viewer cannot see yet still counts),
-/// where a missing target is a no-op; then the idempotent insert. A no-op is silent on purpose: the
-/// endpoint redirects either way, so the response is no existence oracle, and the legitimate
-/// interstitial only ever posts a defined type for a real id. The type → set mapping mirrors
-/// <see cref="ServerContentRevealService.GetMyRevealsAsync"/>: a profile post is a
-/// <see cref="RevealedEntityType.BlogPost"/>; a group post reveals its group.</para>
+/// is a no-op (no token spent); then the bucket; then the target check, where a target the viewer may
+/// not see is a no-op exactly like a missing one; then the idempotent insert.</para>
+///
+/// <para><b>The target check is the viewer's confidentiality predicate, never ground truth</b>
+/// (review fixes, 2026-10-13). It is <see cref="ServerContentRevealService.ResolveVisibleTitlesAsync"/>,
+/// the lookup the <c>/settings</c> list titles its rows with: the rating/audience gate lifted (consent
+/// is what a reveal records), story status, takedown and a profile post's own visibility rule kept. So
+/// a row is minted exactly when the list can title it. Checked against the unfiltered write context,
+/// another author's draft left a "(deleted story)" row while a missing id left none, and the list
+/// answered "does hidden story N exist" for any N. A no-op is silent: the endpoint redirects either
+/// way, and the legitimate interstitial only ever posts a defined type for a target its viewer can
+/// reach.</para>
+///
+/// <para>One identity source: the bucket's user, the row's user and the viewer the predicate is
+/// evaluated for are all <see cref="IActiveUserContext"/>.</para>
 /// </summary>
-public sealed class ContentRevealRecorder(ApplicationDbContext writeDb, IWriteRateLimitService rateLimit)
+public sealed class ContentRevealRecorder(
+    ApplicationDbContext writeDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
+    IActiveUserContext activeUser,
+    IWriteRateLimitService rateLimit)
 {
     /// <summary>
-    /// Records the reveal for <paramref name="userId"/> (the caller's authenticated id). Idempotent.
+    /// Records the active user's reveal of the target. Idempotent.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The caller is anonymous (the endpoint keeps the
+    /// anonymous reveal in the prefs cookie and never calls this).</exception>
     /// <exception cref="WriteRateLimitExceededException">The user's <see cref="WriteActionKind.Reveal"/>
     /// bucket is empty.</exception>
-    public async Task RecordAsync(int userId, RevealedEntityType entityType, int entityId)
+    public async Task RecordAsync(RevealedEntityType entityType, int entityId)
     {
+        if (activeUser.UserId is not int userId)
+            throw new InvalidOperationException("Recording a reveal requires an authenticated user.");
+
         if (!Enum.IsDefined(entityType))
             return;
 
         rateLimit.EnsureAllowed(WriteActionKind.Reveal, userId);
 
-        bool targetExists = entityType switch
+        await using (ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync())
         {
-            RevealedEntityType.Story => await writeDb.Stories.AnyAsync(s => s.StoryId == entityId),
-            RevealedEntityType.Group => await writeDb.Groups.AnyAsync(g => g.GroupId == entityId),
-            RevealedEntityType.BlogPost => await writeDb.ProfileBlogPosts.AnyAsync(p => p.BlogPostId == entityId),
-            _ => false,
-        };
-        if (!targetExists)
-            return;
+            Dictionary<(RevealedEntityType, int), string> visible =
+                await ServerContentRevealService.ResolveVisibleTitlesAsync(readDb, activeUser, [(entityType, entityId)]);
+            if (visible.Count == 0)
+                return;
+        }
 
         if (await writeDb.UserContentReveals.FindAsync(userId, entityType, entityId) is not null)
             return;

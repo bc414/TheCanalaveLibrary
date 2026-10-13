@@ -1887,9 +1887,11 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
 
     /// <summary>
     /// The reveal-management list (<c>GetMyRevealsAsync</c>) is Personal plane: a listed reveal is
-    /// the consent, so the rating gate is satisfied — but the consent endpoint mints a row for any
-    /// (BlogPost, id), so without the post's own visibility rule the list was a title oracle for
-    /// drafts and Private authors' posts (WU-AccessGateSweep2 review fixes).
+    /// the consent, so the rating gate is satisfied — but a row can name a post the viewer may not see
+    /// (until WU-ThrottleCoverage the consent endpoint minted one for any (BlogPost, id); a row still
+    /// outlives a post later unpublished or an author gone Private), so without the post's own
+    /// visibility rule the list was a title oracle for drafts and Private authors' posts
+    /// (WU-AccessGateSweep2 review fixes). The rows are seeded directly for that reason.
     /// </summary>
     [Fact]
     public async Task ContentReveal_MyReveals_BlogPostTitles_RespectPublicationAndAuthorPrivacy()

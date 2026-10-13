@@ -22,10 +22,11 @@ public static class ContentGateEndpoints
 
         // "View this story" / "View this group" / view-this-post — durable per-item consent.
         // Signed-in → UserContentReveal row (cross-device, revocable in /settings), recorded by
-        // ContentRevealRecorder, which validates the type and target and spends a Reveal token
-        // (owner ruling D20); anonymous → prefs-cookie reveal list (180d sliding, LRU-capped),
-        // exempt — it writes only the viewer's own cookie. Invalid input is a silent no-op either
-        // way, and the redirect is the same (no existence oracle).
+        // ContentRevealRecorder, which drops an undefined type, spends a Reveal token (owner ruling
+        // D20) and drops a target the viewer may not see exactly like a missing one — the predicate
+        // the /settings list titles with, so neither the redirect nor the list is an existence
+        // oracle. Anonymous → prefs-cookie reveal list (180d sliding, LRU-capped), exempt — it writes
+        // only the viewer's own cookie; an undefined type is skipped. Every no-op still redirects.
         group.MapPost("/reveal", async Task<IResult> (
             HttpContext http,
             IActiveUserContext activeUser,
@@ -34,19 +35,15 @@ public static class ContentGateEndpoints
             [FromForm] int entityId,
             [FromForm] string returnUrl) =>
         {
-            if (activeUser.UserId is int userId)
+            if (activeUser.UserId is not null)
             {
                 try
                 {
-                    await recorder.RecordAsync(userId, entityType, entityId);
+                    await recorder.RecordAsync(entityType, entityId);
                 }
                 catch (WriteRateLimitExceededException ex)
                 {
-                    // A document flow, not a JSON API: the edge limiters' shape (Program.cs OnRejected)
-                    // — a plain-text body, which status-code pages skip, plus Retry-After.
-                    http.Response.Headers.RetryAfter =
-                        ((int)Math.Ceiling(ex.RetryAfter.TotalSeconds)).ToString();
-                    return Results.Text(ex.Message, "text/plain", statusCode: StatusCodes.Status429TooManyRequests);
+                    return RevealThrottled(http.Response, ex);
                 }
             }
             else if (Enum.IsDefined(entityType))
@@ -127,6 +124,20 @@ public static class ContentGateEndpoints
             }));
 
         return app;
+    }
+
+    /// <summary>
+    /// The refused reveal's response. A document flow, not a JSON API, so it takes the edge limiters'
+    /// shape (Program.cs <c>OnRejected</c>): a plain-text body, which status-code pages skip, plus
+    /// <c>Retry-After</c>. The charset is explicit because the message carries an em dash and
+    /// <c>Results.Text</c> adds none to a caller-supplied content type: an unlabeled body is decoded
+    /// as windows-1252 by a browser that does not sniff UTF-8. Public as a test seam (the repo
+    /// deliberately has no InternalsVisibleTo).
+    /// </summary>
+    public static IResult RevealThrottled(HttpResponse response, WriteRateLimitExceededException ex)
+    {
+        response.Headers.RetryAfter = ((int)Math.Ceiling(ex.RetryAfter.TotalSeconds)).ToString();
+        return Results.Text(ex.Message, "text/plain; charset=utf-8", statusCode: StatusCodes.Status429TooManyRequests);
     }
 
     /// <summary>

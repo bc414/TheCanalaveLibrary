@@ -530,7 +530,7 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
-**WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's `Vote` kind) — no flip.**
+**WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's `Vote` kind) — L4.5 5→1 at its review fixes; L2 stays 5.**
 `ServerPollWriteService.VoteAsync` calls `EnsureAllowed(WriteActionKind.Vote)` right after its auth
 guard, before any DB work: every call spends one token — a vote, a change and a retraction are the one
 method, and a vote on a missing or hidden poll spends one too (consistent with every other kind).
@@ -541,6 +541,11 @@ the client now rebuilds the exception from the 429 body. **Verified by:** Integr
 `WriteThrottleTests.PollVotes_ThrottleUnderVote_RetractionsIncluded` (vote, change, retract, then the
 fourth call refused; no row written); Unit `WriteThrottleWireContractTests` (the client's `VoteAsync`,
 including the 60 s fallback when the body carries no retry). No browser pass was run (tracker H33).
+**Review fixes (2026-10-13): L4.5 5→1.** The build kept every cell at 5. But a vote, a change or a
+retraction can now be refused with a wait message after ordinary clicks (the eleventh in a burst),
+and no browser has seen it. This follows the campaign precedent (F46/F53 at WU-ModerationIntegrity).
+WU-PollVoteIntegrity's no-flip refusal shows only on a lost race, which no deliberate click reaches.
+Tracker H33's step 4 returns the cell to 5.
 
 **WU-PollVoteIntegrity Stage note (2026-10-13; owner ruling D23 and its `ConfigLocked` rider; browser-verified
 the same day) — no flip.** Single-choice is now a database constraint, and `AllowMultiple` cannot change while a vote
@@ -889,7 +894,7 @@ bullet below, 2026-07-13.)
   destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
   Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
   design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
-- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed. WU-PollVoteIntegrity's browser pass, 2026-10-13, drove the restructured vote and edit flows and both race refusals on both phases, with no flip — its Stage note's browser bullet; tracker H30 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
+- **L4.5 — Stage 1 (5→1 at WU-ThrottleCoverage's review fixes, 2026-10-13: a vote can now be refused with a wait message, undriven in a browser — tracker H33; its Stage note at this feature's top. Before that: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed. WU-PollVoteIntegrity's browser pass, 2026-10-13, drove the restructured vote and edit flows and both race refusals on both phases, with no flip — its Stage note's browser bullet; tracker H30 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
   As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
   New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
   names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while

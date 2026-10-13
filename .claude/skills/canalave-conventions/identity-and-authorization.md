@@ -90,7 +90,10 @@ for `document.cookie` interop, which clashes with the context's synchronous reso
 (user id, entity type Story/Group/BlogPost, entity id) — *not* a cookie (cross-device, no size
 cap, server-readable on every path including export anchor GETs, revocable from `/settings`).
 Anonymous consent lives in the cookie lists above; on login, anon reveals are discarded
-(re-consent is one click). Reveal checks compose in read-service queries (the context itself
+(re-consent is one click). A signed-in reveal row is minted only for a target the viewer may see
+once the rating gate is lifted: a hidden target writes nothing, exactly like a missing one, so the
+`/settings` list is no existence oracle (`security.md` §"Write Throttling", WU-ThrottleCoverage
+review fixes, 2026-10-13). Reveal checks compose in read-service queries (the context itself
 stays claims/cookie-only and DbContext-free — no circular dependency). Reveals affect the
 Direct-navigation plane and the revealed item's own subtree only; they never widen Discovery.
 

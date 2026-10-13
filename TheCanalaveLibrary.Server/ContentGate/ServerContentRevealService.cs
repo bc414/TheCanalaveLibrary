@@ -13,6 +13,13 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="BlogPostVisibilityGuard.IsVisible"/>), and a hidden item lists under the same
 /// "(deleted …)" placeholder as an absent one. Removal is self-scoped by construction (the key
 /// includes the caller's own id).
+///
+/// <para><see cref="ResolveVisibleTitlesAsync"/> is the one copy of that rule. The list titles its
+/// rows with it, and <see cref="ContentRevealRecorder"/> mints a row only for a target it returns
+/// (WU-ThrottleCoverage review fixes, 2026-10-13). So the list never shows a "(deleted …)" row for an
+/// id that was hidden when it was revealed, and it cannot tell a hidden id from a missing one. Before
+/// that, the recorder checked ground truth: a hidden id left a "(deleted …)" row and a missing id
+/// left none, an existence oracle over every hidden story and post.</para>
 /// </summary>
 public class ServerContentRevealService(
     ApplicationDbContext writeDb,
@@ -31,64 +38,22 @@ public class ServerContentRevealService(
             .ToListAsync();
         if (reveals.Count == 0) return [];
 
-        // Batch title lookups per entity type — elevated reads (see class doc).
-        HashSet<int> storyIds = [.. reveals.Where(r => r.EntityType == RevealedEntityType.Story).Select(r => r.EntityId)];
-        HashSet<int> groupIds = [.. reveals.Where(r => r.EntityType == RevealedEntityType.Group).Select(r => r.EntityId)];
-        HashSet<int> postIds = [.. reveals.Where(r => r.EntityType == RevealedEntityType.BlogPost).Select(r => r.EntityId)];
-
-        Dictionary<int, string> storyTitles = storyIds.Count == 0 ? [] :
-            await readDb.Stories
-                .IgnoreQueryFilters(["ContentRating"]) // elevated read: Personal plane (own reveals)
-                .Where(s => storyIds.Contains(s.StoryId))
-                .Select(s => new { s.StoryId, Title = s.StoryListing != null ? s.StoryListing.StoryTitle : "" })
-                .ToDictionaryAsync(x => x.StoryId, x => x.Title);
-
-        Dictionary<int, string> groupNames = groupIds.Count == 0 ? [] :
-            await readDb.Groups
-                .IgnoreQueryFilters(["GroupAudience"]) // elevated read: Personal plane (own reveals)
-                .Where(g => groupIds.Contains(g.GroupId))
-                .Select(g => new { g.GroupId, g.GroupName })
-                .ToDictionaryAsync(x => x.GroupId, x => x.GroupName);
-
-        // A reveal row can be minted for any (BlogPost, id) — the consent endpoint does not check the
-        // target — so the title lookup applies the post's visibility rule itself. The rating axis is
-        // satisfied by the reveal being listed (isRevealed: true — Personal plane, see class doc), but
-        // confidentiality is not: an unpublished draft or a profile post whose author's
-        // ProfileVisibility hides it (Class A, WU-AccessGateSweep2) shows as "(deleted post)", the
-        // same placeholder a story reveal gets once the StoryStatus/IsTakenDown filters drop it.
-        Dictionary<int, string> postTitles = [];
-        if (postIds.Count > 0)
-        {
-            var posts = await readDb.ProfileBlogPosts
-                .Where(p => postIds.Contains(p.BlogPostId))
-                .Select(p => new
-                {
-                    p.BlogPostId, p.Title, p.AuthorId, p.IsPublished, p.Rating,
-                    AuthorProfileVisibility = p.Author != null
-                        ? (ProfileVisibility?)p.Author.PrivacySettings.ProfileVisibility
-                        : null,
-                })
-                .ToListAsync();
-
-            postTitles = posts
-                .Where(p => BlogPostVisibilityGuard.IsVisible(
-                    new BlogPostVisibilityFacts(p.BlogPostId, p.AuthorId, p.IsPublished, p.Rating,
-                        IsGroupPost: false, GroupId: null, GroupAudience: null, p.AuthorProfileVisibility),
-                    activeUser, isRevealed: true))
-                .ToDictionary(p => p.BlogPostId, p => p.Title);
-        }
+        Dictionary<(RevealedEntityType, int), string> titles = await ResolveVisibleTitlesAsync(
+            readDb, activeUser, [.. reveals.Select(r => (r.EntityType, r.EntityId))]);
 
         return reveals
             .Select(r => new RevealDisplayDto(
                 r.EntityType,
                 r.EntityId,
-                r.EntityType switch
-                {
-                    RevealedEntityType.Story => storyTitles.GetValueOrDefault(r.EntityId, "(deleted story)"),
-                    RevealedEntityType.Group => groupNames.GetValueOrDefault(r.EntityId, "(deleted group)"),
-                    RevealedEntityType.BlogPost => postTitles.GetValueOrDefault(r.EntityId, "(deleted post)"),
-                    _ => "(unknown)",
-                },
+                titles.TryGetValue((r.EntityType, r.EntityId), out string? title)
+                    ? title
+                    : r.EntityType switch
+                    {
+                        RevealedEntityType.Story => "(deleted story)",
+                        RevealedEntityType.Group => "(deleted group)",
+                        RevealedEntityType.BlogPost => "(deleted post)",
+                        _ => "(unknown)",
+                    },
                 r.DateRevealed))
             .ToList();
     }
@@ -103,5 +68,76 @@ public class ServerContentRevealService(
 
         writeDb.UserContentReveals.Remove(row);
         await writeDb.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The titles of the reveal targets <paramref name="viewer"/> may see once the rating/audience gate
+    /// is lifted (Personal plane, see class doc). A target missing from the result is absent or hidden,
+    /// and the two are never told apart. The type → set mapping: a <see cref="RevealedEntityType.BlogPost"/>
+    /// is a profile post; a group post reveals its group.
+    /// </summary>
+    public static async Task<Dictionary<(RevealedEntityType Type, int Id), string>> ResolveVisibleTitlesAsync(
+        ReadOnlyApplicationDbContext readDb,
+        IActiveUserContext viewer,
+        IReadOnlyCollection<(RevealedEntityType Type, int Id)> targets)
+    {
+        HashSet<int> storyIds = [.. targets.Where(t => t.Type == RevealedEntityType.Story).Select(t => t.Id)];
+        HashSet<int> groupIds = [.. targets.Where(t => t.Type == RevealedEntityType.Group).Select(t => t.Id)];
+        HashSet<int> postIds = [.. targets.Where(t => t.Type == RevealedEntityType.BlogPost).Select(t => t.Id)];
+
+        Dictionary<(RevealedEntityType, int), string> titles = [];
+
+        if (storyIds.Count > 0)
+        {
+            // StoryStatus (author-aware) and IsTakenDown still apply: confidentiality, which no
+            // consent bypasses (ReadOnlyApplicationDbContext).
+            var stories = await readDb.Stories
+                .IgnoreQueryFilters(["ContentRating"]) // elevated read: Personal plane (own reveals)
+                .Where(s => storyIds.Contains(s.StoryId))
+                .Select(s => new { s.StoryId, Title = s.StoryListing != null ? s.StoryListing.StoryTitle : "" })
+                .ToListAsync();
+            foreach (var s in stories) titles[(RevealedEntityType.Story, s.StoryId)] = s.Title;
+        }
+
+        if (groupIds.Count > 0)
+        {
+            var groups = await readDb.Groups
+                .IgnoreQueryFilters(["GroupAudience"]) // elevated read: Personal plane (own reveals)
+                .Where(g => groupIds.Contains(g.GroupId))
+                .Select(g => new { g.GroupId, g.GroupName })
+                .ToListAsync();
+            foreach (var g in groups) titles[(RevealedEntityType.Group, g.GroupId)] = g.GroupName;
+        }
+
+        if (postIds.Count > 0)
+        {
+            // A blog post carries no rating filter to lift (TPT, WU31.5), so the post's own visibility
+            // rule decides. The rating axis is satisfied by the reveal itself (isRevealed: true), but
+            // confidentiality is not: an unpublished draft, or a profile post whose author's
+            // ProfileVisibility hides it (Class A, WU-AccessGateSweep2), stays out. A row can also
+            // outlive its target's visibility (the post unpublished or its author gone Private after
+            // the reveal); it then lists as "(deleted post)", the placeholder a story reveal gets once
+            // the StoryStatus/IsTakenDown filters drop it.
+            var posts = await readDb.ProfileBlogPosts
+                .Where(p => postIds.Contains(p.BlogPostId))
+                .Select(p => new
+                {
+                    p.BlogPostId, p.Title, p.AuthorId, p.IsPublished, p.Rating,
+                    AuthorProfileVisibility = p.Author != null
+                        ? (ProfileVisibility?)p.Author.PrivacySettings.ProfileVisibility
+                        : null,
+                })
+                .ToListAsync();
+
+            foreach (var p in posts.Where(p => BlogPostVisibilityGuard.IsVisible(
+                         new BlogPostVisibilityFacts(p.BlogPostId, p.AuthorId, p.IsPublished, p.Rating,
+                             IsGroupPost: false, GroupId: null, GroupAudience: null, p.AuthorProfileVisibility),
+                         viewer, isRevealed: true)))
+            {
+                titles[(RevealedEntityType.BlogPost, p.BlogPostId)] = p.Title;
+            }
+        }
+
+        return titles;
     }
 }

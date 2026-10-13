@@ -65,7 +65,7 @@ read-only snapshot; this note is the authoritative record of the resolution.
 
 ## Feature 51 — Custom Lists
 
-**WU-ThrottleCoverage Stage note (2026-10-13) — no flip (owner ruling D20, which supersedes the
+**WU-ThrottleCoverage Stage note (2026-10-13) — L4.5 5→1 at its review fixes; L2 stays 5 (owner ruling D20, which supersedes the
 "Rate limiting: none" settled note above):** `CreateListAsync` and `CloneListAsync` call
 `EnsureAllowed(ContentCreate)` right after the auth guard (a clone is a list create, gated by the
 same 100-list cap). Rename, visibility, delete and entry add/remove stay unthrottled (`security.md`'s
@@ -78,6 +78,10 @@ and `CustomListClones_SpendTheSameContentCreateBucket`; Unit `WriteThrottleWireC
 (`CreateListAsync`/`CloneListAsync` over a canned 429). The existing UI catch sites (`MyListsPage`,
 `AddToCustomListMenuInner`, `CustomListPage`'s clone) already route the refusal through
 `ExceptionPresenter`, so they show "wait N seconds". No browser pass was run (tracker H33).
+**Review fixes (2026-10-13): L4.5 5→1.** The settled "Rate limiting: none" this feature was
+browser-verified under is superseded: the sixth list created in a burst is now refused with a wait
+message, and no browser has seen it (the F46/F53 precedent at WU-ModerationIntegrity). Tracker H33's
+step 1 returns the cell to 5.
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
@@ -114,7 +118,7 @@ pre-existing in-flight finding):
 - **L4 — Stage 5.** Established Container/Control recipes only (no new element kinds; mission
   family on Create/Clone per the "New X"/copy-on-write CTA precedents); token check green;
   rendered clean in the browser pass. Human visual sign-off (→6) is the standing pass.
-- **L4.5-Browser — Stage 5 (2026-07-13, standing dev DB kept).** Full loop driven in a real
+- **L4.5-Browser — Stage 1 (lowered 5→1 by WU-ThrottleCoverage's review fixes, 2026-10-13: a list create or clone can now be refused with a wait message, undriven in a browser — tracker H33; its Stage note at this feature's top. Was Stage 5 from 2026-07-13, standing dev DB kept).** Full loop driven in a real
   browser under **InteractiveAuto — the later flows ran on the real WASM runtime** (231
   `_framework` resources, zero `_blazor` WebSocket on the delete/My-Lists loads), psql ground
   truth after every write: create (My Lists page) → caret "Add to list" toggle (✓ flip) → inline

@@ -121,7 +121,8 @@ row for each kind but names no number.
   - **One exception, `RepeatRequest`** (D20; WU-ThrottleCoverage, 2026-10-13). It is the one kind
     whose harm is not load: it guards a *notification* — one user reaching a named other user's tray
     after being told no — and whether a request notifies is known only after validation (a
-    self-owned lineage link auto-approves and notifies nobody). So its call sits on the notifying
+    self-owned lineage link auto-approves and notifies nobody; a target story whose author's
+    account is gone has nobody to tell). So its call sits on the notifying
     branch, after validation and **before the first tracked mutation** (never between a mutation and
     its save: a refused call would leave the dirty entity for the circuit's next `SaveChanges`). A
     side benefit: failed validation never spends one of the five tokens.
@@ -134,13 +135,22 @@ row for each kind but names no number.
     collaborator in one sitting waits three minutes.
   - **`Reveal` has one enforcement point, not one per transport.** The reveal is a full-document
     form POST (`ContentGateEndpoints`) that the circuit and WASM never reach, so
-    `ContentRevealRecorder` (server-only, scoped) is the whole surface: enum check (no-op), then
-    the bucket, then an existence check on the unfiltered write context (no-op), then the
-    idempotent insert. Invalid input is a silent no-op plus the normal redirect — the endpoint
-    contract ("every consent action ends in a redirect") and `AnonPrefs`' "malformed input →
-    defaults, never throw" doctrine; the redirect is the same either way, so there is no existence
-    oracle. A rejection is a bodied plain-text **429 with a `Retry-After` header** (a document flow
-    like the edge limiters, not a JSON API).
+    `ContentRevealRecorder` (server-only, scoped) is the whole surface: an undefined type is a
+    no-op (no token spent), then the bucket, then the target check, then the idempotent insert.
+  - **The reveal's target check is the viewer's confidentiality predicate, never ground truth**
+    (WU-ThrottleCoverage review fixes, 2026-10-13). It is the read context with only the
+    rating/audience filter lifted (consent is what a reveal records), plus
+    `BlogPostVisibilityGuard.IsVisible(…, isRevealed: true)` for a profile post: the same lookup
+    `GetMyRevealsAsync` titles its rows with (`ServerContentRevealService.ResolveVisibleTitlesAsync`),
+    so a row is minted exactly when `/settings` can title it. A target the viewer may not see —
+    another author's draft, pending or rejected story, anything taken down, an unpublished or
+    Private-author profile post — is a no-op exactly like a missing one, after spending its token.
+    Checked against the unfiltered write context, the `/settings` list was an existence oracle: a
+    hidden id left a "(deleted …)" row and a missing id left none. Every no-op still ends in the
+    normal redirect: the endpoint contract ("every consent action ends in a redirect") and
+    `AnonPrefs`' "malformed input → defaults, never throw" doctrine. A rejection is a bodied
+    plain-text **429 with a `Retry-After` header** (a document flow like the edge limiters, not a
+    JSON API), sent as `text/plain; charset=utf-8` because the message carries an em dash.
 - **Select by cost, not by write-vs-read** (reframed 2026-07-18, BB-02/MA-309 — matches current
   MS rate-limiting guidance, which drives limiter choice from "the resources used: time, data
   access, CPU, I/O"). Two classes need protection:
@@ -172,15 +182,19 @@ row for each kind but names no number.
 
 Each row was classified by reading the method, not by its name (D20 asked for exactly that for the
 admin/mod group, and four by-name classifications turned out wrong). "Bounded" names the bound
-that actually holds.
+that actually holds. The list is checked against every public method of every server write
+service, not against memory: the build's version missed four (the respondent answers and
+`UnfollowAsync`) and filed `VouchAsync` under a bound that does not hold; its review fixed all
+five (2026-10-13).
 
 | Surface | Why no bucket |
 |---|---|
 | **Edits** — `UpdateStoryAsync`, `UpdateChapterContentAsync`, the three blog-post updates, `EditCommentAsync`, `UpdatePollAsync`, `UpdateSeriesAsync`, `UpdateArcAsync`, list rename/visibility, `UpdateGroupAsync`, recommendation `EditAsync`, saved-selection `UpdateAsync`, folder rename/reorder | **Exempt, conditionally (D20).** Sound only once the D20 caps half lands text caps: today a chapter-body edit re-runs sanitize + word count on an uncapped body at exactly a create's cost. If the caps half is descoped, this exemption is **void and an `Edit` kind is required**. Until WU-BoundsAndCaps lands, the exemption stands inside its own void condition — recorded here, not papered over. |
-| **Deletes and removals** — every `Delete*`/`Remove*` (including `RemoveCoverArtAsync`, `RemoveVouchAsync`, reveal `RemoveAsync`), `RevokeAsync`, `DeleteLineageAsync`, `DismissHelpfulPromptAsync`, group `LeaveAsync`, chapter move / set-primary | Removes or reorders the caller's own rows; creates nothing another user sees. |
+| **Deletes and removals** — every `Delete*`/`Remove*` (including `RemoveCoverArtAsync`, `RemoveVouchAsync`, reveal `RemoveAsync`), `RevokeAsync`, `DeleteLineageAsync`, `UnfollowAsync`, `DismissHelpfulPromptAsync`, group `LeaveAsync`, chapter move / set-primary | Removes or reorders the caller's own rows; creates nothing another user sees. |
 | **Silent toggles** — `SetUserStoryInteractionStateAsync`, `SetReadItLaterFromRecommendationAsync`, `MarkStartedAsync`, `MarkCompletedAsync`, the three like toggles (no notification, §6.11), `SetReceiveAlertsAsync`, `SetHighlightedByAuthorAsync` (also capped per story), group `JoinAsync`, list/series membership and reorder, folder assign/unassign, poll close/archive, chapter read marks, messaging mark-read/archive, notification mark-read/settings, `SetOverrideAsync`, recommendation `RecordSuccessAsync` | Idempotent state on the caller's own rows; UX-hostile to limit (the 2 s client debounce absorbs click frequency). `ServerChapterReadMarkWriteService` is **not** buffered (its own doc) — a self-scoped per-chapter / per-story toggle with no fan-out. `RecordSuccessAsync` consumes the caller's one attribution per story; the consumption is the bound. |
-| **Notifying toggles** — `FollowAsync`, `SetHiddenGemAsync` (also capped at `MaxHiddenGemsPerUser`), recommendation `RequestRevisionAsync` / `UnblockAsync`, a profile blog post's publish (the false→true edge re-notifies followers), `ApproveLineageAsync` (Pending → Approved once per request) | The bound is `CreateCoreAsync`'s dedup: at most **one unread** notification per (type, source, related entity) per recipient (`ServerNotificationWriteService`). A toggle loop re-notifies only after the recipient reads the last one. Advisory (sequential callers; D23). This bounds the tray, not the churn. |
-| **Hard-capped** — `VouchAsync` (`MaxVouchesPerUser` = 5, idempotent), Spotlight `RedeemSlotAsync`, badge `SetDisplayOrderAsync`, `EnsureMyVerificationCodeAsync` | `RedeemSlotAsync` is user-facing, not mod-only: the consumed grant is the rate limit, and grants are mod-gated (`ServerSpotlightSlotAllocator`). `SetDisplayOrderAsync` is a self-scoped reorder over owned badges. The verification code is idempotent. |
+| **Notifying toggles** — `FollowAsync`, `VouchAsync`, `SetHiddenGemAsync` (also capped at `MaxHiddenGemsPerUser`), recommendation `RequestRevisionAsync` / `UnblockAsync`, a profile blog post's publish (the false→true edge re-notifies followers), `ApproveLineageAsync` (Pending → Approved once per request) | The bound is `CreateCoreAsync`'s dedup: at most **one unread** notification per (type, source, related entity) per recipient (`ServerNotificationWriteService`). A toggle loop re-notifies only after the recipient reads the last one. Advisory (sequential callers; D23). This bounds the tray, not the churn. `VouchAsync`'s cap (`MaxVouchesPerUser` = 5) and its idempotence bound rows, not notifications: a vouch → `RemoveVouchAsync` → vouch loop on one target re-notifies on every insert, so the dedup is its bound too. |
+| **Respondent answers** — acknowledgment `AcceptAsync` / `DeclineAsync`, lineage `RejectLineageAsync` | Each answers a request another user made and is scoped to the respondent (the credited user; the target story's owner). Accept and Decline are Pending-only, one transition per request, so the requester's `RepeatRequest` bucket bounds how often there is anything to answer; neither notifies. Accept moves the beta-reader counter once per request, and its badge award is server-internal (`AwardAsync`, below). `RejectLineageAsync` is silent and has no status precondition: re-rejecting changes nothing, rejecting an Approved link unwinds its counter once, and approving again needs a fresh request (`RepeatRequest`). |
+| **Hard-capped** — Spotlight `RedeemSlotAsync`, badge `SetDisplayOrderAsync`, `EnsureMyVerificationCodeAsync` | `RedeemSlotAsync` is user-facing, not mod-only: the consumed grant is the rate limit, and grants are mod-gated (`ServerSpotlightSlotAllocator`). `SetDisplayOrderAsync` is a self-scoped reorder over owned badges. The verification code is idempotent. |
 | **Story status moves** — `TransitionStatusAsync` (`POST /api/stories/{id}/status`; tracker E7) | Updates one row in place through the transition table and notifies nobody. It never re-stamps `PublishedDate` or `LastUpdatedDate`, so a loop cannot bump the story; a submit/withdraw loop re-stamps one queue row and never adds one. |
 | **Chapter publish** — `SetPublishedAsync` | The new-chapter fan-out fires once per chapter, on the `FirstPublishedDate` stamp, so it is bounded by chapter creates (`ContentCreate`); a republish never re-notifies. |
 | **Group curation** — `AddStoryAsync` | **Flagged, not exempt by ruling (decision row 26 / tracker F23).** Each add of a distinct story notifies every opted-in member (type 60) and the story's author (25), anchored on the new `GroupStory` row (D16), so dedup never merges two adds; an admin's remove + re-add mints a new row and re-notifies. What bounds it today: members opted in (`NotifyForNewStory`) and can leave, and each story can be in a group once. Folder CRUD is group-admin-only structural curation with no notification. |
@@ -189,7 +203,7 @@ that actually holds.
 | **Buffered loss-tolerant signals** — reading progress, user activity | In-process buffers keyed per (user, chapter) / per user; a loop overwrites one buffer slot (`layer2-services.md` §"Signal Buffering"). |
 | **View ping** — `RecordViewAsync` (anonymous) | **Ratified unthrottled (D20 sub-ruling).** Views are never sort keys, so inflation cannot distort discovery, and `ViewCountBuffer` is keyed by story id, so a bot loop grows a dictionary bounded by story count, not ping count. Accepted consequence, recorded rather than defended: displayed view counts are inflatable, and authors read them. No IP-partitioned limiter until a proxy-aware client-IP policy exists (Phase 7). |
 | **Content gate, the other two** — anonymous reveal, `/content-gate/mature`, `/refresh-claims` | The anonymous reveal writes only the viewer's own cookie (LRU-capped at 50); the mature flip is a self-scoped setting plus a cookie reissue; refresh is idempotent. |
-| **Moderator/admin-gated** — all of `IModerationWriteService` (including `AssignGroupAdminAsync`, story approve/reject, `SetCanAutoApproveAsync`), EV approve/reject, `SetIntAsync` (`RequireModerator`), tag writes (`RequireModerator` + the `TagWrites` edge policy), Fanon `LinkGroupAsync` / `NotifyNewAuthorsAsync` | Mod actions are never throttled. Confirmed per method. **Fanon's author half** (`AdoptAsync`, `AdoptAllAsync`, `SetDismissedAsync`) is user-facing, not mod-gated: self-scoped to the caller's own stories, no notification; HTTP carries `TagWrites`, the circuit path is unthrottled. |
+| **Moderator/admin-gated** — all of `IModerationWriteService` (including `AssignGroupAdminAsync`, story approve/reject, `SetCanAutoApproveAsync`), EV approve/reject, `SetIntAsync` (`RequireModerator`), tag writes (`RequireModerator` + the `TagWrites` edge policy), Fanon `LinkGroupAsync` / `NotifyNewAuthorsAsync`, Spotlight `GrantSlotAsync` / `RevokeSlotAsync` (`RequireModerator`) | Mod actions are never throttled. Confirmed per method. **Fanon's author half** (`AdoptAsync`, `AdoptAllAsync`, `SetDismissedAsync`) is user-facing, not mod-gated: self-scoped to the caller's own stories, no notification; HTTP carries `TagWrites`, the circuit path is unthrottled. |
 | **Self-scoped settings and account** — profile / reader / privacy / author / appearance settings, filter settings, self account deletion | Self-scoped. Avatar upload is covered by `ImageUpload`. |
 | **Import `/resplit`**; **unsubscribe** | `/resplit` re-splits an already-parsed result (bounded by `ImportLimits`, no decode). Unsubscribe carries the `Unsubscribe` edge policy (anonymous, per-IP). The import *commit* loops `CreateChapterAsync` under `ContentCreate`, so an import of more than five chapters partially commits and then refuses (tracker D16). |
 

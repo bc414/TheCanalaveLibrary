@@ -84,9 +84,9 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
+| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 1 | 5 | N/A | N/A |
+| 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 1 | 5 | N/A | N/A |
+| 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 1 | 5 | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
@@ -113,7 +113,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
 | 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
@@ -126,8 +126,8 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
 | 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 1 | 5 | N/A | N/A |
+| 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 53 | External Story Links & Verification | Stories | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |
@@ -141,4 +141,4 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 64 | Site SEO | Seo | N/A | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
 | 65 | Accessibility | — | N/A | N/A | N/A | N/A | 5 | 1 | N/A | N/A | N/A |
-| 66 | Viewer Access Gating | ContentGate | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 |
+| 66 | Viewer Access Gating | ContentGate | 5 | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 |

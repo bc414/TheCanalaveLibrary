@@ -73,7 +73,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
   site now runs global InteractiveAuto (badge surfaces not browser-driven in the flip's wave). Full
   wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
-- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5** (lowered to **1** by WU-CounterSymmetry, 2026-09-30: the display filter and the `UserCard` count guard changed what a badge row shows, with no browser available — tracker **H23**; **back to 5** after its browser pass the same day, on both render phases — see its Stage note). Browser-verifiable surface
+- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5** (lowered to **1** by WU-CounterSymmetry, 2026-09-30: the display filter and the `UserCard` count guard changed what a badge row shows, with no browser available — tracker **H23**; **back to 5** after its browser pass the same day, on both render phases — see its Stage note). **Now Stage 1:** lowered 5→1 again by WU-ThrottleCoverage's review fixes (2026-10-13). An acknowledgment request can now be refused with a wait message, and no browser has seen it (tracker **H33**; see its Stage note). Browser-verifiable surface
   exercised as TestUser against the seeded dev DB:
   - Empty state: `/settings` Badges section rendered "You haven't earned any badges yet."
   - Curation: after awarding `Recommender` (direct `user_badges` insert — the award *trigger*
@@ -113,9 +113,9 @@ empty for a stranger and anonymous, populated for the author; taken-down: empty 
 `Revoke_NonexistentStory_ThrowsUnauthorizedAccess`; the existing revoke tests still green. All four
 fail against the pre-fix code. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
-### Feature 50 L2 — WU-ThrottleCoverage Stage note (2026-10-13): acknowledgment requests are throttled (owner ruling D20)
+### Feature 50 L2/L4.5 — WU-ThrottleCoverage Stage note (2026-10-13): acknowledgment requests are throttled (owner ruling D20) — L4.5 5→1 at its review fixes
 
-**No cell flips — F50 stays Stage 5.** `ServerStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync`
+**The build flipped no cell; its review fixes flipped L4.5 5→1 (below). L2 stays 5.** `ServerStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync`
 now spends a `RepeatRequest` token (5 burst, 1 per 3 min — D20's report tier, "or tighter") on every
 request, because every request notifies the credited user. D20 allowed a state guard ("one
 re-request per decline") instead; it would not close the vector, since `RevokeAsync` deletes a
@@ -123,8 +123,10 @@ Declined row from `MyAcknowledgmentsPage` and a fresh request then re-notifies w
 repeat — so the bucket charges first requests too (owner friction note: decision row 26 (c)). The
 call sits after validation and **before the tracked mutation** (the Declined row's flip back to
 Pending): `security.md`'s placement exception for this kind. Validation failures spend nothing.
-`IStoryAcknowledgmentWriteService`'s doc states the throw. Accept/Decline/Revoke stay unthrottled
-(the respondent's answer and the author's own delete — `security.md`'s enumeration).
+`IStoryAcknowledgmentWriteService`'s doc states the throw. Accept, Decline and Revoke stay
+unthrottled: `security.md`'s enumeration files Accept and Decline under "Respondent answers" (one
+Pending-only transition per request, bounded by the requester's bucket) and Revoke under "Deletes
+and removals".
 
 **How verified:** Integration `WriteThrottleTests` (real limiter, tightened table) —
 `AcknowledgmentRevokeRerequestCycle_ThrottlesUnderRepeatRequest` (request/revoke ×3, the fourth
@@ -133,6 +135,13 @@ request refused: the bypass is closed), `AcknowledgmentRequests_ThatFailValidati
 then an unrelated save on the same scope: the row is still Declined). Mutation-checked: moving the
 call after the mutation fails the third. Unit `WriteThrottleWireContractTests` covers the WASM client
 rebuilding the exception. No browser pass was run (tracker H33).
+
+**Review fixes (2026-10-13).** Two changes:
+- **The enumeration named no row for Accept or Decline.** This note cited it for them anyway.
+  `security.md` now has the "Respondent answers" row.
+- **L4.5 5→1.** A sixth credit request in one sitting is now refused with a wait message. That is an
+  ordinary author flow, and no browser has seen it (the F46/F53 precedent at WU-ModerationIntegrity).
+  Tracker H33's step 3 returns the cell to 5.
 
 ### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling, plus a spec-sourced `UserCard` rider)
 

@@ -2130,10 +2130,11 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        the earlier "This file isn't…" alert, because a transition does not clear the form's error
        list. Cosmetic.
 - [ ] **H33 — WU-ThrottleCoverage browser pass: the throttle messages on both render phases, the reveal paths, and the consent leak fix** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ThrottleCoverage; no browser was available to it.*
-  - Grid: no cell moved — the throttles and the catch-site fix sit beneath Stage-5 cells (F8–F10, F37,
-    F50, F51, F54, F66), and the only markup-adjacent change is the series page's error text. This item
-    is the pass that confirms them in a real browser. Real limits: `ContentCreate` and `RepeatRequest`
-    refuse the sixth call in a burst, `Vote` and `Reveal` the eleventh.
+  - Grid: the build moved no cell; its review fixes (2026-10-13) flipped **F8, F9, F10, F37, F50, F51
+    and F66 L4.5 5→1**. Each now meets a refusal or a page that no browser has seen. This pass returns
+    them to 5. F54 stays 5: its limiter refuses only under server-wide overload, and step 5 is a
+    regression smoke. Real limits: `ContentCreate` and `RepeatRequest` refuse the sixth call in a
+    burst, `Vote` and `Reveal` the eleventh.
   - Steps (each on the circuit, then again on a WASM revisit):
     1. `/my-lists`: create six lists quickly; the sixth shows "please wait N seconds", not "Something
        went wrong". Then clone a public list: refused the same way until the bucket refills.
@@ -2150,8 +2151,13 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        gated and absent from discovery. Repeat with "View this story" in A: B stays gated.
     7. Signed in: "View this story" on an M story still lands on the story and writes one
        `user_content_reveals` row; posting the reveal form with a hand-edited `entityType` (say 9) or a
-       missing id redirects normally and writes nothing.
-    8. Optional: an import of seven chapters reproduces tracker **D16** (five committed, then the wait
+       missing id redirects normally and writes nothing. Then hand-post the id of **another author's
+       draft** and of a **taken-down** story: each redirects normally, writes no row, and `/settings`
+       lists no "(deleted story)" for it (review fixes: the list was an existence oracle).
+    8. Signed in, post the reveal form eleven times quickly: the eleventh answers 429 with a
+       `Retry-After` header and `Content-Type: text/plain; charset=utf-8`, and the page reads "too
+       fast — please wait N seconds" with the em dash intact (review fixes: it was unlabeled).
+    9. Optional: an import of seven chapters reproduces tracker **D16** (five committed, then the wait
        message).
 
 ---
