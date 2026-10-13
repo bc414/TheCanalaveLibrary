@@ -72,7 +72,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — second Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12 — first Stage note below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — second Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12, browser-driven on both render phases by its browser pass the same day — first Stage note below).**
   **WU-DependencyCVEs Stage note (2026-10-12; tracker E2 closed) — no flip.** The sanitizer
   (`ServerHtmlSanitizationService`, the write path's trust boundary) now runs on HtmlSanitizer
   9.2.1039 over AngleSharp **1.8.4**. It used to run on 9.0.892 over AngleSharp 0.17.1, which
@@ -88,6 +88,24 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   sibling to the mis-parse: content loss, no live markup), and on 1.7.2 the cgp3 canary fails.
   Integration `ChapterWriteServiceTests` (sanitize-on-save) is green on the new parser. No UI
   changed, so no browser pass is owed.
+  **Browser verification (2026-10-12, WU-DependencyCVEs' pass; server-only path).** Both
+  advisories' payloads went through the real write paths into stored HTML, with `psql` after every
+  write and a `window.__pwned` counter in every `onerror` (never a dialog):
+  - **Import (circuit, AuthorAlpha, story 2).** A one-document HTML file with the three payload
+    variants, a `<script>`, an `onclick` and an `<img onerror>` split into two drafts. The preview
+    held no `img`/`svg`/`math`/`style`/`script`/`on*` element, and the import committed chapters 5
+    and 6 (ids 19, 20). Stored HTML kept `strong`/`em`/`u`/`s`/`blockquote` and the link (with
+    `target`/`rel` added), and dropped every vector. The pgww payload leaves the inert text `"&gt;`,
+    which is the correct parse.
+  - **Render (both phases).** Chapter 5, published from the editor on WASM
+    (`PUT /api/chapters/19/published`; `Story.WordCount` 90 → 114), read as ReaderGamma on WASM and
+    then on the circuit: no live vector in the DOM, the counter stayed 0, and no console error.
+  - **Other write paths on the same parser.** ReaderGamma's comment with formatting and an
+    embedded `<img>` (WASM, `POST /api/comments/chapter`) stored with the `img` stripped. The
+    Markdown "into editor" import and the editor save (circuit) stored the SVG-style payload as
+    escaped text. Import is `audit/Import.md` F63's note.
+  - No bug in the sanitizer path. The pass found two pre-existing editor defects, filed as tracker
+    **H25**, and fixed the upload-refusal bug in `audit/ImageStorage.md` L2.
   **WU-CounterSymmetry Stage note (2026-09-30; service audit §2.4.3/§2.4.6, owner ruling D22) — no flip.**
   - **`Story.WordCount` counts published chapters only.** `RefreshStoryWordCountAsync` filters on
     `IsPublished`, and `SetPublishedAsync` now calls it after its save. Publishing therefore adds a

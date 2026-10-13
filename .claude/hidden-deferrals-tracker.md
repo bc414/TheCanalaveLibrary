@@ -970,6 +970,9 @@ unless noted. All sit under Stage-5 cells.
     `ImageUploadProcessor`; the per-advisory analysis is in `security.md`. Two Unit tests guard the
     two reachable-in-principle halves (the BigTIFF PoC, the ICC CLUT PoC). The report-only vuln
     scan keeps listing ImageSharp, and E3's hard-gate promotion waits on this item.
+  - Browser-verified 2026-10-12 (WU-DependencyCVEs' pass): the BigTIFF PoC, uploaded as an avatar,
+    was refused in about a second on both render phases, with nothing written. That pass also made
+    the refusal readable (`ImageUploadValidationException`, `audit/ImageStorage.md` L2).
 
 ---
 
@@ -1591,6 +1594,33 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     counter on a fresh workbench.
   - **Fix shape:** derive the seeded counters, by running both recalculators at the end of the Full
     seed or by computing them, and make the class doc true.
+- [ ] **H25 — Chapter editor: imported HTML loses its blockquotes and gains empty paragraphs, and saving a draft chapter lands on "Page not found"** `[polish · medium · beta]` — *Observed 2026-10-12 by the WU-DependencyCVEs browser pass. Neither is in that WU's code.*
+  - Grid: F63 L3-Logic (`ChapterFileImport` → editor) and F6 L3-Logic (`ChapterEditorPage`) stay 5.
+    Both defects are pre-existing, not regressions of the AngleSharp move: the server-side readers
+    and the bulk import store correct HTML.
+  - **Imported HTML is mangled when it reaches Quill.** `EditorView.SetHtmlAsync` calls Blazored's
+    `LoadHTMLContent`, which assigns `quill.root.innerHTML` raw and bypasses Quill's clipboard
+    conversion. Inter-block whitespace (every Markdown import, any pretty-printed HTML file) then
+    becomes empty `<p>` lines, and a `<blockquote>` holding a `<p>` splits: the quote bar is left
+    empty and the text falls out of it.
+    - Seen: Markdown `> quoted` imported "into editor" on story 10 chapter 1 was saved as
+      `<blockquote>\n</blockquote><p>quoted in markdown</p><blockquote>\n</blockquote>` with five
+      `<p>\n</p>` lines.
+    - Proven in the page: for `<p>one</p>\n<blockquote>\n<p>quoted</p>\n</blockquote>\n<p>two</p>`,
+      the raw-innerHTML path gives that shape, while
+      `quill.setContents(quill.clipboard.convert({ html }))` gives
+      `<p>one</p><blockquote>quoted</blockquote><p>two</p>`.
+    - The editor's first render is not affected: the initial `Html` goes through Quill's constructor,
+      which converts it. Only `SetHtmlAsync` callers are hit: the import's "Replace editor content",
+      and draft restore, whose input is Quill's own output and so carries no whitespace.
+    - Fix shape: a project JS helper that loads HTML through `clipboard.convert` + `setContents`, and
+      `SetHtmlAsync` calls it instead of `LoadHTMLContent`. No automated tier runs Quill, so this
+      needs a browser re-check; a bUnit test can only pin the interop call.
+  - **Saving a draft chapter shows "Page not found".** `ChapterEditorPage`'s save navigates to the
+    chapter's reading URL. The reading page 404s an unpublished chapter even for its author, so
+    every save of a draft lands the author on the not-found page; the save itself succeeds.
+    - Fix shape: return to the editor (or the story page) when the chapter is unpublished. Showing
+      authors their own drafts on the reading page would be a different, owner-level call.
 
 ---
 

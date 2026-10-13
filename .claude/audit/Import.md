@@ -21,7 +21,9 @@ Feature 53. *(As-built names corrected 2026-07-27; the build note below always h
 ## Feature 63 — Chapter Import (file ingestion)
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).
 - **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
-  1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12 — Stage note below).** **L4.5 —
+  1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12, and browser-driven on both render
+  phases by its browser pass the same day — Stage note below; tracker H25 holds two pre-existing
+  editor defects that pass found).** **L4.5 —
   Stage 5** (see note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
   service need a client impl).** Endpoints + client impl live (WU-L5Sweep), incl. the three
@@ -88,6 +90,28 @@ which 1.8.4 clears and 1.7.2 would not). No code change was needed.
 **Verified:** Unit `ContentImportTests` and Integration `ImportCommitTests` pass unchanged on the
 new parser, including the export → import round trips. The sanitizer's new mXSS payload tests are
 in `audit/Chapters.md` F6 L2's Stage note. No UI changed, so no browser pass is owed; L4.5 stays 5.
+
+**Browser verification (2026-10-12, WU-DependencyCVEs' pass; server-only path).** Every reader the
+WU moved was driven through the real import UIs, with `psql` after each commit:
+- **One document, HTML (circuit, AuthorAlpha, story 2).** The advisory-payload file split at its
+  two `<h1>`s. Switching the split to "Don't split" and back re-split in memory (1 ↔ 2 drafts), and
+  the panel warned "2 images dropped". The commit created chapters 5 and 6, sanitized; the payload
+  detail is in `audit/Chapters.md` F6 L2's browser note.
+- **EPUB round trip (WASM).** Story 2's own EPUB export, fed back into the EPUB mode of story 10:
+  `POST /api/content-import/epub` answered 200 and showed four drafts (the title page and three
+  chapters). With three removed, the commit (`POST /api/chapters`) created story 10's chapter 1
+  (id 21). Its body equals the source chapter's apart from the EPUB's own chapter heading, which
+  import keeps as an `<h2>`.
+- **Into editor, Markdown (circuit).** `ChapterFileImport` parsed a Markdown file holding both
+  payloads ("1 image dropped"), "Replace editor content" loaded it, and the save stored the payloads
+  as escaped text.
+- **Refusals.** A non-ZIP `.epub` read "This file isn't an EPUB (not a valid archive)." (400 on
+  WASM). Another author (AuthorBeta) on `/story/2/edit` got "You don't have permission to edit this
+  story." Over HTTP, AuthorBeta's `POST /api/chapters` into story 2 answered 403 and wrote nothing;
+  an anonymous parse answered 401.
+- **Two pre-existing defects found, both in the editor rather than the readers:** tracker **H25**.
+  The Markdown import's blockquote lost its quote and gained empty paragraphs once Quill loaded it.
+  Saving the draft chapter then landed the author on "Page not found".
 
 ### Settled (WU38d, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Reframe:** fundamentally *chapter* import / bulk chapter import, NOT "story import." Story

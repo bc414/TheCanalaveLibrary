@@ -12,7 +12,8 @@ generation: `IExportService` (Core) + `ServerExportService` + per-format writers
 ## Feature 54 — Content Download/Export
 - **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11; re-verified WU-StoryLifecycle,
   2026-09-30 — nullable publish date, "Not yet published" header; re-verified WU-DependencyCVEs,
-  2026-10-12 — the `ExportDom` walks on AngleSharp 1.8.4; see their Stage notes below).**
+  2026-10-12 — the `ExportDom` walks on AngleSharp 1.8.4, all six formats downloaded by its browser
+  pass the same day; see their Stage notes below).**
 - **L3-Logic — N/A** (trigger lives in Stories components). **L3.5 — N/A** (no components).
 - **L4 — N/A. L4.5 — Stage 5. L5 — N/A. L6 — N/A. L8 — N/A.**
 
@@ -67,6 +68,14 @@ only parse already-sanitized stored HTML.
 new parser, with no serializer diff in any writer's expected output. `ContentImportTests`' export →
 import round trips still survive byte-for-byte. No UI changed, so no browser pass is owed; L4.5
 stays 5.
+**Browser verification (2026-10-12, WU-DependencyCVEs' pass; server-only path).** Story 2, which
+then held the sanitized probe chapter 5 (`audit/Chapters.md` F6 L2's browser note), was downloaded
+anonymously in all six formats: each answered 200 with its content type. The HTML, EPUB
+(`chapter-3.xhtml`), Markdown and TXT bodies keep the bold, italic, underline, strike, link and
+quote and hold no `img`/`svg`/`math`/`script`; the DOCX keeps the bold run; the PDF starts
+`%PDF-1.4`. Anonymous downloads of a Draft, a pending, an M-rated and an unpublished chapter
+answered 404, as did a numeric format segment. Feeding the EPUB back in is `audit/Import.md` F63's
+round trip.
 
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under

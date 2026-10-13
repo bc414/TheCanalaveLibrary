@@ -17,16 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DependencyCVEs (2026-10-12), the NuGet advisory sweep, and its review fixes.
+- **Last landed:** WU-DependencyCVEs (2026-10-12), the NuGet advisory sweep, its review fixes and its browser pass.
   - **Patched:** `System.Security.Cryptography.Xml` → 10.0.12 (one pin in Core; the deployed Server
     takes the assembly from the shared framework, so its fix is the patched host runtime, Phase 7);
     `SSH.NET` → 2026.0.0 (test-only); **E2 closed**: HtmlSanitizer 9.2.1039 with AngleSharp
     **1.8.4** (not the 1.7.2 floor: AngleSharp's own advisory GHSA-cgp3 covers ≤ 1.8.1).
-  - **Owner-open:** ImageSharp 3.1.12 stays as accepted risk. Every patched line needs a Six Labors
-    license key, so the choice is **decision row 21** (tracker E9); only 4.1.2+ clears the scan. All
-    five vectors are unreachable through the upload pipeline, and two Unit tests guard them.
-  - The vuln scan lists only ImageSharp. `dotnet test`: Unit 1,089, RazorComponents 770, Integration
-    1,380. **Pointers:** its DONE entry; `security.md` §"Dependency Vulnerability Scan Cadence".
+  - **Owner-open:** ImageSharp 3.1.12 stays as accepted risk (**decision row 21**, tracker E9: every
+    patched line needs a Six Labors key, and only 4.1.2+ clears the scan, which lists nothing else).
+  - **Browser pass:** the advisories' payloads driven through import, editor, comments, reading and
+    all six exports on both phases (no sanitizer bug); upload refusals now read on both phases
+    (`ImageUploadValidationException`); **H25** filed (two pre-existing editor defects).
+  - `dotnet test`: Unit 1,090, RazorComponents 770, Integration 1,383. **Pointers:** its DONE entry;
+    `security.md` §"Dependency Vulnerability Scan Cadence" and §"Upload Content Pipeline".
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
@@ -523,8 +525,56 @@ is pending except where a bullet says so.
     - on 1.7.2, the cgp3 canary fails;
     - a TIFF module in the sniff reproduces the advisory's hang, and the test fails on its deadline;
     - reading `IccProfile.Entries` allocates 114.9 MB and fails.
-  - No browser pass is owed: no UI changed, and ImageSharp did not change version, so the
-    amendment's upload pass does not trigger.
+  - No browser pass was owed (no UI changed, and ImageSharp did not change version), but the
+    orchestrator ran one the same day ("Browser verification" below). Its fix brought `dotnet test`
+    to Unit 1,090, RazorComponents 770, Integration 1,383, all green; the four gates pass; build 0
+    errors, the same three C# warnings.
+- **Browser verification (2026-10-12).** Server-only path, Local provider, on the standing workbench
+  (not reset), `psql` after every write. The phase was read from the network log
+  (`_blazor/negotiate` against the action's `/api` call), with the circuit forced by removing the
+  Auto-mode localStorage hash. Every `onerror` payload bumped a `window.__pwned` counter instead of
+  opening a dialog; it stayed 0 throughout. GIF: `e2e-WU-DependencyCVEs.gif` (the primary flow:
+  payload import, preview, commit, publish, read, comment).
+  - **Sanitizer on AngleSharp 1.8.4:** one HTML document carrying both advisories' payloads went
+    through AuthorAlpha's one-document import (circuit). The two drafts and the stored chapters 5 and 6
+    of story 2 kept the allowed formatting and no vector. Chapter 5, published on WASM, read clean
+    as ReaderGamma on both phases. ReaderGamma's WASM comment had its `<img>` stripped. A Markdown
+    "into editor" import and save (circuit) stored the payloads as escaped text.
+  - **Import readers:** an EPUB round trip on WASM (story 2's export into story 10, `POST
+    /api/content-import/epub`) kept the body exactly, apart from the EPUB's own chapter heading. The
+    one-document re-split picker worked on the circuit, and a broken `.epub` read "This file isn't an
+    EPUB (not a valid archive)." AuthorBeta was refused on the edit
+    page and with 403 over HTTP; an anonymous parse got 401.
+  - **Export writers:** all six formats of story 2, downloaded anonymously, answered 200 with intact
+    formatting and no vector. A Draft, a pending, an M-rated and an unpublished chapter answered 404.
+  - **Client bundle:** with Core's Crypto.Xml pin inherited, the WASM runtime loaded
+    `System.Security.Cryptography.Xml` and every WASM action above ran. Sign-in (dev login) worked
+    for all three users the pass drove (AuthorAlpha, AuthorBeta, ReaderGamma).
+  - **Bug fixed (commit "browser-pass fixes"):** an upload refusal never read on either phase. The
+    BigTIFF PoC avatar showed the generic error and logged `fail:` on the circuit, and "… (Parameter
+    'buffer')" on WASM. The pipeline now throws `ImageUploadValidationException` with user-written
+    text (`security.md` §"Upload Content Pipeline" Rules). Re-verified: the BigTIFF avatar and a
+    non-image cover read "This file isn't a JPEG, PNG or WebP image." on both phases, nothing was
+    written, and no `fail:` was logged. A valid PNG avatar still stored and served. Tests:
+    - Unit `ImageUploadProcessorTests` +1;
+    - Integration `ImageUploadEndpointsTests` (3);
+    - updated assertions in the advisory and telemetry tests.
+
+    Mutation-checked: putting the `ArgumentException` back fails 5 Unit and 3 Integration tests.
+  - **Filed, not this WU's code:** **H25**. "Replace editor content" mangles imported blockquotes
+    and whitespace (Blazored's raw-`innerHTML` load), and saving a draft chapter lands on "Page not
+    found".
+  - **Not driven:** a moderator surface (this WU touches none); keyboard-only and screen-reader
+    passes (owner's, as before).
+  - **Dev-DB state left behind** (server-only workbench; `reset-dev-db.ps1` drops it):
+    - story 2: chapter 5 "Probe Chapter One" (id 19, published; `Story.WordCount` 90 → 114) and
+      chapter 6 "Probe Chapter Two" (id 20, draft), both sanitized payload probes;
+    - ReaderGamma's comment on chapter 5 (comment 6);
+    - story 10 (AuthorAlpha's Draft): chapter 1 (id 21, draft; content 24), created by the EPUB
+      round-trip import and then overwritten in place by the Markdown "into editor" import and save;
+    - AuthorBeta's avatar: `/uploads/users/5/profile-{uuid}.png` (a 64×64 green-and-white PNG).
+  - Narrative: the browser notes in `audit/ImageStorage.md` L2, `audit/Chapters.md` F6 L2,
+    `audit/Import.md` F63 and `audit/Export.md` F54.
 - **Hand-offs:**
   - **WU-TrackerFixes:** skip its §1 C / E2 entirely, including the §5 sanitizer tests (landed here,
     minus the dropped href-escaping test).
@@ -534,7 +584,7 @@ is pending except where a bullet says so.
   - `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence";
   - the Stage notes in `audit/Chapters.md` F6 L2, `audit/Export.md` F54, `audit/Import.md` F63 and
     `audit/ImageStorage.md` L2;
-  - tracker E2/E3/E9.
+  - tracker E2/E3/E9, and H25 (from the browser pass).
 
 ## WU-CounterSymmetry — counter & concurrency doctrine: every counter derived and reconciled, post-commit counters, check-then-act hardened per family, creating a group counts as joining (worksheet D21–D24; extends `Profiles/`, `Groups/`, `Following/`, `UserStoryInteractions/`, `Chapters/`, `Comments/`, `Recommendations/`, `Moderation/`, `Badges/`, `Stories/`, `Users/`) — DONE ✓ (2026-09-30)
 

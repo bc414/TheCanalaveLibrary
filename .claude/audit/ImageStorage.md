@@ -108,7 +108,7 @@ write path's `CoverArtRelativeUrl` a pass-through string; both UIs have since sh
 
 ---
 
-## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12 — last Stage note below)
+## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12; refusals made user-facing on both render phases by its browser pass the same day — last two Stage notes below)
 
 `IImageStorageService` + `LocalImageStorageService` minted and registered
 (`AddScoped<IImageStorageService, LocalImageStorageService>()`). No write-path call site yet (Stories'
@@ -227,6 +227,38 @@ The choice of a key, a library swap or standing risk is the owner's: `roadmap.md
   (fails). The existing `ImageUploadProcessorTests` and the Integration storage tests are unchanged
   and green.
 - No browser pass is owed: ImageSharp did not change version and no UI changed.
+
+**WU-DependencyCVEs browser verification (2026-10-12; server-only path, Local provider) — one bug
+fixed; L2 remains Stage 5.** The pass fed the advisory payloads through the real upload UIs on both
+render phases (circuit proven by `_blazor/negotiate`; WASM by the `/api/…` request), with `psql` as
+ground truth.
+- **Found:** the pipeline refused the 24-byte BigTIFF PoC promptly (about 1 s, no hang), but the
+  uploader never got a readable refusal. Every refusal threw a BCL `ArgumentException`:
+  - on the circuit, `/settings`' avatar upload showed the generic "Something went wrong" with an
+    Error ID, and the server logged `fail: SettingsPage` ("Settings save failed unexpectedly");
+  - on WASM the 400's `Detail` reached the page as "Uploaded file is not a recognized image.
+    (Parameter 'buffer')".
+- **Fixed:** new `ImageUploadValidationException` (Core `Images/`, a `CanalaveValidationException`,
+  carrying the decoder's exception as its inner exception; the base gained that constructor).
+  `ImageUploadProcessor` and `ImageUploadRules.ExtensionFor` throw it with user-written text for
+  every refusal the uploader caused: claimed type, the 10 MB cap, unrecognized bytes, undecodable
+  pixels and the dimension guard. The unreachable encoder fallback stays an `ArgumentException`.
+  The rule is now `security.md` §"Upload Content Pipeline" Rules ("Every refusal is user-facing").
+- **Re-verified after the fix:**
+  - the BigTIFF avatar (AuthorBeta) and a non-image cover (AuthorAlpha, story 10) both read "This
+    file isn't a JPEG, PNG or WebP image." on both phases (WASM: `POST …/profile-picture` and
+    `…/cover` answered 400);
+  - `psql`: no avatar or cover written, and the server log has no `fail:`;
+  - a valid 64×64 PNG avatar upload still succeeded on WASM: stored `/uploads/users/5/profile-{uuid}.png`,
+    served 200 `image/png`, re-encoded (328 → 218 bytes).
+- **Tests:**
+  - Unit `ImageUploadProcessorTests` (+1, 12) and `ImageUploadProcessorAdvisoryTests`: refusals are
+    the typed exception, `ExceptionPresenter` treats them as user-facing, and the text is exact (the
+    circuit half). `ImageStorageTelemetryTests`' oversize case asserts the new type.
+  - Integration `ImageUploadEndpointsTests` (new, 3): the BigTIFF avatar, an SVG-claimed cover and
+    a non-image cover each answer 400 with the readable `Detail` and write nothing (the WASM half).
+  - Mutation-checked: putting the `ArgumentException` back at the sniff and the claimed-type check
+    fails 5 Unit tests and all 3 Integration tests.
 
 ## L3/L3.5/L4 — N/A for this cluster
 
