@@ -220,6 +220,167 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         (await FlushAsync()).Should().Be(1);
     }
 
+    // ── Mid-batch SMTP death and cancellation (WU-NotificationCorrectness, R5) ────
+
+    [Fact]
+    public async Task MidBatchDeath_RestoresOnlyTheUnsent_AndTheRetryDuplicatesNothing()
+    {
+        int[] recipients = [_recipientId, await SeedUserAsync("email-r2"), await SeedUserAsync("email-r3")];
+        foreach (int r in recipients)
+            await NotifyNewFollowerAsync(recipientId: r);
+
+        // The connection dies after the first message went out.
+        Transport.FailAfter(1, new IOException("connection reset"));
+        Func<Task> flush = async () => await FlushAsync();
+        await flush.Should().ThrowAsync<MailBatchInterruptedException>();
+
+        Transport.Sent.Should().HaveCount(1);
+        Buffer.Count.Should().Be(2, "only the two unsent notifications go back; the sent one must not");
+
+        (await FlushAsync()).Should().Be(2);
+        Transport.Sent.Select(m => m.UserId).Should().BeEquivalentTo(recipients,
+            "every recipient got exactly one email: none lost to the death, none sent twice by the retry");
+    }
+
+    [Fact]
+    public async Task CancellationMidBatch_ThrowsTheCancellation_AndRestoresTheUnsent()
+    {
+        int[] recipients = [_recipientId, await SeedUserAsync("email-c2"), await SeedUserAsync("email-c3")];
+        foreach (int r in recipients)
+            await NotifyNewFollowerAsync(recipientId: r);
+
+        // Shutdown cancels the send between the first and second message.
+        Transport.FailAfter(1, new OperationCanceledException());
+        Func<Task> flush = async () => await FlushAsync();
+        (await flush.Should().ThrowAsync<OperationCanceledException>())
+            .Which.Should().NotBeOfType<MailBatchInterruptedException>(
+                "the worker's shutdown path must see a cancellation, not the batch wrapper");
+
+        Buffer.Count.Should().Be(2, "a cancelled flush used to lose its whole drained batch");
+        Transport.Sent.Should().HaveCount(1);
+    }
+
+    // ── Shutdown drain (WU-NotificationCorrectness, R6) ──────────────────────────
+
+    [Fact]
+    public async Task DrainAll_DrainsPastTheFirstBatch_ToEmpty()
+    {
+        // 450 ids that resolve to nothing (drained, judged ineligible, gone) ahead of one real
+        // notification, so the real one sits in the third batch of 200. One FlushAsync — the old
+        // shutdown path — would never reach it.
+        EnqueueMissingIds(450);
+        await NotifyNewFollowerAsync();
+
+        int stranded = await DrainAllAsync(CancellationToken.None);
+
+        stranded.Should().Be(0);
+        Buffer.Count.Should().Be(0);
+        Transport.Sent.Should().ContainSingle().Which.UserId.Should().Be(_recipientId);
+    }
+
+    [Fact]
+    public async Task DrainAll_StopsAtAFailedBatch_WithoutSpinning_AndReportsWhatItStranded()
+    {
+        EnqueueMissingIds(450);
+        await NotifyNewFollowerAsync();
+        Transport.FailNextBatchWith = new InvalidOperationException("SMTP unreachable");
+
+        int stranded = await DrainAllAsync(CancellationToken.None);
+
+        stranded.Should().Be(1, "the failed batch's one real notification is restored and reported");
+        Buffer.Count.Should().Be(1);
+        Transport.Sent.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DrainAll_WithAnExpiredBudget_SendsNothing_AndReportsTheQueue()
+    {
+        await NotifyNewFollowerAsync();
+        using var expired = new CancellationTokenSource();
+        await expired.CancelAsync();
+
+        int stranded = await DrainAllAsync(expired.Token);
+
+        stranded.Should().Be(1);
+        Buffer.Count.Should().Be(1);
+        Transport.Sent.Should().BeEmpty();
+    }
+
+    // ── D19: an override of one field never freezes the other (the point of the ruling) ──
+
+    [Fact]
+    public async Task CollapsedOnlyOverride_DoesNotPinEmail_AgainstALaterDefaultFlip()
+    {
+        // The recipient follows a story, and collapses NewChapterOnFollowedStory in the panel. The
+        // settings page submits BOTH effective values, so email arrives as its current default (on).
+        int storyId = await SeedStoryAsync(_actorId);
+        await SeedFollowAsync(_recipientId, storyId);
+
+        SetActiveUser(_recipientId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<INotificationWriteService>()
+                .SetSettingAsync(NotificationTypeEnum.NewChapterOnFollowedStory, emailEnabled: true, collapsed: true);
+        }
+
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewChapterOnFollowedStory);
+        row.Should().NotBeNull("Collapsed is overridden");
+        row!.EmailEnabled.Should().BeNull("an email value the user never chose is not pinned");
+        row.Collapsed.Should().BeTrue();
+
+        // Retune the type: email for new chapters now defaults OFF. notification_types survives the
+        // Respawn reset (TablesToIgnore), so the default is restored in finally.
+        await SetDefaultEmailEnabledAsync(NotificationTypeEnum.NewChapterOnFollowedStory, false);
+        try
+        {
+            // Read site 1: the settings read follows the new default for email, keeps the override.
+            NotificationSettingDto dto;
+            using (IServiceScope scope = Factory.Services.CreateScope())
+            {
+                dto = (await scope.ServiceProvider.GetRequiredService<INotificationReadService>().GetSettingsAsync())
+                    .Single(s => s.TypeId == NotificationTypeEnum.NewChapterOnFollowedStory);
+            }
+            dto.EmailEnabled.Should().BeFalse("the default flip reaches a user who only ever collapsed the type");
+            dto.EmailIsDefault.Should().BeTrue();
+            dto.Collapsed.Should().BeTrue();
+            dto.CollapsedIsDefault.Should().BeFalse();
+
+            // Read site 2: the flusher's eligibility gate agrees, so a fresh chapter sends nothing.
+            SetActiveUser(_actorId);
+            using (IServiceScope scope = Factory.Services.CreateScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<INotificationWriteService>()
+                    .NotifyNewChapterAsync(storyId, chapterId: 1, authorId: _actorId);
+            }
+            Buffer.Count.Should().Be(1, "the in-app row is created and queued regardless of email");
+            (await FlushAsync()).Should().Be(0);
+            Transport.Sent.Should().BeEmpty();
+        }
+        finally
+        {
+            await SetDefaultEmailEnabledAsync(NotificationTypeEnum.NewChapterOnFollowedStory, true);
+        }
+    }
+
+    [Fact]
+    public async Task CollapsedOnlyOverride_StillEmails_WhileTheTypeDefaultsEmailOn()
+    {
+        // The other direction of the per-field coalesce: a row whose EmailEnabled is NULL follows the
+        // default (on), it does not read as "off".
+        SetActiveUser(_recipientId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<INotificationWriteService>()
+                .SetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: true);
+        }
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou))!.EmailEnabled.Should().BeNull();
+        SetActiveUser(_actorId);
+
+        await NotifyNewFollowerAsync();
+
+        (await FlushAsync()).Should().Be(1);
+    }
+
     // ── One-click unsubscribe ────────────────────────────────────────────────────
 
     [Fact]
@@ -308,6 +469,40 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         await svc.NotifyNewFollowerAsync(recipientId ?? _recipientId, followerId ?? _actorId);
     }
 
+    private async Task<int> DrainAllAsync(CancellationToken budget)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<NotificationEmailFlusher>().DrainAllAsync(budget);
+    }
+
+    /// <summary>Queues ids no notification row has — they drain as ineligible and are dropped.</summary>
+    private void EnqueueMissingIds(int count) =>
+        Buffer.Enqueue(Enumerable.Range(0, count).Select(i => 9_000_000_000L + i));
+
+    private async Task SeedFollowAsync(int userId, int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStoryInteractions.Add(new UserStoryInteraction { UserId = userId, StoryId = storyId, IsFollowed = true });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<UserNotificationSetting?> SettingRowAsync(int userId, NotificationTypeEnum type)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserNotificationSettings.AsNoTracking()
+            .SingleOrDefaultAsync(s => s.UserId == userId && s.NotificationTypeId == type);
+    }
+
+    private async Task SetDefaultEmailEnabledAsync(NotificationTypeEnum type, bool enabled)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.NotificationTypes.Where(t => t.NotificationTypeId == type)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.DefaultEmailEnabled, enabled));
+    }
+
     private async Task NotifyNewVouchAsync()
     {
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -327,24 +522,32 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
     }
 
     /// <summary>
-    /// Writes a sparse override row directly. Deliberately NOT via <c>SetSettingAsync</c>: that
-    /// method is self-scoped to the active user, and these tests need to set the *recipient's*
-    /// preference while the *actor* is the one generating notifications.
+    /// Writes a sparse override row directly, in canonical form (D19): <c>Collapsed</c> NULL (follow
+    /// the default) and <c>EmailEnabled</c> NULL when it equals the type default. Deliberately NOT via
+    /// <c>SetSettingAsync</c>: that method is self-scoped to the active user, and these tests need to
+    /// set the *recipient's* preference while the *actor* is the one generating notifications.
     /// </summary>
     private async Task SetSettingAsAsync(int userId, NotificationTypeEnum type, bool emailEnabled)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool defaultEmail = await db.NotificationTypes
+            .Where(t => t.NotificationTypeId == type)
+            .Select(t => t.DefaultEmailEnabled)
+            .FirstAsync();
+        if (emailEnabled == defaultEmail) return; // canonical "default" is no row at all
+
         db.UserNotificationSettings.Add(new UserNotificationSetting
         {
             UserId = userId,
             NotificationTypeId = type,
             EmailEnabled = emailEnabled,
-            Collapsed = false
+            Collapsed = null
         });
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Effective <c>EmailEnabled</c>, resolved per field (D19) straight from the tables.</summary>
     private async Task<bool> EffectiveEmailEnabledAsync(int userId, NotificationTypeEnum type)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -353,7 +556,7 @@ public class NotificationEmailFanOutTests(PostgresFixture postgres) : Integratio
         UserNotificationSetting? row = await db.UserNotificationSettings
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserId == userId && s.NotificationTypeId == type);
-        if (row is not null) return row.EmailEnabled;
+        if (row?.EmailEnabled is bool overridden) return overridden;
 
         return await db.NotificationTypes
             .Where(t => t.NotificationTypeId == type)

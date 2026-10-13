@@ -270,7 +270,8 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         NotificationSettingDto? followerSetting = settings.FirstOrDefault(
             s => s.TypeId == NotificationTypeEnum.NewFollowerOnYou);
         followerSetting.Should().NotBeNull();
-        followerSetting!.IsDefault.Should().BeTrue("no override row → IsDefault = true");
+        followerSetting!.EmailIsDefault.Should().BeTrue("no override row → both fields follow the default");
+        followerSetting.CollapsedIsDefault.Should().BeTrue();
         followerSetting.EmailEnabled.Should().BeTrue(
             "NewFollowerOnYou has DefaultEmailEnabled = true in the seed data");
         followerSetting.Collapsed.Should().BeFalse(
@@ -294,7 +295,8 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         followerSetting.Should().NotBeNull();
         followerSetting!.EmailEnabled.Should().BeFalse("override must be applied");
         followerSetting.Collapsed.Should().BeTrue("override must be applied");
-        followerSetting.IsDefault.Should().BeFalse("an override row now exists");
+        followerSetting.EmailIsDefault.Should().BeFalse("email is overridden");
+        followerSetting.CollapsedIsDefault.Should().BeFalse("collapsed is overridden");
     }
 
     [Fact]
@@ -312,8 +314,150 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             settings.FirstOrDefault(s => s.TypeId == NotificationTypeEnum.NewFollowerOnYou);
 
         followerSetting.Should().NotBeNull();
-        followerSetting!.IsDefault.Should().BeTrue(
-            "sparse model: setting both values back to defaults must delete the override row");
+        (followerSetting!.EmailIsDefault && followerSetting.CollapsedIsDefault).Should().BeTrue(
+            "sparse model: both values back at their defaults means both fields follow the default");
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeNull(
+            "both fields at default must delete the override row, not keep an all-NULL one");
+    }
+
+    // ── D19: sparse per field (WU-NotificationCorrectness) ───────────────────────
+
+    [Fact]
+    public async Task SetSettingAsync_EachFieldCollapsesToNullOnItsOwn_RowGoesOnlyWhenBothAreDefault()
+    {
+        // NewFollowerOnYou defaults: EmailEnabled = true, Collapsed = false.
+        SetActiveUser(_recipientId);
+
+        await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: false, collapsed: true);
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row.Should().NotBeNull();
+        row!.EmailEnabled.Should().BeFalse();
+        row.Collapsed.Should().BeTrue();
+
+        // Email back to its default: that column goes NULL, the Collapsed override survives, the row stays.
+        await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: true);
+        row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row.Should().NotBeNull("Collapsed is still overridden");
+        row!.EmailEnabled.Should().BeNull("a field equal to its default is stored as NULL, not as a pinned copy");
+        row.Collapsed.Should().BeTrue();
+
+        NotificationSettingDto dto = (await CallGetSettingsAsync()).Single(s => s.TypeId == NotificationTypeEnum.NewFollowerOnYou);
+        dto.EmailEnabled.Should().BeTrue();
+        dto.EmailIsDefault.Should().BeTrue();
+        dto.Collapsed.Should().BeTrue();
+        dto.CollapsedIsDefault.Should().BeFalse();
+
+        // Both at default: the row goes.
+        await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: false);
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Unsubscribe_OnACollapsedType_WritesOnlyEmail_AndLeavesCollapsedAlone()
+    {
+        SetActiveUser(_recipientId);
+        await CallSetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: true);
+
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
+
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row.Should().NotBeNull();
+        row!.EmailEnabled.Should().BeFalse("unsubscribe turns email off against a default-on type");
+        row.Collapsed.Should().BeTrue("unsubscribe owns email_enabled only; the display override is untouched");
+    }
+
+    [Fact]
+    public async Task Unsubscribe_WithNoRow_LeavesCollapsedNull_AndIsIdempotent()
+    {
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
+        (await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue(
+            "mail clients and link scanners re-POST the same link");
+
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row.Should().NotBeNull();
+        row!.EmailEnabled.Should().BeFalse();
+        row.Collapsed.Should().BeNull("Collapsed keeps tracking DefaultCollapsed — unsubscribe never pins it");
+    }
+
+    [Fact]
+    public async Task Unsubscribe_OnADefaultOffType_DropsAnEmailOverride_AndTheRowWhenNothingIsLeft()
+    {
+        // NewVouchOnYou defaults EmailEnabled = false: turning email "off" means following the default.
+        SetActiveUser(_recipientId);
+        await CallSetSettingAsync(NotificationTypeEnum.NewVouchOnYou, emailEnabled: true, collapsed: false);
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou))!.EmailEnabled.Should().BeTrue();
+
+        await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou);
+        (await SettingRowAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou)).Should().BeNull(
+            "email back at its (off) default and collapsed already NULL → no row");
+
+        // With a Collapsed override present, only email_enabled goes NULL and the row stays.
+        await CallSetSettingAsync(NotificationTypeEnum.NewVouchOnYou, emailEnabled: true, collapsed: true);
+        await CallUnsubscribeAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou);
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou);
+        row.Should().NotBeNull();
+        row!.EmailEnabled.Should().BeNull();
+        row.Collapsed.Should().BeTrue();
+
+        // And with no row at all it is a no-op.
+        await CallUnsubscribeAsync(_actorId, NotificationTypeEnum.NewVouchOnYou);
+        (await SettingRowAsync(_actorId, NotificationTypeEnum.NewVouchOnYou)).Should().BeNull();
+    }
+
+    // ── D23 applied: the settings upsert never 500s on a concurrent insert (R7) ──
+
+    [Fact]
+    public async Task Unsubscribe_ACompetingRowLandingBeforeTheInsert_StillSucceeds()
+    {
+        // The second of two concurrent unsubscribe POSTs (a mail client and a link scanner): the
+        // competing writer's row appears after this writer found none and before it inserts. A
+        // check-then-insert hits the primary key there and 500s; the ON CONFLICT upsert updates.
+        var interceptor = new InterleavingCommandInterceptor(
+            ConnectionString, "INSERT INTO user_notification_settings",
+            $"INSERT INTO user_notification_settings (user_id, notification_type_id, email_enabled, collapsed) " +
+            $"VALUES ({_recipientId}, {(short)NotificationTypeEnum.NewFollowerOnYou}, false, NULL)",
+            interceptReaders: true);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerNotificationWriteService _, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerNotificationWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            await using ReadOnlyApplicationDbContext readDb = await scope.ServiceProvider
+                .GetRequiredService<IDbContextFactory<ReadOnlyApplicationDbContext>>().CreateDbContextAsync();
+
+            (await NotificationSettingUpsert.UnsubscribeAsync(
+                writeDb, readDb, _recipientId, NotificationTypeEnum.NewFollowerOnYou)).Should().BeTrue();
+        }
+
+        interceptor.Fired.Should().BeTrue("the competing insert must have landed before the writer's own");
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row!.EmailEnabled.Should().BeFalse();
+        row.Collapsed.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetSetting_ACompetingRowLandingBeforeTheInsert_IsOverwrittenNot500()
+    {
+        var interceptor = new InterleavingCommandInterceptor(
+            ConnectionString, "INSERT INTO user_notification_settings",
+            $"INSERT INTO user_notification_settings (user_id, notification_type_id, email_enabled, collapsed) " +
+            $"VALUES ({_recipientId}, {(short)NotificationTypeEnum.NewFollowerOnYou}, false, NULL)",
+            interceptReaders: true);
+
+        SetActiveUser(_recipientId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerNotificationWriteService service, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerNotificationWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            await service.SetSettingAsync(NotificationTypeEnum.NewFollowerOnYou, emailEnabled: true, collapsed: true);
+        }
+
+        interceptor.Fired.Should().BeTrue();
+        UserNotificationSetting? row = await SettingRowAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou);
+        row!.EmailEnabled.Should().BeNull("the settings page owns both columns, and email equals its default");
+        row.Collapsed.Should().BeTrue();
     }
 
     // ── WU33: GetTotalCountAsync ─────────────────────────────────────────────────
@@ -435,6 +579,31 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         followIdx.Should().BeGreaterThanOrEqualTo(0);
         vouchIdx.Should().BeLessThan(followIdx,
             "OldestUnreadFirst: unread notifications must appear before read ones regardless of creation time");
+    }
+
+    [Fact]
+    public async Task GetNotificationsAsync_OldestUnreadFirst_TiesOnTimestamp_PageByIdWithoutSkipOrRepeat()
+    {
+        // Fan-out rows are stamped microseconds apart and can tie on DateCreated. Pin two unread rows
+        // to the same instant. Pinning the NEWER row first moves it ahead of the older one in the heap
+        // (an UPDATE writes a new tuple), so without a unique tiebreak the database is free to return —
+        // and does return — the tied rows newest-id first, or the same row on both pages.
+        int actorB = await SeedUserAsync("NS-T");
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+        await CallNotifyNewVouchAsync(_recipientId, actorB);
+        DateTime tie = DateTime.UtcNow.AddMinutes(-3);
+        await SetNotificationDateCreatedAsync(_recipientId, NotificationTypeEnum.NewVouchOnYou, actorB, tie);
+        await SetNotificationDateCreatedAsync(_recipientId, NotificationTypeEnum.NewFollowerOnYou, _actorId, tie);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] page1 = await CallGetNotificationsAsync(1, 1, NotificationFeedOrder.OldestUnreadFirst);
+        NotificationDto[] page2 = await CallGetNotificationsAsync(2, 1, NotificationFeedOrder.OldestUnreadFirst);
+
+        page1.Should().ContainSingle();
+        page2.Should().ContainSingle();
+        long first = page1[0].NotificationId, second = page2[0].NotificationId;
+        second.Should().NotBe(first, "offset paging over a total order never repeats a row");
+        first.Should().BeLessThan(second, "ties on (IsRead, DateCreated) are broken by ascending id");
     }
 
     // ── D4: a null source = no actor (WU-InertFeatures) ──────────────────────────
@@ -720,5 +889,27 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             .Where(n => n.NotificationId == notificationId)
             .Select(n => !n.IsRead)
             .FirstOrDefaultAsync();
+    }
+
+    /// <summary>The raw stored row (per-field NULLs visible), or null when there is none.</summary>
+    private async Task<UserNotificationSetting?> SettingRowAsync(int userId, NotificationTypeEnum type)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserNotificationSettings.AsNoTracking()
+            .SingleOrDefaultAsync(s => s.UserId == userId && s.NotificationTypeId == type);
+    }
+
+    /// <summary>
+    /// The one-click unsubscribe's write, for a user resolved from its signed token in production — so
+    /// it takes the user id directly rather than the active user.
+    /// </summary>
+    private async Task<bool> CallUnsubscribeAsync(int userId, NotificationTypeEnum type)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext writeDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await using ReadOnlyApplicationDbContext readDb = await scope.ServiceProvider
+            .GetRequiredService<IDbContextFactory<ReadOnlyApplicationDbContext>>().CreateDbContextAsync();
+        return await NotificationSettingUpsert.UnsubscribeAsync(writeDb, readDb, userId, type);
     }
 }

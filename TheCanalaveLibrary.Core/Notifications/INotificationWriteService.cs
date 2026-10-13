@@ -48,8 +48,10 @@ public interface INotificationWriteService : INotificationReadService
     /// <summary>
     /// Sets the current user's preference override for <paramref name="notifType"/>.
     ///
-    /// <para><b>Sparse model:</b> when both values match the type defaults, the override row
-    /// is deleted (NULL = use default). Otherwise the row is upserted.</para>
+    /// <para><b>Sparse model, per field (owner ruling D19):</b> the two arguments are effective
+    /// values. Each one equal to its type default is stored as NULL (NULL = use the default), so a
+    /// later default change reaches that field; the override row is deleted when both are NULL and
+    /// upserted otherwise.</para>
     /// </summary>
     Task SetSettingAsync(NotificationTypeEnum notifType, bool emailEnabled, bool collapsed);
 
@@ -273,17 +275,21 @@ public interface INotificationWriteService : INotificationReadService
     /// Sends <c>StorySpotlighted = 91</c> to the story author <b>at go-live</b> (called by
     /// <c>SpotlightGoLiveWorker</c> when a placement's window opens, never at booking).
     /// <c>RelatedEntityId = storyId</c>. Drop-self covers a sponsor spotlighting their own story,
-    /// which the service already refuses, so this always delivers.
+    /// which the service already refuses, so this always delivers. <paramref name="sponsorUserId"/>
+    /// is null when the sponsor's account was deleted before go-live (<c>SponsoringUserId</c> is
+    /// SET NULL) — D4's "actor since deleted" null, never a stand-in id, which the source FK would
+    /// refuse (WU-NotificationCorrectness, 2026-10-12).
     /// </summary>
-    Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId);
+    Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int? sponsorUserId, int storyId);
 
     /// <summary>
     /// Sends <c>RecommendationSpotlighted = 92</c> to the attached recommendation's recommender
     /// <b>at go-live</b>. <c>RelatedEntityId = storyId</c> (recommendations display on the story
     /// page). When the sponsor attached their own recommendation, the create-core's drop-self
     /// rule suppresses it — the standing self-generated-notification convention.
+    /// <paramref name="sponsorUserId"/> is null for a deleted sponsor, as above.
     /// </summary>
-    Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId);
+    Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int? sponsorUserId, int storyId);
 
     // ── Semantic generation methods (WU-Polls slice) ─────────────────────────────
 

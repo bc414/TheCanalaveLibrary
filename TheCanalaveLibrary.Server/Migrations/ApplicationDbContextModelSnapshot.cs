@@ -4086,11 +4086,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("notification_type_id");
 
-                    b.Property<bool>("Collapsed")
+                    b.Property<bool?>("Collapsed")
                         .HasColumnType("boolean")
                         .HasColumnName("collapsed");
 
-                    b.Property<bool>("EmailEnabled")
+                    b.Property<bool?>("EmailEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("email_enabled");
 

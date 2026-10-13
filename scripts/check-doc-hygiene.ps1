@@ -47,6 +47,9 @@ $retiredTerms = [ordered]@{
     # (?-i) makes this one case-sensitive (Select-String ignores case by default), so the live
     # moderation-history label "[deleted Comment]" (D8's "[deleted {type}]") never trips it.
     '"[Deleted Comment]" placeholder (declined, worksheet D12 / WU-TptHardDelete review fixes 2026-09-30)' = '(?-i)\[Deleted Comment\]'
+    # Case-sensitive and not preceded by a word char, so the per-field EmailIsDefault /
+    # CollapsedIsDefault that replaced it never trip it.
+    'NotificationSettingDto.IsDefault (split into EmailIsDefault / CollapsedIsDefault, owner ruling D19, WU-NotificationCorrectness 2026-10-12)' = '(?-i)(?<![\w*])IsDefault\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

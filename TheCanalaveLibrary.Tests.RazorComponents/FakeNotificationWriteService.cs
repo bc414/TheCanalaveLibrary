@@ -61,8 +61,8 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public Task NotifyAccountSuspendedAsync(int targetUserId) => Task.CompletedTask;
     public Task NotifyAccountBannedAsync(int targetUserId) => Task.CompletedTask;
     public Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId) => Task.CompletedTask;
-    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId) => Task.CompletedTask;
-    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int? sponsorUserId, int storyId) => Task.CompletedTask;
+    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int? sponsorUserId, int storyId) => Task.CompletedTask;
     public Task NotifyPollUpdatedAsync(int? pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) => Task.CompletedTask;
     public Task NotifyNewStoryCommentAsync(int storyAuthorId, int commenterId, int chapterId) => Task.CompletedTask;
     public Task NotifyNewBlogCommentAsync(int blogAuthorId, int commenterId, int blogPostId) => Task.CompletedTask;

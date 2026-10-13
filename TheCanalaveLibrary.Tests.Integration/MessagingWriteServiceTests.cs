@@ -99,6 +99,67 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
         await act.Should().ThrowAsync<MessagingValidationException>();
     }
 
+    [Fact]
+    public async Task StartConversation_SubjectOverTheColumnCap_IsAValidationErrorNotADatabaseError()
+    {
+        // conversations.subject is varchar(2048): an over-long subject used to reach the INSERT and
+        // fail there (a 500). It is now refused by the validator (a 400), before anything is written.
+        Func<Task> act = async () => await CallStartAsync(
+            subject: new string('s', MessagingConstants.MaxSubjectLength + 1), messageHtml: "<p>Hi</p>");
+
+        await act.Should().ThrowAsync<MessagingValidationException>();
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Conversations.CountAsync())
+            .Should().Be(0);
+    }
+
+    // ── One unit of work (WU-NotificationCorrectness, service audit §2.8) ─────────
+
+    [Fact]
+    public async Task StartConversation_CommitsTheWholeGraphInOneSave()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        IMessagingWriteService svc = scope.ServiceProvider.GetRequiredService<IMessagingWriteService>();
+        int saves = 0;
+        db.SavedChanges += (_, _) => saves++;
+
+        int convId = await svc.StartConversationAsync(new StartConversationDto(_recipientId, "One save", "<p>Hi</p>"));
+
+        saves.Should().Be(1, "the conversation, both participants and the first message are one unit of work");
+        (await db.ConversationParticipants.CountAsync(p => p.ConversationId == convId)).Should().Be(2);
+        (await db.PrivateMessages.CountAsync(m => m.ConversationId == convId)).Should().Be(1);
+        ConversationParticipant sender = await db.ConversationParticipants
+            .SingleAsync(p => p.ConversationId == convId && p.UserId == _senderId);
+        PrivateMessage first = await db.PrivateMessages.SingleAsync(m => m.ConversationId == convId);
+        sender.LastReadTimestamp.Should().Be(first.DateSent,
+            "one timestamp: the sender's read watermark is never behind their own first message");
+    }
+
+    [Fact]
+    public async Task StartConversation_AFailureWritingTheChildren_LeavesNoBareConversation()
+    {
+        // The participants/message insert fails. Two saves used to leave the already-committed,
+        // participant-less conversation behind as an orphan; one save rolls the whole graph back.
+        var interceptor = new InterleavingCommandInterceptor(
+            ConnectionString, "INSERT INTO conversation_participants",
+            failWith: new InvalidOperationException("simulated failure writing the participants"),
+            interceptReaders: true);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerMessagingWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerMessagingWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            Func<Task> act = () => svc.StartConversationAsync(new StartConversationDto(_recipientId, "Doomed", "<p>Hi</p>"));
+            await act.Should().ThrowAsync<Exception>();
+        }
+
+        interceptor.Fired.Should().BeTrue();
+        (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Conversations.CountAsync())
+            .Should().Be(0, "no orphaned, participant-less conversation");
+    }
+
     // ── AllowPrivateMessages gate ─────────────────────────────────────────────────
 
     [Fact]

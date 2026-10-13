@@ -139,6 +139,14 @@ OldestUnreadFirst ordering exactly. NewestFirst measured +6.7% (noise): it narro
 then sorts the per-user residual — accepted, per-user notification counts are bounded (60-day
 cleanup worker). Supersedes the recipient FK index.
 
+OldestUnreadFirst ends in a unique `notification_id` tiebreak (WU-NotificationCorrectness,
+2026-10-12): fan-out rows can share a `date_created`, and offset paging needs a total order. **No
+DDL:** the index still serves the presorted `(is_read, date_created)` prefix and Postgres adds an
+Incremental Sort for the id key. Measured on the dev DB inside a rolled-back transaction (20k extra
+rows over 7 users, `ANALYZE`d; page 3 of 20): `Incremental Sort … Presorted Key: n.is_read,
+n.date_created` over `Index Scan using ix_notifications_recipient_read_date`, reading 61 rows of the
+user's ~2.9k. Not a full Sort.
+
 ### private_messages — thread paging
 
 ```

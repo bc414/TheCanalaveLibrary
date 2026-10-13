@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
 
@@ -15,7 +16,8 @@ namespace TheCanalaveLibrary.Server;
 /// <list type="number">
 ///   <item><b>Still unread.</b> A notification the recipient already opened in-app needs no email.</item>
 ///   <item><b>Effective <c>EmailEnabled</c>.</b> The sparse <c>UserNotificationSetting</c> row's
-///   value, falling back to <c>NotificationType.DefaultEmailEnabled</c> — the same LEFT JOIN
+///   non-NULL <c>EmailEnabled</c>, falling back to <c>NotificationType.DefaultEmailEnabled</c> when
+///   there is no row or the column is NULL (per field — owner ruling D19) — the same LEFT JOIN
 ///   <c>GetSettingsAsync</c> implements.</item>
 ///   <item><b><c>EmailConfirmed</c>.</b> Never mail an unverified address: it may not belong to the
 ///   account holder, and unverified recipients are what wrecks a sending domain's reputation.</item>
@@ -29,12 +31,22 @@ namespace TheCanalaveLibrary.Server;
 /// accounts would be a regression; <c>NotificationEmailFlusherTests</c> asserts the current
 /// behaviour so that change fails loudly.</para>
 ///
-/// <para><b>Failure posture.</b> A connection-level SMTP failure propagates, and
-/// <see cref="NotificationEmailWorker"/> restores the batch for the next cycle. Per-message
-/// failures are handled inside the transport (logged, counted, dropped — see
-/// <see cref="IMailTransport.SendBatchAsync"/>). Nothing here ever touches the in-app
-/// <c>Notification</c> rows: mail is a side-channel, and a mail outage must not corrupt the
-/// notification feed.</para>
+/// <para><b>Failure posture (restore rules rewritten WU-NotificationCorrectness, 2026-10-12).</b>
+/// <see cref="FlushAsync"/> restores to the buffer exactly the ids whose mail was not sent, then
+/// rethrows; the worker logs and carries on. Per-message failures are handled inside the transport
+/// (logged, counted, dropped — see <see cref="IMailTransport.SendBatchAsync"/>). Which ids go back:</para>
+/// <list type="bullet">
+///   <item>composing failed → the whole drained batch (nothing was sent);</item>
+///   <item><see cref="MailBatchInterruptedException"/> → only the composed mails from its
+///   <see cref="MailBatchInterruptedException.ProcessedCount"/> on — the leading ones were sent (or
+///   dropped as a per-message failure) and must not go twice, and ids judged ineligible are already
+///   correctly gone;</item>
+///   <item>any other transport exception → every composed id (assume nothing was processed);</item>
+///   <item>cancellation (a shutdown mid-flight) restores by the same rules and rethrows the
+///   <see cref="OperationCanceledException"/> itself, so the caller's shutdown path still sees one.</item>
+/// </list>
+/// <para>Nothing here ever touches the in-app <c>Notification</c> rows: mail is a side-channel, and a
+/// mail outage must not corrupt the notification feed.</para>
 /// </summary>
 public sealed class NotificationEmailFlusher(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -52,38 +64,119 @@ public sealed class NotificationEmailFlusher(
 
     /// <summary>
     /// Drains and sends one batch. Returns the number of emails handed to the transport (which is
-    /// not the same as the number delivered — see the class doc's failure posture).
+    /// not the same as the number delivered — see the class doc's failure posture). On failure the
+    /// unsent ids are already back in the buffer when this throws.
     /// </summary>
     public async Task<int> FlushAsync(CancellationToken cancellationToken = default)
     {
         List<long> batch = buffer.Drain(MaxBatchSize);
         if (batch.Count == 0) return 0;
 
+        List<(long NotificationId, OutgoingMail Mail)> composed;
         try
         {
-            List<OutgoingMail> mails = await ComposeAsync(batch, cancellationToken);
-            if (mails.Count == 0) return 0;
-
-            await transport.SendBatchAsync(mails, cancellationToken);
-            return mails.Count;
+            composed = await ComposeAsync(batch, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
-            // Restore before rethrowing so the worker's catch doesn't have to know the batch.
+            // Nothing was sent: the whole drained batch goes back.
             buffer.Restore(batch);
+            if (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex,
+                    "Notification email compose failed for {BatchSize} notification(s); all {RestoredCount} restored for retry.",
+                    batch.Count, batch.Count);
+            }
+            throw;
+        }
+
+        if (composed.Count == 0) return 0;
+
+        try
+        {
+            await transport.SendBatchAsync([.. composed.Select(c => c.Mail)], cancellationToken);
+            return composed.Count;
+        }
+        catch (Exception ex)
+        {
+            // The transport reports how many leading mails reached a terminal outcome; a transport
+            // that throws anything else is assumed to have processed none (IMailTransport contract).
+            int processed = ex is MailBatchInterruptedException interrupted
+                ? Math.Clamp(interrupted.ProcessedCount, 0, composed.Count)
+                : 0;
+            List<long> unsent = [.. composed.Skip(processed).Select(c => c.NotificationId)];
+            buffer.Restore(unsent);
+
+            Exception cause = ex is MailBatchInterruptedException { InnerException: { } inner } ? inner : ex;
+            if (cause is OperationCanceledException)
+            {
+                // A shutdown cancelled the send mid-batch. The unsent tail is back in the buffer;
+                // rethrow the OCE itself so the caller's cancellation path (DrainAllAsync, the
+                // worker) recognises it.
+                logger.LogInformation(
+                    "Notification email send cancelled after {ProcessedCount} of {BatchSize} mail(s); {RestoredCount} restored.",
+                    processed, composed.Count, unsent.Count);
+                ExceptionDispatchInfo.Capture(cause).Throw();
+            }
+
             logger.LogError(ex,
-                "Notification email flush failed for {BatchSize} notification(s); batch restored for retry.",
-                batch.Count);
+                "Notification email send failed after {ProcessedCount} of {BatchSize} mail(s); {RestoredCount} restored for retry.",
+                processed, composed.Count, unsent.Count);
             throw;
         }
     }
 
-    private async Task<List<OutgoingMail>> ComposeAsync(List<long> notificationIds, CancellationToken cancellationToken)
+    /// <summary>
+    /// Drains the buffer to empty, one bounded batch at a time — the graceful-shutdown path
+    /// (<see cref="NotificationEmailWorker"/>). A single <see cref="FlushAsync"/> moves at most
+    /// <see cref="MaxBatchSize"/> mails, so a shutdown that flushed once would strand the rest of a
+    /// deep queue. Lives here, not on the worker, so Integration tests drive it deterministically.
+    ///
+    /// <para>Stops at the first failed batch (that batch is already restored — retrying a dead SMTP
+    /// host in a loop would only spin until the budget ran out) or when
+    /// <paramref name="budget"/> is cancelled. Never throws.</para>
+    /// </summary>
+    /// <returns>The number of ids still queued when it stopped (0 = fully drained).</returns>
+    public async Task<int> DrainAllAsync(CancellationToken budget)
+    {
+        try
+        {
+            while (buffer.Count > 0)
+            {
+                budget.ThrowIfCancellationRequested();
+                await FlushAsync(budget);
+            }
+        }
+        catch (OperationCanceledException) when (budget.IsCancellationRequested)
+        {
+            // The budget ran out. FlushAsync restored any batch it was holding; the caller logs the
+            // stranded count this returns.
+        }
+        catch (Exception ex)
+        {
+            // FlushAsync has already logged this failure (Error, with the batch) and restored the batch.
+            logger.LogWarning(
+                "Notification email drain stopped after a failed batch ({ExceptionType}); {QueuedCount} still queued.",
+                ex.GetType().Name, buffer.Count);
+        }
+
+        return buffer.Count;
+    }
+
+    /// <summary>
+    /// Resolves eligibility for the drained ids and composes one mail per eligible notification,
+    /// paired with its id so a partial send can restore exactly the unsent ones. Ids judged
+    /// ineligible (read, emails off, unconfirmed address, gone) are simply absent from the result.
+    /// </summary>
+    private async Task<List<(long NotificationId, OutgoingMail Mail)>> ComposeAsync(
+        List<long> notificationIds, CancellationToken cancellationToken)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync(cancellationToken);
 
         // One query, all four eligibility gates. LEFT JOINs mirror GetNotificationsAsync's shape:
-        //   • UserNotificationSettings (sparse, composite key) → effective EmailEnabled.
+        //   • UserNotificationSettings (sparse per field, composite key) → effective EmailEnabled:
+        //     the row's EmailEnabled when the row exists AND that column is non-NULL (D19), else
+        //     the type default. The explicit guard translates to a CASE, not a bare COALESCE.
         //   • Users on SourceUserId (int?) → actor name; null when the source was deleted
         //     (SET NULL policy) or the type has no actor.
         var rows = await (
@@ -102,7 +195,7 @@ public sealed class NotificationEmailFlusher(
             from src in sources.DefaultIfEmpty()
             where recipient.EmailConfirmed
                   && recipient.Email != null
-                  && (s != null ? s.EmailEnabled : nt.DefaultEmailEnabled)
+                  && (s != null && s.EmailEnabled != null ? s.EmailEnabled.Value : nt.DefaultEmailEnabled)
             select new
             {
                 n.NotificationId,
@@ -130,7 +223,7 @@ public sealed class NotificationEmailFlusher(
             readDb,
             rows.Select(r => (r.NotificationTypeId, r.RelatedEntityId)).ToList());
 
-        var mails = new List<OutgoingMail>(rows.Count);
+        var mails = new List<(long NotificationId, OutgoingMail Mail)>(rows.Count);
         foreach (var r in rows)
         {
             NotificationTarget target =
@@ -156,7 +249,7 @@ public sealed class NotificationEmailFlusher(
                 unsubscribeUrl,
                 publicUrls.AbsolutePageUrl(NotificationEmailBodies.SettingsPath));
 
-            mails.Add(new OutgoingMail(
+            mails.Add((r.NotificationId, new OutgoingMail(
                 r.RecipientEmail,
                 subject,
                 htmlBody,
@@ -169,7 +262,7 @@ public sealed class NotificationEmailFlusher(
                 {
                     ["List-Unsubscribe"] = $"<{unsubscribeUrl}>",
                     ["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-                }));
+                })));
         }
 
         return mails;

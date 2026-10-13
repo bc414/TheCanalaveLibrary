@@ -63,6 +63,25 @@ public class MessagingValidationsTests
     }
 
     [Fact]
+    public void Validate_SubjectOverTheColumnCap_ReturnsLengthError()
+    {
+        // conversations.subject is capped at MaxSubjectLength: over it, the INSERT used to fail (500).
+        var dto = new StartConversationDto(RecipientId,
+            Subject: new string('s', MessagingConstants.MaxSubjectLength + 1), MessageHtml: "<p>Hello</p>");
+        dto.Validate(SenderId).Should().ContainSingle()
+            .Which.Should().Contain(MessagingConstants.MaxSubjectLength.ToString());
+    }
+
+    [Fact]
+    public void Validate_SubjectAtTheCapAfterTrimming_IsValid()
+    {
+        // The service stores the trimmed subject, so surrounding whitespace never counts against the cap.
+        var dto = new StartConversationDto(RecipientId,
+            Subject: "  " + new string('s', MessagingConstants.MaxSubjectLength) + "  ", MessageHtml: "<p>Hello</p>");
+        dto.Validate(SenderId).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Validate_EmptySubjectAndSelfMessage_ReturnsTwoErrors()
     {
         // Both violations present simultaneously.

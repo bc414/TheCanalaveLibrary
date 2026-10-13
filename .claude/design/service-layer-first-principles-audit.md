@@ -434,7 +434,12 @@ code change:
 
 > **First three bullets built:** WU-InertFeatures (2026-09-30), with D16's `GroupStory` anchor — the
 > notify block now runs only on a real add, an authorless story still notifies members, and the
-> story's author gets type 25 only. The remaining bullets are routed to WU-NotificationCorrectness /
+> story's author gets type 25 only. **The next three bullets built: WU-NotificationCorrectness
+> (2026-10-12).** SMTP death: a per-message vs. batch-abort classification plus
+> `MailBatchInterruptedException.ProcessedCount`, so the flusher restores only the unsent remainder.
+> Shutdown: `DrainAllAsync` drains to empty within a 15 s budget. Tiebreak: `OldestUnreadFirst` ends
+> in `NotificationId` (no DDL). Dedup: accepted as an advisory policy under D23's test (doc only, no
+> index). `StartConversationAsync` is one save. The lineage/acknowledgment bullet stays routed to
 > WU-ThrottleCoverage.
 
 - **Group `AddStoryAsync` re-notifies on the idempotent duplicate path** (block sits outside
@@ -604,6 +609,8 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
 17. **`UserNotificationSetting` granularity**: doctrine says per-field NULL sparse; columns are
     non-nullable (an override of `Collapsed` freezes `EmailEnabled` against future default
     changes). Make both columns nullable now (free) or fix the doctrine sentence.
+    *Ruled worksheet D19 (both nullable, per-field collapse); built WU-NotificationCorrectness,
+    2026-10-12.*
 18. **Private messages can never produce email** (no notification type exists) — for a small site
     the unread-PM nudge is the single highest-value email. Ratify the absence or reserve the enum
     value + semantics now.
@@ -645,7 +652,7 @@ unless noted):
 | 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example |
 | 5 | WU37 validation table: pairing member-count/in-story → Reject | `StoryMappers` silently drops bad indexes and persists degenerate pairings | Enforce or amend (defect §2.12) |
 | 6 | "SpriteBaseUrl is a config seam… no code changes" | False for WASM (§2.7.3) | Amend + fix |
-| 7 | §Filtering semantics: "NULL for either field means use the default" | Columns are non-nullable; sparseness is row-level | Decision §3.17, then align |
+| 7 | §Filtering semantics: "NULL for either field means use the default" | Columns are non-nullable; sparseness is row-level | Decision §3.17, then align — *CLOSED: schema aligned to doctrine (worksheet D19), WU-NotificationCorrectness 2026-10-12* |
 | 8 | DAG rule: write→write only Notification/Badge | `ChapterReadMarkWrite → IUserStoryInteractionWriteService` (deliberate, described elsewhere in the same file) | Amend the sanctioned list |
 | 9 | "GetListingsAsync two-step" sketch | Pre-TagFanon shape (no roll-up, no StoryCharacters branch) presented as current | Mark historical like the WU37 sketch |
 | 10 | `IStoryReadService` doc comments on DTOs | Claim sprite URLs "already resolved by the read service" — resolution moved to render time | Fix stale comments |

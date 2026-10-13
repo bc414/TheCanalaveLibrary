@@ -29,7 +29,10 @@ namespace TheCanalaveLibrary.SharedUI;
 ///
 /// <para><b>Forward-compat stubs:</b> types whose generating write-path is not yet implemented
 /// produce no DB rows but are covered by switch arms here for completeness. Default arm catches
-/// any future type added to <see cref="NotificationTypeEnum"/> before this switch is updated.</para>
+/// any future type added to <see cref="NotificationTypeEnum"/> before this switch is updated —
+/// every <em>existing</em> type has its own arm, which <c>NotificationPresenterTests</c> asserts
+/// (90–92 and 100 used to reach the catch-all; arms added WU-NotificationCorrectness, 2026-10-12).
+/// The text also feeds the notification email's subject and body.</para>
 /// </summary>
 public static class NotificationPresenter
 {
@@ -228,7 +231,35 @@ public static class NotificationPresenter
             NotificationTypeEnum.SiteAnnouncement =>
                 "A new site announcement has been posted",
 
-            // ── Forward-compat catch-all ──────────────────────────────────────────
+            // ── Community Spotlight (90–92; arms added WU-NotificationCorrectness, 2026-10-12 —
+            // they used to fall through to the catch-all) ──────────────────────────────
+            // 90 keeps its granting moderator as the source (roadmap decision row 19, unruled), so
+            // the arm names them, as that row's "as built" describes; a deleted moderator reads
+            // "Someone".
+            NotificationTypeEnum.SpotlightSlotGranted =>
+                $"{actor} granted you a Community Spotlight slot",
+
+            // {actor} = the sponsor (null after their account's deletion → "Someone");
+            // {target} = the spotlighted story.
+            NotificationTypeEnum.StorySpotlighted =>
+                target is not null
+                    ? $"{actor} put {target} in the Community Spotlight"
+                    : $"{actor} put your story in the Community Spotlight",
+
+            NotificationTypeEnum.RecommendationSpotlighted =>
+                target is not null
+                    ? $"{actor} put {target} in the Community Spotlight with your recommendation"
+                    : $"{actor} put a story in the Community Spotlight with your recommendation",
+
+            // ── Polls (100) — composed actor-free: a site poll's owner is staff, and the voter
+            // needs the change, not who made it. {target} = the owning blog post (null for site
+            // polls, which carry no related entity). ───────────────────────────────────────
+            NotificationTypeEnum.PollUpdated =>
+                target is not null
+                    ? $"A poll you voted on in {target} was changed"
+                    : "A poll you voted on was changed",
+
+            // ── Forward-compat catch-all (a type minted before its arm is written) ──
             _ => "You have a new notification"
         };
 

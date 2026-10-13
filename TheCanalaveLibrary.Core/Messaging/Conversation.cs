@@ -6,7 +6,7 @@ public partial class Conversation
 {
     public int ConversationId { get; set; }
 
-    [Required] [MaxLength(2048)] public string Subject { get; set; } = null!;
+    [Required] [MaxLength(MessagingConstants.MaxSubjectLength)] public string Subject { get; set; } = null!;
 
     public DateTime DateCreated { get; set; }
 

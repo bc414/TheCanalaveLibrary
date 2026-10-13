@@ -12,7 +12,9 @@ namespace TheCanalaveLibrary.Server;
 /// invariants: <b>drop-self</b> (an actor is never notified of their own action — conditional on
 /// there being an actor: a null source drops nobody, owner ruling D4) and <b>dedup</b> (skip a
 /// recipient who already holds an unread notification for the same type + source + related entity,
-/// except for the D4-exempt types that have no related entity). There is <em>no</em> public generic
+/// except for the D4-exempt types that have no related entity). Dedup is advisory — it holds for
+/// sequential callers only, and two concurrent same-key creates may both insert, accepted per D23
+/// (see <see cref="CreateCoreAsync"/>). There is <em>no</em> public generic
 /// <c>CreateAsync</c> that bypasses these invariants — see <c>layer2-services.md</c>
 /// §"Notification Generation" for the rationale.</para>
 ///
@@ -87,7 +89,7 @@ public class ServerNotificationWriteService(
     {
         int userId = ActiveUser.RequireUserId();
 
-        // The sparse upsert/delete rule itself lives in NotificationSettingUpsert — shared with the
+        // The sparse per-field rule itself (D19) lives in NotificationSettingUpsert — shared with the
         // one-click unsubscribe endpoint, which writes for a user resolved from a signed token
         // rather than from IActiveUserContext and so cannot come through this self-scoped method.
         //
@@ -318,12 +320,12 @@ public class ServerNotificationWriteService(
             [(awardeeUserId, 0)]);
 
     /// <inheritdoc/>
-    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId) =>
+    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int? sponsorUserId, int storyId) =>
         CreateCoreAsync(NotificationTypeEnum.StorySpotlighted, sponsorUserId,
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
-    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId) =>
+    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int? sponsorUserId, int storyId) =>
         CreateCoreAsync(NotificationTypeEnum.RecommendationSpotlighted, sponsorUserId,
             [(recommenderUserId, storyId)]);
 
@@ -442,7 +444,12 @@ public class ServerNotificationWriteService(
     ///   <item><b>Cross-existing dedup:</b> recipients who already hold an unread notification
     ///   of the same <paramref name="type"/> + <paramref name="sourceUserId"/> + related entity are
     ///   skipped (absorbs idempotent or retry-style callers). A null source matches a null source.
-    ///   Skipped entirely for <see cref="CrossExistingDedupExempt"/>.</item>
+    ///   Skipped entirely for <see cref="CrossExistingDedupExempt"/>. <b>Advisory, a policy rather
+    ///   than a constraint:</b> it is a check-then-insert with no unique index, so it guarantees only
+    ///   sequential callers; two concurrent creates with the same key may both insert. Accepted under
+    ///   D23's classification test — no reader is wrong (each row is a real event, the count counts
+    ///   rows, mark-read and the 60-day cleanup absorb it), only the anti-flood intent is
+    ///   disappointed (<c>layer2-services.md</c> §"Notification Generation" → "Dedup").</item>
     /// </list>
     /// All remaining rows are bulk-inserted in a single <c>SaveChangesAsync</c>. No-ops when
     /// every target is filtered out.

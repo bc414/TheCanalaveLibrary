@@ -17,18 +17,19 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DependencyCVEs (2026-10-12), the NuGet advisory sweep, its review fixes and its browser pass.
-  - **Patched:** `System.Security.Cryptography.Xml` → 10.0.12 (one pin in Core; the deployed Server
-    takes the assembly from the shared framework, so its fix is the patched host runtime, Phase 7);
-    `SSH.NET` → 2026.0.0 (test-only); **E2 closed**: HtmlSanitizer 9.2.1039 with AngleSharp
-    **1.8.4** (not the 1.7.2 floor: AngleSharp's own advisory GHSA-cgp3 covers ≤ 1.8.1).
-  - **Owner-open:** ImageSharp 3.1.12 stays as accepted risk (**decision row 21**, tracker E9: every
-    patched line needs a Six Labors key, and only 4.1.2+ clears the scan, which lists nothing else).
-  - **Browser pass:** the advisories' payloads driven through import, editor, comments, reading and
-    all six exports on both phases (no sanitizer bug); upload refusals now read on both phases
-    (`ImageUploadValidationException`); **H25** filed (two pre-existing editor defects).
-  - `dotnet test`: Unit 1,090, RazorComponents 770, Integration 1,383. **Pointers:** its DONE entry;
-    `security.md` §"Dependency Vulnerability Scan Cadence" and §"Upload Content Pipeline".
+- **Last landed:** WU-NotificationCorrectness (2026-10-12) — worksheet D19 plus service audit §2.8's
+  remainder. No cell flipped. Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to
+  the dev DB.
+  - **D19:** `UserNotificationSetting` is sparse per field; unsubscribe writes only its own column.
+    The settings upsert is race-free under D23.
+  - **Mail:** a mid-batch SMTP death restores only the unsent mail (`MailBatchInterruptedException`).
+    Shutdown drains to empty within 15 s.
+  - **Smaller fixes:** the feed tiebreak, a one-save `StartConversationAsync`, the subject cap, the
+    90–92/100 presenter arms, and a deleted Spotlight sponsor passed as a null source.
+  - **Tracker:** **D13** filed (the paged-ordering sweep), **H26** filed (its browser pass), **D8**
+    re-scoped and not built.
+  - `dotnet test`: Unit 1,157, RazorComponents 770, Integration 1,401. **Pointer:** its DONE entry.
+  Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
@@ -237,8 +238,8 @@ references it, does not restate it.
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
-  2026-10-12 resume) the unplanned WU-DependencyCVEs, and **WU-NotificationCorrectness** is next in
-  the campaign's build order.
+  2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), and
+  **WU-SchemaHardening** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -264,7 +265,8 @@ references it, does not restate it.
   **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
-  **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21),
+  **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
+  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -430,6 +432,70 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-NotificationCorrectness — `UserNotificationSetting` sparse per field (worksheet D19), mail restores only the unsent and drains to empty, feed tiebreak, one-save `StartConversationAsync`, subject cap (service audit §2.8; extends `Notifications/`, `Email/`, `Messaging/`, `Spotlight/`, `SeedTool/`) — DONE ✓ (2026-10-12)
+
+- **Cells:** none flipped. F41/F42/F43 L1/L2, F49 L2 and F55 L2 stay 5: defects beneath sound cells.
+  F42 L4.5 stays 5 as a copy-only change. Migration `WU_NotificationCorrectness_SparseSettingFields`
+  is applied to the dev DB. Dated 2026-10-12 (the session's `currentDate`, per CLAUDE.md and
+  WU-DependencyCVEs' precedent), not the template's 2026-09-30.
+- **Trigger:** worksheet D19 (answered 2026-08-07); service audit §2.8's items not owned by
+  WU-InertFeatures; amendment U8. It also took the 90–92 presenter arms WU-InertFeatures routed here.
+- **What landed:**
+  1. **D19.** `EmailEnabled`/`Collapsed` are `bool?`, sparse per field. Up canonicalizes existing
+     rows; Down backfills the defaults. Both ran on a populated dev-DB clone. `NotificationSettingUpsert`
+     owns the rule: NULL when a field equals its default, delete when both are NULL, and unsubscribe
+     writes only `email_enabled`. Three per-field read sites.
+     `NotificationSettingDto.IsDefault` → `EmailIsDefault`/`CollapsedIsDefault` (registered as a
+     retired term). No UI, endpoint or client change. SeedTool emits only canonical rows (COPY
+     writes NULLs) and keeps the RNG stream unchanged.
+  2. **D23 applied (flagged: from the promulgated test, not a new owner answer).** Both settings
+     writers are one `INSERT … ON CONFLICT DO UPDATE` of their own columns. Two concurrent unsubscribe
+     POSTs used to 500. Notification dedup is recorded as an advisory policy (doc only).
+  3. **Mail.** `SmtpMailTransport.IsPerMessageFailure`: per-message only for a 5xx while still
+     connected, or a compose failure. Everything else throws the new
+     `MailBatchInterruptedException(ProcessedCount)`. The flusher restores only the unsent tail;
+     cancellation restores and rethrows the OCE. `DrainAllAsync` plus the worker's 15 s
+     `ShutdownDrainBudget` drain to empty and log what was stranded. Identity's `SendAsync` unwraps.
+  4. **Feed:** `OldestUnreadFirst` ends in `NotificationId`. No DDL; EXPLAIN shows an Incremental Sort.
+  5. **Messaging:** `StartConversationAsync` is one save with one timestamp. The subject is capped
+     at `MessagingConstants.MaxSubjectLength` (2048, the existing column cap) → 400.
+  6. **Found during the build:** the Spotlight go-live sweep passed a stand-in source `0` for a
+     deleted sponsor. The FK refused it, so the placement never stamped and nobody was notified. It
+     now passes the null (`int? sponsorUserId`).
+  7. **Presenter:** arms for 90–92 and 100, which used to read "You have a new notification".
+  8. **Docs:**
+     - moment 1: `layer2-services.md` §Filtering semantics, §Email fan-out (restore rules, shutdown,
+       transport failure contract), §Signal Buffering worker, dedup, the check-then-act family table,
+       the deleted-actor rule, the single-field discovery mirror; `layer6-indexes.md`;
+       `audit/Notifications.md` Settled; `roadmap.md` Resolved (D19); service-audit §2.8/§3.17/§4
+       row 7; worksheet D19 Built line; tracker D13 (the paged-ordering sweep).
+     - moment 2: `testing.md` §"Unit of work, partial sends, drains and tiebreaks".
+     - moment 3: Stage notes in `audit/Notifications.md` (incl. the F42/F43 L3 headlines that still
+       read Stage 2), `Messaging.md` F49 and `Spotlight.md` F55; tracker H26 and D8.
+- **Left alone:**
+  - Tracker **D8** (blog titles after the author goes Private), routed here by WU-AccessGateSweep2:
+    not built, re-scoped. Its one-line fix would blank the author's own type-33 notifications, and
+    an unpublished post leaks the same way. Unowned.
+  - The other `Skip/Take` orderings (tracker **D13**, audit before the cross-cutting build).
+  - The PM email / `(kind,id)` buffer (WU-PrivateMessageEmail builds on this flusher shape and must
+    keep the partial-restore and drain-to-empty rules).
+  - Lineage/acknowledgment re-request vectors (WU-ThrottleCoverage).
+  - Service §4 rows 3/4 and the write-service DAG paragraph (WU-DocCorrections).
+  - The CHECK `email_enabled IS NOT NULL OR collapsed IS NOT NULL` (WU-SchemaHardening's call).
+  - The three-state default/on/off control (D19's accepted cost).
+- **Verification:**
+  - `dotnet build`: 0 errors, 32 warnings (none in touched files).
+  - `dotnet test`: **Unit 1,157** (+67), **RazorComponents 770** (unchanged), **Integration 1,401**
+    (+18), all green. The four gates pass.
+  - Every fix-specific test was mutation-checked: each fails with its fix reverted (two batches plus
+    both directions of the email coalesce).
+  - **Browser: not run, none available** → tracker **H26**.
+- **Pointers:** `audit/Notifications.md` §"WU-NotificationCorrectness Stage note";
+  `audit/Messaging.md` F49; `audit/Spotlight.md` F55; `layer2-services.md` §"Notification
+  Generation" / §"Email fan-out".
 
 ---
 

@@ -50,37 +50,36 @@ public class ServerMessagingWriteService(
         // Sanitize-once-on-save: raw EditorView HTML → allowed-list HTML via IHtmlSanitizationService.
         string sanitizedMessage = sanitizer.Sanitize(dto.MessageHtml);
 
-        // Create Conversation + two ConversationParticipant rows + first PrivateMessage.
+        // Conversation + two ConversationParticipant rows + first PrivateMessage, as ONE unit of
+        // work (WU-NotificationCorrectness, 2026-10-12). The children ride the navigations, and EF's
+        // fixup assigns their ConversationId inside the single SaveChangesAsync below, which runs in
+        // one transaction — so a failure leaves nothing behind. (Two saves used to commit a bare,
+        // participant-less conversation first, orphaning it if the second save failed.)
+        // One timestamp for all three, so the sender's read watermark is never behind their own
+        // first message.
+        DateTime now = DateTime.UtcNow;
         var conversation = new Conversation
         {
             Subject = dto.Subject.Trim(),
-            DateCreated = DateTime.UtcNow
+            DateCreated = now
         };
-        writeDb.Conversations.Add(conversation);
-
-        // EF needs the Conversation row (and its generated ConversationId) before adding
-        // participants and the first message. A SaveChanges here gets the generated PK.
-        await writeDb.SaveChangesAsync();
-
-        writeDb.ConversationParticipants.Add(new ConversationParticipant
+        conversation.ConversationParticipants.Add(new ConversationParticipant
         {
-            ConversationId = conversation.ConversationId,
             UserId = senderId,
-            LastReadTimestamp = DateTime.UtcNow   // sender has "read" their own first message
+            LastReadTimestamp = now   // sender has "read" their own first message
         });
-        writeDb.ConversationParticipants.Add(new ConversationParticipant
+        conversation.ConversationParticipants.Add(new ConversationParticipant
         {
-            ConversationId = conversation.ConversationId,
             UserId = dto.RecipientUserId
             // LastReadTimestamp = null → recipient has unread from the start
         });
-        writeDb.PrivateMessages.Add(new PrivateMessage
+        conversation.PrivateMessages.Add(new PrivateMessage
         {
-            ConversationId = conversation.ConversationId,
             SenderUserId = senderId,
             MessageText = sanitizedMessage,
-            DateSent = DateTime.UtcNow
+            DateSent = now
         });
+        writeDb.Conversations.Add(conversation);
 
         await writeDb.SaveChangesAsync();
 

@@ -317,6 +317,38 @@ public class SpotlightServiceTests(PostgresFixture postgres) : IntegrationTestBa
     }
 
     [Fact]
+    public async Task Sweep_SponsorDeletedBeforeGoLive_StillNotifies_WithANullSource()
+    {
+        // SponsoringUserId is SET NULL on the sponsor's account deletion. The sweep used to pass a
+        // stand-in source of 0, which notifications.source_user_id's FK refused: the placement was
+        // never stamped, re-failed every minute for its whole window, and the author was never told.
+        int recommenderId = await SeedUserAsync("Recommender");
+        int recId = await SeedRecAsync(recommenderId, _storyId);
+        int slotId = await GrantToSponsorAsync();
+        SetActiveUser(_sponsorId);
+        await CallWriteAsync(w => w.RedeemSlotAsync(new RedeemSpotlightSlotDto(slotId, _storyId, recId, CurrentBlockStart)));
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().CommunitySpotlights
+                .ExecuteUpdateAsync(s => s.SetProperty(cs => cs.SponsoringUserId, (int?)null));
+        }
+
+        (await RunSweepAsync()).Should().Be(1, "the placement is stamped on the first sweep");
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Notification story = await db.Notifications.SingleAsync(n =>
+                n.RecipientUserId == _authorId && n.NotificationTypeId == NotificationTypeEnum.StorySpotlighted);
+            story.SourceUserId.Should().BeNull("a deleted actor is a null source (D4), never a stand-in id");
+            (await db.Notifications.AnyAsync(n =>
+                    n.RecipientUserId == recommenderId && n.NotificationTypeId == NotificationTypeEnum.RecommendationSpotlighted))
+                .Should().BeTrue();
+        }
+    }
+
+    [Fact]
     public async Task Sweep_FuturePlacement_NotTouched()
     {
         int slotId = await GrantToSponsorAsync();

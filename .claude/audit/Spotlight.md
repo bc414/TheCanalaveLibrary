@@ -87,7 +87,7 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   90–92; entity migrated out of legacy `Core/Models/`. Migration-verified: generated clean and
   applied cleanly on startup to the standing dev DB (SeedTool-volume). No L6 pass — the composite
   index shipped with L1 by design (low-volume table); L6 stays N/A.
-- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30). Allocator seam + read/write services + go-live worker/sweeper split +
+- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12 — stage unchanged, Stage note at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
   SiteSettings cluster. Redemption is advisory-lock-serialized under `CreateExecutionStrategy()`.
   Covered by the Integration tier (`SpotlightServiceTests`, 20 tests: grant cap/roles/donation-seam
   NotSupported, every redemption rejection, a two-racers-one-opening concurrency test, sweep
@@ -184,3 +184,18 @@ F30's browser note.
   The card save wrote a fresh attribution.
 - **Anonymous.** The card sends you to `/Account/Login?ReturnUrl=%2F`.
 - The placement stays live through the booked block (dev-DB state: the workplan entry).
+
+### WU-NotificationCorrectness Stage note (2026-10-12) — F55 L2 stays 5: a deleted sponsor is a null source
+
+**Defect, found during the build (not in its spec).** `SpotlightGoLiveSweeper` passed
+`SponsoringUserId ?? 0` as the notification source for 91/92. `SponsoringUserId` is SET NULL on the
+sponsor's account deletion, and `notifications.source_user_id` carries an FK to the users table, so
+the insert of a stand-in 0 failed. The placement was never stamped, re-failed every minute for its
+whole window, and neither the author nor the recommender was told. The sweep now passes the `int?`
+through: a deleted sponsor is D4's "actor since deleted" null (`layer2-services.md` §"Notification
+Generation" → "A deleted actor is passed as null, never as a sentinel id").
+`NotifyStorySpotlightedAsync` / `NotifyRecommendationSpotlightedAsync` take `int? sponsorUserId`.
+The presenter's new 91/92 arms read "Someone put … in the Community Spotlight" for that case
+(`audit/Notifications.md`, WU-NotificationCorrectness Stage note). Covered by Integration
+`SpotlightServiceTests.Sweep_SponsorDeletedBeforeGoLive_StillNotifies_WithANullSource`, which fails
+with the stand-in restored. No browser step of its own; the 91/92 copy is in tracker H26.

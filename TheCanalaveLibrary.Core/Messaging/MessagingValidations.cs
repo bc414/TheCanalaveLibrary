@@ -8,8 +8,9 @@ public static class MessagingValidations
 {
     /// <summary>
     /// Validates a <see cref="StartConversationDto"/> before it reaches the write service.
-    /// Checks: non-empty subject, non-whitespace message body, and self-message block.
-    /// The self-message guard in the write service is the authoritative enforcement point;
+    /// Checks: non-empty subject no longer than <see cref="MessagingConstants.MaxSubjectLength"/>
+    /// once trimmed (the length the service stores), non-whitespace message body, and self-message
+    /// block. The self-message guard in the write service is the authoritative enforcement point;
     /// this validation is a pre-check so the client receives a structured error rather than
     /// an <see cref="InvalidOperationException"/>.
     /// </summary>
@@ -19,6 +20,8 @@ public static class MessagingValidations
 
         if (string.IsNullOrWhiteSpace(dto.Subject))
             errors.Add("Subject is required.");
+        else if (dto.Subject.Trim().Length > MessagingConstants.MaxSubjectLength)
+            errors.Add($"Subject must be {MessagingConstants.MaxSubjectLength} characters or fewer.");
 
         if (string.IsNullOrWhiteSpace(dto.MessageHtml))
             errors.Add("Message body must not be empty.");

@@ -44,9 +44,9 @@ public interface INotificationReadService
         NotificationFeedOrder order = NotificationFeedOrder.NewestFirst);
 
     /// <summary>
-    /// Returns all notification types with the current user's effective preferences
-    /// (user override when a <c>UserNotificationSetting</c> row exists, otherwise
-    /// <c>NotificationType</c> defaults). Ordered by category then type.
+    /// Returns all notification types with the current user's effective preferences, resolved
+    /// per field (owner ruling D19): the <c>UserNotificationSetting</c> column when it is non-NULL,
+    /// otherwise that field's <c>NotificationType</c> default. Ordered by category then type.
     /// Used by the Feature 43 settings page (WU33).
     /// </summary>
     Task<NotificationSettingDto[]> GetSettingsAsync();

@@ -394,7 +394,10 @@ shape keyed per-user with a latest-timestamp merge — see `layer8-data-marts.md
    Records flush batch-size + duration histograms; on failure: `Restore`, log, rethrow.
 3. **Worker** — `BackgroundService` + `PeriodicTimer` (5 s), delegating to the flusher; catches and
    logs so the loop survives a failed cycle; **drains once more after cancellation** (graceful
-   shutdown must not eat the loss window). Singleton-worker discipline: exactly one per process.
+   shutdown must not eat the loss window). A flusher whose batch is **bounded** (the notification
+   email flusher's 200) must instead **drain to empty within a budget** — one more flush moves only
+   one batch — and log what it strands (§"Email fan-out"). Singleton-worker discipline: exactly one
+   per process.
 4. **Scoped write service** — the unchanged `I{Feature}WriteService` body becomes
    `buffer.Record(...)`. The interface doc states the honest contract: *eventually-durable,
    may lose the last flush interval, not read-your-own-write*.
@@ -831,6 +834,11 @@ could not express it.
   column**: actor-free types compose actor-free text ("Your account has been suspended"), and the
   presenter's `?? "Someone"` fallback survives only for types that genuinely had an actor since
   deleted. "Someone banned your account" must not be reachable.
+- **A deleted actor is passed as null, never as a sentinel id** (WU-NotificationCorrectness,
+  2026-10-12). `source_user_id` carries an FK to the users table, so a stand-in like `0` fails the
+  insert. A producer that reads its actor from a `SET NULL` column (`CommunitySpotlight.SponsoringUserId`,
+  a poll's owner) passes that `int?` straight through, which is also what keeps drop-self honest:
+  a deleted actor has no self to drop.
 
 **Moderation-band de-identification (owner ruling D5, WU-InertFeatures 2026-09-30).** Every
 notification in the moderation band 70–82 (`ContentRemoved`, `StoryRejected`, `AccountWarning`,
@@ -861,6 +869,15 @@ enumerated the band per type:
   first is unread must produce two rows. The exemption set lives in `ServerNotificationWriteService`;
   any future dedup unique index must respect it and the null source.
 - Within-batch dedup (one row per recipient per call, first wins) applies to every type.
+- **Cross-existing dedup is advisory: a policy, not a constraint** (D23's classification test applied,
+  WU-NotificationCorrectness 2026-10-12). It is a check-then-insert with no unique index behind it, so
+  it holds only for sequential callers. Two concurrent creates with the same key can both insert, and
+  that is accepted. No reader is wrong when it happens: every row is a real event, the unread count
+  counts rows, and mark-read plus the 60-day cleanup absorb the duplicate; only the anti-flood intent
+  is disappointed. A partial unique index would have to encode the exemption set above and
+  `NULLS NOT DISTINCT` on the nullable source in DDL, and turn create-core's bulk insert into
+  `INSERT … ON CONFLICT DO NOTHING` so one conflict cannot fail a whole fan-out: cost with no reader to
+  protect (§"Check-then-act posture" family table).
 
 **`RelatedEntityId` stays non-nullable; 0 means "no related entity".** It carries no FK, is interpreted
 per type (see §"Polymorphic RelatedEntityId" below), and 0 is never a valid id in this schema. NULL
@@ -890,8 +907,38 @@ table stores exactly two user-settable fields per type — `EmailEnabled` (the e
 No in-app mute column exists; that toggle was deliberately dropped from spec §5.18 (recorded in
 `audit/Notifications.md`).
 
-9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
-required non-nullable on all types.
+**Sparse per field, not per row (owner ruling D19, built WU-NotificationCorrectness 2026-10-12).**
+Both columns are nullable, and the effective value is resolved **per field**: the column when it is
+non-NULL, otherwise the type's default. The general principle, for this table and the next sparse one:
+**a sparse-override row must be sparse at the granularity at which the user expresses preferences.**
+The settings page submits both effective values on every toggle, so under a row-level rule collapsing
+a panel section would have pinned an `EmailEnabled` the user never chose, and a later change to the
+type's `DefaultEmailEnabled` would never reach them. The mechanism, owned by one helper
+(`NotificationSettingUpsert` — never reimplemented inline):
+- **Writers collapse each field to NULL on its own:** a value equal to the type's default is stored as
+  NULL. The row is deleted only when **both** columns are NULL, so it exists only while at least one
+  column is non-NULL.
+- **Each writer owns only the columns it sets.** `SetSettingAsync` owns both; the one-click
+  unsubscribe owns `email_enabled` only and never reads or rewrites `collapsed`.
+- **Race-free upsert** (D23's "a visible 500 is never a posture"): a non-delete write is one
+  `INSERT … ON CONFLICT (user_id, notification_type_id) DO UPDATE SET <only the writer's columns>`.
+  A statement that can leave both columns NULL is followed by
+  `DELETE … WHERE email_enabled IS NULL AND collapsed IS NULL` on the key, whose predicate makes it
+  safe against a concurrent writer that has just set a column.
+- **Readers coalesce per field**, in the explicit `s != null && s.X != null ? s.X.Value : nt.DefaultX`
+  shape (three sites: the feed's `Collapsed`, `GetSettingsAsync`, the email flusher's eligibility).
+  `NotificationSettingDto` carries `EmailIsDefault` / `CollapsedIsDefault` per field; "no row" is no
+  longer a meaningful answer once a row can be half-NULL.
+- **Accepted cost (D19, not a defect):** "explicitly chose the value that is today's default" is stored
+  as NULL, the same as "never chose", so a later default flip carries that user along. There is no
+  three-state default/on/off control.
+
+**Contrast — `IDiscoveryFilterSettingsService` stays row-level, correctly.** Its rows carry one
+settable field each, so row-level sparseness *is* per-field sparseness there (§"§8.7 Discovery
+Defaults"). That is the distinction, not a second exception.
+
+9 categories, 47 types with gap-based numbering (30 of them default `EmailEnabled = true`).
+`DefaultEmailEnabled` and `DefaultCollapsed` are required non-nullable on all types.
 
 ### Email fan-out (WU-NotifEmail, 2026-07-31)
 
@@ -900,29 +947,65 @@ inserted rows onto `NotificationEmailBuffer` (in-process, bounded, singleton) an
 `BackgroundService` drains it and sends the batch over **one** pooled SMTP connection. This is the
 standard buffer/flusher/worker trio — see §"Signal Buffering" and `ReadingProgressFlushWorker.cs`.
 
-Inline sending is **rejected**, not deferred: ~22 seeded types default `EmailEnabled = true` and
-several fan out to every follower of a story or author, so an inline send puts N ×
+Inline sending is **rejected**, not deferred: 30 of the 47 seeded types default `EmailEnabled = true`
+and several fan out to every follower of a story or author, so an inline send puts N ×
 (connect → auth → send → disconnect) inside a SignalR circuit write path.
 
 Rules that bind the flusher:
 
 - **Eligibility is the flusher's job, not the enqueuer's.** Effective `EmailEnabled` = the sparse
-  `UserNotificationSetting` row's value, falling back to `NotificationType.DefaultEmailEnabled` —
-  the same LEFT JOIN `GetSettingsAsync` implements. Resolve it at drain time, not enqueue time, so
-  a user who unsubscribes between the two is honored.
+  `UserNotificationSetting` row's non-NULL `EmailEnabled`, falling back to
+  `NotificationType.DefaultEmailEnabled` (per field — §"Filtering semantics", D19) — the same LEFT
+  JOIN `GetSettingsAsync` implements. Resolve it at drain time, not enqueue time, so a user who
+  unsubscribes between the two is honored.
 - **Gate on `EmailConfirmed`. Do not gate on account status.** `AccountWarning`,
   `AccountSuspended`, and `AccountBanned` default `EmailEnabled = true` and are exactly the
   notifications a restricted user must receive.
 - **Skip rows already `IsRead` at drain time** — the user saw it in-app first.
-- **Mail failure never touches the in-app row.** Log with batch size, restore the batch, let the
-  worker survive. Same best-effort posture as the rest of create-core.
+- **Mail failure never touches the in-app row, and restores only what was not sent**
+  (WU-NotificationCorrectness, 2026-10-12). Log with the batch size and the restored count, let the
+  worker survive. Same best-effort posture as the rest of create-core. Which ids go back:
+  - compose failed → the whole drained batch (nothing was sent);
+  - `MailBatchInterruptedException` → only the composed messages from `ProcessedCount` on; the ones
+    before it were sent (or dropped as a per-message failure) and must not be sent twice, and
+    ineligible ids were already judged and are correctly gone;
+  - any other transport exception → every composed id (assume nothing was processed);
+  - **cancellation restores too.** A shutdown that cancels a send mid-batch restores the unsent
+    remainder and rethrows the `OperationCanceledException` itself, so the worker's shutdown path
+    still sees an OCE. Error-level logging is for non-cancellation failures only.
+  - **At-least-once, for exactly one message.** If the server accepted DATA but the reply was lost,
+    that one message is retried and may arrive twice. Every other message is exactly-once.
+- **Shutdown drains to empty, within a budget.** A batch is bounded (`MaxBatchSize` = 200, deliberate
+  per-tick work), so one final flush would strand everything past the first batch.
+  `NotificationEmailFlusher.DrainAllAsync(budget)` loops `FlushAsync` while the buffer is non-empty,
+  stops on the first failed batch (already restored) or on cancellation, and returns the stranded
+  count; the worker runs it under `NotificationEmailWorker.ShutdownDrainBudget` (15 s, inside the
+  host's default 30 s `ShutdownTimeout`) and logs a Warning with the count when anything is
+  stranded. A hard crash still loses the in-memory buffer; the in-app rows are durable either way.
 - **Never silently drop.** If the buffer's bound is hit, log and increment a counter — a fan-out
   that quietly stops emailing is indistinguishable from one that works.
 
 **Transport.** Notification mail does not ride `IEmailSender<User>` (Identity's three-method
-confirmation/reset contract). Both paths sit on `IMailTransport` (`Server/Identity/`), so the
+confirmation/reset contract). Both paths sit on `IMailTransport` (`Server/Email/`), so the
 `Email:Provider` switch, `EmailOptions`, and the `CanalaveTelemetry.Email` span/counters are
 single-sourced. Selecting a provider is a config change; no code depends on which one.
+
+**Transport failure contract — partial progress is reported, never guessed**
+(WU-NotificationCorrectness, 2026-10-12; `IMailTransport.SendBatchAsync`'s doc is the normative
+copy). A batch has two failure classes:
+- **Per-message terminal** — logged, counted on `canalave.email.failed`, dropped, and the batch goes
+  on. It is either a failure to *compose* the message (a malformed address, a bad header: the same
+  input fails the same way forever) or an SMTP **5xx** reply while the client is **still connected**
+  (`SmtpMailTransport.IsPerMessageFailure` is the one copy of that rule).
+- **Batch abort** — everything else: a 4xx (transient, including provider throttling such as
+  421/451/454), a protocol error, a dropped connection, any failure after the client disconnected,
+  connect/auth failure, and cancellation between messages. The transport throws
+  `MailBatchInterruptedException(ProcessedCount, inner)`, where `ProcessedCount` counts the
+  **leading** messages that reached a terminal outcome; messages from `ProcessedCount` on were not
+  sent and are safe to retry. A transport that processed ≥ 1 message before failing **must** wrap.
+  Aborts are not counted as `failed` (they are retried) and are logged once, by the caller.
+- The single-message `SendAsync` (Identity's confirmation/reset mail) unwraps and rethrows the inner
+  exception, so Identity sees the same exception classes it always saw for a connect failure.
 
 **Absolute links.** Use `IPublicUrlProvider.AbsolutePageUrl` (`Core/Seo/`, backed by
 `Site:PublicBaseUrl`). A worker has no `HttpContext`, and a request-derived base is wrong here for
@@ -931,11 +1014,12 @@ add one.
 
 **Unsubscribe.** Every notification email carries RFC 8058 `List-Unsubscribe` +
 `List-Unsubscribe-Post` headers pointing at an anonymous Data-Protection-signed endpoint, plus a
-visible footer link. Unsubscribing flips one type via the same sparse upsert/delete semantics as
-`SetSettingAsync` — reuse that method's body, never reimplement the "matches default ⇒ delete the
-row" rule.
+visible footer link. Unsubscribing turns email off for one type through the same sparse helper as
+`SetSettingAsync` (`NotificationSettingUpsert`) — never reimplement the "matches default ⇒ NULL;
+both NULL ⇒ delete the row" rule. It writes only `email_enabled` and leaves `collapsed` alone
+(§"Filtering semantics"), and it is idempotent: mail clients and link scanners both re-POST.
 
-**Email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text — the ~40-type
+**Email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text — the per-type
 switch is not forked. Bodies are table-based inline-CSS HTML and are the one markup surface
 **exempt** from the design-token rules in `layer4-style.md`: email clients do not support custom
 properties, and `check-design-tokens.ps1` governs app markup only.
@@ -1042,7 +1126,9 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
 **The pattern (applied in `GetNotificationsAsync`):**
 
 1. **Materialize the page** via normal LINQ with LEFT JOINs (`UserNotificationSettings` for effective
-   Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`.
+   Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`,
+   and end it in a unique key (`NotificationId`): fan-out rows can share a `DateCreated`, and a
+   non-unique order lets offset paging skip or repeat rows across pages.
 2. **Classify** each materialized row's `RelatedEntityId` by a private
    `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
    `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | GroupStory | BlogPost | BlogPostDirect | Tag`.
@@ -1173,9 +1259,11 @@ No migration.
 `IDiscoveryDefaultsReadService` above, which stays anonymous-callable and a pure read.
 `GetMyMatrixAsync()` returns one row per (confirmed-consumer search mode × mappable filter key)
 with its system default, effective value, and override-exists flag; `SetOverrideAsync(searchModeKey,
-filterKey, isEnabled)` is a sparse upsert/delete — mirrors `INotificationWriteService.SetSettingAsync`'s
-contract exactly (when the value matches the system default the override row is deleted, so absence
-means "use default"). Surfaces on `/settings` (`DiscoverySettingsForm.razor`), not
+filterKey, isEnabled)` is a sparse upsert/delete — a **single-field** mirror of
+`INotificationWriteService.SetSettingAsync`'s contract (when the value matches the system default the
+override row is deleted, so absence means "use default"). Its rows carry one settable field each, so
+row-level sparseness is per-field sparseness here; the two-field notification table is sparse per
+column instead (owner ruling D19 — §"Notification Generation" → "Filtering semantics"). Surfaces on `/settings` (`DiscoverySettingsForm.razor`), not
 `ResultsFilterPanel` — see `audit/Discovery.md` §"Note on search-result narrowing" for why.
 
 ### Optional caller-supplied exclusions — `ICoOccurrenceReadService` (F61, WU-RelatedStories)
@@ -2659,6 +2747,8 @@ failure.
 | USI create-create (`user_story_interactions` and its `user_story_interaction_dates` partition) | n/a — a crash | Harden | Ensure-row `INSERT … ON CONFLICT DO NOTHING`, then re-read (below) | WU-CounterSymmetry |
 | `group_members` idempotent join | n/a — a crash | Harden | `JoinAsync`: one `INSERT … ON CONFLICT (user_id, group_id) DO NOTHING`; `GroupsJoined + 1` only when it inserted a row | WU-CounterSymmetry |
 | Vouch idempotency | n/a — a crash | Harden | PK `(vouching_user_id, vouched_user_id)` (already present) + `INSERT … ON CONFLICT DO NOTHING`; `NotifyNewVouchAsync` only when it inserted a row | WU-CounterSymmetry |
+| `user_notification_settings` upsert (settings page + one-click unsubscribe; two concurrent unsubscribe POSTs are a real pattern) | n/a — a crash | Harden | `INSERT … ON CONFLICT (user_id, notification_type_id) DO UPDATE SET <the writer's own columns>`, then the all-NULL conditional delete (§"Filtering semantics") | WU-NotificationCorrectness |
+| Notification cross-existing dedup | no — every row is a real event; only the anti-flood intent is disappointed | Accept-and-record (a policy) | Advisory check-then-insert, sequential callers only (§"Filtering semantics" → "Dedup") | — |
 | `group_stories` idempotent add | yes — membership is set semantics | Harden | Unique `(GroupId, StoryId)` | not yet — routed to WU-SchemaHardening |
 | Poll single-choice | **yes** — tallies are published numbers | Restructure, not lock | `PollId` on the vote row + a single-choice guard column, unique on `(guard, user_id)`; the `ConfigLocked` first-vote-vs-config-edit rider | not yet — routed to WU-PollVoteIntegrity (the Block H migration wave) |
 | USI flip-delta counters | no — derived data | Accept | Recompute-corrected (§"Transition-delta rule") | — |

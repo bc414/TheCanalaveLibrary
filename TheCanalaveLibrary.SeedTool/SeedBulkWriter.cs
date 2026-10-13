@@ -219,8 +219,11 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.StartRowAsync();
             await writer.WriteAsync(row.UserId, NpgsqlDbType.Integer);
             await writer.WriteAsync(row.NotificationTypeId, NpgsqlDbType.Smallint);
-            await writer.WriteAsync(row.EmailEnabled, NpgsqlDbType.Boolean);
-            await writer.WriteAsync(row.Collapsed, NpgsqlDbType.Boolean);
+            // Both columns are nullable since D19: NULL = follow the type default for that field.
+            if (row.EmailEnabled is bool email) await writer.WriteAsync(email, NpgsqlDbType.Boolean);
+            else await writer.WriteNullAsync();
+            if (row.Collapsed is bool collapsed) await writer.WriteAsync(collapsed, NpgsqlDbType.Boolean);
+            else await writer.WriteNullAsync();
         }
         await writer.CompleteAsync();
     }

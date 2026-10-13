@@ -355,6 +355,33 @@ D24's `GroupsJoined` oscillation would have been caught.
 - Assert `UserStatRecalcResult.RowsInserted == 0` too when every user was seeded: it proves the
   convergence assertion compared real rows.
 
+## Unit of work, partial sends, drains and tiebreaks (WU-NotificationCorrectness)
+
+Five Integration shapes from the notification and messaging fixes (2026-10-12):
+- **"One save" is asserted, and so is the rollback.** Resolve the `ApplicationDbContext` and the
+  service from **one** scope, count `db.SavedChanges` events around the call, and assert exactly one
+  (`MessagingWriteServiceTests.StartConversation_CommitsTheWholeGraphInOneSave`). Pair it with an
+  `InterleavingCommandInterceptor` `failWith` on a child table's insert marker
+  (`interceptReaders: true`) and assert that no parent row survives — the observable consequence the
+  count only implies.
+- **A mid-batch transport failure** is driven with `RecordingMailTransport.FailAfter(n, inner)`: it
+  records the first `n` messages and throws `MailBatchInterruptedException(n, inner)`. Assert what was
+  sent, what was restored to the buffer, and that the next flush sends the rest with no duplicate.
+  `FailNextBatchWith` stays the "no progress reported" case. `Clear()` resets both.
+- **Shutdown drains** are driven through `NotificationEmailFlusher.DrainAllAsync(budget)`, never the
+  worker (it is removed from the test host, like every timer worker). To put a real notification
+  past the first batch, enqueue ids no row has first (they drain as ineligible); pass an
+  already-cancelled token for the expired-budget case.
+- **A tiebreak test must make the tie bite without it.** Pin two rows to the same sort value, and pin
+  the **newer** row first: the `UPDATE` writes a new tuple, which puts that row ahead in the heap and
+  in the index's equal-key order, so a query with no unique final key returns it first (or on both
+  pages). Then page with size 1 and assert distinct ids in key order
+  (`NotificationServiceTests.GetNotificationsAsync_OldestUnreadFirst_TiesOnTimestamp_*`). Pinned in
+  insertion order, the tie happens to come back in id order and the test passes either way.
+- **A mutated row in an ignored table is restored in `finally`.** `notification_types` (and the other
+  seeded lookup tables) is in Respawn's `TablesToIgnore`, so a test that flips a type's default
+  (`ExecuteUpdateAsync`) restores it in a `finally`, or every later test inherits the change.
+
 ## Integration test helper pitfall: async methods that create a scope must `await` the call inside it
 
 Any helper method that opens a `using IServiceScope scope` and calls a service **must be `async` and

@@ -43,7 +43,14 @@ public sealed record OutgoingMail(
 /// </summary>
 public interface IMailTransport
 {
-    /// <summary>Sends a single message. Equivalent to a one-element <see cref="SendBatchAsync"/>.</summary>
+    /// <summary>
+    /// Sends a single message. Equivalent to a one-element <see cref="SendBatchAsync"/>, except that a
+    /// batch abort surfaces as its <em>inner</em> exception, not as
+    /// <see cref="MailBatchInterruptedException"/>: Identity's transactional mail
+    /// (<see cref="SmtpEmailSender"/>) sees the same exception classes it always saw for a connect
+    /// failure. A per-message failure (see <see cref="SendBatchAsync"/>) is logged and dropped, as in a
+    /// batch.
+    /// </summary>
     Task SendAsync(OutgoingMail mail, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -52,12 +59,25 @@ public interface IMailTransport
     /// message is the cost the write-behind design exists to avoid
     /// (<c>layer2-services.md</c> §"Email fan-out").
     ///
-    /// <para><b>Failure contract, relied on by <see cref="NotificationEmailFlusher"/>:</b>
-    /// a <em>connection-level</em> failure (cannot connect, auth rejected) throws, and the caller
-    /// restores the whole batch to retry next cycle. A <em>per-message</em> failure (rejected
-    /// recipient, malformed address) is logged, counted on <c>canalave.email.failed</c>, and
-    /// <b>dropped</b> — it does not throw and is not retried, because a message the server rejects
-    /// on its merits will be rejected identically forever.</para>
+    /// <para><b>Failure contract, relied on by <see cref="NotificationEmailFlusher"/>
+    /// (WU-NotificationCorrectness, 2026-10-12).</b> Every failure is one of two classes:</para>
+    /// <list type="bullet">
+    ///   <item><b>Per-message terminal</b> — a message the same input will fail identically forever: it
+    ///   could not be composed (malformed address, bad header), or the server answered it with a 5xx
+    ///   while the connection stayed up (rejected recipient). Logged, counted on
+    ///   <c>canalave.email.failed</c>, <b>dropped</b>; the batch continues and nothing is thrown.</item>
+    ///   <item><b>Batch abort</b> — everything else: connect/auth failure, a 4xx (transient, provider
+    ///   throttling included), a protocol error, a dropped connection, any failure once the client has
+    ///   disconnected, and cancellation between messages. The transport throws
+    ///   <see cref="MailBatchInterruptedException"/> whose <see cref="MailBatchInterruptedException.ProcessedCount"/>
+    ///   counts the <b>leading</b> messages that reached a terminal outcome; the rest were not sent and
+    ///   the caller restores exactly those. A transport that processed one or more messages before
+    ///   failing <b>must</b> wrap, or the caller can only choose between dropping the remainder and
+    ///   re-sending the sent head. Aborts are not counted as failed (they are retried) and are not
+    ///   logged here — the caller is the one log site.</item>
+    /// </list>
+    /// <para>Accepted edge: when the server accepted DATA but its reply was lost, that one message is
+    /// not counted as processed and may be delivered twice (at-least-once for exactly one message).</para>
     /// </summary>
     Task SendBatchAsync(IReadOnlyList<OutgoingMail> batch, CancellationToken cancellationToken = default);
 }

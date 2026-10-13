@@ -43,8 +43,10 @@ note) but deliberately scoped it to Identity's confirmation/reset/email-change f
   `ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation").
   Hooking there inherits both create-core invariants for free: only rows that survived drop-self and
   dedup, and actually got inserted, are eligible for mail.
-- **Eligibility rule — unchanged.** Effective `EmailEnabled` = the sparse `UserNotificationSetting`
-  row's value, or `NotificationType.DefaultEmailEnabled` when no row exists. Same LEFT JOIN shape
+- **Eligibility rule — unchanged in intent, per field since D19.** Effective `EmailEnabled` = the
+  sparse `UserNotificationSetting` row's **non-NULL** `EmailEnabled`, or
+  `NotificationType.DefaultEmailEnabled` when there is no row or the column is NULL (owner ruling
+  D19, WU-NotificationCorrectness 2026-10-12 — the columns became nullable). Same LEFT JOIN shape
   `GetSettingsAsync` already implements.
 - **Best-effort posture — unchanged.** A mail failure never fails, delays, or mutates the in-app
   notification. Same posture as the rest of create-core.
@@ -67,8 +69,10 @@ note) but deliberately scoped it to Identity's confirmation/reset/email-change f
 - **One-click unsubscribe (settled 2026-07-31; Brian-ratified).** Every notification email carries
   RFC 8058 `List-Unsubscribe` + `List-Unsubscribe-Post` headers pointing at an anonymous tokenized
   endpoint, plus a visible footer link. Token is Data-Protection-signed (no schema, no migration).
-  Unsubscribing sets `EmailEnabled = false` for that one type via the same sparse upsert/delete
-  semantics as `SetSettingAsync`.
+  Unsubscribing sets `EmailEnabled = false` for that one type via the same sparse helper as
+  `SetSettingAsync` (`NotificationSettingUpsert`). Since D19 (WU-NotificationCorrectness,
+  2026-10-12) it writes only the `email_enabled` column — stored as NULL when the type's default is
+  already off — and never touches `collapsed`.
 - **Absolute links (settled 2026-07-31).** Reuse `IPublicUrlProvider` / `Site:PublicBaseUrl`
   (`Core/Seo/`) — a configured canonical origin deliberately not derived from the current request,
   which is exactly what a worker with no `HttpContext` needs. No new config key.
@@ -167,13 +171,77 @@ step.
 untouched by this WU. Mail is built and locally verifiable; it cannot reach a real inbox until
 Phase 7.
 
+## WU-NotificationCorrectness Stage note (2026-10-12) — F41/F42/F43 L1/L2 stay Stage 5
+
+**No cell flips.** Defects beneath sound cells: worksheet D19 (answered 2026-08-07) and the service
+audit's §2.8 items WU-InertFeatures did not own. Rule text: `layer2-services.md` §"Notification
+Generation" → "Filtering semantics" and §"Email fan-out".
+
+- **F43 L1 — D19, sparse per field.** Migration `WU_NotificationCorrectness_SparseSettingFields`:
+  `email_enabled` and `collapsed` are nullable. Up canonicalizes existing rows (a value equal to its
+  type default → NULL; an all-NULL row → deleted). Down backfills the defaults before NOT NULL
+  returns. Both directions were run against a populated clone of the dev DB (five rows → the expected
+  three, and back). Applied to the dev DB (`20261013030320_…`); it held no settings rows.
+- **F43 L2 — the write path.** `NotificationSettingUpsert` owns the rule. Each field equal to its
+  default is stored NULL; the row is deleted only when both are NULL; one-click unsubscribe writes
+  `email_enabled` alone and never reads `collapsed`. Under D23's "a visible 500 is never a posture",
+  both writers are one `INSERT … ON CONFLICT DO UPDATE` (of their own columns). Two concurrent
+  unsubscribe POSTs used to 500 on the primary key. This follows from D23's promulgated test, not a
+  new owner answer. The wire contract is unchanged: no UI, endpoint or client change.
+- **F42/F43 L2 — the reads.** Three per-field coalescing sites in the explicit
+  `s != null && s.X != null ? s.X.Value : default` shape (the feed's `Collapsed`, `GetSettingsAsync`,
+  the flusher's eligibility). `NotificationSettingDto.IsDefault` became `EmailIsDefault` /
+  `CollapsedIsDefault` (retired term registered in `check-doc-hygiene.ps1`). Nothing renders them.
+- **F41 L2 — the email side-channel.**
+  - `SmtpMailTransport` classifies send failures: per-message only for a 5xx while still connected
+    (`IsPerMessageFailure`), or a compose failure. Everything else throws
+    `MailBatchInterruptedException(ProcessedCount)`. A mid-batch disconnect used to drop the rest of
+    the batch for good; a whole-batch restore would have re-sent the head.
+  - The flusher restores only the unsent tail. Cancellation restores too and rethrows the OCE.
+  - `DrainAllAsync` drains to empty within the worker's 15 s `ShutdownDrainBudget`; a single final
+    flush moved at most 200.
+  - Identity's single `SendAsync` unwraps the abort to its inner exception.
+- **F41 L2 — dedup.** Accepted as an advisory policy under D23's test (doc only, no index).
+- **F41 L2 — a deleted Spotlight sponsor (found during the build).** `SpotlightGoLiveSweeper` passed
+  `SponsoringUserId ?? 0` as the source. The source FK refused 0, so the placement was never stamped,
+  re-failed every minute for its window, and nobody was notified. It now passes the null
+  (`audit/Spotlight.md` F55).
+- **F42 L2 — order.** `OldestUnreadFirst` ends in `NotificationId`. Fan-out rows tie on
+  `DateCreated`, and offset paging skipped or repeated them. No DDL: `EXPLAIN` shows an Incremental Sort
+  over the index prefix (`layer6-indexes.md`). The other paged reads: tracker **D13**.
+- **F42 L3 — presenter copy.** Arms for 90–92 (routed here by WU-InertFeatures) and 100. All four used
+  to read "You have a new notification" in the bell, the inbox and the email subject.
+  - 90 names the granting moderator, as decision row 19's "as built" describes.
+  - 91/92 name the sponsor ("Someone" once deleted).
+  - 100 is actor-free.
+- **Tests.**
+  - **Integration** (+18): `NotificationServiceTests` +7 — per-field collapse, three unsubscribe
+    shapes, two interleaved upsert races (`InterleavingCommandInterceptor`), the tied-timestamp
+    paging.
+  - `NotificationEmailFanOutTests` +7 — the D19 freeze regression on type 10 with a flipped default
+    (restored in `finally`), its default-on mirror, mid-batch death, mid-batch cancellation, three
+    `DrainAllAsync` shapes.
+  - `MessagingWriteServiceTests` +3 (F49); `SpotlightServiceTests` +1.
+  - **Unit** (+67): `SmtpMailTransportClassificationTests` (15), the presenter's own-arm theory over
+    all 47 types plus three copy facts, two `MessagingValidationsTests`.
+  - **RazorComponents:** none — no component changed.
+  - Every fix-specific test was mutation-checked: each fails with its fix reverted.
+- **Browser: not run, and not available in this environment.** Copy-only display change, so F42
+  L4.5 stays 5 (the WU-InertFeatures presenter-slice precedent). The owed checks are tracker **H26**.
+- **Left open:** tracker **D8** (blog-post titles after the author goes Private) was routed here by
+  the WU-AccessGateSweep2 review fixes. It is not built: its one-line fix would blank the post
+  author's own type-33 notifications, and an unpublished post is the same leak. Re-scoped in the
+  tracker.
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
-closed). L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
+closed). L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed. **L2 stays 5 under WU-NotificationCorrectness
+(2026-10-12):** the email flusher restores only unsent mail and drains to empty on shutdown, dedup is documented as
+an advisory policy, and a deleted Spotlight sponsor is a null source (Stage note above Feature 41).
 
 - **L1 — Stage 5 (`related_entity_id` widened to `bigint`, WU-InertFeatures 2026-09-30).** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
   (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
@@ -433,7 +501,10 @@ write class in place of `CurrentUserId` (CS9107 shape).
 - **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; shared auth guard WU-ModerationIntegrity 2026-09-30; the two-pass enrichment moved out to
   `NotificationEnricher` at WU-NotifEmail 2026-07-31 so email shares it — stage unchanged; `long` ids,
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
-  2026-09-30 — stage unchanged, see the slice below).**
+  2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
+  id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
+  unchanged, L4.5 stays 5 as a copy-only change with its browser check owed in tracker H26; Stage
+  note above Feature 41).**
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes
   `(type, long)` pairs and narrows each kind's id set to `int` before querying (out-of-range ids miss);
   results are a `NotificationTarget(Title, Url, ContextTitle)` record consumed by the read service and
@@ -452,14 +523,17 @@ write class in place of `CurrentUserId` (CS9107 shape).
   - `INotificationReadService`: `GetUnreadCountAsync()`, `GetNotificationsAsync(page, pageSize)`. All
     self-scoped via `IActiveUserContext` (the whole surface is "my notifications").
   - `GetNotificationsAsync` returns `NotificationDto` with effective `Collapsed` (type default
-    overridden by the user's sparse setting when a row exists).
+    overridden by the user's sparse setting when the row's `Collapsed` is non-NULL — per field since
+    D19). Both orders end in the unique `NotificationId` (WU-NotificationCorrectness).
   - The bell in the layout injects `INotificationReadService` directly — legitimate cross-cutting
     injection (see `render-and-layout.md` "Notification bell").
   - Mark-as-read mutations (`MarkAsReadAsync`, `MarkAllAsReadAsync`) live on `INotificationWriteService`
     (it inherits from `INotificationReadService`).
-  - **L3-Logic — Stage 2** (the notification bell in the layout; panel grouped by `NotificationCategory`,
-    `DefaultCollapsed`/user-override per type). **L3.5-Structure — Stage 2** (panel + flyout preview).
-    **L4 — Stage 1.** All deferred to WU33.
+  - **L3-Logic — Stage 5, L3.5-Structure — Stage 5** (built WU33, 2026-06-24 — the bell in the
+    layout, the panel grouped by `NotificationCategory` with `DefaultCollapsed`/user override per type,
+    the flyout preview; browser-verified 2026-07-01/02, the section at the end of this file). **L4 —
+    Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still read "Stage 2 …
+    deferred to WU33" against the grid.)
   - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
     site now runs global InteractiveAuto; notifications page + bell badge verified in a real WASM
     runtime during the flip's browser wave (persisted unread count). Full wave narrative + the 7
@@ -584,18 +658,29 @@ write class in place of `CurrentUserId` (CS9107 shape).
 ## Feature 43 — Notification Settings
 
 - **L1 — Stage 5** (`UserNotificationSetting` sparse-override; `EmailEnabled`/`Collapsed` — see Shared
-  Context correction; `NULL` for either = use default, §5.18 as corrected). **L2 — Stage 2 → 5 (WU22;
+  Context correction; `NULL` for either = use default, §5.18 as corrected; both columns nullable and
+  sparse per field since D19, WU-NotificationCorrectness 2026-10-12 — stage unchanged, migration
+  applied). **L2 — Stage 2 → 5 (WU22;
   `EmailEnabled` stopped being inert at WU-NotifEmail 2026-07-31 — it now gates real mail and is
-  writable from the one-click unsubscribe endpoint as well as this page; stage unchanged).**
-  Settled constraints:
+  writable from the one-click unsubscribe endpoint as well as this page; stage unchanged; per-field
+  write/read rule, race-free upsert and per-field DTO flags, WU-NotificationCorrectness 2026-10-12 —
+  stage unchanged, Stage note above Feature 41).**
+  Settled constraints (the sparse rule is per field since owner ruling D19 — answered 2026-08-07,
+  built WU-NotificationCorrectness 2026-10-12; rule text `layer2-services.md` §"Notification
+  Generation" → "Filtering semantics"):
   - `GetSettingsAsync()` returns `NotificationSettingDto[]` grouped by category — LEFT JOIN
-    `UserNotificationSetting` onto `NotificationType`; NULL ⇒ type defaults (`DefaultEmailEnabled`,
-    `DefaultCollapsed`). Includes `IsDefault` flag so the UI knows which rows are overridden.
-  - `SetSettingAsync(NotificationTypeEnum type, bool emailEnabled, bool collapsed)` — sparse: upsert
-    the override row when either field differs from the type defaults; delete the row when both match
-    the defaults (returning to default requires no stored row). Self-scoped via `IActiveUserContext`.
-  - **L3/L3.5 — Stage 2.** Settings page driven by DB data. **L4 — Stage 1.** All
-    deferred to WU33.
+    `UserNotificationSetting` onto `NotificationType`; a missing row **or** a NULL column ⇒ that
+    field's type default (`DefaultEmailEnabled`, `DefaultCollapsed`), resolved per field. Carries
+    `EmailIsDefault` / `CollapsedIsDefault` (per field; the row-level `IsDefault` is retired) so a UI
+    could tell "following the site default" from an override — nothing renders them yet.
+  - `SetSettingAsync(NotificationTypeEnum type, bool emailEnabled, bool collapsed)` — the wire
+    contract keeps two effective `bool`s. Server-side, each field equal to its type default is stored
+    as NULL; the row is deleted only when both are NULL; otherwise one race-free
+    `INSERT … ON CONFLICT DO UPDATE`. Self-scoped via `IActiveUserContext`.
+  - Not built, by ruling: a three-state default/on/off control (D19's accepted cost).
+  - **L3/L3.5 — Stage 5** (built WU33, 2026-06-24 — see its Stage-5 note below). Settings page driven
+    by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
+    read "Stage 2 … deferred to WU33" against the grid's 5/5.)
   - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
     site now runs global InteractiveAuto; the notification settings page loads in a real WASM
     runtime during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed:

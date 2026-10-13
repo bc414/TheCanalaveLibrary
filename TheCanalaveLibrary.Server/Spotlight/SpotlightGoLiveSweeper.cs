@@ -45,9 +45,11 @@ public sealed class SpotlightGoLiveSweeper(
             try
             {
                 // Sponsor is the notification source (drop-self: a sponsor who attached their own
-                // recommendation isn't notified about it). 0 = sponsor account deleted — matches
-                // no real user id, so both notifications still deliver.
-                int sourceUserId = placement.SponsoringUserId ?? 0;
+                // recommendation isn't notified about it). A deleted sponsor (SET NULL) passes
+                // through as a null source — D4's "actor since deleted" — so both notifications still
+                // deliver. It used to be a stand-in 0, which the source FK refused: the placement was
+                // never stamped, re-failed every sweep for its whole window, and nobody was told.
+                int? sourceUserId = placement.SponsoringUserId;
 
                 if (placement.StoryAuthorId is int authorId)
                     await notifications.NotifyStorySpotlightedAsync(authorId, sourceUserId, placement.StoryId);

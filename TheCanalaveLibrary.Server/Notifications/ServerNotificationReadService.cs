@@ -19,8 +19,9 @@ namespace TheCanalaveLibrary.Server;
 /// as private members; it moved out at WU-NotifEmail (2026-07-31) so the notification-email flusher
 /// could produce the same titles and links without going through this user-scoped read path.</para>
 ///
-/// <para><see cref="GetSettingsAsync"/> LEFT-JOINs settings onto types; NULL means "use
-/// default" (sparse-override model, Feature 43).</para>
+/// <para><see cref="GetSettingsAsync"/> LEFT-JOINs settings onto types and resolves each field on its
+/// own: a missing row or a NULL column means "use that field's default" (sparse-override model,
+/// Feature 43; per field since owner ruling D19).</para>
 /// </summary>
 public class ServerNotificationReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -80,7 +81,8 @@ public class ServerNotificationReadService(
 
         // ── First pass: materialize the page ──────────────────────────────────────
         // LEFT JOINs:
-        //   • UserNotificationSettings (sparse) → effective Collapsed per type.
+        //   • UserNotificationSettings (sparse per field, D19) → effective Collapsed per type: the
+        //     row's Collapsed when the row exists AND that column is non-NULL, else the type default.
         //   • Users on SourceUserId (int?) → SourceUserName; null when source deleted
         //     (SET NULL policy) or type has no actor field.
         var q =
@@ -104,17 +106,21 @@ public class ServerNotificationReadService(
                 n.RelatedEntityId,
                 n.IsRead,
                 n.DateCreated,
-                Collapsed = s != null ? s.Collapsed : nt.DefaultCollapsed
+                Collapsed = s != null && s.Collapsed != null ? s.Collapsed.Value : nt.DefaultCollapsed
             };
 
-        // Ordering:
+        // Ordering — both end in the unique NotificationId, because Skip/Take over a non-unique
+        // order can skip or repeat rows across pages, and fan-out rows share timestamps (one
+        // create-core batch stamps every row within microseconds).
         // NewestFirst (default) — most recently created first; tie-break by id desc.
         // OldestUnreadFirst     — unread (IsRead=false → 0 in SQL) before read (1),
-        //                         then chronological ascending within each group.
+        //                         then chronological ascending within each group; tie-break by id.
+        //                         ix_notifications_recipient_read_date still serves the presorted
+        //                         prefix; the id key rides an Incremental Sort (layer6-indexes.md).
         var orderedQ = order switch
         {
             NotificationFeedOrder.OldestUnreadFirst =>
-                q.OrderBy(x => x.IsRead).ThenBy(x => x.DateCreated),
+                q.OrderBy(x => x.IsRead).ThenBy(x => x.DateCreated).ThenBy(x => x.NotificationId),
             _ =>
                 q.OrderByDescending(x => x.DateCreated).ThenByDescending(x => x.NotificationId)
         };
@@ -161,7 +167,7 @@ public class ServerNotificationReadService(
 
         if (userId is null)
         {
-            // Anonymous: return defaults for all types (IsDefault = true — no override rows).
+            // Anonymous: return defaults for all types (both fields follow the default — no rows).
             return await readDb.NotificationTypes
                 .OrderBy(nt => nt.NotificationCategory).ThenBy(nt => nt.NotificationTypeId)
                 .Select(nt => new NotificationSettingDto(
@@ -171,12 +177,14 @@ public class ServerNotificationReadService(
                     nt.Description,
                     nt.DefaultEmailEnabled,
                     nt.DefaultCollapsed,
+                    true,
                     true))
                 .ToArrayAsync();
         }
 
-        // LEFT JOIN UserNotificationSettings onto NotificationTypes.
-        // NULL from the left join → no override → IsDefault = true, values come from type defaults.
+        // LEFT JOIN UserNotificationSettings onto NotificationTypes, resolved per field (D19): a
+        // missing row OR a NULL column → that field follows the type default (and its *IsDefault
+        // flag is true); a non-NULL column is the user's override for that field alone.
         return await (
             from nt in readDb.NotificationTypes
             join uns in readDb.UserNotificationSettings.Where(s => s.UserId == userId)
@@ -188,9 +196,10 @@ public class ServerNotificationReadService(
                 nt.NotificationCategory,
                 nt.DisplayName,
                 nt.Description,
-                s != null ? s.EmailEnabled : nt.DefaultEmailEnabled,
-                s != null ? s.Collapsed : nt.DefaultCollapsed,
-                s == null // IsDefault
+                s != null && s.EmailEnabled != null ? s.EmailEnabled.Value : nt.DefaultEmailEnabled,
+                s != null && s.Collapsed != null ? s.Collapsed.Value : nt.DefaultCollapsed,
+                s == null || s.EmailEnabled == null,  // EmailIsDefault
+                s == null || s.Collapsed == null      // CollapsedIsDefault
             )
         ).ToArrayAsync();
     }

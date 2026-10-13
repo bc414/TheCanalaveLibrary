@@ -145,10 +145,10 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId) =>
+    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int? sponsorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
-    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId) =>
+    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int? sponsorUserId, int storyId) =>
         throw NotExposedOverHttp();
 
     public Task NotifyPollUpdatedAsync(

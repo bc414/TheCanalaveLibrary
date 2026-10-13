@@ -87,7 +87,7 @@ shared one.
 - **L1 — Stage 5.** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`. No further L1 work needed.
-- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below; shared auth guard WU-ModerationIntegrity, 2026-09-30; `StartConversationAsync` one unit of work and the subject cap enforced, WU-NotificationCorrectness 2026-10-12 — stage unchanged, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (4 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`) and
   `IMessagingWriteService : IMessagingReadService` (4 mutations: `StartConversationAsync` [gated],
@@ -395,6 +395,30 @@ re-save (or `reset-dev-db.ps1`).
 **Browser-verified 2026-09-30 (WU-AccessGateSweep2 browser pass):** with "Off" saved through the form,
 starting a conversation was refused with "This user does not accept private messages." on WASM (a
 403 on `POST /api/messaging/conversations`) and on the circuit. No `conversations` row was written.
+
+### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced
+
+**No cell flips.** The WU35 settled decisions are untouched; the `AllowPrivateMessages` gate stays on
+`StartConversationAsync`.
+- **One save (service audit §2.8).** `StartConversationAsync` used to save the `Conversation` alone
+  and then save its two participants and first message, on the false comment "EF needs the
+  Conversation row … before adding participants". A failure between the two saves left an orphaned,
+  participant-less conversation. The children now ride `Conversation.ConversationParticipants` /
+  `PrivateMessages`, EF's fixup assigns the FK, and one `SaveChangesAsync` (one transaction) writes
+  the graph. One `DateTime now` stamps `DateCreated`, the sender's `LastReadTimestamp` and `DateSent`,
+  so the sender's watermark is never behind their own first message.
+- **Subject cap (orchestrator amendment U8).** `conversations.subject` is `varchar(2048)`; an
+  over-long subject reached the INSERT and came back as a 500. `MessagingValidations.Validate` now
+  refuses a trimmed subject over `MessagingConstants.MaxSubjectLength` (2048 — the column's existing
+  cap, which `Conversation.Subject`'s `[MaxLength]` now reads, so the two cannot drift), so it is a
+  `MessagingValidationException` → 400. No new number, no migration (the snapshot did not move).
+- **Tests.** Integration `MessagingWriteServiceTests` +3: one save counted through `SavedChanges`
+  (with the shared-timestamp assertion), a failure injected on the participants insert leaves no
+  conversation (`InterleavingCommandInterceptor` `failWith`), and the over-cap subject is a validation
+  error with nothing written. Unit `MessagingValidationsTests` +2 (over the cap; at the cap after
+  trimming). Each fails with its fix reverted.
+- **Browser: not run.** The compose modal's refusal for a 2,049-character subject is a step in
+  tracker H26.
 
 ### Tests (WU35, 2026-06-24)
 

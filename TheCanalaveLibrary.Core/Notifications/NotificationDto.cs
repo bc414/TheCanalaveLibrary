@@ -5,8 +5,8 @@ namespace TheCanalaveLibrary.Core;
 /// <see cref="INotificationReadService.GetNotificationsAsync"/>.
 ///
 /// <para><b>Collapsed</b> is the effective user preference — the per-user
-/// <c>UserNotificationSetting.Collapsed</c> override when a row exists, otherwise
-/// <c>NotificationType.DefaultCollapsed</c>. WU33 uses it to collapse/expand notification
+/// <c>UserNotificationSetting.Collapsed</c> override when the row's <c>Collapsed</c> is non-NULL
+/// (owner ruling D19: sparse per field), otherwise <c>NotificationType.DefaultCollapsed</c>. WU33 uses it to collapse/expand notification
 /// groups in the grouped-by-category view.</para>
 ///
 /// <para><b>SourceUserId / SourceUserName</b> are nullable, and two different nulls share them

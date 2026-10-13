@@ -755,7 +755,7 @@ unless noted. All sit under Stage-5 cells.
     question, so it is recorded rather than fixed. A status move deliberately does not touch
     `LastUpdatedDate` (`layer2-services.md` §"Story Lifecycle"); this item is about chapters only.
 
-- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness.*
+- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness, which re-scoped it without building it (2026-10-12; see the last bullets).*
   - Grid: F41/F42 L2=5 (unchanged).
   - Source: `NotificationEnricher.BatchLoadEntitiesAsync`, `BlogPostDirect` branch (used by
     `NewBlogPostByFollowedUser`/`OnFollowedStory`/`OnFavoritedStory`/`OnReadItLaterStory`,
@@ -770,6 +770,22 @@ unless noted. All sit under Stage-5 cells.
     author's `ProfileVisibility` in the `BlogPostDirect` projection and drop title + link when it is
     `Private` (no per-recipient work needed — `UsersOnly` admits every recipient), or accept and
     record it.
+  - **Not built by WU-NotificationCorrectness (2026-10-12), which re-scoped it.** Its spec did not
+    carry D8, and the one-line fix above is wrong as written. `NewCommentOnBlog` (33) also resolves
+    through `BlogPostDirect`, and its recipient is always the post's **author**, who can still open
+    their own post. Dropping on the author's `Private` would blank the author's own comment
+    notifications. The same leak also has a second trigger: a post **unpublished** after the
+    notification went out, which `BlogPostVisibilityGuard` also hides.
+  - **Fix shape, either one:**
+    - Type-split the kind. Give 33 its own kind that resolves as today. Keep `BlogPostDirect` for
+      13–16 and 100, whose recipients are never the author: drop-self excludes the author, and 100's
+      source is the poll owner. That kind drops a profile post whose author is `Private` or that is
+      unpublished.
+    - Make enrichment recipient-aware and mirror `BlogPostVisibilityGuard` for non-author
+      recipients.
+    The split keeps the enricher recipient-agnostic; the second answers the general case. Either way,
+    add Integration tests that the author's own 33 keeps its title and that a follower's 13 loses it.
+  - Owner: no WU. The next notification-enricher change takes it.
 
 - [ ] **D9 — Moderator free-text reasons travel in the query string** `[latent-risk · low · launch]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass; not decided there.*
   - Grid: F47/F48 L5=5 (unchanged).
@@ -848,6 +864,22 @@ unless noted. All sit under Stage-5 cells.
     per-circuit write serialization, or a write context per operation. Each has a different reach.
     The `testing.md` tiers cannot see it today: bUnit has no real circuit, and Integration uses one
     scope per call.
+- [ ] **D13 — Offset-paged reads whose ordering may not end in a unique key** `[latent-risk · low · beta]` — *Filed 2026-10-12 by WU-NotificationCorrectness, which fixed the one site its source cited.*
+  - Grid: no cell moves; each site sits under a Stage-5 L2 cell.
+  - **The rule** (`layer2-services.md` §"Polymorphic RelatedEntityId" step 1): an ordering applied
+    before `Skip/Take` ends in a unique key. Otherwise rows that tie on every sort key come back in an
+    arbitrary order per query, and offset paging can skip one row and repeat another across pages.
+  - **Fixed:** `ServerNotificationReadService.GetNotificationsAsync`'s `OldestUnreadFirst` now ends in
+    `NotificationId` (fan-out rows share a `DateCreated`). `NewestFirst` already did.
+  - **Not swept** (the audit-before-cross-cutting-build rule): the other `Skip(`/`Take(` reads in
+    `Server/` — `BlogPosts/ServerBlogPostReadService`, `Comments/ServerCommentReadService`,
+    `Discovery/ServerManualTreeSearchReadService`, `Groups/ServerGroupReadService`,
+    `Messaging/ServerMessagingReadService`, `Stories/ServerStoryReadService`,
+    `Tags/ServerFanonReadService` (`Data/DataSeeder` is not a paged read).
+  - **Fix shape:** enumerate every paged ordering, append the entity's PK as the last key where it is
+    missing, and `EXPLAIN` each against its L6 index (the notification fix rode an Incremental Sort
+    with no DDL; `layer6-indexes.md` §"notifications"). An Integration test per fixed site: two rows
+    with identical sort values, page size 1, pages 1 and 2 distinct.
 
 ---
 
@@ -1621,6 +1653,28 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     every save of a draft lands the author on the not-found page; the save itself succeeds.
     - Fix shape: return to the editor (or the story page) when the chapter is unpublished. Showing
       authors their own drafts on the reading page would be a different, owner-level call.
+- [ ] **H26 — WU-NotificationCorrectness browser pass: the new notification copy, the settings page on the per-field DTO, the subject cap** `[test-hygiene · low · beta]` — *Filed 2026-10-12 by WU-NotificationCorrectness, which ran with no browser available.*
+  - Grid: no cell moved. F42 L4.5 stays 5 as a copy-only change (the WU-InertFeatures presenter-slice
+    precedent); F43 and F49 had no UI change.
+  - **Steps** (both render phases; `psql` as ground truth; the Aspire path for the mail steps):
+    1. **Presenter copy, 90–92 and 100** (all four read "You have a new notification" before). Grant
+       a slot on `/mod/spotlight` → the awardee's bell reads "{moderator} granted you a Community
+       Spotlight slot". Redeem it for another author's story with a recommendation attached; at
+       go-live the author reads "{sponsor} put {story} in the Community Spotlight" and the
+       recommender "… with your recommendation". Edit a poll someone voted on; after the 30-minute
+       quiet period the voter reads "A poll you voted on in {post} was changed". Mailpit: the same text
+       is each email's subject and lead line.
+    2. **Settings page on the per-field DTO** (`/notifications/settings`). Toggle only Collapsed for
+       New Chapter. The row is `email_enabled NULL, collapsed true`, and the page still shows Email on
+       after a reload. Toggle it back: the row is gone. On WASM, a stale bundle that still expects
+       `IsDefault` is fixed by a hard reload.
+    3. **One-click unsubscribe** from a Mailpit message on a type you had collapsed:
+       `email_enabled false`, `collapsed` unchanged. A second POST still answers 200.
+    4. **Compose modal subject cap.** A 2,049-character subject is refused with "Subject must be 2048
+       characters or fewer." (400 on WASM). No `conversations` row is written.
+  - Not browser-observable: the mid-batch restore, the shutdown drain, the feed tiebreak and the
+    deleted-sponsor null source. Integration covers them (`audit/Notifications.md`,
+    WU-NotificationCorrectness Stage note).
 
 ---
 

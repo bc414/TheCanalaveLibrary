@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="ServerNotificationWriteService"/>'s create-core pushes here after its own commit;
 /// <see cref="NotificationEmailWorker"/> drains it through <see cref="NotificationEmailFlusher"/>.
 ///
-/// <para><b>Why not send inline:</b> ~22 seeded notification types default
+/// <para><b>Why not send inline:</b> 30 of the 47 seeded notification types (as of 2026-10-12) default
 /// <c>EmailEnabled = true</c>, and several of those fan out to every follower of a story or author.
 /// An inline send would put N × (connect → auth → send → disconnect) inside a SignalR circuit write
 /// path. Decision recorded 2026-07-31, superseding the earlier "build inline first and measure"

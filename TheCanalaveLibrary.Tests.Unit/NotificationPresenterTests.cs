@@ -309,6 +309,53 @@ public class NotificationPresenterTests
             NotificationCategoryEnum.YourFollows)).Text.Should().Be("A story you follow has a new chapter");
     }
 
+    // ── Every existing type has its own arm (WU-NotificationCorrectness) ──────────
+
+    [Theory]
+    [MemberData(nameof(AllTypeData))]
+    public void Compose_EveryExistingType_HasItsOwnArm_NotTheCatchAll(NotificationTypeEnum type)
+    {
+        // The catch-all is for a type minted before its arm is written. 90–92 and 100 used to reach
+        // it ("You have a new notification") in the bell, the inbox and the email subject alike.
+        string catchAll = NotificationPresenter.Compose(Make((NotificationTypeEnum)999, NotificationCategoryEnum.SiteNews)).Text;
+        foreach (string? target in new[] { null, "A Story" })
+        {
+            NotificationPresenter.Compose(Make(type, CategoryFor(type), sourceUserName: "Alice", targetTitle: target))
+                .Text.Should().NotBe(catchAll, $"{type} must have its own presenter arm");
+        }
+    }
+
+    [Fact]
+    public void Compose_Spotlight90To92_NameTheActorAndTheStory()
+    {
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.SpotlightSlotGranted, NotificationCategoryEnum.SiteNews,
+            sourceUserName: "ModUser")).Text.Should().Be("ModUser granted you a Community Spotlight slot");
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.StorySpotlighted, NotificationCategoryEnum.YourStories,
+            sourceUserName: "Sponsor", targetTitle: "The Dragon's Path")).Text
+            .Should().Be("Sponsor put The Dragon's Path in the Community Spotlight");
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.RecommendationSpotlighted, NotificationCategoryEnum.YourRecommendations,
+            sourceUserName: "Sponsor", targetTitle: "The Dragon's Path")).Text
+            .Should().Be("Sponsor put The Dragon's Path in the Community Spotlight with your recommendation");
+    }
+
+    [Fact]
+    public void Compose_StorySpotlighted_DeletedSponsorAndMissingStory_FallBackWithoutNulls()
+    {
+        // A deleted sponsor is a null source (D4's "actor since deleted"): "Someone" is right here.
+        string text = NotificationPresenter.Compose(Make(NotificationTypeEnum.StorySpotlighted, NotificationCategoryEnum.YourStories)).Text;
+        text.Should().Be("Someone put your story in the Community Spotlight");
+    }
+
+    [Fact]
+    public void Compose_PollUpdated_IsActorFree_AndNamesThePostWhenThereIsOne()
+    {
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows,
+            sourceUserName: "AuthorAlpha", targetTitle: "Weekly Poll")).Text
+            .Should().Be("A poll you voted on in Weekly Poll was changed");
+        NotificationPresenter.Compose(Make(NotificationTypeEnum.PollUpdated, NotificationCategoryEnum.YourFollows)).Text
+            .Should().Be("A poll you voted on was changed", "a site poll carries no related entity");
+    }
+
     // ── Mutation sanity: a missing switch arm returns non-empty (default arm) ─────
 
     [Fact]

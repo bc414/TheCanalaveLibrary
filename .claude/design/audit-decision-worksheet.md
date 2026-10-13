@@ -1923,6 +1923,8 @@ stays green unchanged. Unsubscribe on a type the user had collapsed leaves `coll
 effective value still tracking the default, and re-unsubscribing is idempotent. *(RazorComponents
 tier: untouched — no UI change, which is itself the claim being asserted.)*
 
+**Built:** WU-NotificationCorrectness (2026-10-12) — rule now stated in `layer2-services.md` §"Notification Generation" → "Filtering semantics" (sparse per field; the single-field `IDiscoveryFilterSettingsService` contrast under §"§8.7 Discovery Defaults"). The DDL rode this WU's own migration, not the schema-hardening one; `SetSettingAsync_DeletesOverrideRow_WhenValuesMatchDefault` needed its `IsDefault` assertion rewritten to the per-field flags, so it did not stay green unchanged.
+
 ## Block E — Bounds, caps, throttles
 
 Gates WU-BoundsAndCaps.

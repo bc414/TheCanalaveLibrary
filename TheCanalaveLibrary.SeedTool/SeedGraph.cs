@@ -97,7 +97,13 @@ public sealed record SeedSavedSelectionRow(
 
 public sealed record SeedSavedSelectionEntryRow(int Id, int SelectionId, int TagId, bool IsExcluded);
 
-public sealed record SeedNotificationSettingRow(int UserId, short NotificationTypeId, bool EmailEnabled, bool Collapsed);
+/// <summary>
+/// One sparse <c>user_notification_settings</c> row. Each field is NULL (follow the type default) or
+/// the <b>non-default</b> value, and a row with both NULL is never emitted — the per-field invariant
+/// of owner ruling D19 (<c>layer2-services.md</c> §"Notification Generation" → "Filtering
+/// semantics").
+/// </summary>
+public sealed record SeedNotificationSettingRow(int UserId, short NotificationTypeId, bool? EmailEnabled, bool? Collapsed);
 
 public sealed record SeedFanonLinkRow(
     int Id, string NormalizedName, int BaseTagId, int TargetTagId, int? LinkedByUserId, DateTime DateLinkedUtc);
@@ -736,9 +742,22 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             }
         }
 
-        // Per-user notification settings (sparse overrides — never seeded anywhere before).
+        // Per-user notification settings — sparse PER FIELD (owner ruling D19): each field is either
+        // NULL (follow the type default) or the non-default value, and an all-NULL row is never
+        // written. The defaults below mirror the HasData seed in
+        // Server/Data/Configurations/NotificationConfigurations.cs (type → DefaultEmailEnabled;
+        // DefaultCollapsed is false for all six) — keep them in step if a default changes there.
+        // Two draws per chosen type, the same as before D19, so the RNG stream below is unchanged.
         List<SeedNotificationSettingRow> notificationSettings = [];
-        short[] settableTypes = [0, 10, 20, 22, 26, 32];
+        (short Type, bool DefaultEmail, bool DefaultCollapsed)[] settableTypes =
+        [
+            (0, false, false),  // SiteAnnouncement
+            (10, true, false),  // NewChapterOnFollowedStory
+            (20, true, false),  // NewStoryFavorite
+            (22, true, false),  // NewRecommendationOnYourStory
+            (26, false, false), // TagUpdateSuggestion
+            (32, false, false), // NewVouchOnYou
+        ];
         foreach (SeedUserRow user in users)
         {
             if (_rng.NextDouble() >= 0.20) continue;
@@ -746,10 +765,12 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             int count = 1 + _rng.Next(3);
             for (int n = 0; n < count; n++)
             {
-                short t = settableTypes[_rng.Next(settableTypes.Length)];
+                var (t, defaultEmail, defaultCollapsed) = settableTypes[_rng.Next(settableTypes.Length)];
                 if (!chosenTypes.Add(t)) continue;
-                notificationSettings.Add(new SeedNotificationSettingRow(
-                    user.Id, t, _rng.NextDouble() < 0.30, _rng.NextDouble() < 0.30));
+                bool? email = _rng.NextDouble() < 0.50 ? !defaultEmail : null;
+                bool? collapsed = _rng.NextDouble() < 0.30 ? !defaultCollapsed : null;
+                if (email is null && collapsed is null) continue; // all-default = no row
+                notificationSettings.Add(new SeedNotificationSettingRow(user.Id, t, email, collapsed));
             }
         }
 

@@ -215,6 +215,15 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **`UserNotificationSetting` granularity (worksheet D19) — answered 2026-08-07, built
+  WU-NotificationCorrectness 2026-10-12.** No decision row: it came out of the service audit's §3.17
+  and its §4 drift row 7, which closes as "schema aligned to doctrine". Both columns are nullable and
+  each collapses to NULL on its own when it equals the type default; the row is deleted only when
+  both are NULL; one-click unsubscribe writes only its own column. No UI, endpoint or client change,
+  and no three-state control (D19's accepted cost). The upsert is race-free under D23's "a visible
+  500 is never a posture". Rule: `layer2-services.md` §"Notification Generation" → "Filtering
+  semantics". Narrative: `audit/Notifications.md` F43.
+
 - **Counter & concurrency doctrine (worksheet D21–D24) — answered 2026-08-08 (Brian-ratified), built
   WU-CounterSymmetry 2026-09-30.** No decision rows: they came out of the schema audit's §3.6 and the
   service audit's §2.4/§3.7/§3.14/§3.15.
