@@ -157,7 +157,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         ApplicationDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         ChapterContent content = new() { SortOrder = 0, ChapterText = "<p>inherit</p>", WordCount = 1, Rating = null, PublishDate = DateTime.UtcNow };
-        Chapter chapter = new() { StoryId = freshStoryId, ChapterNumber = 1, Title = "Ch 1", PrimaryContentId = null, IsPublished = true, VersionCount = 1, ChapterContents = [content] };
+        Chapter chapter = new() { StoryId = freshStoryId, ChapterNumber = 1, Title = "Ch 1", PrimaryContentId = null, IsPublished = true, FirstPublishedDate = DateTime.UtcNow, VersionCount = 1, ChapterContents = [content] };
         seedDb.Chapters.Add(chapter);
         await seedDb.SaveChangesAsync();
         chapter.PrimaryContentId = content.ChapterContentId;
@@ -203,7 +203,11 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         using IServiceScope dbScope = Factory.Services.CreateScope();
         ApplicationDbContext db = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         List<Chapter> freshChapters = db.Chapters.Where(c => c.StoryId == freshStoryId).ToList();
-        foreach (Chapter c in freshChapters) c.IsPublished = true;
+        foreach (Chapter c in freshChapters)
+        {
+            c.IsPublished = true;
+            c.FirstPublishedDate ??= DateTime.UtcNow; // ck_chapters_first_published_date (WU-SchemaHardening)
+        }
         await db.SaveChangesAsync();
 
         // Read the middle chapter (ChapterNumber == 2) as the anonymous viewer.
@@ -323,6 +327,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         ApplicationDbContext db = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter chapter = await db.Chapters.FirstAsync(c => c.StoryId == storyId);
         chapter.IsPublished = true;
+        chapter.FirstPublishedDate ??= DateTime.UtcNow; // ck_chapters_first_published_date (WU-SchemaHardening)
         await db.SaveChangesAsync();
     }
 
@@ -377,6 +382,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
             Title            = "Chapter 1",
             PrimaryContentId = null,
             IsPublished      = true,
+            FirstPublishedDate = DateTime.UtcNow,
             VersionCount     = 2,
             ChapterContents  = [primary]
         };

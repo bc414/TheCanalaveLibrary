@@ -29,6 +29,32 @@ public class SiteDailyStatWorkerTests
             .Should().Be(new DateOnly(2026, 7, 10));
     }
 
+    // ── SiteDailyStatAggregator.IsActiveUsersMeasurable (WU-SchemaHardening) ─────────
+    // last_active_utc keeps only each user's latest ping, so only the most recent completed day (or
+    // today) can be counted; an older, gap-filled day is written NULL instead of an undercount.
+
+    [Theory]
+    [InlineData(0, true)]   // today (the dev probe's partial day)
+    [InlineData(-1, true)]  // yesterday: the worker's daily target
+    [InlineData(-2, false)] // a gap-filled older day
+    [InlineData(-30, false)]
+    public void IsActiveUsersMeasurable_OnlyTheMostRecentCompletedDayOrToday(int dayOffset, bool expected)
+    {
+        DateTime nowUtc = new(2026, 7, 11, 14, 30, 0, DateTimeKind.Utc);
+        DateOnly statDate = DateOnly.FromDateTime(nowUtc).AddDays(dayOffset);
+
+        SiteDailyStatAggregator.IsActiveUsersMeasurable(statDate, nowUtc).Should().Be(expected);
+    }
+
+    [Fact]
+    public void IsActiveUsersMeasurable_JustAfterMidnight_YesterdayIsStillMeasurable()
+    {
+        DateTime nowUtc = new(2026, 7, 11, 0, 0, 1, DateTimeKind.Utc);
+
+        SiteDailyStatAggregator.IsActiveUsersMeasurable(new DateOnly(2026, 7, 10), nowUtc).Should().BeTrue();
+        SiteDailyStatAggregator.IsActiveUsersMeasurable(new DateOnly(2026, 7, 9), nowUtc).Should().BeFalse();
+    }
+
     [Fact]
     public void MissingDays_EmptyTable_BackfillsOnlyTheBoundedWindow()
     {

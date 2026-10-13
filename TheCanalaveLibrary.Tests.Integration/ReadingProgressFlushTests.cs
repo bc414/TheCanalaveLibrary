@@ -178,7 +178,8 @@ public class ReadingProgressFlushTests(PostgresFixture postgres) : IntegrationTe
             StoryId = storyId,
             ChapterNumber = chapterNumber,
             Title = $"Chapter {chapterNumber}",
-            IsPublished = true
+            IsPublished = true,
+            FirstPublishedDate = DateTime.UtcNow // ck_chapters_first_published_date (WU-SchemaHardening)
         };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();

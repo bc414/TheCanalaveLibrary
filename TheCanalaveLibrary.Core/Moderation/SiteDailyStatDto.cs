@@ -10,7 +10,7 @@ public record SiteDailyStatDto(
     int TotalUsers,
     int TotalStories,
     long TotalWords,
-    int? NewUsers,
+    int NewUsers,
     int NewStories,
     int NewChapters,
     long NewWords,

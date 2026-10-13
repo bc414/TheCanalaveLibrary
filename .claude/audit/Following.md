@@ -19,7 +19,8 @@ guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's p
 tests for the anonymous refusal stay green. `ServerFollowingReadService` drops the now-unused
 `CurrentUserId` property.
 
-- **L1 — Stage 5.** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
+- **L1 — Stage 5 (`ck_followed_users_no_self` since WU-SchemaHardening, 2026-10-13 — Stage note at the
+  end of Feature 19).** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
   asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
 - **L2 — Stage 5 (WU21, 2026-06-22; alerts-on raise guarded + clear conformance WU-AccessGateSweep2, 2026-09-30 — see its Stage note; shared auth guard WU-ModerationIntegrity, 2026-09-30).** `IFollowingReadService` / `IFollowingWriteService` (inherits
   read) built in `Core/Following/`. `ServerFollowingReadService` (`ReadOnlyApplicationDbContext` +
@@ -124,7 +125,8 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   bool-vs-table choice with `VouchText MaxLength(280)` — that's the historical snapshot (spec is
   read-only). The user resolved the decision Phase B session 2026-06-20: ratify the dedicated table,
   and keep `VouchText` at **1000** (not 280) — code is authoritative, spec is not edited.
-- **L1 — Stage 5 (re-verified WU21, 2026-06-22).** `MakeVouchTextUnlimited` migration removes
+- **L1 — Stage 5 (re-verified WU21, 2026-06-22; `ck_vouches_no_self` since WU-SchemaHardening,
+  2026-10-13 — Stage note at the end of this feature).** `MakeVouchTextUnlimited` migration removes
   `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
   Phase B's 1000-char ruling and spec §5.8's original 280; code is authoritative. Applied via
   Testcontainers `Database.MigrateAsync` in the integration suite. `has-pending-model-changes` clean.
@@ -191,6 +193,19 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   `ix_vouches_vouched_user_id` covers incoming-vouch lookups. The spec's old filtered-index pair on
   `followed_users` (`WHERE is_vouched = true`) no longer applies — see
   `skills/canalave-conventions/layer6-indexes.md` "Vouch Indexes" (updated to match).
+
+### WU-SchemaHardening Stage note (2026-10-13) — Features 18, 19: no self-follow, no self-vouch in the schema
+
+**No cell flips — F18 and F19 L1 stay Stage 5.** Schema audit §2.6: the self-reference rule was
+enforced only by `FollowingEndpoints`/`FollowingValidationException` and SeedGraph's skip, so a writer
+around the service (an import, a script, the moderation path) could store one. Migration
+`WU_SchemaHardening` adds `ck_followed_users_no_self` (`user_id <> followed_user_id`) and
+`ck_vouches_no_self` (`vouching_user_id <> vouched_user_id`), declared in the model
+(`layer1-data-model.md` §"CHECK constraints"). No writer produces such a row: the dev DB had none,
+and a SeedTool re-run on a migrated scratch clone loaded 1,519 vouches.
+
+Tests: **Integration** `SchemaConstraintTests` (each refusal by SQLSTATE 23514 and name; the catalog
+inventory).
 
 ## L4.5-Browser verification (2026-07-01) — F18 + F19 → Stage 5
 

@@ -115,7 +115,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
 | 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 5 | N/A |
 | 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |

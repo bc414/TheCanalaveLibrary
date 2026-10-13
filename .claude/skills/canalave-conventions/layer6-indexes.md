@@ -231,6 +231,21 @@ the queue's batch enrichment), so it carries the `HasIndex` name argument (rule 
 it would silently replace the full index. The two may be redundant once measured; that is a
 measurement question, so the full index was **not** dropped blind.
 
+## Integrity indexes — group folders and group stories (WU-SchemaHardening, 2026-10-13; UNMEASURED)
+
+Shipped for correctness (D23; schema §2.4), not on a measurement, so the always-measure rule does not
+gate them. None changes a column list a measured plan relies on.
+
+| Index | Shape | Why |
+|---|---|---|
+| `ix_group_stories_group_id_story_id` | UNIQUE `(group_id, story_id)` | `group_stories` is a set (D23). It **supersedes** the EF convention FK index `ix_group_stories_group_id`, which EF dropped because the new index leads with `group_id` (a full index, so it does cover the FK — unlike the partial case in rule 3 above). |
+| `ix_group_folders_group_id_parent_folder_id_name` | UNIQUE `(group_id, parent_folder_id, name)` **NULLS NOT DISTINCT** | Rebuilt in place (same name, same columns): top-level names were not unique under the default NULLS DISTINCT. |
+| `ix_group_folders_parent_folder_id` | `(parent_folder_id)` (EF FK convention) | New with the self-FK: the `ON DELETE SET NULL` lookup of a deleted folder's sub-folders. |
+
+**Left as is:** the L6 matrix's "WRONG vs `sort_order`" note on the folder index (the tree read orders
+by `sort_order`). That is a performance claim, so it waits for a measurement; this WU kept the column
+list.
+
 ## Rejected — no matching query (R4), reconfirmed against the 2026-07-07 codebase survey
 
 | Candidate | Why rejected |

@@ -190,6 +190,8 @@ Story/Group/BlogPost, all `int` PKs).
 
 ### 2.4 `group_folders.parent_folder_id` has no FK; root-folder names aren't unique
 
+> **Built:** WU-SchemaHardening (2026-10-13) — the self-FK (`ON DELETE SET NULL`) and the name index rebuilt NULLS NOT DISTINCT (migration `WU_SchemaHardening`, with DML that moves dangling parents to the top level and suffixes duplicate top-level names); the service half (service §2.10) in `layer2-services.md` §"Group Folder Integrity". Case-insensitive names stay D29. The entry below is history.
+
 Spec §"Group Tables" calls for a self-referencing FK with SET NULL. The shipped column is a bare
 `integer` — no FK at all (`GroupFolder.cs` has the property but no navigation; no Fluent
 relationship). Deleting a folder (`ServerGroupWriteService.cs:332` — a live path) leaves children
@@ -221,6 +223,8 @@ record that as a deliberate exception in the audit file — it currently reads a
 
 ### 2.6 Zero CHECK constraints
 
+> **Built:** WU-SchemaHardening (2026-10-13) — eight of the nine below, plus WU-StoryLifecycle's two publish-anchor CHECKs: ten in all, **declared in the model** with `HasCheckConstraint` and lowercase `ck_` names rather than as `migrationBuilder.Sql` (so no re-append entry; the last paragraph below is superseded). `CK_uci_read_progress` waits for D20's bounds (tracker D14); `CK_users_suspension` is one-directional, as written. List and rule: `layer1-data-model.md` §"CHECK constraints". The entry below is history.
+
 `layer1-data-model.md` §Migrations notes CHECK constraints as a supported manual-DDL category —
 "*(none present)*". For a pre-launch schema that's a gap, not a style choice: services enforce
 these today, but raw-SQL workers, future maintenance scripts, and the moderation hard-delete path
@@ -245,6 +249,8 @@ reconciliation policy (§3.6) instead. Per the migration rules, these are `migra
 manual DDL and must join the re-append registry in `layer1-data-model.md`.
 
 ### 2.7 Minor consistency defects (batch into any nearby migration)
+
+> **Built:** WU-SchemaHardening (2026-10-13) — the filter overrides use the natural composite PK; `site_daily_stats.new_users` is NOT NULL and `active_users` is NULL only for an unmeasurable day, now written that way (`layer8-data-marts.md`). **Not built:** the TPT `PK_<table>` rename is impossible without breaking the snapshot (one EF key per hierarchy; probed) — a ratified divergence in `layer1-data-model.md` §TPT. The entry below is history.
 
 - **`user_story_interaction_filter_settings`** carries a surrogate identity PK plus a unique on
   `(user_id, search_mode_key, filter_key)`; its sibling `default_..._settings` uses the natural

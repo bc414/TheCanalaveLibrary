@@ -24,6 +24,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ApprovedStorySubmissions).HasDefaultValue(0);
         builder.Property(u => u.CanAutoApprove).HasDefaultValue(true).HasSentinel(true);
 
+        // A suspension end date exists only while Suspended (schema audit §2.6; service audit
+        // §2.1.3(c), kept by ServerModerationWriteService.ApplyStatus). One direction only: whether
+        // Suspended requires a date is §2.1.3(a)'s call, not the schema's.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_users_suspension",
+            $"account_status = {(short)AccountStatusEnum.Suspended} OR suspended_until_utc IS NULL"));
+
         // 1-to-1 Cascade (Personal data that MUST be deleted with the user)
         builder.HasOne(u => u.UserStat)
             .WithOne(s => s.User)

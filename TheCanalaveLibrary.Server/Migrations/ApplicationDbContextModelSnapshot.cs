@@ -550,7 +550,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_base_polls_owner_id");
 
-                    b.ToTable("base_polls", (string)null);
+                    b.ToTable("base_polls", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_base_polls_dates", "date_closed IS NULL OR date_closed >= date_opened");
+                        });
 
                     b.UseTptMappingStrategy();
                 });
@@ -648,7 +651,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_chapters_story_id_chapter_number");
 
-                    b.ToTable("chapters", (string)null);
+                    b.ToTable("chapters", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_chapters_first_published_date", "NOT is_published OR first_published_date IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.ChapterContent", b =>
@@ -1147,7 +1153,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_fanon_links_normalized_name_base_tag_id");
 
-                    b.ToTable("fanon_links", (string)null);
+                    b.ToTable("fanon_links", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_fanon_links_no_self", "base_tag_id <> target_tag_id");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.FollowedUser", b =>
@@ -1176,7 +1185,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("FollowedUserId")
                         .HasDatabaseName("ix_followed_users_followed_user_id");
 
-                    b.ToTable("followed_users", (string)null);
+                    b.ToTable("followed_users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_followed_users_no_self", "user_id <> followed_user_id");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Group", b =>
@@ -1264,11 +1276,19 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasKey("GroupFolderId")
                         .HasName("pk_group_folders");
 
+                    b.HasIndex("ParentFolderId")
+                        .HasDatabaseName("ix_group_folders_parent_folder_id");
+
                     b.HasIndex("GroupId", "ParentFolderId", "Name")
                         .IsUnique()
                         .HasDatabaseName("ix_group_folders_group_id_parent_folder_id_name");
 
-                    b.ToTable("group_folders", (string)null);
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("GroupId", "ParentFolderId", "Name"), false);
+
+                    b.ToTable("group_folders", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_group_folders_no_self", "parent_folder_id IS NULL OR parent_folder_id <> group_folder_id");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.GroupMember", b =>
@@ -1341,11 +1361,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("AddedByUserId")
                         .HasDatabaseName("ix_group_stories_added_by_user_id");
 
-                    b.HasIndex("GroupId")
-                        .HasDatabaseName("ix_group_stories_group_id");
-
                     b.HasIndex("StoryId")
                         .HasDatabaseName("ix_group_stories_story_id");
+
+                    b.HasIndex("GroupId", "StoryId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_group_stories_group_id_story_id");
 
                     b.ToTable("group_stories", (string)null);
                 });
@@ -2789,7 +2810,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("new_stories");
 
-                    b.Property<int?>("NewUsers")
+                    b.Property<int>("NewUsers")
                         .HasColumnType("integer")
                         .HasColumnName("new_users");
 
@@ -3007,7 +3028,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("StoryStatusId")
                         .HasDatabaseName("ix_stories_story_status_id");
 
-                    b.ToTable("stories", (string)null);
+                    b.ToTable("stories", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stories_published_date", "story_status_id NOT BETWEEN 2 AND 7 OR published_date IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryAcknowledgment", b =>
@@ -3088,7 +3112,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_story_arcs_story_id_title");
 
-                    b.ToTable("story_arcs", (string)null);
+                    b.ToTable("story_arcs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_story_arcs_bounds", "start_chapter_number <= end_chapter_number");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacter", b =>
@@ -3308,7 +3335,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("TargetStoryId")
                         .HasDatabaseName("ix_story_lineages_target_story_id");
 
-                    b.ToTable("story_lineages", (string)null);
+                    b.ToTable("story_lineages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_story_lineages_no_self", "source_story_id <> target_story_id");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryLineageType", b =>
@@ -3916,7 +3946,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasDatabaseName("ix_asp_net_users_verification_code")
                         .HasFilter("\"verification_code\" IS NOT NULL");
 
-                    b.ToTable("AspNetUsers", (string)null);
+                    b.ToTable("AspNetUsers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_suspension", "account_status = 2 OR suspended_until_utc IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserBadge", b =>
@@ -4346,34 +4379,25 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserStoryInteractionFilterSetting", b =>
                 {
-                    b.Property<int>("UserStoryInteractionFilterSettingId")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int>("UserId")
                         .HasColumnType("integer")
-                        .HasColumnName("user_story_interaction_filter_setting_id");
+                        .HasColumnName("user_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserStoryInteractionFilterSettingId"));
+                    b.Property<string>("SearchModeKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("search_mode_key");
+
+                    b.Property<string>("UserStoryInteractionFilterKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("user_story_interaction_filter_key");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("is_enabled");
 
-                    b.Property<string>("SearchModeKey")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("search_mode_key");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
-
-                    b.Property<string>("UserStoryInteractionFilterKey")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("user_story_interaction_filter_key");
-
-                    b.HasKey("UserStoryInteractionFilterSettingId")
+                    b.HasKey("UserId", "SearchModeKey", "UserStoryInteractionFilterKey")
                         .HasName("pk_user_story_interaction_filter_settings");
 
                     b.HasIndex("SearchModeKey")
@@ -4381,10 +4405,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.HasIndex("UserStoryInteractionFilterKey")
                         .HasDatabaseName("ix_user_story_interaction_filter_settings_user_story_interacti");
-
-                    b.HasIndex("UserId", "SearchModeKey", "UserStoryInteractionFilterKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_user_story_interaction_filter_settings_user_id_search_mode_");
 
                     b.ToTable("user_story_interaction_filter_settings", (string)null);
                 });
@@ -4510,7 +4530,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("VouchedUserId")
                         .HasDatabaseName("ix_vouches_vouched_user_id");
 
-                    b.ToTable("vouches", (string)null);
+                    b.ToTable("vouches", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_vouches_no_self", "vouching_user_id <> vouched_user_id");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.GroupBlogPost", b =>
@@ -4713,7 +4736,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("BlogPostId")
                         .HasDatabaseName("ix_blog_post_polls_blog_post_id");
 
-                    b.ToTable("blog_post_polls", (string)null);
+                    b.ToTable("blog_post_polls", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_base_polls_dates", "date_closed IS NULL OR date_closed >= date_opened");
+                        });
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.SitePoll", b =>
@@ -4724,7 +4750,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_archived");
 
-                    b.ToTable("site_polls", (string)null);
+                    b.ToTable("site_polls", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_base_polls_dates", "date_closed IS NULL OR date_closed >= date_opened");
+                        });
                 });
 
             modelBuilder.Entity("GroupFolderGroupStory", b =>
@@ -5147,6 +5176,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_group_folders_groups_group_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.GroupFolder", null)
+                        .WithMany()
+                        .HasForeignKey("ParentFolderId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_group_folders_group_folders_parent_folder_id");
 
                     b.Navigation("Group");
                 });

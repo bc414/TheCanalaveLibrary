@@ -113,7 +113,7 @@
                 <p class="text-(--color-text)">
                     Deleting "@_pendingDeleteName" removes the folder and unfiles any stories in it.
                     The stories stay in the group &mdash; only their placement in this folder is removed.
-                    This can't be undone.
+                    Any sub-folders move to the top level. This can't be undone.
                 </p>
             </ConfirmDialog>
         }
@@ -294,8 +294,31 @@
         }
         catch (GroupValidationException ex) { _errors.AddRange(ex.Errors); }
         catch (UnauthorizedAccessException) { _forbidden = true; }
+        catch (KeyNotFoundException)
+        {
+            // The chosen parent was deleted (another admin or tab) after this page loaded.
+            _errors.Add("That parent folder no longer exists.");
+            _newParentFolderId = null;
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
         finally { _busy = false; }
+    }
+
+    // The folder (or the chosen parent) is gone under the page: keep the refusal and reload, so the
+    // stale row stops offering actions on a folder that no longer exists. A failed reload is added
+    // after the refusal, never instead of it (error-handling.md, the moved-under-the-page rule; the
+    // ModSubmissionsPage/MyStoryLineagesPage shape).
+    private async Task ReloadAfterRefusalAsync()
+    {
+        try
+        {
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errors.Add(ExceptionPresenter.GetUserMessage(ex));
+        }
     }
 
     private void BeginRename(GroupFolderDto folder)
@@ -324,7 +347,12 @@
         }
         catch (GroupValidationException ex) { _errors.AddRange(ex.Errors); }
         catch (UnauthorizedAccessException) { _forbidden = true; }
-        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (KeyNotFoundException)
+        {
+            _errors.Add("That folder no longer exists.");
+            _editingFolderId = null;
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
         finally { _busy = false; }
     }
@@ -347,8 +375,15 @@
             await GroupService.DeleteFolderAsync(folderId);
             await ReloadAsync();
         }
+        // A sub-folder would duplicate a top-level name: the service deleted nothing and names each
+        // clash (layer2-services.md §"Group Folder Integrity").
+        catch (GroupValidationException ex) { _errors.AddRange(ex.Errors); }
         catch (UnauthorizedAccessException) { _forbidden = true; }
-        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (KeyNotFoundException)
+        {
+            _errors.Add("That folder no longer exists.");
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
         finally
         {
@@ -382,7 +417,11 @@
             await ReloadAsync();
         }
         catch (UnauthorizedAccessException) { _forbidden = true; }
-        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (KeyNotFoundException)
+        {
+            _errors.Add("That folder no longer exists.");
+            await ReloadAfterRefusalAsync();
+        }
         catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
         finally { _busy = false; }
     }

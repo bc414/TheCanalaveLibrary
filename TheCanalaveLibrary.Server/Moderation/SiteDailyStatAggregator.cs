@@ -30,6 +30,11 @@ namespace TheCanalaveLibrary.Server;
 /// story, drafts and taken-down ones included). <c>word_count</c> itself counts published chapters
 /// only.
 ///
+/// <c>active_users</c> is written only for a day that can still be measured
+/// (<see cref="IsActiveUsersMeasurable"/>) and NULL otherwise, and a re-upsert never replaces a measured
+/// value with NULL (WU-SchemaHardening; before it, a gap-filled older day stored a silent undercount
+/// in this append-only table). <c>new_users</c> is NOT NULL.
+///
 /// Scoped, deliberately separate from the hosted <see cref="SiteDailyStatWorker"/> so integration
 /// tests and a <c>/dev</c> probe can trigger an upsert deterministically without hosting timing —
 /// same split as <see cref="DiscoveryMartRebuilder"/>.
@@ -87,7 +92,9 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
             (SELECT COUNT(*) FROM user_chapter_interactions
                 WHERE last_interaction_date >= @range_start AND last_interaction_date < @range_end),
             (SELECT COALESCE(SUM(view_count), 0) FROM daily_story_stats WHERE stat_date = @stat_date),
-            (SELECT COUNT(*) FROM "AspNetUsers" WHERE last_active_utc >= @range_start AND last_active_utc < @range_end)
+            CASE WHEN @measure_active
+                THEN (SELECT COUNT(*) FROM "AspNetUsers" WHERE last_active_utc >= @range_start AND last_active_utc < @range_end)
+            END
         ON CONFLICT (stat_date) DO UPDATE SET
             total_users = EXCLUDED.total_users,
             total_stories = EXCLUDED.total_stories,
@@ -107,19 +114,26 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
             favorites_added = EXCLUDED.favorites_added,
             chapters_read = EXCLUDED.chapters_read,
             story_views = EXCLUDED.story_views,
-            active_users = EXCLUDED.active_users
+            active_users = COALESCE(EXCLUDED.active_users, site_daily_stats.active_users)
         """;
 
     /// <summary>
+    /// Whether <c>active_users</c> can be counted for <paramref name="statDate"/> at
+    /// <paramref name="nowUtc"/>. <c>User.LastActiveUtc</c> holds only each user's latest ping, so a
+    /// user active on a day and again later no longer counts toward that day. The count is taken while
+    /// the day is the previous completed UTC day (the worker's daily target) or today (the dev probe);
+    /// any older day is unmeasurable and is written NULL, the settled "honest, not reconstructable"
+    /// semantics (<c>layer8-data-marts.md</c> §"site_daily_stats"). Public test seam — the repo has no
+    /// InternalsVisibleTo.
+    /// </summary>
+    public static bool IsActiveUsersMeasurable(DateOnly statDate, DateTime nowUtc) =>
+        statDate >= SiteDailyStatWorker.PreviousCompletedUtcDay(nowUtc);
+
+    /// <summary>
     /// Upserts the row for <paramref name="statDate"/> (a completed UTC day). Idempotent — safe to
-    /// call more than once for the same day (e.g. a retry, or the worker's bounded gap-fill).
-    ///
-    /// <b>Known one-time limitation:</b> <c>new_users</c> is computed from <c>User.CreatedUtc</c>,
-    /// which is backfilled to this feature's migration-deploy instant for every pre-existing user
-    /// (their real registration date is unrecoverable). If <paramref name="statDate"/> is the
-    /// deploy day itself, this query counts the entire pre-existing user base as "new" that day —
-    /// a one-time cosmetic spike on the dashboard's growth chart, not an ongoing correctness bug.
-    /// Every subsequent day is accurate.
+    /// call more than once for the same day (e.g. a retry, or the worker's bounded gap-fill). Whether
+    /// <c>active_users</c> is counted is decided against the current UTC time
+    /// (<see cref="IsActiveUsersMeasurable"/>).
     /// </summary>
     public async Task UpsertDayAsync(DateOnly statDate, CancellationToken ct = default)
     {
@@ -141,6 +155,8 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
                     new NpgsqlParameter("stat_date", NpgsqlDbType.Date) { Value = statDate },
                     new NpgsqlParameter("range_start", NpgsqlDbType.TimestampTz) { Value = rangeStart },
                     new NpgsqlParameter("range_end", NpgsqlDbType.TimestampTz) { Value = rangeEnd },
+                    new NpgsqlParameter("measure_active", NpgsqlDbType.Boolean)
+                        { Value = IsActiveUsersMeasurable(statDate, DateTime.UtcNow) },
                 ],
                 ct);
 

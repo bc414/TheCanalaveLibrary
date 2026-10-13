@@ -7,10 +7,10 @@ namespace TheCanalaveLibrary.Core;
 /// One row per (User × SearchMode × filter-kind) when the user's preference differs from
 /// <see cref="DefaultUserStoryInteractionFilterSetting"/>.
 /// </summary>
+/// <remarks>Keyed by the natural triple (UserId, SearchModeKey, UserStoryInteractionFilterKey), like its
+/// default-matrix sibling; the surrogate id was dropped in WU-SchemaHardening (schema audit §2.7).</remarks>
 public partial class UserStoryInteractionFilterSetting
 {
-    public int UserStoryInteractionFilterSettingId { get; set; }
-
     public int UserId { get; set; }
 
     [Required]

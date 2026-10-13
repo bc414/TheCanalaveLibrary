@@ -407,6 +407,47 @@ public class PollServiceTests(PostgresFixture postgres) : IntegrationTestBase(po
             .Where(e => e.Message.Contains("locked"));
     }
 
+    // ── Close date vs. the effective open date (WU-SchemaHardening, ck_base_polls_dates) ──
+    // PollEditDto.CanSave compares only when both dates are sent. These two paths used to persist
+    // date_closed < date_opened; since the CHECK they would be its raw 500. The service now answers 400.
+
+    [Fact]
+    public async Task CreatePoll_CloseDateInThePast_WithNoOpenDate_ThrowsValidation()
+    {
+        Func<Task> act = () => CreateSitePollAsync(NewDto(closed: DateTime.UtcNow.AddDays(-1)));
+
+        await act.Should().ThrowAsync<PollValidationException>()
+            .Where(e => e.Errors.Contains(PollEditDto.CloseBeforeOpenMessage),
+                "the open date defaults to now, and the close date is before it");
+
+        using IServiceScope scope = NewScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Polls.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UpdatePoll_CloseDateBeforeTheStoredOpenDate_ThrowsValidation()
+    {
+        // A scheduled poll (opens in two days) is still editable; "keep the open date" (null) plus a
+        // close date tomorrow would close it before it opens.
+        DateTime opensAt = DateTime.UtcNow.AddDays(2);
+        int pollId = await CreateSitePollAsync(NewDto(opened: opensAt));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using (IServiceScope scope = NewScope())
+        {
+            IPollWriteService service = scope.ServiceProvider.GetRequiredService<IPollWriteService>();
+            Func<Task> act = () => service.UpdatePollAsync(pollId, NewDto(opened: null, closed: DateTime.UtcNow.AddDays(1)));
+            await act.Should().ThrowAsync<PollValidationException>()
+                .Where(e => e.Errors.Contains(PollEditDto.CloseBeforeOpenMessage));
+        }
+
+        using IServiceScope verify = NewScope();
+        ApplicationDbContext db = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        BasePoll stored = await db.Polls.AsNoTracking().SingleAsync(p => p.PollId == pollId);
+        stored.DateClosed.Should().BeNull("the refused update wrote nothing");
+    }
+
     [Fact]
     public async Task Update_OptionReconcile_KeepsVotesOnRetained_DropsVotesOnDeleted()
     {

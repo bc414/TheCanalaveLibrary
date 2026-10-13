@@ -586,6 +586,7 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTes
             Title            = "Chapter 1",
             PrimaryContentId = null,
             IsPublished      = true,
+            FirstPublishedDate = DateTime.UtcNow,
             VersionCount     = 0
         };
         db.Chapters.Add(chapter);

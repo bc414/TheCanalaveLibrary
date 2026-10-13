@@ -530,6 +530,22 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
+**WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip.** Migration
+`WU_SchemaHardening` adds `ck_base_polls_dates` (`date_closed IS NULL OR date_closed >= date_opened`)
+on `base_polls`, declared on the TPT base's `ToTable` (`layer1-data-model.md` §"CHECK constraints"). A
+throwaway probe confirmed that EF puts it on `base_polls` only, not on the child tables, so no raw-SQL
+fallback was needed. The hand DML pulls an inverted close date back to the open date (rehearsed on a
+dirtied dev-DB clone).
+- **L2 had a gap the CHECK would have turned into a 500.** `PollEditDto.CanSave` compares the dates
+  only when both are sent. A create with no open date (now) and a past close date, or an update that
+  keeps the stored open date (null) and moves the close date before it, used to persist an inverted
+  poll. `ServerPollWriteService.EnsureClosesAfterOpen` now checks the close date against the
+  **effective** open date and answers `PollValidationException` with `CanSave`'s own message (now the
+  shared `PollEditDto.CloseBeforeOpenMessage`). `ClosePollAsync` was already safe: it needs an open poll.
+- Tests: **Integration** `PollServiceTests` +2 (both paths refuse and write nothing; mutation-checked
+  against the check removed) and `SchemaConstraintTests` (the raw refusal by SQLSTATE 23514 and name).
+  No UI changed: the poll editor surfaces `PollValidationException` as before, so F37 L4.5 stays 5.
+
 **WU-TptHardDelete browser verification Stage note (2026-09-30) — no flip; L4.5 stays 5.** Owner
 ruling D11 end to end, `psql` after every write.
 - **Fixture:** a throwaway account, registered for the pass, owned a published profile post with an
@@ -635,9 +651,9 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
 bullet below, 2026-07-13.)
 
-- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; `ck_base_polls_dates` since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — see the Stage notes at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; the close date is checked against the effective open date since WU-SchemaHardening, 2026-10-13 — Stage note at this feature's top; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30, browser-driven the same day (its browser-verification note at this feature's top); site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock

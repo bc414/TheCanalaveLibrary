@@ -31,6 +31,14 @@ public class PollEditDto
     public List<PollOptionEditDto> Options { get; set; } = [];
 
     /// <summary>
+    /// Refusal for a close date at or before the open date. <see cref="CanSave"/> can compare only when
+    /// both dates are sent; <c>ServerPollWriteService</c> repeats the check against the effective open
+    /// date (now on create, the stored date on update, when <see cref="DateOpened"/> is null), which
+    /// <c>ck_base_polls_dates</c> backs in the database.
+    /// </summary>
+    public const string CloseBeforeOpenMessage = "The close date must be after the open date.";
+
+    /// <summary>
     /// Tier-2 validation (mirrors <c>BlogPostValidations</c>' CanSave pattern).
     /// Returns an empty list when saveable.
     /// </summary>
@@ -61,7 +69,7 @@ public class PollEditDto
             errors.Add("Options must be unique within the poll.");
 
         if (DateOpened is DateTime opened && DateClosed is DateTime closed && closed <= opened)
-            errors.Add("The close date must be after the open date.");
+            errors.Add(CloseBeforeOpenMessage);
 
         return errors;
     }

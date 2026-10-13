@@ -37,9 +37,11 @@ public class ServerPollWriteService(
         rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         ValidateOrThrow(dto);
+        DateTime now = DateTime.UtcNow;
+        EnsureClosesAfterOpen(dto.DateClosed, dto.DateOpened ?? now);
 
         SitePoll poll = new() { IsArchived = false };
-        ApplyCreate(poll, dto, userId);
+        ApplyCreate(poll, dto, userId, now);
 
         writeDb.Polls.Add(poll);
         await writeDb.SaveChangesAsync();
@@ -64,9 +66,11 @@ public class ServerPollWriteService(
             throw new UnauthorizedAccessException("You can only add polls to your own blog posts.");
 
         ValidateOrThrow(dto);
+        DateTime now = DateTime.UtcNow;
+        EnsureClosesAfterOpen(dto.DateClosed, dto.DateOpened ?? now);
 
         BlogPostPoll poll = new() { BlogPostId = blogPostId };
-        ApplyCreate(poll, dto, userId);
+        ApplyCreate(poll, dto, userId, now);
 
         writeDb.Polls.Add(poll);
         await writeDb.SaveChangesAsync();
@@ -82,6 +86,8 @@ public class ServerPollWriteService(
             throw new PollValidationException("Closed polls cannot be edited.");
 
         ValidateOrThrow(dto);
+        // dto.DateOpened == null keeps the stored open date, which CanSave cannot see.
+        EnsureClosesAfterOpen(dto.DateClosed, dto.DateOpened ?? poll.DateOpened);
 
         int[] existingOptionIds = poll.PollOptions.Select(o => o.PollOptionId).ToArray();
         bool hasVotes = existingOptionIds.Length > 0 && await writeDb.PollVotes
@@ -308,12 +314,26 @@ public class ServerPollWriteService(
         if (errors.Count > 0) throw new PollValidationException(errors);
     }
 
-    private void ApplyCreate(BasePoll poll, PollEditDto dto, int ownerId)
+    /// <summary>
+    /// The close date must follow the <b>effective</b> open date. <see cref="PollEditDto.CanSave"/>
+    /// compares only when both dates are sent, so a create that leaves the open date to "now" with a
+    /// close date already past, or an update that keeps the stored open date and moves the close date
+    /// before it, used to persist <c>date_closed &lt; date_opened</c>. Since WU-SchemaHardening
+    /// <c>ck_base_polls_dates</c> refuses that row, so this check is what turns it into a 400 instead
+    /// of the constraint's 500. Same message and the same strict <c>&lt;=</c> as <c>CanSave</c>.
+    /// </summary>
+    private static void EnsureClosesAfterOpen(DateTime? dateClosed, DateTime effectiveOpened)
+    {
+        if (dateClosed is DateTime closed && closed <= effectiveOpened)
+            throw new PollValidationException(PollEditDto.CloseBeforeOpenMessage);
+    }
+
+    private void ApplyCreate(BasePoll poll, PollEditDto dto, int ownerId, DateTime now)
     {
         poll.OwnerId = ownerId;
         poll.PollName = dto.PollName.Trim();
         poll.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
-        poll.DateOpened = dto.DateOpened ?? DateTime.UtcNow;
+        poll.DateOpened = dto.DateOpened ?? now;
         poll.DateClosed = dto.DateClosed;
         poll.AllowMultiple = dto.AllowMultiple;
         poll.ResultsVisibility = dto.ResultsVisibility;

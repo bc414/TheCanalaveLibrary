@@ -135,7 +135,8 @@ Row 19 was added the same day by its review fixes (a third such edge, previously
 "unruled" in the conventions). Row 20 was added 2026-09-30 by WU-ModerationIntegrity: two account-status
 transitions its spec derived rather than took from owner text. Row 21 was added 2026-10-12 by the
 WU-DependencyCVEs review fixes, promoted out of `hidden-deferrals-tracker.md` **E9** under the same
-rule.
+rule. Row 22 was added 2026-10-13 by WU-SchemaHardening: an unruled edge its build had to take a
+default on.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -151,6 +152,7 @@ rule.
 | 19 | **Should a Spotlight slot grant name the moderator who granted it?** `SpotlightSlotGranted` (90) carries the granting moderator as its source, so their id and username ship in `NotificationDto`. No surface shows the name: the presenter's 90 arm is actor-free ("You were granted a Community Spotlight slot") until this row is ruled. Before 2026-10-12, 90 fell through to the catch-all. WU-NotificationCorrectness first built an arm that named the moderator in the bell, the inbox and the default-on email; its review fixes (2026-10-13) took the name out so the arm does not pre-empt this row. | As built (status quo): the source is kept; the copy names no one. D4's dedup exemption already applies to 90. | D5 de-identifies the 70–82 moderation band "including the good news" so a name's presence cannot leak an outcome, but D5 scopes itself to 70–82 and 90 sits outside it; whether a reward from a moderator is a moderation act is policy. **Either answer needs a small build.** "Name them": give the 90 arm its `{actor}` back. "Don't": null the source at the producer, as D5 does for 70–82. Rule text: `layer2-services.md` §"Notification Generation" → "Moderation-band de-identification". Filed WU-InertFeatures review fixes, 2026-09-30. |
 | 20 | **Two account-status refusals the build derived (service §2.1.3).** May a moderator *warn* someone who is serving a live suspension, and may they *ban* someone already banned? | As built (derived, not owner text): both refused with a `ModerationValidationException`. A warning would lower a live suspension to Warned — the same "silent lowering" §2.1.3 names for warning a banned user — and a second ban would write a second `AccountBanned` (74) notification, since D4 exempts 74 from dedup. Everything else in the table is literal §2.1.3 (Banned leavable only via Reinstate; a suspension needs a future date). **Refined by the WU's review fixes (2026-09-30):** the second-ban refusal holds only on the moderator-initiated path. A *report-driven* Ban on a banned account resolves that report against the standing ban (`ResolvedActionTaken`, 81 to the reporter; no status write, stamp bump or second 74). Refusing it there left every other report about a banned account closable only as "no action" (82) — account actions close no siblings (D7), Warn/Suspend on Banned are refused, and a `User` report cannot be removed — which tells the reporter something false and writes `ResolvedNoAction` into D8's history. | Escalation policy is yours; "allowed" is a one-line change per row. Rule text: `layer2-services.md` §"Moderation Services" → "The account-status transition table".
 | 21 | **ImageSharp licensing (tracker E9).** SixLabors.ImageSharp 3.1.12 carries five 2026-10 advisories (GHSA-j3p4, -j9gm, -jjfr high; -gwg2, -wmxv moderate), and every patched line (3.2.x, 4.1.2+) runs a build-time license check that fails a Release build without a Six Labors key. Choose: **(a)** apply for Six Labors community licensing and add the key as a CI secret and a dev user-secret; **(b)** swap the upload pipeline to another decoder library; **(c)** keep 3.1.12 as standing accepted risk. | As built (interim, not a ruling): hold 3.1.12 as accepted risk. All five vectors are unreachable through `ImageUploadProcessor`, and two Unit tests guard the reachable-in-principle halves. Consequences: the report-only vuln scan keeps listing ImageSharp, so the Phase-7 hard gate (tracker E3) cannot be promoted, and Dependabot's 3.2.x PR fails CI. Under (a), only 4.1.2+ clears the scan: the GitHub-reviewed ranges recorded on 2026-10-12 run to `<= 4.1.1`, so 3.2.x stays listed. | A license application and its terms, a reversal of the 2026-07-06 choice of ImageSharp (`middle_plan_v2.md` §Resolved, "Upload validation"), or standing risk at launch: licensing and launch risk posture are yours. Gates the Phase-7 vuln-scan hard gate (row 4). Rule text: `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence". |
+| 22 | **Deleting a group folder whose sub-folder would duplicate a top-level name.** Since WU-SchemaHardening a deleted folder's sub-folders move to the top level (the spec's SET NULL), and top-level names are unique. Say "Fanfic" holds a sub-folder "Favorites" and the group already has a top-level "Favorites": what should deleting "Fanfic" do? | As built (a default, not a ruling): refuse the whole delete with a message naming the clashing sub-folder ("Rename one of them first"); nothing is deleted. It mutates nothing the admin did not ask for, and follows D23's loud-failure posture. | The alternative, renaming the promoted folder automatically (say "Favorites (2)"), changes a name a group's admins chose. Which surprise is better is a product call; "rename" is a one-method change in `ServerGroupWriteService.DeleteFolderAsync`. Rule text: `layer2-services.md` §"Group Folder Integrity". |
 
 ## Recommended next work units (2026-07-27)
 
@@ -215,6 +217,25 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **Schema hardening — folder integrity, `group_stories` as a set, the CHECK set (schema audit
+  §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row) — built WU-SchemaHardening
+  2026-10-13.** No decision row: these came out of the two audits, and D23 (answered 2026-08-08) routed
+  `group_stories` here. Three rules now stand:
+  - **CHECKs are declared in the model** (`HasCheckConstraint`, lowercase `ck_<table>_<rule>`), not as
+    raw migration SQL, so they survive a nuke-and-rebuild and need no re-append entry. Ten exist,
+    including WU-StoryLifecycle's two publish-anchor invariants; four more were considered and not added,
+    each with its reason. Rule: `layer1-data-model.md` §"CHECK constraints".
+  - **Folders:** a real self-FK (SET NULL), unique top-level names, validated names, same-group parents,
+    and a delete that moves sub-folders to the top level. Its collision refusal is a default, not a
+    ruling: **decision row 22**. Rule: `layer2-services.md` §"Group Folder Integrity".
+  - **`group_stories`** is unique on `(GroupId, StoryId)`; a racing add counts as already added. Rule:
+    `layer2-services.md` §"Check-then-act posture".
+
+  Also: `site_daily_stats.new_users` is NOT NULL, and `active_users` is written only for a measurable day
+  (`layer8-data-marts.md`); `user_story_interaction_filter_settings` uses its natural composite key; the
+  TPT `PK_<table>` names are a ratified divergence (`layer1-data-model.md` §TPT). The `read_progress`
+  CHECK waits for D20's bounds (tracker **D14**). Narrative: `audit/Groups.md` F39.
+
 - **`UserNotificationSetting` granularity (worksheet D19) — answered 2026-08-07, built
   WU-NotificationCorrectness 2026-10-12.** No decision row: it came out of the service audit's §3.17
   and its §4 drift row 7, which closes as "schema aligned to doctrine". Both columns are nullable and
@@ -235,7 +256,8 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
     is superseded.
   - **D23:** a classification test per check-then-act family. USI, `group_members` and vouch
     inserts are upserts now. The gem, highlight and vouch limits are stated-soft. `group_stories` is
-    routed to WU-SchemaHardening and the poll restructure to WU-PollVoteIntegrity.
+    routed to WU-SchemaHardening (built there 2026-10-13, entry above) and the poll restructure to
+    WU-PollVoteIntegrity.
     **For the owner:** "stated-soft with no corrective" is D23's fallback for when D21 declines to
     fund a corrective. D21 never mentions the limits, so the build read that silence as a decline. It
     is an inference, not your ruling. Say so if you want a corrective funded instead.

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -20,6 +22,12 @@ public class ServerGroupWriteService(
     ILogger<ServerGroupWriteService> logger)
     : ServerGroupReadService(readDbFactory, activeUser), IGroupWriteService
 {
+    // Database names the race backstops match on (GroupConfigurations.cs pins each one), so any other
+    // 23505/23503 stays a genuine fault. layer2-services.md §"Group Folder Integrity".
+    private const string GroupStoryIndex = "ix_group_stories_group_id_story_id";
+    private const string FolderNameIndex = "ix_group_folders_group_id_parent_folder_id_name";
+    private const string FolderParentForeignKey = "fk_group_folders_group_folders_parent_folder_id";
+
     // ── Group CRUD ────────────────────────────────────────────────────────────────
 
     public async Task<int> CreateGroupAsync(CreateGroupDto dto)
@@ -194,44 +202,56 @@ public class ServerGroupWriteService(
             throw new ContentRatingExceededException(
                 $"Story rating {story.Rating} exceeds this group's maximum content rating {group.MaxContentRating}.");
 
-        // Check for duplicate before inserting.
+        // A group's stories are a set (owner ruling D23). This check is the fast path for the common
+        // re-add; the unique index ix_group_stories_group_id_story_id is the backstop for the concurrent
+        // double add that passes it (caught below). Either way an already-added story is a no-op.
         bool alreadyAdded = await writeDb.GroupStories
             .AnyAsync(gs => gs.GroupId == dto.GroupId && gs.StoryId == dto.StoryId);
-        if (!alreadyAdded)
+        if (alreadyAdded) return;
+
+        GroupStory groupStory = new()
         {
-            GroupStory groupStory = new()
-            {
-                GroupId      = dto.GroupId,
-                StoryId      = dto.StoryId,
-                AddedByUserId = userId,
-                DateAdded    = DateTime.UtcNow
-            };
-            writeDb.GroupStories.Add(groupStory);
+            GroupId      = dto.GroupId,
+            StoryId      = dto.StoryId,
+            AddedByUserId = userId,
+            DateAdded    = DateTime.UtcNow
+        };
+        writeDb.GroupStories.Add(groupStory);
+        try
+        {
             await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, GroupStoryIndex))
+        {
+            // Another request added this story between the check and the insert: the add happened,
+            // once. No folder assignment and no second fan-out. Detached so the circuit-scoped context
+            // never retries the rejected row on its next save.
+            writeDb.Entry(groupStory).State = EntityState.Detached;
+            return;
+        }
 
-            // Tier 3: optional folder assignment.
-            if (dto.GroupFolderId.HasValue)
-            {
-                await AssignStoryToFolderInternalAsync(
-                    groupStory.GroupStoryId, dto.GroupFolderId.Value, story.Rating, dto.GroupId);
-            }
+        // Tier 3: optional folder assignment.
+        if (dto.GroupFolderId.HasValue)
+        {
+            await AssignStoryToFolderInternalAsync(
+                groupStory.GroupStoryId, dto.GroupFolderId.Value, story.Rating, dto.GroupId);
+        }
 
-            // Notifications (best-effort post-commit) — only on a real add. Outside this block, any
-            // member could re-add an already-added story and re-fire the whole fan-out (service audit
-            // §2.8). An authorless story still notifies members; only the author's own type 25 needs
-            // an author. Both types anchor on the GroupStory row (owner ruling D16).
-            try
-            {
-                await notifications.NotifyNewGroupStoryAsync(
-                    dto.GroupId, groupStory.GroupStoryId, story.AuthorId, userId);
-            }
-            catch (Exception ex)
-            {
-                // Best-effort — notification failure must not roll back the primary action.
-                logger.LogWarning(ex,
-                    "NewGroupStory notification failed for story {StoryId} added to group {GroupId}",
-                    dto.StoryId, dto.GroupId);
-            }
+        // Notifications (best-effort post-commit) — only on a real add. Before the early returns above,
+        // any member could re-add an already-added story and re-fire the whole fan-out (service audit
+        // §2.8). An authorless story still notifies members; only the author's own type 25 needs
+        // an author. Both types anchor on the GroupStory row (owner ruling D16).
+        try
+        {
+            await notifications.NotifyNewGroupStoryAsync(
+                dto.GroupId, groupStory.GroupStoryId, story.AuthorId, userId);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort — notification failure must not roll back the primary action.
+            logger.LogWarning(ex,
+                "NewGroupStory notification failed for story {StoryId} added to group {GroupId}",
+                dto.StoryId, dto.GroupId);
         }
     }
 
@@ -286,32 +306,64 @@ public class ServerGroupWriteService(
 
     // ── Folder management ─────────────────────────────────────────────────────────
 
+    // Folder rules (schema audit §2.4, service audit §2.10, WU-SchemaHardening): names are validated
+    // and unique among siblings byte-wise, a parent is in the same group, and a delete moves the
+    // sub-folders to the top level. layer2-services.md §"Group Folder Integrity".
+
     public async Task<int> CreateFolderAsync(CreateFolderDto dto)
     {
         int userId = ActiveUser.RequireUserId();
         await RequireAdminAsync(dto.GroupId, userId);
+
+        List<string> errors = GroupFolderValidations.NameErrors(dto.Name);
 
         // Validate MaxRating ≤ group cap.
         Rating groupCap = await writeDb.Groups
             .Where(g => g.GroupId == dto.GroupId)
             .Select(g => g.MaxContentRating)
             .FirstOrDefaultAsync();
-
         if (dto.MaxRating > groupCap)
-            throw new GroupValidationException(
-                [$"Folder MaxRating ({dto.MaxRating}) cannot exceed the group's MaxContentRating ({groupCap})."]);
+            errors.Add($"Folder MaxRating ({dto.MaxRating}) cannot exceed the group's MaxContentRating ({groupCap}).");
+
+        if (errors.Count > 0) throw new GroupValidationException(errors);
+        string name = dto.Name.Trim();
+
+        // The parent must be a folder of this group. A nonexistent id and another group's id get the same
+        // answer (the D3.1 shape in AssignStoryToFolderInternalAsync), so the response never discloses
+        // that the id exists elsewhere. Before WU-SchemaHardening any id was stored unchecked.
+        if (dto.ParentFolderId is int parentId
+            && !await writeDb.GroupFolders.AnyAsync(f => f.GroupFolderId == parentId && f.GroupId == dto.GroupId))
+            throw new KeyNotFoundException($"Folder {parentId} not found.");
+
+        if (await SiblingNameTakenAsync(dto.GroupId, dto.ParentFolderId, name, exceptFolderId: null))
+            throw new GroupValidationException([GroupFolderValidations.DuplicateName(name)]);
 
         GroupFolder folder = new()
         {
             GroupId        = dto.GroupId,
             ParentFolderId = dto.ParentFolderId,
-            Name           = dto.Name.Trim(),
+            Name           = name,
             MaxRating      = dto.MaxRating,
             SortOrder      = dto.SortOrder
         };
 
         writeDb.GroupFolders.Add(folder);
-        await writeDb.SaveChangesAsync();
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, FolderNameIndex))
+        {
+            // A sibling with this name was created after the check: the same answer as the check.
+            writeDb.Entry(folder).State = EntityState.Detached;
+            throw new GroupValidationException([GroupFolderValidations.DuplicateName(name)]);
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation, FolderParentForeignKey))
+        {
+            // The parent was deleted after the check: the same answer as a missing parent.
+            writeDb.Entry(folder).State = EntityState.Detached;
+            throw new KeyNotFoundException($"Folder {dto.ParentFolderId} not found.");
+        }
         return folder.GroupFolderId;
     }
 
@@ -325,25 +377,110 @@ public class ServerGroupWriteService(
 
         await RequireAdminAsync(folder.GroupId, userId);
 
-        folder.Name = newName.Trim();
-        await writeDb.SaveChangesAsync();
+        List<string> errors = GroupFolderValidations.NameErrors(newName);
+        if (errors.Count > 0) throw new GroupValidationException(errors);
+        string name = newName.Trim();
+
+        // Renaming a folder to its own name changes nothing.
+        if (name == folder.Name) return;
+
+        if (await SiblingNameTakenAsync(folder.GroupId, folder.ParentFolderId, name, exceptFolderId: folder.GroupFolderId))
+            throw new GroupValidationException([GroupFolderValidations.DuplicateName(name)]);
+
+        folder.Name = name;
+        try
+        {
+            await writeDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, FolderNameIndex))
+        {
+            writeDb.Entry(folder).State = EntityState.Detached;
+            throw new GroupValidationException([GroupFolderValidations.DuplicateName(name)]);
+        }
     }
 
     public async Task DeleteFolderAsync(int groupFolderId)
     {
         int userId = ActiveUser.RequireUserId();
 
-        GroupFolder? folder = await writeDb.GroupFolders
-            .FirstOrDefaultAsync(f => f.GroupFolderId == groupFolderId);
+        var folder = await writeDb.GroupFolders
+            .Where(f => f.GroupFolderId == groupFolderId)
+            .Select(f => new { f.GroupId, f.Name })
+            .FirstOrDefaultAsync();
         if (folder is null) throw new KeyNotFoundException($"Folder {groupFolderId} not found.");
 
         await RequireAdminAsync(folder.GroupId, userId);
 
-        // GroupStory-GroupFolder many-to-many join rows cascade on folder delete (EF removes them).
-        // Child folders: ParentFolderId is SET NULL (configured in GroupFolderConfiguration) —
-        // children become root-level folders rather than being orphaned.
-        writeDb.GroupFolders.Remove(folder);
-        await writeDb.SaveChangesAsync();
+        // The sub-folders move to the top level (the self-FK's ON DELETE SET NULL; spec §Group Tables).
+        // Top-level names are unique, so a sub-folder named like an existing top-level folder would make
+        // the database refuse the whole delete. Refuse it here first, naming each clash, and delete
+        // nothing. Refusing rather than renaming is a default, not an owner ruling (roadmap row 22).
+        var children = await writeDb.GroupFolders
+            .Where(f => f.ParentFolderId == groupFolderId)
+            .OrderBy(f => f.SortOrder).ThenBy(f => f.GroupFolderId)
+            .Select(f => new { f.GroupFolderId, f.Name })
+            .ToListAsync();
+
+        async Task<(List<string> Collisions, int NextTopLevelSortOrder)> CheckPromotionAsync()
+        {
+            var topLevel = await writeDb.GroupFolders
+                .Where(f => f.GroupId == folder.GroupId && f.ParentFolderId == null && f.GroupFolderId != groupFolderId)
+                .Select(f => new { f.Name, f.SortOrder })
+                .ToListAsync();
+            // Ordinal: the unique index compares byte-wise (case-insensitive names are D29, pending).
+            HashSet<string> topLevelNames = topLevel.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+            List<string> collisions = children
+                .Where(c => topLevelNames.Contains(c.Name))
+                .Select(c => GroupFolderValidations.DeleteWouldDuplicate(folder.Name, c.Name))
+                .ToList();
+            return (collisions, topLevel.Count == 0 ? 0 : topLevel.Max(f => f.SortOrder) + 1);
+        }
+
+        (List<string> collisions, int nextSortOrder) = await CheckPromotionAsync();
+        if (collisions.Count > 0) throw new GroupValidationException(collisions);
+
+        IExecutionStrategy strategy = writeDb.Database.CreateExecutionStrategy();
+        try
+        {
+            await strategy.ExecuteAsync(async () =>
+            {
+                // The hard-delete precedent (layer2-services.md §"Hard deletes of content parents"): the
+                // write context is scoped per circuit and may still track a folder or a story's folder
+                // set from an earlier action, which the set-based writes below would leave stale; and a
+                // retried delegate must not inherit a failed attempt's tracked state.
+                writeDb.ChangeTracker.Clear();
+                await using IDbContextTransaction tx = await writeDb.Database.BeginTransactionAsync();
+
+                // Promoted sub-folders sort after the existing top-level folders, in their own order,
+                // instead of tie-sorting against them.
+                for (int i = 0; i < children.Count; i++)
+                {
+                    int childId = children[i].GroupFolderId;
+                    int sortOrder = nextSortOrder + i;
+                    await writeDb.GroupFolders
+                        .Where(f => f.GroupFolderId == childId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(f => f.SortOrder, sortOrder));
+                }
+
+                // Set-based, so the database's SET NULL moves the sub-folders up after this row is gone:
+                // a sub-folder that shares its deleted parent's name takes the parent's top-level name
+                // without tripping the unique index. The join rows (story assignments) cascade; the
+                // stories stay in the group. A 0-row delete is a lost race with another delete.
+                int deleted = await writeDb.GroupFolders
+                    .Where(f => f.GroupFolderId == groupFolderId)
+                    .ExecuteDeleteAsync();
+                if (deleted == 0) throw new KeyNotFoundException($"Folder {groupFolderId} not found.");
+
+                await tx.CommitAsync();
+            });
+        }
+        catch (Exception ex) when (IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, FolderNameIndex))
+        {
+            // A top-level folder with a promoted sub-folder's name was created after the check. The
+            // transaction rolled back; answer as the check would have.
+            (List<string> late, _) = await CheckPromotionAsync();
+            throw new GroupValidationException(late.Count > 0 ? late : [GroupFolderValidations.DeleteWouldDuplicateAny(folder.Name)]);
+        }
     }
 
     public async Task ReorderFolderAsync(int groupFolderId, int newSortOrder)
@@ -361,6 +498,28 @@ public class ServerGroupWriteService(
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when a sibling of the proposed folder already has <paramref name="name"/>: same group, same
+    /// parent (null = the top level, which EF's null semantics compare as equal). <c>==</c> translates to
+    /// Postgres <c>=</c>, the byte-wise comparison the unique index makes, so the check and the index
+    /// agree exactly.
+    /// </summary>
+    private Task<bool> SiblingNameTakenAsync(int groupId, int? parentFolderId, string name, int? exceptFolderId) =>
+        writeDb.GroupFolders.AnyAsync(f => f.GroupId == groupId
+                                           && f.ParentFolderId == parentFolderId
+                                           && f.Name == name
+                                           && f.GroupFolderId != exceptFolderId);
+
+    /// <summary>
+    /// True when <paramref name="ex"/> (a <c>DbUpdateException</c> from <c>SaveChanges</c>, or the
+    /// <see cref="PostgresException"/> a set-based write throws directly) is <paramref name="sqlState"/>
+    /// on the named constraint. Matching the name keeps every other violation a genuine fault.
+    /// </summary>
+    private static bool IsViolationOf(Exception ex, string sqlState, string constraintName) =>
+        (ex as PostgresException ?? ex.InnerException as PostgresException) is { } pg
+        && pg.SqlState == sqlState
+        && pg.ConstraintName == constraintName;
 
 
     private async Task RequireMemberAsync(int groupId, int userId)

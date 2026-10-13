@@ -61,7 +61,10 @@ public interface IGroupWriteService : IGroupReadService
     /// <summary>
     /// Adds a story to the group (member action). Enforces the content-rating waterfall:
     /// tier 2 (<c>story.Rating &gt; group.MaxContentRating</c>) and optionally tier 3
-    /// (<c>story.Rating &gt; folder.MaxRating</c>) when <c>dto.GroupFolderId</c> is set.
+    /// (<c>story.Rating &gt; folder.MaxRating</c>) when <c>dto.GroupFolderId</c> is set. Idempotent: a
+    /// group's stories are a set (unique <c>(GroupId, StoryId)</c>, owner ruling D23), so adding a story
+    /// already in the group, including a concurrent double add, does nothing (no folder assignment, no
+    /// notification).
     /// </summary>
     /// <exception cref="ContentRatingExceededException">Story rating exceeds group or folder ceiling.</exception>
     /// <exception cref="KeyNotFoundException">Group, story, or folder not found.</exception>
@@ -96,21 +99,31 @@ public interface IGroupWriteService : IGroupReadService
 
     /// <summary>
     /// Creates a new folder in the group. Admin-only. <c>dto.MaxRating</c> must be ≤ the group's
-    /// <see cref="Group.MaxContentRating"/>. Folder names must be unique within their parent.
+    /// <see cref="Group.MaxContentRating"/>. The trimmed name is required, at most
+    /// <see cref="GroupConstants.MaxFolderNameLength"/> characters, and unique among its siblings (same
+    /// parent; the top level is one sibling set), compared byte-wise. A <c>dto.ParentFolderId</c> must
+    /// name a folder in the same group. Rules: <c>layer2-services.md</c> §"Group Folder Integrity".
     /// </summary>
-    /// <exception cref="GroupValidationException">Name taken or MaxRating exceeds group cap.</exception>
-    /// <exception cref="KeyNotFoundException">Group not found.</exception>
+    /// <exception cref="GroupValidationException">Name missing, too long or taken; or MaxRating exceeds the group cap.</exception>
+    /// <exception cref="KeyNotFoundException">The parent folder does not exist or belongs to another group
+    /// (one answer for both, so the response never discloses another group's folder).</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not an Admin.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<int> CreateFolderAsync(CreateFolderDto dto);
 
-    /// <summary>Renames a folder (admin). Name must be unique within parent.</summary>
-    /// <exception cref="GroupValidationException">Name taken.</exception>
+    /// <summary>Renames a folder (admin). The same name rules as create; renaming a folder to its own
+    /// name is a no-op.</summary>
+    /// <exception cref="GroupValidationException">Name missing, too long or taken by a sibling.</exception>
     /// <exception cref="KeyNotFoundException">Folder not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not an Admin.</exception>
     Task RenameFolderAsync(int groupFolderId, string newName);
 
-    /// <summary>Hard-deletes a folder (admin). Stories remain in the group; only folder assignments CASCADE.</summary>
+    /// <summary>
+    /// Hard-deletes a folder (admin). Its sub-folders move to the top level, after the existing top-level
+    /// folders and in their own order. Stories stay in the group; only their assignments to this folder
+    /// go. Refused, with nothing deleted, when a sub-folder's name equals an existing top-level name.
+    /// </summary>
+    /// <exception cref="GroupValidationException">A sub-folder would duplicate a top-level folder's name.</exception>
     /// <exception cref="KeyNotFoundException">Folder not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not an Admin.</exception>
     Task DeleteFolderAsync(int groupFolderId);

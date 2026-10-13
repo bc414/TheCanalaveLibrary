@@ -647,7 +647,7 @@ public class CommentAndBlogNotificationTests(PostgresFixture postgres) : Integra
         Chapter chapter = new()
         {
             StoryId = storyId, ChapterNumber = 1, Title = "Chapter 1",
-            PrimaryContentId = null, IsPublished = true, VersionCount = 0
+            PrimaryContentId = null, IsPublished = true, FirstPublishedDate = DateTime.UtcNow, VersionCount = 0
         };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();

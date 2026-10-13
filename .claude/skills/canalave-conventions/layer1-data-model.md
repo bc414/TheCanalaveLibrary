@@ -110,6 +110,20 @@ the rationale is in `layer2-services.md` §"Attribution (Feature 30)"). Check: e
 either has its inverse named in a `WithMany(...)`/`WithOne(...)` call or is deleted; a snapshot column
 with no C# property is the symptom.
 
+**TPT primary-key constraint names stay `PK_<table>` — a ratified divergence (WU-SchemaHardening,
+2026-10-13).** Twelve PKs keep EF's default mixed-case name instead of the `pk_` convention:
+`PK_base_comments`, `PK_chapter_comments`, `PK_blog_post_comments`, `PK_user_profile_comments`,
+`PK_group_comments`, `PK_base_blog_posts`, `PK_profile_blog_posts`, `PK_group_blog_posts`,
+`PK_site_blog_posts`, `PK_base_polls`, `PK_site_polls`, `PK_blog_post_polls` (schema audit §2.7 bullet 2).
+**It cannot be fixed.** EF names keys per `IKey`, not per table, and a TPT hierarchy shares one key
+across all its tables. A throwaway probe (`HasKey(c => c.CommentId).HasName("pk_base_comments")`, then
+`migrations add`) emitted `AddPrimaryKey("pk_base_comments", …)` on **all five** comment tables.
+Postgres names a PK's index after the constraint, and index names are unique per schema, so the
+migration could never apply. That is why `EFCore.NamingConventions` leaves these keys alone. A raw-SQL
+`ALTER TABLE … RENAME CONSTRAINT` is no better: the DB would disagree with the snapshot, and the next
+PK-touching migration would emit `DropPrimaryKey("PK_…")` and fail. Do not reopen this as a cosmetic
+cleanup.
+
 **Cross-child casts in projections need a base-typed source:** a projection that branches across
 sibling child types (`p is SitePoll && ((SitePoll)p).IsArchived`, `p is BlogPostPoll ?
 ((BlogPostPoll)p).BlogPostId : null`) only translates when the `IQueryable`'s **static element
@@ -253,8 +267,9 @@ independently. The service layer rejects logically impossible write combinations
   itself is required whenever a raw COPY/INSERT path (SeedTool) omits the column.
 - **`User.CreatedUtc`** (`datetime`, `.HasDefaultValueSql("CURRENT_TIMESTAMP")`) and
   **`User.LastActiveUtc`** (`datetime?`, nullable) — added WU-SiteDailyStat (2026-07-10).
-  `CreatedUtc` sources Feature 62's `new_users`/`total_users`; pre-existing rows backfill to the
-  migration's deploy date (real registration date is unrecoverable). `LastActiveUtc` is stamped
+  `CreatedUtc` sources Feature 62's `new_users`/`total_users`. Since the 2026-07-18 migration
+  collapse the column is in `InitialSchema`, so every row is stamped at insert (the old "pre-existing
+  rows backfill to the deploy date" caveat is gone — WU-SchemaHardening). `LastActiveUtc` is stamped
   for **authenticated requests only** via the Signal Buffering pattern
   (`layer2-services.md` §"Signal Buffering") — never a tracked per-request write — and sources
   `active_users` + the profile "last seen on" display (gated by the pre-existing
@@ -423,8 +438,55 @@ current set (folded in at the 2026-07-18 migration collapse; originals were migr
 Verify a collapse preserved everything with a schema diff: `pg_dump --schema-only` before and after
 the regeneration must differ only in `__EFMigrationsHistory` row contents.
 
-Key manual edits EF won't generate (re-append per the rule above if ever introduced):
-- **CHECK constraints:** `migrationBuilder.Sql(...)` in `Up()`, drop in `Down()`. *(none present)*
+### CHECK constraints — declared in the model (WU-SchemaHardening, 2026-10-13)
+
+**Declare every CHECK in its entity's configuration, never as raw migration SQL:**
+`builder.ToTable(t => t.HasCheckConstraint("ck_<table>_<rule>", "<sql>"))`, or
+`builder.ToTable("base_polls", t => …)` where the configuration already names its table (TPT). EF then
+emits `AddCheckConstraint`/`DropCheckConstraint` itself, the constraint lives in
+`Data/Configurations/` next to the FKs and indexes it guards, and a nuke-and-rebuild regenerates it.
+That is why CHECKs need **no** re-append entry: the registry above exists only for DDL the model cannot
+hold. (The earlier rule, `migrationBuilder.Sql`, existed only because of that regeneration loss.)
+- **Name:** lowercase `ck_<table>_<rule>`, like `pk_`/`fk_`/`ix_`. The schema audit's `CK_…` spelling
+  is the mixed-case defect it also reported.
+- **SQL:** snake_case column names; an enum value is interpolated from the C# enum
+  (`$"account_status = {(short)AccountStatusEnum.Suspended} OR …"`), never typed as a bare number.
+- **TPT base:** declare it on the base type's `ToTable("base_…", …)`. Probed 2026-10-13: EF puts it on
+  the base table only, not on the child tables (which lack the columns).
+- **Existing rows:** a migration that adds a CHECK normalizes violating rows first, in the same `Up()`
+  (top, before the scaffolded ops). That DML is a one-off, not re-append DDL — a fresh database has no
+  rows.
+- **Guarded:** `SchemaConstraintTests` (Integration) asserts the catalog's CHECK set equals the list
+  below, so a regeneration that lost one fails a test. Add a row there when you add one here.
+
+| Constraint | Table | Rule |
+|---|---|---|
+| `ck_story_arcs_bounds` | `story_arcs` | `start_chapter_number <= end_chapter_number` |
+| `ck_story_lineages_no_self` | `story_lineages` | `source_story_id <> target_story_id` |
+| `ck_stories_published_date` | `stories` | `story_status_id NOT BETWEEN 2 AND 7 OR published_date IS NOT NULL` — a published status carries its publish stamp (D2; the bounds are `StoryLifecycle`'s published set, interpolated from `StoryStatusEnum`) |
+| `ck_chapters_first_published_date` | `chapters` | `NOT is_published OR first_published_date IS NOT NULL` (D2's one-directional form; the converse is false after a legal unpublish) |
+| `ck_followed_users_no_self` | `followed_users` | `user_id <> followed_user_id` |
+| `ck_vouches_no_self` | `vouches` | `vouching_user_id <> vouched_user_id` |
+| `ck_fanon_links_no_self` | `fanon_links` | `base_tag_id <> target_tag_id` |
+| `ck_group_folders_no_self` | `group_folders` | `parent_folder_id IS NULL OR parent_folder_id <> group_folder_id` |
+| `ck_base_polls_dates` | `base_polls` | `date_closed IS NULL OR date_closed >= date_opened`. `PollEditDto.CanSave` compares only when both dates are sent, so `ServerPollWriteService` also checks the close date against the **effective** open date (create: now when unset; update: the stored date when unset) and answers `PollValidationException` |
+| `ck_users_suspension` | `AspNetUsers` | `account_status = Suspended OR suspended_until_utc IS NULL` (one direction only) |
+
+**Considered and not added** (each with its reason, so nobody re-proposes it blind):
+- `read_progress BETWEEN 0 AND 1` on `user_chapter_interactions` — encodes D20's pending bounds
+  (service §2.11's clamp-vs-reject), and the reading-progress flusher upserts a whole buffer batch in one
+  statement, so one bad value would fail every row in it. It rides with the WU that lands §2.11
+  (tracker **D14**).
+- `account_status = Suspended ⇒ suspended_until_utc IS NOT NULL` — whether an indefinite suspension is
+  legal is service §2.1.3(a)'s call, not a schema one.
+- Non-negativity on denormalized counters — rejected by schema §2.6 itself: a concurrent decrement race
+  would turn recompute-corrected drift (D21/D22) into a user-facing 500.
+- `user_notification_settings`: `email_enabled IS NOT NULL OR collapsed IS NOT NULL` — the D19 writers
+  pass through an all-NULL row on purpose (`NotificationSettingUpsert.UnsubscribeAsync` nulls its column,
+  then deletes the row if both are NULL), and no reader depends on the row's absence (each field
+  resolves to its default on its own).
+
+Other manual edits EF won't generate (re-append per the rule above if ever introduced):
 - **Triggers:** `CREATE TRIGGER` (PL/pgSQL) in `Up()`, `DROP TRIGGER` in `Down()`.
   `HasTrigger` Fluent API is SQL Server-specific — do not use. *(none present)*
 - **Migration commands:** always `--context ApplicationDbContext` (the read context owns no migrations).

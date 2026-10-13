@@ -210,6 +210,7 @@ anchor. D16/D17's new-chapter fan-out anchors on `Chapter.FirstPublishedDate`, w
 column should exist before the fan-out producer is written.
 
 **Built:** WU-StoryLifecycle (2026-09-30) — rule now stated in `layer2-services.md` §"Story Lifecycle" (publish anchors; L8 sourcing in `layer8-data-marts.md` §`site_daily_stats`).
+**Built:** WU-SchemaHardening (2026-10-13) — rule now stated in `layer1-data-model.md` §"CHECK constraints" (the two invariants enforced by `ck_stories_published_date` and `ck_chapters_first_published_date`, one-directional as `layer2-services.md` §"Story Lifecycle" states them).
 
 ### D3. Where recommendation provenance lives
 
@@ -2246,6 +2247,7 @@ sweep.)* The classification test above is promulgated to
 answers must ship as one doctrine paragraph or neither reads correctly.
 
 **Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Check-then-act posture" (USI, `group_members` and vouch upserts built; the three limits written down as stated-soft per the conditional above, reading D21's silence on them as the decline — an inference flagged for the owner in `roadmap.md` §Resolved; `group_stories` and the poll restructure still routed to WU-SchemaHardening and WU-PollVoteIntegrity).
+**Built:** WU-SchemaHardening (2026-10-13) — rule now stated in `layer2-services.md` §"Group Folder Integrity" and §"Check-then-act posture" (the `group_stories` row: unique `ix_group_stories_group_id_story_id`; a racing add counts as already added).
 
 ### D24. Does creating a group count as joining?
 

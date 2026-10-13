@@ -888,6 +888,16 @@ unless noted. All sit under Stage-5 cells.
     missing, and `EXPLAIN` each against its L6 index (the notification fix rode an Incremental Sort
     with no DDL; `layer6-indexes.md` §"notifications"). An Integration test per fixed site: two rows
     with identical sort values, page size 1, pages 1 and 2 distinct.
+- [ ] **D14 — `ck_user_chapter_interactions_read_progress` (`read_progress BETWEEN 0 AND 1`) is not in the database** `[latent-risk · low · beta]` — *Filed 2026-10-13 by WU-SchemaHardening, which built the rest of schema §2.6's CHECK set.*
+  - Grid: no cell moves (F44 Reading Progress Tracking's L1/L2 cells stay 5).
+  - **Why it was left out:** the bound is part of D20 (pending): service §2.11's clamp-vs-reject choice
+    for NaN, ±∞ and out-of-range progress. It is also unsafe before that fix lands:
+    `ReadingProgressFlusher` upserts the whole buffer batch in one statement, so a single bad value
+    would fail every row in the flush.
+  - **Fix shape:** the WU that lands §2.11 (clamp to [0,1] and reject non-finite values in
+    `RecordProgressAsync`, plus the buffer contract) adds the CHECK in the same migration, declared in
+    the model (`layer1-data-model.md` §"CHECK constraints", which lists it under "Considered and not
+    added"), and a row in `SchemaConstraintTests`' inventory.
 
 ---
 
@@ -1696,6 +1706,30 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     deleted-sponsor null source, the deferral of a 4xx recipient and the deleted-account unsubscribe
     (400). Integration and Unit cover them (`audit/Notifications.md`, the WU-NotificationCorrectness
     Stage note and its review-fixes note).
+- [ ] **H27 — `/mod/stats` draws a NULL `active_users` day as 0** `[polish · low · beta]` — *Filed 2026-10-13 by WU-SchemaHardening.*
+  - Grid: no cell moves (F62 L4 is the Phase-3 visual pass).
+  - `ModStatsPage.razor` plots `s.ActiveUsers ?? 0`. Since WU-SchemaHardening the aggregator writes
+    NULL for every day it cannot measure (any gap-filled day older than the previous completed UTC
+    day; `layer8-data-marts.md` §`site_daily_stats`), so those days now draw as a drop to zero instead
+    of a gap. Before the WU they stored a silent undercount, so the chart was already wrong there.
+  - **Fix shape:** a gap (or a hollow marker) for a NULL day in the sparkline, per the `dataviz`
+    skill's missing-data rule, and a bUnit test that a NULL day is not rendered as 0. L4 work, so it
+    belongs with the Phase-3 sweep or any `/mod/stats` change.
+- [ ] **H28 — WU-SchemaHardening browser pass: the folder-management page's delete and refusals** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-SchemaHardening, which ran with no browser available.*
+  - Grid: **F39 L4.5 went 5→1** at this WU (the campaign's no-browser precedent): the page's delete now
+    moves sub-folders up, and it has three new refusal paths.
+  - **Steps** (both render phases; `psql` on `group_folders` / `group_folder_group_story` as ground
+    truth), on `/group/{id}/folders` as the group's admin:
+    1. Create a top-level "A" with a sub-folder "B" (file a story into "B" from the group page).
+       Delete "A": the confirm text says sub-folders move to the top level; "B" appears last among the
+       top-level folders, its story still filed in it.
+    2. Create a top-level "C" with a sub-folder "D", and a top-level "D". Delete "C": the page shows
+       "Can't delete "C": its sub-folder "D" would move to the top level…" and nothing is deleted.
+    3. Create a second top-level folder with an existing top-level name, and rename a folder to a
+       sibling's name: both answer "A folder named … already exists here." A blank name (spaces only)
+       is refused too.
+    4. Open the page in two tabs; delete a folder in one, then create a sub-folder under it from the
+       other: "That parent folder no longer exists." and the tree reloads without it.
 
 ---
 

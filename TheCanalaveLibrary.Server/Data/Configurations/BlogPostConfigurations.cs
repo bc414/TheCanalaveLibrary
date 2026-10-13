@@ -70,8 +70,12 @@ public sealed class BasePollConfiguration : IEntityTypeConfiguration<BasePoll>
             .HasFilter("last_edited_at IS NOT NULL")
             .HasDatabaseName("ix_base_polls_last_edited_at");
 
-        // TPT Inheritance setup
-        builder.ToTable("base_polls");
+        // TPT Inheritance setup. A poll never closes before it opens (schema audit §2.6). Declared on
+        // the base table's ToTable: EF puts it on base_polls only (probed WU-SchemaHardening), not on
+        // the child tables, which lack the columns. ServerPollWriteService checks the effective open
+        // date first, so a bad pair is a PollValidationException, not this constraint's 500.
+        builder.ToTable("base_polls", t => t.HasCheckConstraint(
+            "ck_base_polls_dates", "date_closed IS NULL OR date_closed >= date_opened"));
     }
 }
 

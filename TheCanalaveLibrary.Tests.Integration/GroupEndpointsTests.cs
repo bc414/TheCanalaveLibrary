@@ -245,6 +245,57 @@ public class GroupEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
         (await db.GroupFolders.FindAsync(folderId)).Should().BeNull();
     }
 
+    // ── Folder integrity refusals over the wire (WU-SchemaHardening) ─────────────
+
+    [Fact]
+    public async Task PostFolders_DuplicateTopLevelName_Returns400()
+    {
+        // Before WU-SchemaHardening two top-level folders could share a name (NULLS DISTINCT), and a
+        // duplicate sibling was a raw unique-violation 500. Now the service refuses it as a validation
+        // error, which the endpoint answers 400 (ClientGroupWriteService maps it back to
+        // GroupValidationException on WASM).
+        int adminId = await SeedUserAsync("Admin");
+        int groupId = await SeedGroupWithAdminAsync(adminId);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IGroupWriteService>()
+                .CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Favorites" });
+
+        SetActiveUser(adminId);
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/groups/folders",
+            new CreateFolderDto { GroupId = groupId, Name = "Favorites" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("already exists here");
+    }
+
+    [Fact]
+    public async Task DeleteFolder_CollidingSubFolder_Returns400_AndDeletesNothing()
+    {
+        int adminId = await SeedUserAsync("Admin");
+        int groupId = await SeedGroupWithAdminAsync(adminId);
+        int parentId;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+            parentId = await svc.CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Fanfic" });
+            await svc.CreateFolderAsync(new CreateFolderDto { GroupId = groupId, ParentFolderId = parentId, Name = "Favorites" });
+            await svc.CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Favorites" });
+        }
+
+        SetActiveUser(adminId);
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.DeleteAsync($"/api/groups/folders/{parentId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "the promoted sub-folder would duplicate a top-level name — a refusal, never a raw 500");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("would move to the top level");
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.GroupFolders.CountAsync(f => f.GroupId == groupId)).Should().Be(3, "nothing was deleted");
+    }
+
     // ── Story↔folder assignment — the D3.1 fix, over the wire ────────────────────
 
     [Fact]

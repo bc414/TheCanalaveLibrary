@@ -20,7 +20,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 [Collection("Postgres")]
 public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private readonly DateOnly _day = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-3));
+    // The previous completed UTC day — the worker's daily target, and the only completed day whose
+    // active_users is still measurable (WU-SchemaHardening; an older day is written NULL).
+    private readonly DateOnly _day = SiteDailyStatWorker.PreviousCompletedUtcDay(DateTime.UtcNow);
     private DateTime InDay => _day.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
     private DateTime BeforeDay => _day.AddDays(-1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
@@ -257,20 +259,56 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         row.NewWords.Should().Be(500, "Ch2's promoted version is an update, never a publish event");
     }
 
+    // ── active_users is written only for a measurable day (WU-SchemaHardening) ──────────
+
+    [Fact]
+    public async Task UpsertDayAsync_OlderDay_WritesNullActiveUsers_AndStillCountsTheRest()
+    {
+        // A gap-filled day three days back: last_active_utc only holds each user's latest ping, so the
+        // day's activity cannot be reconstructed. Before the WU this stored a silent undercount (0 here,
+        // although user A may well have been active that day) into an append-only table.
+        DateOnly older = _day.AddDays(-2);
+
+        await UpsertAsync(older);
+
+        SiteDailyStat row = (await LoadRowAsync(older))!;
+        row.ActiveUsers.Should().BeNull("an unmeasurable day is honest NULL (layer8-data-marts.md §site_daily_stats)");
+        row.NewUsers.Should().Be(0, "new_users is NOT NULL and countable for any day");
+    }
+
+    [Fact]
+    public async Task UpsertDayAsync_ReUpsertOfAnOlderDay_KeepsItsMeasuredActiveUsers()
+    {
+        // The day was measured while it was recent (7); a later gap-fill or dev-probe re-upsert of the
+        // same, now-old day must not erase it with NULL.
+        DateOnly older = _day.AddDays(-2);
+        await UpsertAsync(older);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Database.ExecuteSqlAsync($"UPDATE site_daily_stats SET active_users = 7 WHERE stat_date = {older}");
+        }
+
+        await UpsertAsync(older);
+
+        (await LoadRowAsync(older))!.ActiveUsers.Should().Be(7);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────────
 
-    private async Task UpsertAsync()
+    private async Task UpsertAsync(DateOnly? day = null)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         SiteDailyStatAggregator aggregator = scope.ServiceProvider.GetRequiredService<SiteDailyStatAggregator>();
-        await aggregator.UpsertDayAsync(_day);
+        await aggregator.UpsertDayAsync(day ?? _day);
     }
 
-    private async Task<SiteDailyStat?> LoadRowAsync()
+    private async Task<SiteDailyStat?> LoadRowAsync(DateOnly? day = null)
     {
+        DateOnly target = day ?? _day;
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.SiteDailyStats.SingleOrDefaultAsync(s => s.StatDate == _day);
+        return await db.SiteDailyStats.SingleOrDefaultAsync(s => s.StatDate == target);
     }
 
     private async Task<int> CountRowsForDayAsync()

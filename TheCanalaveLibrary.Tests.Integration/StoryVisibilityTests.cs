@@ -233,7 +233,7 @@ public class StoryVisibilityTests(PostgresFixture postgres) : IntegrationTestBas
         Chapter chapter = new()
         {
             StoryId = storyId, ChapterNumber = 1, Title = "Chapter 1", IsPublished = true,
-            VersionCount = 2,
+            FirstPublishedDate = DateTime.UtcNow, VersionCount = 2,
         };
         ChapterContent primary = new()
         {

@@ -12,6 +12,12 @@ public sealed class ChapterConfiguration : IEntityTypeConfiguration<Chapter>
         // A story cannot have two chapters with the same number
         builder.HasIndex(e => new { e.StoryId, e.ChapterNumber }).IsUnique();
 
+        // A published chapter carries its first-publish anchor (owner ruling D2, WU-StoryLifecycle;
+        // routed here to WU-SchemaHardening). One direction only: the anchor is never moved, so an
+        // unpublished chapter keeps it.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_chapters_first_published_date", "NOT is_published OR first_published_date IS NOT NULL"));
+
         // 1. Define the 1-to-many for "all versions"
         builder.HasMany(c => c.ChapterContents)
             .WithOne(cc => cc.Chapter)

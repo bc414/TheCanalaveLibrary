@@ -284,6 +284,19 @@ attribution write FK-failed in practice.)
 Respawn wipes all rows between tests — each test is self-contained in its FK setup; nothing
 can be assumed to survive from a previous test.
 
+**An inline seed must satisfy the table's CHECK constraints too** (WU-SchemaHardening, 2026-10-13;
+the list is `layer1-data-model.md` §"CHECK constraints"). The one that bites most: a `Chapter` seeded
+with `IsPublished = true` also sets `FirstPublishedDate` (`ck_chapters_first_published_date`), as
+the production publish path does. Adding the constraint broke 94 tests in 12 classes that skipped it.
+A story seeded in a published status needs a `PublishedDate`; `SeedStoryAsync` already does this.
+
+**A CHECK, FK or unique index is pinned with one raw statement.** Write the row a writer that skipped
+the service would write, on its own `NpgsqlConnection`, and assert the `PostgresException`'s
+`SqlState` (23514 check, 23505 unique, 23503 FK) and its exact `ConstraintName`. Add each new CHECK to
+`SchemaConstraintTests`' catalog inventory, which compares `pg_constraint` (`contype = 'c'`, `conrelid
+<> 0`, schema `public`) with the documented set. Then a regeneration that loses a constraint, or an
+undocumented one, fails a test.
+
 ## Asserting a TPT delete left no base row: raw SQL, ids captured first (WU-TptHardDelete)
 
 A content-parent delete that forgets its TPT children leaves **orphaned base rows** (a

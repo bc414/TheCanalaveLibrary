@@ -143,7 +143,12 @@ context, since even a genuine replica would trail the primary slightly.
   Actions"). That SET NULL **is** the reparent mechanism, so it is load-bearing and is **excluded from
   D10's content-parent RESTRICT set**. The spec's mechanism never worked: SET NULL erases which parent
   an orphan had, so any future revival of a placeholder needs a retained row, not this cascade.
-- **Self-references** (parent tags, parent folders): SET NULL → children become top-level.
+- **Self-references** (parent tags, parent folders): SET NULL → children become top-level. The
+  `group_folders.parent_folder_id` FK exists since WU-SchemaHardening (2026-10-13); before it the
+  column was a bare integer and a deleted folder's sub-folders dangled out of sight. Top-level folder
+  names are unique too (NULLS NOT DISTINCT), so a delete whose promoted sub-folder would duplicate a
+  top-level name is rejected by the service before anything is deleted (`layer2-services.md` §"Group
+  Folder Integrity"; a default, roadmap decision row 22).
 
 ## Dev-Only Diagnostic Endpoints
 

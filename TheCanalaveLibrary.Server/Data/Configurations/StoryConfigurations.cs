@@ -12,6 +12,14 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
         builder.Property(e => e.Rating).HasConversion<short>();
         builder.Property(e => e.StoryStatusId).HasConversion<short>();
 
+        // A published status carries its publish stamp (owner ruling D2, WU-StoryLifecycle; routed here
+        // to WU-SchemaHardening). The bounds are StoryLifecycle.IsPublished's set. One direction only: an
+        // unpublished story keeps its original date (republication never re-stamps).
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_stories_published_date",
+            $"story_status_id NOT BETWEEN {(short)StoryStatusEnum.InProgress} AND {(short)StoryStatusEnum.OpenBeta} " +
+            "OR published_date IS NOT NULL"));
+
         builder.HasMany(s => s.Chapters)
             .WithOne(c => c.Story)
             .HasForeignKey(c => c.StoryId)
@@ -338,6 +346,11 @@ public sealed class StoryArcConfiguration : IEntityTypeConfiguration<StoryArc>
         // spine for "arcs of story N, in reading order" (WU45 — replaces the former unique
         // (StoryId, SortOrder): display order is derived from StartChapterNumber, not stored).
         builder.HasIndex(e => new { e.StoryId, e.StartChapterNumber }).IsUnique();
+
+        // An arc's range is never inverted (schema audit §2.6). The arc service rejects end < start, and
+        // a chapter delete or move removes an arc it would invert rather than saving it.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_story_arcs_bounds", "start_chapter_number <= end_chapter_number"));
     }
 }
 
@@ -350,6 +363,10 @@ public sealed class StoryLineageConfiguration : IEntityTypeConfiguration<StoryLi
 
         builder.HasKey(e => new { e.SourceStoryId, e.TargetStoryId, e.RelationshipTypeId });
         // Future indexes for querying (e.g., by TargetStoryId)...
+
+        // A story is never its own source (schema audit §2.6).
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_story_lineages_no_self", "source_story_id <> target_story_id"));
     }
 }
 

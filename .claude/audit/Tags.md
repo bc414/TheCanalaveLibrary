@@ -215,6 +215,15 @@ WU: `audit/Discovery.md` §"WU-ApplyFiltersPurity note"; convention: `layer2-ser
 §"Reference-Data Caching". Verified by `TagHierarchyCacheTests` (Integration) plus
 `TagWriteServiceTests`/`TagReadServiceTests`/`TagEndpointsTests` unmodified and green.
 
+## WU-SchemaHardening Stage note (2026-10-13) — F11 L1 stays Stage 5: a fanon link never targets its own base tag
+
+Schema audit §2.6: `ServerFanonWriteService` refuses linking a custom-name group to its own base tag,
+but nothing below it did. Migration `WU_SchemaHardening` adds `ck_fanon_links_no_self`
+(`base_tag_id <> target_tag_id`), declared in the model (`layer1-data-model.md` §"CHECK
+constraints"). The dev DB had no violating row, and SeedTool's `fanon_links` (distinct tags) loaded
+on a migrated scratch clone. Tests: **Integration** `SchemaConstraintTests` (the refusal by SQLSTATE
+23514 and name, two `Tag` rows seeded inline the `FanonPipelineTests` way; the catalog inventory).
+
 ## Feature 11 — Tag Administration
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `ServerTagWriteService` and
@@ -226,7 +235,8 @@ floor already answered 401 first). `ServerTagWriteService`'s context field is re
 the house name. Verified by the existing Integration tag/fanon suites (the non-moderator 403 cases pass
 unchanged).
 
-- **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
+- **L1 — Stage 5 (`ck_fanon_links_no_self` since WU-SchemaHardening, 2026-10-13 — Stage note above).**
+  `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
   tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30).** **L3/L3.5 — Stage 5
   (WU27.5, see Stage note below)** (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
   see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:

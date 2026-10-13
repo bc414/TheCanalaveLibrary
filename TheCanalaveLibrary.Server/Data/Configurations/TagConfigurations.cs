@@ -122,6 +122,10 @@ public sealed class FanonLinkConfiguration : IEntityTypeConfiguration<FanonLink>
         builder.HasIndex(e => e.TargetTagId)
             .HasDatabaseName("ix_fanon_links_target_tag_id");
 
+        // A custom name is never linked to its own base tag (schema audit §2.6).
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_fanon_links_no_self", "base_tag_id <> target_tag_id"));
+
         builder.HasOne(e => e.BaseTag)
             .WithMany()
             .HasForeignKey(e => e.BaseTagId)

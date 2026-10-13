@@ -9,7 +9,7 @@ public class GroupFolder
     public int GroupId { get; set; }
     
     [Required]
-    [MaxLength(100)]
+    [MaxLength(GroupConstants.MaxFolderNameLength)]
     public string Name { get; set; } = null!;
     
     public Rating MaxRating { get; set; }

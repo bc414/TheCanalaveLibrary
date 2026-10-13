@@ -90,8 +90,9 @@ public sealed class UserStoryInteractionFilterSettingConfiguration : IEntityType
 {
     public void Configure(EntityTypeBuilder<UserStoryInteractionFilterSetting> builder)
     {
-        // A user can only have one setting for a specific filter/mode
-        builder.HasIndex(e => new { e.UserId, e.SearchModeKey, e.UserStoryInteractionFilterKey }).IsUnique();
-        // Future indexes for querying...
+        // A user has one setting per filter/mode: the natural composite key, matching
+        // DefaultUserStoryInteractionFilterSettingConfiguration (schema audit §2.7; the surrogate id it
+        // replaced had no reader). user_id leads, so the per-user reads still use the key's prefix.
+        builder.HasKey(e => new { e.UserId, e.SearchModeKey, e.UserStoryInteractionFilterKey });
     }
 }

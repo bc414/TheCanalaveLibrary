@@ -14,7 +14,7 @@ public class CreateFolderDto
     public int? ParentFolderId { get; set; }
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(GroupConstants.MaxFolderNameLength)]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>

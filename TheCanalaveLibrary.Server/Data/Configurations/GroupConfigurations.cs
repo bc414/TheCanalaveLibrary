@@ -67,7 +67,14 @@ public sealed class GroupStoryConfiguration : IEntityTypeConfiguration<GroupStor
     public void Configure(EntityTypeBuilder<GroupStory> builder)
     {
         builder.Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by GroupId, StoryId, DateAdded)...
+
+        // A group's stories are a set (owner ruling D23: "membership is set semantics"). AddStoryAsync
+        // keeps its AnyAsync check as the fast path; this index refuses the concurrent double add, which
+        // the service then treats as already added (layer2-services.md §"Group Folder Integrity"). It
+        // leads with group_id, so it also replaces the convention FK index ix_group_stories_group_id.
+        builder.HasIndex(e => new { e.GroupId, e.StoryId })
+            .IsUnique()
+            .HasDatabaseName("ix_group_stories_group_id_story_id");
     }
 }
 
@@ -77,8 +84,29 @@ public sealed class GroupFolderConfiguration : IEntityTypeConfiguration<GroupFol
     {
         builder.Property(e => e.MaxRating).HasConversion<short>();
 
-        // A folder's name must be unique within its parent folder (or at the root)
-        builder.HasIndex(e => new { e.GroupId, e.ParentFolderId, e.Name }).IsUnique();
-        // Future indexes for querying...
+        // Self-FK (spec §Group Tables; schema audit §2.4): deleting a folder moves its sub-folders to the
+        // top level. Before WU-SchemaHardening the column was a bare integer, so a deleted folder's
+        // sub-folders pointed at nothing and dropped out of the tree. No navigations: the tree is built
+        // from the flat ParentFolderId column (ServerGroupReadService.BuildFolderTreeAsync). EF adds the
+        // convention index ix_group_folders_parent_folder_id, which the SET NULL lookup needs.
+        builder.HasOne<GroupFolder>()
+            .WithMany()
+            .HasForeignKey(f => f.ParentFolderId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Sibling names are unique: same group, same parent, and the top level (NULL parent) is one
+        // sibling set — hence NULLS NOT DISTINCT (precedent: StoryCharacterConfiguration). Before
+        // WU-SchemaHardening the default NULLS DISTINCT let two top-level folders share a name. The
+        // comparison is byte-wise; case-insensitive names are worksheet D29 (pending). The name is
+        // load-bearing: ServerGroupWriteService catches a 23505 on it by name.
+        builder.HasIndex(e => new { e.GroupId, e.ParentFolderId, e.Name })
+            .IsUnique()
+            .AreNullsDistinct(false)
+            .HasDatabaseName("ix_group_folders_group_id_parent_folder_id_name");
+
+        // A folder is never its own parent (schema audit §2.6). No operation re-parents a folder, so
+        // longer cycles cannot form.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_group_folders_no_self", "parent_folder_id IS NULL OR parent_folder_id <> group_folder_id"));
     }
 }

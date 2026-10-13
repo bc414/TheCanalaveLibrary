@@ -61,7 +61,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
 `story-card` boundary island — one broken card degrades to a tile, the deck survives. Strategy:
 `error-handling.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
 
-- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note; `ck_stories_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note at the end of this feature).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
   slug server-generated; explicit-interface edit contract. **Settled by owner ruling D1 (worksheet
   2026-08-04), before the WU-StoryLifecycle build (2026-09-30) — do not revisit: status is off the
@@ -376,6 +376,26 @@ No behavior change. `dotnet build` zero warnings. `dotnet test` 1232/1232 pass (
 same existing Story tests — no new tests needed; this is a compiler-warning fix, not a behavioral
 change).
 
+### WU-SchemaHardening Stage note (2026-10-13) — Features 4, 8, 10: three CHECK constraints
+
+**No cell flips — F4, F8 and F10 L1 stay Stage 5.** Schema audit §2.6 found no CHECK constraint in the
+schema. WU-StoryLifecycle routed its D2 invariant here. Migration `WU_SchemaHardening` adds, declared
+in the model (`layer1-data-model.md` §"CHECK constraints"):
+- **F4** `ck_stories_published_date` — `story_status_id NOT BETWEEN 2 AND 7 OR published_date IS NOT
+  NULL`. A published status carries its publish stamp (D2). It is one-directional, because an
+  unpublished story keeps its date. The bounds are interpolated from `StoryStatusEnum`.
+- **F8** `ck_story_arcs_bounds` — `start_chapter_number <= end_chapter_number`. The arc service already
+  refuses `end < start`, and chapter delete and move drop an arc rather than invert it.
+- **F10** `ck_story_lineages_no_self` — `source_story_id <> target_story_id`.
+
+Before applying, every writer was checked: none can produce a violating row, and the dev DB had none.
+DataSeeder, SeedTool (re-run on a migrated scratch clone of the dev DB, 2026-10-13: 3,000 stories
+loaded) and `SeedStoryAsync` already keep D2.
+
+Tests: **Integration** `SchemaConstraintTests` asserts each constraint by SQLSTATE 23514 and name, that
+an unpublished story may keep or lack its date, and that the catalog's CHECK set equals the documented
+one.
+
 ## Feature 5 — Story Browsing & Display
 
 ### WU-RecLifecycle Stage note (2026-07-25) — empty candidate set no longer means "no narrowing"
@@ -593,7 +613,8 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
   fields are the source of truth; no drag-reorder of arcs (order follows ranges).
 
 **Cell status (WU45 build landed 2026-07-12):**
-- **L1 — Stage 5.** Migration `WU45_StoryArcDropSortOrder`: `sort_order` column + its unique index
+- **L1 — Stage 5 (`ck_story_arcs_bounds` since WU-SchemaHardening, 2026-10-13 — see its Stage note
+  under Feature 4).** Migration `WU45_StoryArcDropSortOrder`: `sort_order` column + its unique index
   dropped; unique `(story_id, start_chapter_number)` added (ordering spine + non-overlap backstop).
   `StoryArc.cs` moved `Core/Models/` → `Core/Stories/` (legacy-folder rule). Verified: migration
   applies via the Integration suite's Testcontainers migrate; `dotnet build` green.
@@ -778,7 +799,8 @@ kept (spec §939 wording; ancestor/descendant-style names were rejected as wrong
 Migration `AddStoryLineageRename` (2026-07-12) renamed the tables/constraints/indexes in place — no
 data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet build` 0 errors).
 
-- **L1 — Stage 5.** `StoryLineage` (`Core/Stories/StoryLineage.cs`) composite key
+- **L1 — Stage 5 (`ck_story_lineages_no_self` since WU-SchemaHardening, 2026-10-13 — see its Stage
+  note under Feature 4).** `StoryLineage` (`Core/Stories/StoryLineage.cs`) composite key
   `(SourceStoryId, TargetStoryId, RelationshipTypeId)`; `StoryLineageType` lookup table seeded
   (Inspired By/Prequel/Sequel/Companion Piece — unchanged data, only the container renamed);
   `StoryLineageStatus` enum (`Pending=0/Approved=1/Rejected=2`). One-way directional per §5 — absence

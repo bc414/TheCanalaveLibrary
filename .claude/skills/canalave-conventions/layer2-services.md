@@ -691,6 +691,52 @@ a folder's ceiling cannot exceed the group ceiling. Attempting to create a folde
 **`ContentRatingExceededException`** lives in `Core/Groups/` (not `Core/` root) — it is a domain
 exception specific to the group content model, not a general cross-cutting concern.
 
+## Group Folder Integrity (schema §2.4, service §2.10; WU-SchemaHardening 2026-10-13)
+
+Before this WU, `parent_folder_id` was a bare integer, top-level names were not unique (default NULLS
+DISTINCT), names were unvalidated, and `DeleteFolderAsync` claimed a SET NULL that existed nowhere: a
+deleted folder's sub-folders kept pointing at nothing and vanished from the tree. The rules now:
+
+- **Names.** `GroupFolderValidations.NameErrors` (Core, tier 2) trims, then requires a name and caps it
+  at `GroupConstants.MaxFolderNameLength`. Create and rename both call it; the server throws
+  `GroupValidationException`. The stored name is the trimmed one.
+- **Sibling uniqueness.** Folders with the same `GroupId` and the same `ParentFolderId` (NULL = top
+  level) have distinct names. The database enforces it: `ix_group_folders_group_id_parent_folder_id_name`
+  is UNIQUE **NULLS NOT DISTINCT**, so two top-level folders can no longer share a name. Create and
+  rename pre-check it with `==` (Postgres `=`, byte-wise), exactly the index's comparison. Do **not**
+  lower-case one side: case-insensitive names are D29 (pending), and an app-level case-insensitive check
+  over a case-sensitive index is the race service §2.12 reports for saved selections. Renaming a folder
+  to its own name is a no-op.
+- **Race backstop.** A concurrent create or rename that passes the pre-check hits the index.
+  Each save catches 23505 **on that index's name only** (a `private const` mirroring
+  `HasDatabaseName`), answers with the same `GroupValidationException` as the pre-check, and detaches the
+  rejected entity so the circuit-scoped context never retries it.
+- **Parent.** A `ParentFolderId` must name a folder in the same group. A nonexistent id and another
+  group's id both throw `KeyNotFoundException("Folder {id} not found.")`, the D3.1 shape, so the answer
+  never discloses that the id exists elsewhere (`identity-and-authorization.md`'s non-disclosure rule).
+  No operation moves a folder to a new parent, so no cycle can form; `ck_group_folders_no_self` forbids
+  the one-row cycle anyway. The same-group guarantee is the service's: a composite same-group FK is D33
+  (pending).
+- **Delete moves sub-folders to the top level.** The self-FK is `ON DELETE SET NULL`. The service:
+  1. reads the folder's direct sub-folders and the group's other top-level names;
+  2. if a sub-folder's name equals an existing top-level name (byte-wise), throws
+     `GroupValidationException` naming each one, and deletes nothing;
+  3. otherwise, in one transaction, gives the sub-folders `SortOrder` values after the current last
+     top-level folder (keeping their relative order), then deletes the folder set-based. The database's
+     SET NULL moves them up. It runs after the parent row is gone, so a sub-folder that shares its
+     deleted parent's name may take the parent's top-level name.
+  4. catches the same 23505 for a top-level folder created between the check and the delete.
+
+  Story assignments in the deleted folder go with it (the join table cascades); the stories stay in the
+  group. **Rejecting rather than auto-renaming is a default, not an owner ruling** (roadmap decision
+  row 22). It follows D23's loud-failure posture, mutates nothing the admin did not ask for, and is a
+  one-method change if the owner prefers a rename.
+- **`group_stories` is a set** (D23: "membership is set semantics"). `ix_group_stories_group_id_story_id`
+  is UNIQUE. `AddStoryAsync` keeps its `AnyAsync` check as the fast path. A concurrent double add hits
+  the index: the save catches 23505 on that name, detaches the row and treats the add as already done
+  (no folder assignment, no notification). The posture row is §"Check-then-act posture"'s
+  `group_stories` family.
+
 ## Group Comments — Per-Context Method Pattern
 
 Group comments follow the **per-context method** pattern established for blog-post comments in WU31.
@@ -2097,8 +2143,10 @@ is the "New"-badge input and the new-chapter fan-out anchor. `ChapterContent.Pub
 **per-version provenance only** — when *this version* became publicly readable (stamped on first chapter
 publish for every version still null, and at creation for an alternate added to an already-published
 chapter). No discovery or recency surface reads it: adding or promoting a version is an update, never a
-publish event. Invariants, maintained in code (the CHECK constraints are routed to WU-SchemaHardening):
-published status ⇒ `PublishedDate != null`; `IsPublished ⇒ FirstPublishedDate != null`. (D2 wrote
+publish event. Invariants, maintained in code and enforced by CHECK constraints since
+WU-SchemaHardening (`ck_stories_published_date`, `ck_chapters_first_published_date`;
+`layer1-data-model.md` §"CHECK constraints"): published status ⇒ `PublishedDate != null`;
+`IsPublished ⇒ FirstPublishedDate != null`. (D2 wrote
 `IsPublished == (FirstPublishedDate != null)`, which cannot hold together with "never moved" and the
 legal chapter unpublish.)
 
@@ -2779,7 +2827,7 @@ failure.
 | Vouch idempotency | n/a — a crash | Harden | PK `(vouching_user_id, vouched_user_id)` (already present) + `INSERT … ON CONFLICT DO NOTHING`; `NotifyNewVouchAsync` only when it inserted a row | WU-CounterSymmetry |
 | `user_notification_settings` upsert (settings page + one-click unsubscribe; two concurrent unsubscribe POSTs are a real pattern) | n/a — a crash | Harden | `INSERT … ON CONFLICT (user_id, notification_type_id) DO UPDATE SET <the writer's own columns>`, then the all-NULL conditional delete (§"Filtering semantics") | WU-NotificationCorrectness |
 | Notification cross-existing dedup | no — every row is a real event; only the anti-flood intent is disappointed | Accept-and-record (a policy) | Advisory check-then-insert, sequential callers only (§"Filtering semantics" → "Dedup") | — |
-| `group_stories` idempotent add | yes — membership is set semantics | Harden | Unique `(GroupId, StoryId)` | not yet — routed to WU-SchemaHardening |
+| `group_stories` idempotent add | yes — membership is set semantics | Harden | Unique `ix_group_stories_group_id_story_id`; `AddStoryAsync` keeps the `AnyAsync` fast path and treats a 23505 on that index as already added (§"Group Folder Integrity") | WU-SchemaHardening |
 | Poll single-choice | **yes** — tallies are published numbers | Restructure, not lock | `PollId` on the vote row + a single-choice guard column, unique on `(guard, user_id)`; the `ConfigLocked` first-vote-vs-config-edit rider | not yet — routed to WU-PollVoteIntegrity (the Block H migration wave) |
 | USI flip-delta counters | no — derived data | Accept | Recompute-corrected (§"Transition-delta rule") | — |
 | Hidden gem (5/user), highlight (5/story), vouch limit (5/user) | no | Accept — **stated-soft** | See below | — |

@@ -14,11 +14,9 @@ namespace TheCanalaveLibrary.Core;
 /// DbSet; the upsert must stay idempotent per <c>stat_date</c>, which the change tracker cannot
 /// guarantee across retries.
 ///
-/// Columns split into stock snapshots (<c>Total*</c>, as-of end-of-day; nullable only where a
-/// pre-launch day predates the sourcing column) and daily flows (event counts for that day; each
-/// nullable because a startup gap-fill cannot backfill every column — most notably
-/// <see cref="ActiveUsers"/>, which is go-forward only since <see cref="User.LastActiveUtc"/>
-/// stamps are not retroactive).
+/// Columns split into stock snapshots (<c>Total*</c>, as-of end-of-day) and daily flows (event counts
+/// for that day). Every column is NOT NULL except <see cref="ActiveUsers"/>, whose NULL means "this day
+/// could not be measured" (see its own doc).
 /// </summary>
 public class SiteDailyStat
 {
@@ -31,8 +29,10 @@ public class SiteDailyStat
     public long TotalWords { get; set; }
 
     // --- Daily flows ---
-    /// <summary>Null for any day before <see cref="User.CreatedUtc"/> existed.</summary>
-    public int? NewUsers { get; set; }
+    /// <summary>Users created that day (<see cref="User.CreatedUtc"/>). NOT NULL since
+    /// WU-SchemaHardening: <c>created_utc</c> has been in the schema since the 2026-07-18 migration
+    /// collapse, so every day is countable.</summary>
+    public int NewUsers { get; set; }
     public int NewStories { get; set; }
     public int NewChapters { get; set; }
     public long NewWords { get; set; }
@@ -54,7 +54,11 @@ public class SiteDailyStat
     /// views; no such stream exists. Named honestly rather than as the more general "page_views."</summary>
     public long StoryViews { get; set; }
 
-    /// <summary>Null for any day before <see cref="User.LastActiveUtc"/> existed — go-forward only,
-    /// never reconstructable for past days.</summary>
+    /// <summary>Users active that day, or null when the day could not be measured. Every ping
+    /// overwrites <see cref="User.LastActiveUtc"/>, so a day is countable only while it is the most
+    /// recent completed UTC day (or today); an older, gap-filled day is written null rather than a
+    /// silent undercount, and a re-upsert never replaces a measured value with null
+    /// (<c>SiteDailyStatAggregator.IsActiveUsersMeasurable</c>; layer8-data-marts.md
+    /// §"site_daily_stats").</summary>
     public int? ActiveUsers { get; set; }
 }

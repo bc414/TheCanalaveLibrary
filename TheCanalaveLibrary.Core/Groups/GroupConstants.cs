@@ -12,6 +12,8 @@ public static class GroupConstants
     /// <summary>Maximum length of <see cref="Group.Description"/> (mirrors the MaxLength attribute).</summary>
     public const int MaxDescriptionLength = 2048;
 
-    /// <summary>Maximum length of <see cref="GroupFolder.Name"/> (mirrors <see cref="CreateFolderDto"/>'s MaxLength attribute).</summary>
+    /// <summary>Maximum length of <see cref="GroupFolder.Name"/>, after trimming. The entity's and
+    /// <see cref="CreateFolderDto"/>'s MaxLength attributes read it, and
+    /// <see cref="GroupFolderValidations.NameErrors"/> enforces it on create and rename.</summary>
     public const int MaxFolderNameLength = 100;
 }

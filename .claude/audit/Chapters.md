@@ -66,7 +66,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
 `ChapterReadServiceTests` — null-rated version reads as effective story rating). `SeedStoryAsync` in
 `IntegrationTestBase` extended with optional `rating` parameter.
 
-- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Chapter.FirstPublishedDate` added, `ChapterContent.PublishDate` nullable; see the WU-StoryLifecycle Stage note under Feature 7).** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Chapter.FirstPublishedDate` added, `ChapterContent.PublishDate` nullable; see the WU-StoryLifecycle Stage note under Feature 7; `ck_chapters_first_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note at the end of this feature).** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
   `Chapter.PrimaryContentId` was changed from `long` to `long?` (nullable) during WU17 to break the
   circular FK insert dependency (`Chapter.PrimaryContentId → ChapterContent.ChapterId → Chapter`);
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
@@ -314,6 +314,29 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   construction — see above). Settled: follows the existing desktop/mobile composition pattern
   already used elsewhere, not a runtime toggle. Open: nothing design-blocking: this is
   build-when-scheduled, same as `HomeMobile`.
+
+### WU-SchemaHardening Stage note (2026-10-13) — Feature 6: the chapter publish-anchor CHECK
+
+**No cell flips — F6 L1 stays Stage 5.** WU-StoryLifecycle kept D2's chapter invariant in code and
+routed its CHECK here. Migration `WU_SchemaHardening` adds `ck_chapters_first_published_date`
+(`NOT is_published OR first_published_date IS NOT NULL`), declared in the model
+(`layer1-data-model.md` §"CHECK constraints"). It is D2's one-directional form: an unpublished chapter
+keeps its anchor (the anchor is never moved).
+
+Every writer already complied: `SetPublishedAsync` stamps the anchor before the flag in the same save,
+create leaves the chapter unpublished, and DataSeeder and SeedTool stamp published chapters. A SeedTool
+re-run on a migrated scratch clone loaded 13,384 chapters. The dev DB had no violating row.
+
+**Test seeds fixed (orchestrator amendment).** The CHECK broke 94 Integration tests across 12 classes
+that inserted published chapters directly with no anchor. Each seed now sets `FirstPublishedDate`
+when it publishes: `ChapterDraftVisibilityTests`, `ChapterReadMarkServiceTests`,
+`ChapterReadServiceTests`, `CommentAndBlogNotificationTests`, `CommentReadServiceTests`,
+`CommentWriteServiceTests`, `CompletionProducerTests`, `ParentVisibilityContractTests`,
+`ReadingProgressFlushTests`, `StoryDetailTests`, `StoryVisibilityTests` and
+`UserStatRecalculatorTests`. No story-status seed needed a fix: `SeedStoryAsync` already models D2.
+
+Tests: **Integration** `SchemaConstraintTests` covers the refusal (23514 by name) and the legal case of
+an unpublished chapter that keeps its anchor.
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.

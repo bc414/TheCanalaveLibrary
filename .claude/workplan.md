@@ -17,18 +17,19 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-NotificationCorrectness (2026-10-12; review fixes and browser pass 2026-10-13)
-  — worksheet D19 plus service audit §2.8's remainder. **F42/F43/F49 L4.5** went 5→1 at the review
-  fixes and back to 5 at the browser pass, which closed tracker **H26** and found no bug. Migration
-  `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB and to the Aspire DB.
-  - **D19:** `UserNotificationSetting` is sparse per field; unsubscribe writes only its own column.
-    The settings upsert is race-free under D23.
-  - **Mail:** a mid-batch SMTP death restores only the unsent mail; shutdown drains to empty within
-    15 s; a 4xx to one recipient is a capped deferral, never a batch abort (review fixes).
-  - **Smaller fixes:** feed tiebreak, one-save `StartConversationAsync`, subject cap, 90–92/100
-    presenter arms (90 and 100 kept name-free pending row 19 and D8), deleted-sponsor null source.
-  - **Tracker:** **D13** filed; **H26** filed and closed; **D8** routed to WU-TrackerFixes.
-  - `dotnet test`: Unit 1,169, RazorComponents 770, Integration 1,408. **Pointer:** its DONE entry.
+- **Last landed:** WU-SchemaHardening (2026-10-13) — schema audit §2.4/§2.6/§2.7, service audit §2.10,
+  D23's `group_stories` row, and WU-StoryLifecycle's two publish-anchor CHECKs. Migration
+  `WU_SchemaHardening` (rehearsed Up/Down/Up on a dirtied dev-DB clone) is applied to the server-only
+  dev DB; the Aspire DB picks it up on its next start. **F39 L4.5 5→1** (no browser; tracker **H28**).
+  - **Folders:** a real self-FK (SET NULL), unique top-level names, validated names, same-group parents;
+    delete moves sub-folders to the top level and refuses a name clash (a default: decision **row 22**).
+  - **`group_stories`** is unique; a racing add counts as already added. **Ten CHECKs**, declared in the
+    model (the new rule in `layer1-data-model.md`), guarded by a catalog inventory test.
+  - **Smaller:** the poll close date is checked against the effective open date; `new_users` NOT NULL
+    and `active_users` written only for a measurable day; the filter overrides' natural key.
+  - **Tracker:** **D14**, **H27** and **H28** filed. `dotnet test`: Unit 1,182, RazorComponents 774,
+    Integration 1,456. **Pointer:** its DONE entry.
+  Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
@@ -238,8 +239,8 @@ references it, does not restate it.
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
-  2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), and
-  **WU-SchemaHardening** is next in the campaign's build order.
+  2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
+  WU-SchemaHardening (2026-10-13); **WU-UserDeletion** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -266,7 +267,8 @@ references it, does not restate it.
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
-  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day)),
+  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
+  WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -274,13 +276,15 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–21** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–22** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
   fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
   2026-09-30; 21 — ImageSharp licensing (tracker **E9**: a Six Labors key, a library swap or
-  standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  standing risk) — added 2026-10-12 by the WU-DependencyCVEs review fixes; 22 — the folder-delete
+  name-clash default — added 2026-10-13 by WU-SchemaHardening). Tracker **H28**, WU-SchemaHardening's
+  folder-page browser pass, returns F39 L4.5 to 5. Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -439,6 +443,74 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)
+
+- **Cells:** F39 L4.5 **5→1** (the folder page's delete and refusals changed; no browser was
+  available; tracker **H28**). Every other touched cell stays 5: F4/F6/F8/F10/F18/F19/F37/F39/F47/F62
+  L1, F37/F39 L2, F39 L3.5, F62 L8. Dated 2026-10-13 (the session's `currentDate`, as the two WUs
+  before it), not the template's 2026-09-30.
+- **Trigger:** the WU spec plus orchestrator amendment (WU-StoryLifecycle's two CHECKs, and fixing every
+  test that seeds a published chapter or story without its date).
+- **What landed:**
+  1. **Migration `WU_SchemaHardening`.** Group-folder self-FK `ON DELETE SET NULL`; the name index
+     rebuilt NULLS NOT DISTINCT; unique `ix_group_stories_group_id_story_id` (replaces the FK index);
+     the filter overrides' natural PK (surrogate dropped); `site_daily_stats.new_users` NOT NULL; ten
+     CHECKs. Hand DML at the top of `Up()` normalizes violating rows. Rehearsed Up/Down/Up on a dev-DB
+     clone dirtied with every case; SeedTool re-run on a migrated scratch clone; applied to the
+     server-only dev DB.
+  2. **CHECK mechanism (moment-1 rule):** `HasCheckConstraint` in the model, lowercase
+     `ck_<table>_<rule>`, no re-append entry; a probe showed EF puts the TPT base's CHECK on
+     `base_polls` only. The ten: `ck_story_arcs_bounds`, `ck_story_lineages_no_self`,
+     `ck_stories_published_date`, `ck_chapters_first_published_date`, `ck_followed_users_no_self`,
+     `ck_vouches_no_self`, `ck_fanon_links_no_self`, `ck_group_folders_no_self`, `ck_base_polls_dates`,
+     `ck_users_suspension` (one direction).
+  3. **Folder integrity** (`ServerGroupWriteService`, new Core `GroupFolderValidations`): validated
+     names, byte-wise sibling uniqueness, same-group parents (`KeyNotFoundException`), rename-to-self
+     no-op. Delete moves sub-folders to the top level after the existing ones (set-based, so the DB's
+     SET NULL runs after the parent row is gone) and refuses a top-level name clash. Race backstops by
+     constraint name on create, rename, delete and `AddStoryAsync` (counts as already added: no
+     folder, no notification).
+  4. **Poll dates:** the close date is checked against the effective open date (create and update) →
+     `PollValidationException`, not the CHECK's 500.
+  5. **`site_daily_stats`:** `active_users` only for a measurable day (`IsActiveUsersMeasurable`),
+     `COALESCE`-preserved on re-upsert; stale backfill comments fixed.
+  6. **UI:** the folder page's delete copy, its refusal message, "That parent folder no longer
+     exists.", and a reload after every "no longer exists" refusal (`error-handling.md`).
+  7. **Docs:** moment 1 — `layer1-data-model.md` (§"CHECK constraints", the §TPT PK-name ratified
+     divergence, `CreatedUtc`), `layer2-services.md` (§"Group Folder Integrity", the check-then-act
+     row, the Story Lifecycle invariants), `cross-cutting.md`, `layer6-indexes.md`,
+     `layer8-data-marts.md`, `audit/Groups.md` Settled, `roadmap.md` Resolved and row 22, worksheet D23
+     Built line, tracker D14/H27/H28. Moment 3 — Stage notes and headlines in Groups F39, Stories
+     F4/F8/F10, Chapters F6, Following F18/F19, Tags F11, BlogPosts F37, Moderation F47/F62,
+     Discovery F31.
+- **Left alone:**
+  - **Spec-author defaults, flagged:** the folder-delete refusal (not auto-rename) is decision
+    **row 22**. Spec C8a (stale suspension dates) was already built by WU-ModerationIntegrity:
+    verified, not rebuilt.
+  - **D4 descoped:** the twelve TPT `PK_<table>` names cannot be renamed (one EF key per hierarchy;
+    the probe renamed all five comment PKs to one name). Recorded as a ratified divergence.
+  - **Pending owner rows:** `read_progress` CHECK (D20 bounds; tracker **D14**), case-insensitive
+    names (D29), join rigor and a composite same-group FK (D33), the `sort_order` index (always
+    measure), the suspension biconditional (§2.1.3(a)).
+  - **Declined, with reasons:** the `user_notification_settings` all-NULL CHECK (its writers pass
+    through an all-NULL row and no reader depends on it) and counter non-negativity (schema §2.6).
+  - `/mod/stats` drawing a NULL day as 0 (tracker **H27**, L4).
+  - Service §4's phantom SET-NULL comment is fixed here: WU-DocCorrections skips it.
+- **Verification:**
+  - `dotnet build`: 0 errors, 33 warnings, none new (baseline diff).
+  - `dotnet test`: **Unit 1,182** (+13), **RazorComponents 774** (+4), **Integration 1,456** (+48),
+    all green. New Integration classes: `GroupFolderIntegrityTests` (24, five interleaved races) and
+    `SchemaConstraintTests` (18, including the catalog inventory). The amendment's seed fixes: 94
+    tests in 12 classes inserted published chapters without `FirstPublishedDate`.
+  - Mutation-checked, each failing its tests: a tracked EF delete, the sort-order append, the
+    same-group parent check, name validation, the `AddStoryAsync` catch, the poll check, the
+    `active_users` `CASE` and `COALESCE`, the page's catches and copy.
+  - The four gates pass. **No browser was available** — tracker **H28**.
+- **Pointers:** `layer2-services.md` §"Group Folder Integrity"; `layer1-data-model.md` §"CHECK
+  constraints"; `audit/Groups.md` F39 Stage note; `roadmap.md` §Resolved and row 22.
 
 ---
 

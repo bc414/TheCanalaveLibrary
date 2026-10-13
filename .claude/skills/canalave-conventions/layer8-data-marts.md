@@ -189,7 +189,7 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | `total_users` | stock | `COUNT(User WHERE created_utc <= end-of-day)` |
 | `total_stories` | stock | `COUNT(Story WHERE published_date <= end-of-day AND published/visible)` |
 | `total_words` | stock | `SUM(Story.WordCount)` over published/visible stories — the same `published_date < end-of-day AND published/visible` predicate as `total_stories` (WU-CounterSymmetry, 2026-09-30; it used to sum every story, drafts and taken-down ones included). `Story.WordCount` itself counts published chapters only (`layer2-services.md` §"Word Count Is Computed Server-Side") |
-| `new_users` | flow | `User.CreatedUtc` |
+| `new_users` | flow | `User.CreatedUtc`. **NOT NULL** since WU-SchemaHardening (2026-10-13): its one documented NULL case, a day before `created_utc` existed, cannot occur since the column is in `InitialSchema`, and the aggregator always writes a `COUNT(*)` |
 | `new_stories` | flow | `Story.PublishedDate` — the first-publication stamp (NULL = never published, so drafts, pending and rejected stories never count; WU-StoryLifecycle, D2) |
 | `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2). **Known divergence from `new_stories`:** no story predicate, and the anchor is stamped on the chapter's own first publish whatever its story's status — so chapters published inside a not-yet-live story (Draft/Pending, or later Rejected) count here while their story never counts in `new_stories`. Left as built pending `roadmap.md` decision row 16 (when does a chapter "go live" if its story isn't live?) |
 | `new_words` | flow | `SUM` of the primary version's `ChapterContent.WordCount` on `Chapter.FirstPublishedDate` |
@@ -204,7 +204,7 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | `favorites_added` | flow | `UserStoryInteractionDate.FavoriteDate` OR `HiddenFavoriteDate` — confirmed at build (`ServerModerationWriteService`/`UserStoryInteractionDate.cs`) |
 | `chapters_read` | flow (proxy) | `UserChapterInteraction.LastInteractionDate` — mutable/overwritten stamp, documented as approximate, go-forward only |
 | `story_views` | flow | `SUM(daily_story_stats.view_count)` for the day — **story reads only**, not site-wide page views (no such stream exists) |
-| `active_users` | flow (go-forward only) | `COUNT(DISTINCT User WHERE last_active_utc` is within the day`)` — requires `User.LastActiveUtc`, a new signal-buffered column (see `layer2-services.md` §"Signal Buffering"); nullable/absent for any day before that column existed |
+| `active_users` | flow (go-forward only) | `COUNT(DISTINCT User WHERE last_active_utc` is within the day`)` — requires `User.LastActiveUtc`, a new signal-buffered column (see `layer2-services.md` §"Signal Buffering"). The only nullable column, and NULL means "not measurable": `last_active_utc` is overwritten by every later ping, so a day can be counted only while it is the most recent completed UTC day (or today). `SiteDailyStatAggregator.IsActiveUsersMeasurable(statDate, nowUtc)` decides; an older day is written NULL, and a re-upsert never replaces a measured value with NULL (`COALESCE(EXCLUDED.active_users, site_daily_stats.active_users)`). Before WU-SchemaHardening (2026-10-13) the writer counted every day, so a gap-filled day stored a silent undercount |
 
 **Deliberately excluded** (settled, not oversights): `new_series` (rearranges existing stories, not
 new content), `new_vouches` (capped ≤5/user and swapped out as authors "make it" — not an
@@ -236,7 +236,8 @@ hosted/scoped split as the discovery marts (deterministic Integration/`/dev`-pro
 `TestAppFactory` drops the hosted worker), but the aggregator **upserts one day's row**, it does not
 rebuild a table. Runs at the configured off-hours hour against the previous completed UTC day;
 bounded startup gap-fill backfills the backfillable columns for missed days (`active_users` stays
-null for gap-filled days — honest, not reconstructable). Raw SQL via `ExecuteSqlRawAsync`, not LINQ,
+null for gap-filled days older than the previous completed UTC day — honest, not reconstructable;
+enforced in the writer since WU-SchemaHardening, see the column table). Raw SQL via `ExecuteSqlRawAsync`, not LINQ,
 matching every other mart worker's write path. Instrumented via `CanalaveTelemetry` (root span +
 duration/row/outcome), matching the discovery marts.
 

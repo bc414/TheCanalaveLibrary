@@ -18,7 +18,10 @@
 **Entities (Core/Models/):** `Group` (unique `GroupName`, `AudienceRating`/`MaxContentRating`→short,
 `GroupAudienceType` presets derived at boundary), `GroupMember` (composite `(UserId,GroupId)`,
 `GroupRole` enum, `DateJoined`), `GroupStory` (first-class, `AddedByUserId` SetNull),
-`GroupFolder` (nesting via `ParentFolderId`, unique `(GroupId,ParentFolderId,Name)`, `MaxRating`→short),
+`GroupFolder` (nesting via `ParentFolderId` — a self-FK `ON DELETE SET NULL` and `ck_group_folders_no_self`
+since WU-SchemaHardening 2026-10-13, a bare integer before it; unique `(GroupId,ParentFolderId,Name)`
+**NULLS NOT DISTINCT** since the same WU, so top-level names are unique too; `MaxRating`→short),
+`group_stories` unique `(GroupId, StoryId)` (D23, same WU),
 `GroupComment` (TPT subtype of `BaseComment`, has `DatePosted` + `GroupId` — build-ready after WU31.5),
 `GroupBlogPost` (TPT subtype of `BaseBlogPost`). **No services or components built.** Composes
 `StoryDeck` for story listings and WU31 `BlogPost*` components/services for group blog posts.
@@ -198,9 +201,25 @@ whole fan-out); an authorless story still notifies members; the story's author i
 60 fan-out and gets 25 only (one event, one notification). Rule: `layer2-services.md`
 §"Polymorphic RelatedEntityId".
 
-- **L1 — Stage 5.** `GroupFolder` self-nesting + `GroupStory` first-class entity established.
+**Settled — folder integrity (schema §2.4, service §2.10, worksheet D23's `group_stories` row; settled
+for WU-SchemaHardening 2026-10-13; do not revisit without the owner).** Sibling folder names are unique
+byte-wise, top level included (NULLS NOT DISTINCT); create and rename validate the name (required,
+≤ 100 after trimming) and pre-check siblings with the index's own comparison. A parent folder must be
+in the same group, and a bad parent id is a not-found (D3.1's non-disclosure shape). Deleting a folder
+moves its sub-folders to the top level, appended after the existing top-level folders; a sub-folder
+whose name would duplicate a top-level name makes the delete refuse with nothing deleted. That
+refusal is a **default, not an owner ruling** (roadmap decision row 22). `group_stories` is a set: the
+unique index refuses a duplicate and a racing add counts as already added. **Still open, not part of
+this:** case-insensitive names (D29), a composite same-group FK and the join's rigor (D33), the
+`sort_order` index question (L6 always-measure). Rule: `layer2-services.md` §"Group Folder Integrity".
+
+- **L1 — Stage 5 (self-FK `ON DELETE SET NULL`, NULLS NOT DISTINCT sibling names, `ck_group_folders_no_self`
+  and a unique `group_stories (GroupId, StoryId)` since WU-SchemaHardening, 2026-10-13 — stays Stage 5,
+  Stage note at the end of this feature).** `GroupFolder` self-nesting + `GroupStory` first-class entity established.
 - **L2 — Stage 5 (2026-06-24, WU32; story-add notifications re-anchored and de-spammed,
-  WU-InertFeatures 2026-09-30 — stays Stage 5).** **WU-InertFeatures Stage note (owner ruling D16 +
+  WU-InertFeatures 2026-09-30 — stays Stage 5; folder integrity — name rules, same-group parents,
+  delete moves sub-folders to the top level — and the `AddStoryAsync` race backstop, WU-SchemaHardening
+  2026-10-13 — stays Stage 5, Stage note at the end of this feature).** **WU-InertFeatures Stage note (owner ruling D16 +
   service audit §2.8 bullets 1–3):** `AddStoryAsync` now notifies only inside `if (!alreadyAdded)` —
   re-adding an existing story was a repeatable fan-out any member could trigger; the
   `if (storyAuthorId.HasValue)` wrapper is gone (an authorless story silenced the member fan-out
@@ -236,7 +255,8 @@ whole fan-out); an authorless story still notifies members; the story's author i
   `AddGroupStoryDto` carries optional `GroupFolderId`. `ContentRatingExceededException` is a Core domain
   exception. Test tier: Unit — no pure-logic unit test (validation is simple enough; Integration covers).
 - **L3.5-Structure — Stage 5 (2026-06-24, WU32; folder-management page built WU-GroupsL5,
-  2026-07-24).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
+  2026-07-24; delete copy and the new refusals handled WU-SchemaHardening, 2026-10-13 — stays Stage 5,
+  but L4.5 went 5→1 pending tracker H28's browser pass; Stage note at the end of this feature).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
   `RenderFragment` helper (read-only display, deliberate M-badge zero-trace suppression for
   non-consenting viewers — WU-AccessGate). Inline add-story form (StoryId text field) with
   `ContentRatingExceededException` surfaced as error toast. The admin "Manage" link to
@@ -343,6 +363,63 @@ cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-trac
   `GroupPage` display (`RenderFolders`) was confirmed to reflect the live tree afterward.
   Verification data cleaned up post-check (no fixture value, unlike WU-ChapterArcBrowserPass's
   deliberately-kept arcs). Detail: `workplan.md` WU-GroupsL5.
+
+### WU-SchemaHardening Stage note (2026-10-13) — Feature 39: folder integrity, `group_stories` as a set
+
+**No L1/L2/L3.5 flip; F39 L4.5 5→1.** Schema audit §2.4 and service audit §2.10 found the folder model
+sound in shape but unguarded. These defects sat beneath Stage-5 cells:
+- `parent_folder_id` had no FK: a deleted folder's sub-folders kept a dangling parent id and vanished
+  from the tree, while `DeleteFolderAsync`'s comment claimed a SET NULL configured nowhere.
+- `CreateFolderAsync` stored any `ParentFolderId`, including another group's folder or a nonexistent id.
+- Names were unvalidated: a blank name persisted, a name over 100 characters was a raw 500, and a
+  duplicate sibling was a raw 500. Two top-level folders could share a name (default NULLS DISTINCT).
+- `group_stories` had no unique `(GroupId, StoryId)`, so the idempotent add was advisory (D23).
+
+What changed:
+- **L1** (migration `WU_SchemaHardening`): the self-FK `fk_group_folders_group_folders_parent_folder_id`
+  `ON DELETE SET NULL` with its convention index; `ix_group_folders_group_id_parent_folder_id_name`
+  rebuilt NULLS NOT DISTINCT under the same name and columns; `ck_group_folders_no_self`;
+  `ix_group_stories_group_id_story_id` UNIQUE (it replaced the FK index `ix_group_stories_group_id`).
+  Hand DML at the top of `Up()` moves dangling or cross-group parents to the top level, suffixes
+  duplicate top-level names with the row id and deletes duplicate `group_stories`. It was rehearsed on
+  a dev-DB clone dirtied with each case (all fixed, a duplicate's folder assignment cascaded), then
+  Down and Up again; the migration is applied to the server-only dev DB.
+- **L2** (`ServerGroupWriteService`; rule `layer2-services.md` §"Group Folder Integrity"): the new
+  Core helper `GroupFolderValidations.NameErrors` on create and rename; byte-wise sibling pre-checks;
+  renaming a folder to its own name is a no-op; a parent must be in the same group (`KeyNotFoundException`,
+  the D3.1 non-disclosure shape). Delete refuses, naming each clash, when a sub-folder would duplicate a
+  top-level name (a default: roadmap decision row 22). Otherwise it appends the sub-folders after the
+  existing top-level folders and deletes set-based, so the database's SET NULL runs after the parent is
+  gone; a sub-folder named like its deleted top-level parent takes that name. Race backstops catch
+  23505/23503 by constraint name and answer as the checks do, detaching the rejected entity:
+  create/rename (name index), create (parent FK), delete (name index, then a re-check for the message),
+  and `AddStoryAsync` (the `group_stories` index; the add counts as already done, with no folder
+  assignment and no notification). The phantom SET-NULL comment is gone (service §4's false-comment
+  inventory: WU-DocCorrections can skip it), and `IGroupWriteService`'s docs now state the rules.
+- **L3.5** (`GroupFolderManagementPage`): the delete confirmation says sub-folders move to the top level;
+  a delete refusal shows the service's message instead of the generic error; a gone parent on create
+  shows "That parent folder no longer exists."; and every "no longer exists" refusal reloads the tree,
+  keeping the message (`error-handling.md`'s moved-under-the-page rule; it was missing on rename,
+  delete and reorder too).
+
+Tests:
+- **Integration** `GroupFolderIntegrityTests` (24). It covers name, parent, delete and set semantics,
+  plus five interleaved races (`InterleavingCommandInterceptor`): create, rename, parent deleted, delete
+  and add story.
+- **Integration** `SchemaConstraintTests`, the folder and `group_stories` rows: the NULLS NOT DISTINCT
+  index, the self-FK refusing a missing parent and setting children NULL, the duplicate
+  `group_stories` row.
+- **Integration** `GroupEndpointsTests` +2 (a duplicate top-level name and a colliding delete both
+  answer 400).
+- **RazorComponents** `GroupFolderManagementPageTests` +4.
+- **Unit** `GroupFolderValidationsTests` (8).
+- Mutation-checked, each failing its tests when reverted: a tracked EF delete instead of the set-based
+  one (the parent-named sub-folder trips the index), the sort-order append, the same-group parent
+  check, the name validation, the `AddStoryAsync` catch, and the page's catches and copy.
+
+**Browser:** this WU ran with no browser available, so F39 L4.5 went 5→1 (the campaign's no-browser
+precedent: the page's delete behaves differently and has new refusals). Tracker **H28** lists the
+steps that return it to 5.
 
 ## Feature 40 — Group Display
 

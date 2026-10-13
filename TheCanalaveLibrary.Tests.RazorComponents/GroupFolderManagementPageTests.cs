@@ -207,6 +207,94 @@ public class GroupFolderManagementPageTests : BunitContext
         _fakeService.DeleteFolderCalls.Should().ContainSingle().Which.Should().Be(1);
     }
 
+    // ── Folder integrity refusals (WU-SchemaHardening, service audit §2.10) ──────
+
+    [Fact]
+    public void DeleteDialog_SaysSubFoldersMoveToTheTopLevel()
+    {
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([
+            NewFolder(1, "Parent", 0, children: [NewFolder(2, "Child", 0, parentId: 1)]),
+        ]);
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Delete").Click();
+
+        cut.Markup.Should().Contain("Any sub-folders move to the top level.",
+            "a delete no longer takes the sub-folders out of sight; the admin is told where they go");
+    }
+
+    [Fact]
+    public async Task DeleteConfirmed_ValidationFailure_SurfacesViaInlineAlert()
+    {
+        // The service refuses a delete whose sub-folder would duplicate a top-level name and deletes
+        // nothing. Its message must reach the admin, not the generic "unexpected error".
+        const string refusal = "Can't delete \"Parent\": its sub-folder \"Child\" would move to the top level, " +
+                               "where a folder named \"Child\" already exists. Rename one of them first.";
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([NewFolder(1, "Parent", 0)]);
+        _fakeService.DeleteFolderException = new GroupValidationException([refusal]);
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+
+        FindButton(cut, "Delete").Click();
+        FindButton(cut, "Delete folder").Click();
+
+        cut.WaitForState(() => cut.FindAll("[role='alert']").Count > 0, TimeSpan.FromSeconds(2));
+
+        string alert = cut.Find("[role='alert']").TextContent;
+        alert.Should().Contain("would move to the top level");
+        alert.Should().NotContain("unexpected error");
+    }
+
+    [Fact]
+    public async Task Create_ParentGone_ShowsNotFoundMessage_AndReloadsTheTree()
+    {
+        // Another admin deleted the chosen parent after this page loaded: the server answers 404.
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([NewFolder(1, "Gone Soon", 0)]);
+        _fakeService.CreateFolderException = new KeyNotFoundException("Folder 1 not found.");
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+        int loadsBefore = _fakeService.GetByIdCalls;
+
+        cut.Find("#new-folder-name").Input("Child");
+        cut.Find("#new-folder-parent").Change("1");
+        _fakeService.GroupDetail = NewGroupDetail([]); // the parent is gone server-side
+        FindButton(cut, "Create Folder").Click();
+
+        cut.WaitForState(() => cut.FindAll("[role='alert']").Count > 0, TimeSpan.FromSeconds(2));
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("That parent folder no longer exists.");
+        _fakeService.GetByIdCalls.Should().BeGreaterThan(loadsBefore,
+            "the refusal means the tree moved under the page, so it reloads (error-handling.md)");
+        cut.Markup.Should().Contain("No folders yet.", "the reloaded tree no longer shows the deleted parent");
+    }
+
+    [Fact]
+    public async Task DeleteConfirmed_FolderAlreadyGone_KeepsTheMessage_AndReloadsTheTree()
+    {
+        _fakeService.Role = GroupRole.Admin;
+        _fakeService.GroupDetail = NewGroupDetail([NewFolder(1, "Doomed", 0)]);
+        _fakeService.DeleteFolderException = new KeyNotFoundException("Folder 1 not found.");
+
+        IRenderedComponent<GroupFolderManagementPage> cut = Render<GroupFolderManagementPage>(p => p
+            .Add(c => c.GroupId, TestGroupId));
+
+        FindButton(cut, "Delete").Click();
+        _fakeService.GroupDetail = NewGroupDetail([]); // another tab deleted it first
+        FindButton(cut, "Delete folder").Click();
+
+        cut.WaitForState(() => cut.FindAll("[role='alert']").Count > 0, TimeSpan.FromSeconds(2));
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("That folder no longer exists.");
+        cut.Markup.Should().Contain("No folders yet.", "the stale row is gone after the reload");
+    }
+
     // ── Reorder ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -258,6 +346,8 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public GroupDetailDto? GroupDetail { get; set; }
     public GroupRole? Role { get; set; }
     public Exception? CreateFolderException { get; set; }
+    public Exception? DeleteFolderException { get; set; }
+    public int GetByIdCalls { get; private set; }
 
     public List<CreateFolderDto> CreateFolderCalls { get; } = [];
     public List<(int FolderId, string NewName)> RenameFolderCalls { get; } = [];
@@ -272,7 +362,11 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public Task<(GroupCardDto[] Items, int TotalCount)> GetListingsAsync(int page, int pageSize) =>
         Task.FromResult((Array.Empty<GroupCardDto>(), 0));
 
-    public Task<GroupDetailDto?> GetByIdAsync(int groupId) => Task.FromResult(GroupDetail);
+    public Task<GroupDetailDto?> GetByIdAsync(int groupId)
+    {
+        GetByIdCalls++;
+        return Task.FromResult(GroupDetail);
+    }
 
     public Task<GatedMetadataDto?> GetGroupGateAsync(int groupId) => Task.FromResult<GatedMetadataDto?>(null);
 
@@ -324,6 +418,7 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
 
     public Task DeleteFolderAsync(int groupFolderId)
     {
+        if (DeleteFolderException is not null) throw DeleteFolderException;
         DeleteFolderCalls.Add(groupFolderId);
         return Task.CompletedTask;
     }

@@ -165,6 +165,18 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip; L1 stays 5.** Migration
+`WU_SchemaHardening` adds `ck_users_suspension` on `AspNetUsers`:
+`account_status = Suspended OR suspended_until_utc IS NULL`, with Suspended interpolated from
+`AccountStatusEnum`, declared in the model (`layer1-data-model.md` §"CHECK constraints").
+- **Precondition (spec C8a): verified, not rebuilt.** WU-ModerationIntegrity already routes every
+  account-status write through `ApplyStatus`, which clears the date on every non-Suspended result,
+  Reinstate → Active included. The hand DML still clears any stale date (none on the dev DB).
+- **One direction only.** "Suspended ⇒ a date" is service §2.1.3(a)'s call (whether an indefinite
+  suspension is legal), so it is not encoded; a test pins that Suspended with no date is accepted.
+- Tests: **Integration** `SchemaConstraintTests` (a Warned row with a date refused by SQLSTATE 23514 and
+  name; Suspended with and without a date accepted; the catalog inventory).
+
 **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip; L2 stays 5.** The illegal-content
 hard delete (`ResolveWithRemovalAsync(…, hardDelete: true)` → `ApplyHardDeleteAsync`) orphaned TPT base
 rows: removing a story cascaded to its chapters and their `chapter_comments` child rows but never
@@ -362,7 +374,8 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
+**Stages (updated 2026-10-13, WU-SchemaHardening — `ck_users_suspension` beneath L1, no flip, Stage note
+at the top of this section; 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
@@ -1100,6 +1113,29 @@ closed, browser-verification Stage note above). L5/L6/L8 — N/A.
 
 ## Feature 62 — SiteDailyStat Worker
 
+**WU-SchemaHardening Stage note (2026-10-13; schema audit §2.7 bullet 3) — no flip.** The two
+nullable flow columns had "accidental nullability semantics" in an append-only ground-truth table.
+- **L1: `new_users` is NOT NULL** (`int` on `SiteDailyStat` and `SiteDailyStatDto`). Its one documented
+  NULL case was a day before `User.CreatedUtc` existed, which cannot occur since the column is in
+  `InitialSchema` (the 2026-07-18 collapse), and the aggregator always wrote a `COUNT(*)`. The
+  aggregator's "deploy-day spike" note, the entity doc and `User.cs`'s backfill comment were stale for
+  the same reason and are corrected.
+- **L8: `active_users` keeps its settled NULL semantics, and the writer now honours them.** The
+  layer8 doc and the entity promised NULL for days that cannot be reconstructed, but the aggregator
+  wrote a `COUNT(*)` for every day. A gap-filled older day therefore stored a silent undercount:
+  `last_active_utc` keeps only each user's latest ping. The new seam
+  `SiteDailyStatAggregator.IsActiveUsersMeasurable(statDate, nowUtc)` (the previous completed UTC day
+  or today) drives `CASE WHEN @measure_active THEN … END`. The upsert writes
+  `COALESCE(EXCLUDED.active_users, site_daily_stats.active_users)`, so a later re-upsert of an old day
+  (gap-fill, the dev probe) never erases a measured value. `UpsertDayAsync`'s signature is unchanged.
+- **Left alone:** `/mod/stats` draws a NULL day as 0 (`ActiveUsers ?? 0`), an L4 chart question filed as
+  tracker **H27**.
+- Tests:
+  - **Unit** `SiteDailyStatWorkerTests` +5 (the seam's day boundaries).
+  - **Integration** `SiteDailyStatAggregatorTests`. `_day` is now the previous completed UTC day (the old
+    `UtcNow − 3` would read NULL). +2: an older day is written NULL while the rest still count, and a
+    re-upsert keeps a measured value. Mutation-checked: dropping the `CASE` or the `COALESCE` fails them.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** D9's sweep: `GetLatestAsync` and
 `GetSeriesAsync` are moderator-only, so `ServerSiteDailyStatReadService` now takes `IActiveUserContext`
 and gates both with `RequireModerator()`; the two handlers wrap in `ExecuteAsync`. Verified by
@@ -1109,7 +1145,9 @@ Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNon
 and `/api/site-daily-stats/latest` and `/series` answer 200 to a moderator, 403 to a member and 401
 anonymous (F47's browser-verification note).
 
-**Stages (updated 2026-09-30, WU-CounterSymmetry `total_words` predicate beneath L8, no flip;
+**Stages (updated 2026-10-13, WU-SchemaHardening — `new_users` NOT NULL beneath L1 and `active_users`
+written only for a measurable day beneath L8, no flip, Stage note at the top of this section;
+2026-09-30, WU-CounterSymmetry `total_words` predicate beneath L8, no flip;
 WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle review fixes before that):**
 L1–L3.5 = 5, L4 = 3, L4.5 = 5,
 L5/L6 = N/A, L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`

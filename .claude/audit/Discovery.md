@@ -21,7 +21,9 @@ of per-search-mode defaults).
 
 **Entities (Core/Discovery/):** `SearchMode`, `UserStoryInteractionFilterType`,
 `DefaultUserStoryInteractionFilterSetting` (matrix), `UserStoryInteractionFilterSetting`
-(sparse per-user overrides) — renamed from the spec's `UserInteractionFilter`/
+(sparse per-user overrides; keyed by the natural triple `(user_id, search_mode_key,
+user_story_interaction_filter_key)` like the matrix since WU-SchemaHardening, 2026-10-13 — it carried a
+reader-less surrogate id before; Stage note under F31) — renamed from the spec's `UserInteractionFilter`/
 `DefaultSearchSetting`/`UserSearchSetting` at WU23 (§"WU23 Shared Context" below).
 `UserCustomFilter` (list/group inclusion-exclusion filter) was **cut entirely**
 (WU-DiscoveryOverrideUI, 2026-07-31 — both directions unbuilt/unrequested; see the Stage note
@@ -227,7 +229,9 @@ Regression-covered by `TagFilterTests.LateSeed_AfterFirstRender_DisplaysItsChips
 re-seed guard from the start.
 
 ## Feature 31 — Search Page (`/discover`)
-- **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 5** (WU23 built the Source=All query;
+- **L1 — N/A** (queries Story/USI/StoryListing; the per-user override table's key change, WU-SchemaHardening
+  2026-10-13, is a Shared Context entity change with no L1 cell — Stage note at the end of this feature).
+  **L2 — Stage 5** (WU23 built the Source=All query;
   WU28 closed random preload / "give me more" — see the WU28 Stage note below; WU-SelectionPermalink
   added the permalink read, 2026-07-28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
@@ -482,6 +486,22 @@ re-seed guard from the start.
       mutation-sanity.
   - **L4 visual sign-off:** pending (consistent with WU8/WU13/WU23/WU27 precedent; cells stay
     Stage 1 in `status.md` until human check).
+
+### WU-SchemaHardening Stage note (2026-10-13) — the per-user filter overrides' natural key (no cell flips)
+
+Schema audit §2.7 bullet 1: `user_story_interaction_filter_settings` carried a surrogate identity PK
+plus a unique index on `(user_id, search_mode_key, user_story_interaction_filter_key)`, while its
+sibling `default_user_story_interaction_filter_settings` uses the natural composite key. The surrogate
+had no reader. Migration `WU_SchemaHardening` drops it and makes the triple the primary key
+(`pk_user_story_interaction_filter_settings`), same column order. `user_id` still leads, so the
+per-user reads in `ServerDiscoveryFilterSettingsService` and `ServerDiscoveryDefaultsReadService`
+use the key's prefix. No service, DTO or UI changed (the service upserts by the triple already). Up
+kept existing rows. Down re-adds an identity column, which numbers them. Both directions were
+rehearsed on a dev-DB clone holding three override rows.
+
+Tests: **Integration** `SchemaConstraintTests` (a duplicate triple refused by SQLSTATE 23505 on
+`pk_user_story_interaction_filter_settings`); `DiscoveryFilterSettingsServiceTests` and
+`DiscoveryDefaultsReadServiceTests` pass unchanged.
 
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',

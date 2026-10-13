@@ -56,6 +56,8 @@ public class ChapterDraftVisibilityTests(PostgresFixture postgres) : Integration
             Title            = title,
             PrimaryContentId = null,
             IsPublished      = isPublished,
+            // ck_chapters_first_published_date (WU-SchemaHardening): a published chapter carries its anchor.
+            FirstPublishedDate = isPublished ? DateTime.UtcNow : null,
             VersionCount     = 1,
             ChapterContents  = [content]
         };

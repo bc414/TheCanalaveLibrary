@@ -354,7 +354,7 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
         Chapter chapter = new()
         {
             StoryId = storyId, ChapterNumber = 1, Title = "Multi-Version",
-            PrimaryContentId = null, IsPublished = true, VersionCount = 2,
+            PrimaryContentId = null, IsPublished = true, FirstPublishedDate = DateTime.UtcNow, VersionCount = 2,
             ChapterContents = [primary]
         };
         db.Chapters.Add(chapter);

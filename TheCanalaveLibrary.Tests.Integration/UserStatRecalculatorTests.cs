@@ -71,7 +71,7 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             (await db.Stories.SingleAsync(s => s.StoryId == storyId)).WordCount = 750;
 
-            Chapter chapter = new() { StoryId = storyId, ChapterNumber = 1, Title = "Ch1", IsPublished = true };
+            Chapter chapter = new() { StoryId = storyId, ChapterNumber = 1, Title = "Ch1", IsPublished = true, FirstPublishedDate = DateTime.UtcNow };
             db.Chapters.Add(chapter);
             await db.SaveChangesAsync();
 
@@ -287,7 +287,7 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
         using (IServiceScope scope = Factory.Services.CreateScope())
         {
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            Chapter chapter = new() { StoryId = storyId, ChapterNumber = 1, Title = "Ch1", IsPublished = true };
+            Chapter chapter = new() { StoryId = storyId, ChapterNumber = 1, Title = "Ch1", IsPublished = true, FirstPublishedDate = DateTime.UtcNow };
             db.Chapters.Add(chapter);
             await db.SaveChangesAsync();
 

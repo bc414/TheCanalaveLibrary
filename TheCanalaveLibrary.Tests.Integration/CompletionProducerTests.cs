@@ -224,7 +224,9 @@ public class CompletionProducerTests(PostgresFixture postgres) : IntegrationTest
             StoryId       = storyId,
             ChapterNumber = chapterNumber,
             Title         = $"Chapter {chapterNumber}",
-            IsPublished   = isPublished
+            IsPublished   = isPublished,
+            // ck_chapters_first_published_date (WU-SchemaHardening): a published chapter carries its anchor.
+            FirstPublishedDate = isPublished ? DateTime.UtcNow : null
         };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();

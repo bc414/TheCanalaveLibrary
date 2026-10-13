@@ -478,6 +478,8 @@ this is a genuinely now-or-never item.
 
 ### 2.10 Group folder integrity (schema §2.4's service half)
 
+> **Built:** WU-SchemaHardening (2026-10-13) — name validation, byte-wise sibling uniqueness, same-group parents, delete moves sub-folders to the top level (refusing a name clash — a default, roadmap row 22), the phantom SET-NULL comment replaced by the real FK, and `group_stories` unique per D23 with a race backstop. Rule: `layer2-services.md` §"Group Folder Integrity". The entry below is history.
+
 CONFIRMED: `DeleteFolderAsync`'s comment claims SET-NULL re-parenting that is configured nowhere —
 children (and their story assignments) dangle and the subtree becomes permanently invisible in the
 tree build; `CreateFolderAsync` accepts any `ParentFolderId` (cross-group or nonexistent); folder
@@ -660,7 +662,8 @@ unless noted):
 | 10 | `IStoryReadService` doc comments on DTOs | Claim sprite URLs "already resolved by the read service" — resolution moved to render time | Fix stale comments |
 
 **Load-bearing false code comments** found (fix with their defects, same WU — this is the exact
-class the repo's CORRECTION-note convention exists for): `DeleteFolderAsync`'s phantom SET-NULL;
+class the repo's CORRECTION-note convention exists for): `DeleteFolderAsync`'s phantom SET-NULL
+(fixed WU-SchemaHardening, 2026-10-13);
 blog-delete's "cascades handle it" ×2 + interface docs; lineage-reject's phantom spam guard;
 Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb; `RejectLineageAsync`;
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —

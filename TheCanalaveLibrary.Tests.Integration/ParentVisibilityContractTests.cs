@@ -141,6 +141,7 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
             ChapterNumber = 1,
             Title = "PV Chapter",
             IsPublished = isPublished,
+            FirstPublishedDate = isPublished ? DateTime.UtcNow : null, // ck_chapters_first_published_date
         };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();
