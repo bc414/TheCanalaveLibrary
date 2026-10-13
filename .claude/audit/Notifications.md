@@ -386,7 +386,25 @@ Feature 41's Settled list).
   moderator's name never appears even when a source is present; 62 joins the actor-free theory and
   the every-type theories through `CategoryFor`).
 - **F42 L4.5 5→1.** The new copy has not been read in the bell, the inbox or the email; tracker
-  **H29**.
+  **H29**. It went back to 5 at the browser pass the same day (the browser verification note below).
+
+**WU-UserDeletion browser verification (2026-10-13) — F42 L4.5 1→5.** The method, accounts and logs
+are in `audit/Identity.md` F52's browser verification Stage note, and the assignments that produced
+these notifications are in `audit/Groups.md` F40's.
+- **Bell and inbox, server-only path.** ReaderGamma was promoted on group 5 over WASM. Her bell and
+  `/notifications` read "You were made an admin of E2E Rescue: deletion route", with the group icon
+  and no moderator name, on WASM (`GET /api/notifications`). Clicking the bell item opened
+  `/group/5` and marked it read. TestUser was promoted on group 6 on the circuit. His inbox and bell
+  read "You were made an admin of E2E Rescue: leave route" on the circuit, and the inbox item opened
+  `/group/6`. `psql`: one type-62 row per promotion, with `source_user_id` NULL and the group id as
+  `related_entity_id`.
+- **Email, Aspire path.** On the Aspire DB (migrations applied at start), AuthorBeta founded "E2E
+  Rescue: email check" (group 4). TestUser joined, AuthorBeta left through the sole-admin dialog, and
+  ModUser assigned TestUser. Within one flush interval Mailpit held one message to
+  testuser@example.com, subject "Group Admin Assigned". Its lead line was "You were made an admin of
+  E2E Rescue: email check" and it linked `http://localhost:5028/group/4`. The body never names
+  ModUser. The unsubscribe and settings links were present.
+- No bug was found.
 
 **WU-UserDeletion review fixes (2026-10-13) — no flip.**
 - **F41 L2 tier claim corrected.** The note above credited `GroupAdminRescueTests` with the enrichment,
@@ -686,7 +704,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41).** **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13:** the type-62 copy is undriven in a browser — tracker **H29**). Before that it went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41).** **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

@@ -17,17 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-UserDeletion (2026-10-13, two commits plus review fixes) — worksheet D13.
-  Migrations `WU_UserDeletion_SurvivalSet` and `WU_UserDeletion_GroupAdminAssigned` are on the
-  server-only dev DB (the Aspire DB takes them on its next start). **Poll votes survive anonymized**,
+- **Last landed:** WU-UserDeletion (2026-10-13, two commits plus review fixes and a browser pass) —
+  worksheet D13. Migrations `WU_UserDeletion_SurvivalSet` and `WU_UserDeletion_GroupAdminAssigned` are
+  on both dev DBs (the Aspire DB took them at the browser pass). **Poll votes survive anonymized**,
   account deletion **deletes the conversations it leaves empty** (locked against a two-deleter race),
   messaging reads "[deleted user]", and the deletion page enumerates the policy (`cross-cutting.md`
   §"Account deletion"). An **admin-less group** waits for a moderator's `AssignGroupAdminAsync`
   (three guards, a ledger-only Group row, type 62); the sole admin's Leave warns first.
-  **F37/F40/F42/F47/F49/F52 L4.5 5→1** (no browser; tracker **H29**). Filed: tracker
-  **F17/F18/F19/F20**, **E11** (D13 (iii)'s auth/IP logs, a Phase-7 obligation) and **decision row
-  23** (type 62's attribution). `dotnet test`: Unit 1,190, RazorComponents 793, Integration 1,485.
-  **Pointer:** its DONE entry.
+  **F37/F40/F42/F47/F49/F52 L4.5** went 5→1 and back to 5 at the browser pass, which closed **H29** and
+  fixed a pre-existing bug: the message reply box kept the sent text. Filed: tracker **F17/F18/F19/F20**,
+  **E11** (D13 (iii)'s auth/IP logs, a Phase-7 obligation) and **decision row 23** (type 62's
+  attribution). `dotnet test`: Unit 1,190, RazorComponents 795, Integration 1,485. **Pointer:** its
+  DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
@@ -269,7 +270,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -452,7 +453,7 @@ is pending except where a bullet says so.
 - **Cells:** L4.5 **5→1** on F37, F49 and F52 (Part A: the voter list's "[deleted user]" branch,
   messaging's label, the deletion copy) and F40, F42 and F47 (Part B: the group page's rescue panel and
   leave warning, the type-62 copy, Group rows in "Show resolved"); no browser was available, tracker
-  **H29**. Every other touched cell stays 5: F37 L1/L2/L3/L3.5, F49 L2, F52 L1/L2/L4, F40 L2/L3/L3.5,
+  **H29**. All six went **1→5** at the browser pass the same day, which closed H29. Every other touched cell stays 5: F37 L1/L2/L3/L3.5, F49 L2, F52 L1/L2/L4, F40 L2/L3/L3.5,
   F41 L1/L2, F42 L2, F46/F47 L1/L2/L5, F38 (no own surface changed). Two commits (the spec's Part A and
   Part B). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** the WU spec plus orchestrator amendments U3 (close open Message reports inside the
@@ -548,8 +549,32 @@ is pending except where a bullet says so.
     participant), the enricher's 62 arm and its `GroupAudience` bypass (no title), the page's `OnStale`
     wiring and the panel's handler branch, and the client's body route. H29's steps 1 and 7 are
     updated; no stage moved.
-- **Pointers:** `audit/Identity.md` F52, `audit/BlogPosts.md` F37, `audit/Messaging.md` F49,
-  `audit/Groups.md` F38/F40, `audit/Moderation.md` F47, `audit/Notifications.md` (type 62) Stage notes;
+  - **Browser pass (2026-10-13). F37/F40/F42/F47/F49/F52 L4.5 1→5; H29 closed.** All nine of H29's
+    steps ran. Steps 1–7 and 9 used the server-only path, step 8's email the Aspire path (Mailpit).
+    Interactive pages were checked on both render phases, with `psql` after every write.
+    - Two throwaway accounts were registered and deleted through the page. Their votes were
+      anonymized, the conversation with a survivor stayed, the emptied one went, and its open message
+      report closed.
+    - The survivor read "[deleted user]" in the poll and in messaging. Both admin-less routes were
+      rescued with stale-tab refusals on each phase. Type 62 arrived in the bell, the inbox and the
+      email. Group rows appeared in "Show resolved" and in the founder's history.
+    - Not driven: a two-admin Leave, since no in-app path makes a second admin (RazorComponents
+      covers it). Narrative: `audit/Identity.md` F52's browser verification Stage note.
+    - **One runtime bug, fixed** (commit "browser-pass fixes"): the message reply box kept the sent
+      text, so a second click re-sent it. It was pre-existing, noted by WU-GlobalFlip in July and
+      carried by no ledger. RazorComponents `MessagesPageTests` +2. After the fix: Unit 1,190,
+      **RazorComponents 795**, Integration 1,485; the four gates pass.
+    - **Dev-DB state left (server-only).** Poll 2 on blog post 2 (AuthorAlpha), with two anonymized
+      votes and TestUser's. Conversation 2 (TestUser and a deleted user; messages 4, 6, 8–11).
+      Groups 5 "E2E Rescue: deletion route" (ReaderGamma admin, founder NULL) and 6 "E2E Rescue: leave
+      route" (TestUser sole admin; AuthorBeta, ReaderGamma and ModUser left). Reports 9 (closed by
+      deletion), 10 and 11 (Group rows). Type-62 notifications 40024 and 40025. Users 8 and 9 were
+      created and deleted.
+    - **Dev-DB state left (Aspire).** Group 4 "E2E Rescue: email check" (TestUser admin), report 6,
+      notification 22, and one Mailpit message. The containers were stopped afterwards.
+- **Pointers:** `audit/Identity.md` F52 (incl. the browser verification), `audit/BlogPosts.md` F37,
+  `audit/Messaging.md` F49 (incl. the reply-box fix), `audit/Groups.md` F38/F40, `audit/Moderation.md`
+  F47, `audit/Notifications.md` (type 62) Stage notes;
   `cross-cutting.md` §"Account deletion"; tracker F17/F18/F19/F20/E11/H29; roadmap decision row 23.
 
 ## WU-SchemaHardening — group-folder integrity, `group_stories` as a set, ten model-declared CHECK constraints, the schema §2.7 consistency batch (schema audit §2.4/§2.6/§2.7, service audit §2.10, worksheet D23's `group_stories` row; extends `Groups/`, `Data/`, `Stories/`, `Chapters/`, `Following/`, `Tags/`, `BlogPosts/`, `Moderation/`, `Discovery/`) — DONE ✓ (2026-10-13)

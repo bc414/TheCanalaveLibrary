@@ -1868,13 +1868,21 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. Open the page in two tabs; delete a folder in one, then create a sub-folder under it from the
        other: "That parent folder no longer exists." and the tree reloads without it.
 
-- [ ] **H29 — WU-UserDeletion browser pass: account deletion's survival set, the deletion copy, the anonymized voter and messaging label, the admin-less group rescue** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion, which ran with no browser available.*
-  - Grid: **F37, F49 and F52 L4.5 went 5→1** at Part A (the campaign's no-browser precedent): the poll
-    voter list gained a "[deleted user]" branch, the messaging pages read "[deleted user]" for a deleted
-    participant, and the deletion page's copy was rewritten. **F40, F42 and F47 L4.5 went 5→1** at
-    Part B: the group page's rescue panel and leave warning, the type-62 copy, and Group rows in the
-    queue's "Show resolved".
-  - **Steps** (server-only path; both render phases where the page is interactive; `psql` on
+- [x] **H29 — WU-UserDeletion browser pass: account deletion's survival set, the deletion copy, the anonymized voter and messaging label, the admin-less group rescue: browser-verified 2026-10-13 (CLOSED)** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion, which ran with no browser available. Closed 2026-10-13 by its browser pass.*
+  - Grid: **F37, F40, F42, F47, F49 and F52 L4.5 are back at 5.** F37, F49 and F52 went 5→1 at Part A
+    (the campaign's no-browser precedent): the poll voter list gained a "[deleted user]" branch, the
+    messaging pages read "[deleted user]" for a deleted participant, and the deletion page's copy was
+    rewritten. F40, F42 and F47 went 5→1 at Part B: the group page's rescue panel and leave warning,
+    the type-62 copy, and Group rows in the queue's "Show resolved".
+  - **Closed:** all nine steps below ran with `psql` after every write, on both render phases wherever
+    the page is interactive. Steps 1–7 and 9 ran on the server-only path, step 8's email on the Aspire
+    path (Mailpit). Y's report on X's message went through `POST /api/moderation/reports`, because no
+    message has a report control. One step was not driven: a two-admin group's Leave. No in-app path
+    makes a second admin, and RazorComponents `GroupPageTests` covers it. The pass found one runtime
+    bug, outside this WU's code: the message reply box kept the sent text. It was fixed the same day
+    (`audit/Messaging.md` F49). Narrative: `audit/Identity.md` F52, the WU-UserDeletion browser
+    verification Stage note, with pointers from F37, F40, F42, F47 and F49.
+  - **Steps as filed** (server-only path; both render phases where the page is interactive; `psql` on
     `poll_votes`, `conversations`, `private_messages`, `conversation_participants`, `reports`,
     `group_members` as ground truth). Register two throwaway accounts (the NoOp sender's on-page
     confirm link), then:

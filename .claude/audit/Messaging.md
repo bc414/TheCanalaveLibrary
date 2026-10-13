@@ -145,9 +145,9 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13).** A deleted participant now reads "[deleted
-  user]" in the list, the thread header and on their messages, and no browser has seen it (tracker
-  **H29**; the WU-UserDeletion note below). Before that it went 5→1 at the WU-NotificationCorrectness
+- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** A deleted
+  participant reads "[deleted user]" in the list, the thread header and on their messages, seen on both
+  render phases (tracker **H29** closed; the WU-UserDeletion note below). Before that it went 5→1 at the WU-NotificationCorrectness
   review fixes (2026-10-13): the compose modal now gets a 400 ("Subject must be 2048 characters or
   fewer.") where it got a 500. It went 1→5 at that WU's browser pass the same day, which drove the
   refusal on both render phases (tracker **H26** step 4; the WU-NotificationCorrectness note below).
@@ -437,7 +437,8 @@ starting a conversation was refused with "This user does not accept private mess
   `GetConversationThreadAsync`/`GetConversationsAsync` as the survivor read "[deleted user]" for the
   other participant and the deleted sender's messages; both deleted removes the conversation and its
   messages and closes the message report. No messaging test asserted the old strings.
-- **L4.5 5→1:** the new label is undriven in a browser (tracker **H29**).
+- **L4.5 5→1:** the new label is undriven in a browser (tracker **H29**). It went back to 5 at the
+  browser pass the same day (the browser bullets below).
 - **Review fixes (same day), no flip:** two participants deleting at overlapping times could both miss
   the emptied conversation (each saw the other's uncommitted participant row). `UserDeletionService`
   now locks the user's conversations before the delete; the race and its Integration test are in
@@ -454,6 +455,20 @@ starting a conversation was refused with "This user does not accept private mess
   fails with the clear removed. Seen in the browser on both render phases: the circuit makes no
   `/api` call, and WASM makes `POST /api/messaging/conversations/2/messages`. Each time the box went
   back to its placeholder, and a second reply after a clear sent normally (`private_messages` 9–11).
+- **Browser verification (2026-10-13) — F49 L4.5 1→5.** Server-only path; the method, accounts and
+  logs are in `audit/Identity.md` F52's browser verification Stage note.
+  - **One participant deleted.** E2EDelX had conversation 2 with TestUser and conversation 3 with
+    E2EDelY, with a message each way in both. After X was deleted, TestUser's `/messages` listed
+    conversation 2 under "[deleted user]". The thread header and X's message read "[deleted user]" on
+    both render phases: the circuit made no `/api` call, and WASM loaded the thread through
+    `GET /api/messaging/conversations/2` and the list through `?scope=Active`. Y's view of
+    conversation 3 read the same.
+  - **Replying still works.** TestUser replied into conversation 2 after X was gone (WASM, 200). The
+    conversation survives for its remaining participant, as D13 edge (a) rules.
+  - **Both participants deleted.** After Y was deleted, `psql` showed conversation 3 and its messages
+    gone. Y's open report on X's message became Resolved – No Action with no moderator and the
+    "both participants" note.
+  - No console error and no `fail:` line. The one bug found is the reply-box fix above.
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

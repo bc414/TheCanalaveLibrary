@@ -554,7 +554,21 @@ deleted voter's votes now survive anonymized (the Settled bullet "Voter deletion
   counts two voters, pinning tracker **F17**'s upper bound). RazorComponents `PollViewTests` +1 (the
   anonymized voter reads "[deleted user]" without a link, the count is unchanged). Mutation-checked:
   the old voter-count formula and an unfiltered sweep each fail their test.
-- **L4.5 5→1.** The voter list gained a branch no browser has seen; tracker **H29**.
+- **L4.5 5→1.** The voter list gained a branch no browser has seen; tracker **H29**. It went back to 5
+  at the browser pass the same day (next bullet).
+- **Browser verification (2026-10-13) — F37 L4.5 1→5.** Server-only path; the method, accounts and
+  logs are in `audit/Identity.md` F52's browser verification Stage note.
+  - **The poll.** AuthorAlpha created poll 2 in blog post 2's editor: Single choice, Always (live),
+    Shown, options Turtwig and Chimchar. The throwaway accounts E2EDelX and E2EDelY voted Turtwig and
+    Chimchar, and TestUser voted Turtwig. After E2EDelX was deleted, `poll_votes` kept the row with
+    `user_id` NULL.
+  - **Circuit.** As TestUser, `/blog/2` read Turtwig 2 with "TestUser [deleted user]", Chimchar 1, and
+    "3 voters". The placeholder is a plain `<span>` with no link ancestor.
+  - **WASM.** The full load rendered the same. Retract vote (`POST /api/polls/2/vote`) returned a poll
+    reading Turtwig 1 "[deleted user]" and "2 voters". Voting Turtwig again returned "TestUser [deleted
+    user]" and "3 voters". That exercised `PollVoterDto(null, null)` over JSON. `psql` showed the live
+    vote reinserted beside the anonymized row, which the NULLS DISTINCT index allows.
+  - Deleting E2EDelY anonymized the Chimchar vote as well. No console error, no `fail:` line, no bug.
 
 **WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip.** Migration
 `WU_SchemaHardening` adds `ck_base_polls_dates` (`date_closed IS NULL OR date_closed >= date_opened`)
@@ -726,7 +740,7 @@ bullet below, 2026-07-13.)
   destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
   Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
   design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
-- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13: the anonymized-voter branch is undriven — tracker H29).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
+- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
   As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
   New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
   names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while

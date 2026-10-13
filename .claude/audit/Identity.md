@@ -202,7 +202,7 @@ L1/L2/L4 stay 5.**
   `StaticSsrPageRenderTests` +1 asserts the copy's enumerations. Mutation-checked: removing the
   conversation delete, or the message-report closure, fails the both-participants test.
 - **L4.5 5→1.** The page's copy changed and no browser was available, so tracker **H29** carries the
-  pass.
+  pass. It went back to 5 at the browser pass the same day (browser verification Stage note below).
 - **Part B (the WU's second commit, same day).** The copy gained its sole-admin sentence ("it will have
   no admin until a site moderator assigns one") once the moderator's assign-admin action existed to make
   it true (`audit/Moderation.md` F47, `audit/Groups.md` F40). The same Integration copy test asserts it.
@@ -232,6 +232,55 @@ L1/L2/L4 stay 5.**
   names the two content types rider (i) does not yet reach (stories: WU-AuthorStoryDelete; blog posts:
   B25, unowned). F19 is narrowed to the polymorphic columns; E11 and F20 are new.
 - No browser was available; tracker **H29** step 1 now reads the new sentences.
+
+**WU-UserDeletion browser verification (2026-10-13) — F52 L4.5 1→5, with F37, F40, F42, F47 and F49;
+tracker H29 closed.** This note holds the whole pass; the other five features' notes point here.
+- **Method.** Server-only path, standing dev DB kept, `psql` after every write. Steps 1–7 and 9 ran
+  there; step 8's email ran on the Aspire path (Mailpit). Interactive pages were checked on both render
+  phases. The circuit showed `_blazor/negotiate` and no `/api` call for the action. WASM showed no
+  negotiate and the action's `/api` request. The deletion page is static SSR, so it has one phase. A
+  GIF (`e2e-WU-UserDeletion.gif`) records Y's deletion and the WASM rescue.
+- **Accounts.** Two throwaway accounts, E2EDelX (id 8) and E2EDelY (id 9), registered at
+  `/Account/Register` and confirmed through the NoOp sender's on-page link. The pass deleted both.
+- **Step 1, the copy.** As X, `/Account/Manage/DeletePersonalData` showed the four sections as
+  written, including every review-fix sentence: the alert, Retract vote on an open poll only, the
+  removed recommendation, the sole-admin line and the server-logs line. "your profile" opened
+  `/user/8/series`. A wrong password showed "Error: Incorrect password." and deleted nothing.
+- **Steps 2–3, deleting X.** The fixtures:
+  - A Public, results-always poll on blog post 2 (poll 2, created as AuthorAlpha in the editor). X and
+    TestUser voted Turtwig; Y voted Chimchar.
+  - Conversation 2 (X and TestUser) and conversation 3 (X and Y), with a message each way in both.
+  - Y reported X's message 5 through `POST /api/moderation/reports` (204, report 9 Open). No message
+    has a report control, so the API is the only way to file one.
+
+  Deleting X through the page reached `/Account/AccountDeleted`. `psql`:
+  - X's vote row was kept with `user_id` NULL.
+  - Conversation 2 kept TestUser's participant row and both messages; X's message has
+    `sender_user_id` NULL.
+  - Conversation 3 kept Y's participant row, and report 9 stayed Open.
+- **Step 4, the survivor's view.** The poll and messaging checks are in `audit/BlogPosts.md` F37 and
+  `audit/Messaging.md` F49.
+- **Step 5, deleting Y.** `psql`:
+  - Conversation 3 and messages 5 and 7 are gone.
+  - Report 9 is Resolved – No Action, with no moderator and the "both participants … deleted their
+    accounts" note.
+  - Y's vote was anonymized too.
+  - Y's group 5 survives with `creator_id` NULL and no admin. The Groups page then dropped "Created
+    by".
+
+  Report 9 is absent from `/mod/reports`' "Show resolved", which is recorded intent: the queue drops a
+  row whose target is gone (`ServerModerationReadService` step 3), and its reported user is NULL, so
+  no history lists it either.
+- **Steps 6–9.** The leave warning and rescue panel are in `audit/Groups.md` F40, the type-62 bell,
+  inbox and email in `audit/Notifications.md` F42, and the queue and history in `audit/Moderation.md`
+  F47.
+- **One bug, fixed the same day.** The message reply box kept the sent text after Send Reply. It was
+  pre-existing, not this WU's code; the fix and its tests are in `audit/Messaging.md` F49.
+- **Logs.** The server-only log had no `fail:` or `crit:` line. The Aspire log's only `fail:` was the
+  documented antiforgery key-ring line from a cookie minted against the other database.
+- **Not driven: a two-admin group's Leave.** No in-app path makes a second admin: D13 keeps
+  member-to-member transfer absent, and the rescue needs zero admins. RazorComponents
+  `GroupPageTests` covers it (a non-sole admin leaves directly).
 
 **WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.**
 - **L1.** A deleted user's polls now survive anonymized: `base_polls.owner_id` is nullable `ON DELETE
@@ -340,8 +389,10 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
   D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes, and corrected by its review fixes the same day (server logs, a closed poll's votes, a removed recommendation) — Stage notes above). L5 — N/A.**
-  **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13):** the rewritten copy has not been read in a
-  browser; tracker **H29** owes the pass (it was 5 since the 2026-07-01 pass below).
+  **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13):** the
+  rewritten copy was read in a browser, and two throwaway accounts were deleted through it with
+  `psql` ground truth (browser verification Stage note above; tracker **H29** closed). Before that it
+  was 5 from the 2026-07-01 pass below.
 
 ## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
 

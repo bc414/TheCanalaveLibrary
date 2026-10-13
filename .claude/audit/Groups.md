@@ -570,7 +570,7 @@ WU's code.**
     `AdminCount` condition or the leave check fails its tests. `check-design-tokens.ps1` and
     `check-a11y.ps1` pass.
   - **L4.5 5→1.** No browser was available; tracker **H29** carries the moderator panel and the
-    leave warning.
+    leave warning. It went back to 5 at the browser pass the same day (below).
 - **WU-UserDeletion review fixes (2026-10-13) — no flip; L4.5 stays 1.** A refusal left the panel stale:
   it reloaded only its own member list, so after another moderator's assignment `Group.AdminCount` stayed
   0 and the panel kept offering "Assign as admin", refused on every retry. The panel now raises
@@ -583,6 +583,40 @@ WU's code.**
   handler the message goes to the host and the panel shows none); unwiring `OnStale` on the page, or
   skipping the panel's handler branch, fails them. The class doc's pointer to the guards' tests now names
   `GroupAdminRescueTests`. Tracker **H29** step 7's stale-tab check is updated.
+- **WU-UserDeletion browser verification (2026-10-13) — F40 L4.5 1→5.** Server-only path, `psql`
+  after every write, both render phases. The method, accounts and logs are in `audit/Identity.md`
+  F52's browser verification Stage note. No bug was found in the group page.
+  - **Fixture groups.** Group 6, "E2E Rescue: leave route", was founded by AuthorBeta; TestUser,
+    ReaderGamma and ModUser joined. Group 5, "E2E Rescue: deletion route", was founded by E2EDelY;
+    ReaderGamma joined.
+  - **Leave warning.** AuthorBeta, sole admin of group 6, clicked Leave on the circuit. "Leave as the
+    only admin?" opened with its copy. Stay closed it with nothing written. Leave group left:
+    `group_members` held no Admin row, and `creator_id` still names AuthorBeta. ReaderGamma, sole
+    admin of group 5 by then, saw the same dialog on WASM and stayed; no `/api/groups/5/leave` call
+    was made. A plain member left group 6 without a prompt on both phases: ModUser on the circuit,
+    ReaderGamma on WASM.
+  - **Rescue panel.** Group 5 went admin-less when its founder deleted their account. Group 6 went
+    admin-less when its admin left. As ModUser, "This group has no admin" listed the members
+    longest-standing first, with labelled controls and `maxlength` 1024. "Assign as admin" stayed
+    disabled with only a member picked, with whitespace notes, and with only notes.
+    - **WASM, group 5.** The assignment sent `POST /api/moderation/groups/5/assign-admin` (204). The
+      toast read "ReaderGamma is now this group's admin.", the page reloaded and the panel was gone.
+    - **Circuit, group 6.** The same flow made no `/api` call and gave TestUser the admin role.
+    - **`psql`, both groups.** The member's role became Admin. One `reports` row was written per
+      group: type 6, reason 1, reporter and moderator both ModUser, Resolved – Action Taken, the notes
+      in both columns, reported and resolved at one instant. `reported_user_id` holds the founder
+      snapshot: NULL for group 5, whose founder deleted their account, and AuthorBeta for group 6.
+      `groups_joined` did not move.
+  - **Stale second tab.** On each phase a second tab opened while the group was admin-less, then
+    assigned after the first tab had. WASM answered 400 with no console error; the circuit made no
+    `/api` call. Both reloaded the page, which dropped the panel and showed "This group still has an
+    admin. A moderator can only assign an admin to a group that has none." where it had been. Nothing
+    was written.
+  - **Who sees the panel.** A plain member of an admin-less group (ReaderGamma on group 6) saw no
+    panel on either phase. Her `POST` to the assign route got 403, and an anonymous one got 401. A
+    moderator who is a member of a group with an admin saw no panel either.
+  - **Not driven: a two-admin group's Leave.** No in-app path makes a second admin, because D13
+    keeps member-to-member transfer absent. RazorComponents `GroupPageTests` covers it.
 - **L1 — Stage 5** (group comment and group post FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above).
 - **L2 — Stage 5 (2026-06-24, WU32; `GroupDetailDto.AdminCount` since WU-UserDeletion, 2026-10-13, Integration-tested; group-post update/delete since WU-TptHardDelete, 2026-09-30 — Stage notes above).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
   `GetByIdAsync` (builds folder tree in-memory from flat DB load), `GetCurrentUserRoleAsync`,
@@ -617,9 +651,10 @@ WU's code.**
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13).** The rescue panel and the sole admin's leave warning
-  are undriven in a browser; tracker **H29** owes the pass. It was 5 from the 2026-07-01/02 pass (the
-  "L4.5-Browser verification" section below) through the later browser-verified WUs.
+- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
+  panel, its stale-tab refusal and the sole admin's leave warning were driven on both render phases
+  (browser verification Stage note above; tracker **H29** closed). It was 5 from the 2026-07-01/02 pass
+  (the "L4.5-Browser verification" section below) through the later browser-verified WUs.
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: group comments, blog-post create +
   read, and notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost,

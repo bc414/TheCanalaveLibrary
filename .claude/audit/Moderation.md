@@ -213,7 +213,28 @@ F46/F47 L1/L2/L5 stay 5.** The Settled note above, built.
   exact-set test now lists Group, with the ledger-only reason. Mutation-checked: dropping the
   admin-less guard, the self-skip or the queue arm each fails its test.
 - **L4.5 5→1.** `/mod/reports`' "Show resolved" now lists Group rows, undriven in a browser (tracker
-  **H29**).
+  **H29**). It went back to 5 at the browser pass the same day (the browser verification note below).
+
+**WU-UserDeletion browser verification (2026-10-13) — F47 L4.5 1→5.** Server-only path; the method,
+accounts and logs are in `audit/Identity.md` F52's browser verification Stage note, and the rescue
+panel that writes these rows is in `audit/Groups.md` F40's.
+- **The queue.** Two Group rows were written by the rescue: report 10 (group 5, founder deleted) and
+  report 11 (group 6, founder AuthorBeta). As ModUser, `/mod/reports` without "Show resolved" listed
+  neither. With it ticked, both read "Group: {name}", type Group, reason Other, reporter ModUser,
+  Resolved – Action Taken. Each linked `/group/{id}` and offered no action button. The circuit
+  rendered this with no `/api` call; WASM loaded it through
+  `GET /api/moderation/reports?includeResolved=True`.
+- **The founder's history.** `/mod/users/5` (AuthorBeta) listed report 11 as Group, "Group: E2E
+  Rescue: leave route", with the notes as reason detail and action taken, on both phases (WASM:
+  `GET /api/moderation/users/5/history`). Report 10's `reported_user_id` is NULL, so no history lists
+  it, as designed.
+- **The endpoint's edges.** A non-moderator's `POST /api/moderation/groups/6/assign-admin` got 403,
+  and an anonymous one got 401. A stale assignment got 400 with the service's message, read on the
+  page (F40's note).
+- **Message report closed by deletion.** Report 9, on a message whose conversation both participants
+  deleted, closed as Resolved – No Action with no moderator. "Show resolved" does not list it because
+  its target is gone: step 3 drops such rows, which is recorded intent (`ServerModerationReadService`).
+- No bug was found.
 
 **WU-UserDeletion review fixes (2026-10-13) — no flip.**
 - **L5 (F47).** `ClientModerationWriteService.AssignGroupAdminAsync`, the only moderation client method
@@ -450,7 +471,9 @@ has seen, tracker H29 — Stage note at the top of this section; its review fixe
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
-L4.5 = **1** since WU-UserDeletion (2026-10-13; tracker H29). Before that it was 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
+L4.5 = **5**: WU-UserDeletion lowered it to 1 and its browser pass returned it to 5, both 2026-10-13
+(Group rows in "Show resolved" and the founder's history driven on both render phases, tracker H29
+closed — the browser verification note at the top of this section). Before that it was 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
 standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
 to 5, tracker H19 closed — the browser-verification note at the top of this section; the earlier 1→5
 by the WU-StoryLifecycle browser pass is recorded in F48's browser-verification Stage note), L5 = 5,
