@@ -1,3 +1,4 @@
+using AngleSharp.Html.Parser;
 using FluentAssertions;
 using TheCanalaveLibrary.Server;
 
@@ -158,5 +159,70 @@ public class HtmlSanitizationServiceTests
         var input = "<p>The Canalave Library</p>";
         var result = _sut.Sanitize(input);
         result.Should().Contain("The Canalave Library");
+    }
+
+    // ── parser mXSS: the AngleSharp advisories (tracker E2) ──────────────────────
+    //
+    // Both are parse/serialize disagreements: the sanitizer walks AngleSharp's DOM and approves
+    // it, but the serialized output re-parses (in a browser) into a different tree with a live
+    // <img onerror>.
+    // - CVE-2026-54570 / GHSA-pgww-w46g-26qg (< 1.5.0): content inside
+    //   <annotation-xml encoding="text/html"> is HTML (an integration point), not MathML.
+    // - GHSA-cgp3-27rh-pcp2 (1.3.1 – 1.8.1): an SVG <style>'s text was serialized raw, so an
+    //   escaped "&lt;/style>" came back out as a real end tag.
+    // The allow-list strips both vectors whatever the parser does; the two canaries pin the parser
+    // itself past both fixes (the first fails on 0.17.1, the second on 1.7.2).
+
+    private const string AnnotationXmlPayload =
+        "<math><annotation-xml encoding=\"text/html\">" +
+        "<title><a encoding=\"</title><img src=x onerror=alert(1)>\">" +
+        "</annotation-xml></math>";
+
+    private const string SvgStylePayload =
+        "<svg><style>&lt;/style>&lt;img src=x onerror=alert(1)></style></svg>";
+
+    [Theory]
+    [InlineData(AnnotationXmlPayload)]
+    [InlineData("<math><annotation-xml encoding=\"text/html\">" +
+                "<style><a encoding=\"</style><img src=x onerror=alert(1)>\">" +
+                "</annotation-xml></math>")]
+    [InlineData("<math><annotation-xml encoding=\"text/html\">" +
+                "<style><img src=x onerror=alert(1)></style></annotation-xml></math>")]
+    [InlineData(SvgStylePayload)]
+    public void Sanitize_ParserMxssPayload_LeavesNoLiveMarkup(string payload)
+    {
+        var result = _sut.Sanitize($"<p>before</p>{payload}<p>after</p>");
+
+        result.Should().NotContain("<img").And.NotContain("onerror").And.NotContain("annotation-xml")
+            .And.NotContain("<math").And.NotContain("<svg").And.NotContain("<style")
+            .And.NotContain("<title");
+        result.Should().Contain("<p>before</p>").And.Contain("<p>after</p>",
+            "allowed siblings of the stripped vector survive untouched");
+    }
+
+    [Fact]
+    public void SanitizerParser_TreatsAnnotationXmlTextHtmlAsAnHtmlIntegrationPoint()
+    {
+        // GHSA-pgww's own PoC check. A browser's parse of this payload has a live <img>; the
+        // parser the sanitizer walks must see it too, or the sanitizer is judging a different tree.
+        var document = new HtmlParser().ParseDocument(AnnotationXmlPayload);
+
+        document.QuerySelectorAll("img").Should().ContainSingle(
+            "AngleSharp >= 1.5.0 parses annotation-xml[encoding=text/html] content as HTML");
+    }
+
+    [Fact]
+    public void SanitizerParser_RoundTripsSvgStyleTextWithoutMintingElements()
+    {
+        // GHSA-cgp3's own PoC check: the first parse holds only inert text, so serializing and
+        // re-parsing must not produce an element.
+        var parser = new HtmlParser();
+        var first = parser.ParseDocument(SvgStylePayload);
+        first.QuerySelectorAll("img").Should().BeEmpty();
+
+        var reparsed = parser.ParseDocument(first.Body!.InnerHtml);
+
+        reparsed.QuerySelectorAll("img").Should().BeEmpty(
+            "AngleSharp >= 1.8.2 escapes an SVG <style>'s text when it serializes it");
     }
 }

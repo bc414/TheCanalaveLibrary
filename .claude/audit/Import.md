@@ -20,7 +20,9 @@ Feature 53. *(As-built names corrected 2026-07-27; the build note below always h
 
 ## Feature 63 — Chapter Import (file ingestion)
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).
-- **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11).** **L4.5 — Stage 5** (see note).
+- **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
+  1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12 — Stage note below).** **L4.5 —
+  Stage 5** (see note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
   service need a client impl).** Endpoints + client impl live (WU-L5Sweep), incl. the three
   multipart parse endpoints + `Resplit` — which stays a real network hop despite its
@@ -72,6 +74,21 @@ dropped) — the sanitizer still runs on every draft as the trust boundary.
   two findings that had kept `scripts/check-design-tokens.ps1` red repo-wide since WU38d shipped;
   green again as of this fix. `ImportReviewPanelTests` (incl. preview toggle) still pass unchanged.
 
+### L2 Stage note (WU-DependencyCVEs, 2026-10-12) — no cell flips; F63 L2 stays 5
+The import path's two AngleSharp consumers moved together (tracker E2 closed; pin rule in
+`security.md` §"Dependency Vulnerability Scan Cadence"):
+- the readers' own DOM work (`ImportHtmlNormalizer`, `ChapterSplitter`, `HtmlFileReader`,
+  `EpubImportReader`) went from AngleSharp 0.17.1 to **1.8.4**;
+- the trust boundary every reader converges on (`IHtmlSanitizationService`) went from HtmlSanitizer
+  9.0.892 to 9.2.1039.
+
+This matters most here: import is where *wild* HTML (AO3/Calibre EPUBs, arbitrary HTML files) meets
+the parser, and both cleared advisories are parse/serialize mXSS (CVE-2026-54570; GHSA-cgp3-27rh-pcp2,
+which 1.8.4 clears and 1.7.2 would not). No code change was needed.
+**Verified:** Unit `ContentImportTests` and Integration `ImportCommitTests` pass unchanged on the
+new parser, including the export → import round trips. The sanitizer's new mXSS payload tests are
+in `audit/Chapters.md` F6 L2's Stage note. No UI changed, so no browser pass is owed; L4.5 stays 5.
+
 ### Settled (WU38d, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Reframe:** fundamentally *chapter* import / bulk chapter import, NOT "story import." Story
   shell is created via the normal `StoryEditorPage` flow first; import attaches chapters to a
@@ -87,7 +104,7 @@ dropped) — the sanitizer still runs on every draft as the trust boundary.
   (e.g. "3 images dropped" — the allowlist has no `img`).
 - **Libraries:** Mammoth (BSD-2; semantic docx→HTML, style-mapped to the allowlist), VersOne.Epub
   (wild-file robustness — we generate clean EPUBs, AO3/Calibre files are messier), AngleSharp
-  (explicit ref), Markdig (BSD-2).
+  (explicit ref; 1.8.4 since 2026-10-12, version rule in `security.md` pin rules), Markdig (BSD-2).
 - **Explicit modes over one common backend** — the user declares intent; auto-detect splitting runs
   ONLY in mode 4, so a single-chapter doc can never be accidentally shredded:
   1. **Into editor** — single file → `EditorView.SetHtmlAsync`; nothing committed.

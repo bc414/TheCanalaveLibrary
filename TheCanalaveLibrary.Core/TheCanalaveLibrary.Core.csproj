@@ -9,7 +9,12 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.11" />
       <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
-      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
+      <!-- Security pin for a transitive. The legacy Microsoft.AspNetCore.Identity 2.3.x above pulls
+           System.Security.Cryptography.Xml in through DataProtection 2.3.0, and this pin lifts it
+           to a patched servicing release (>= 10.0.10 clears GHSA-23rf/-8q5v/-cvvh/-g8r8/-mmjf,
+           WU-DependencyCVEs 2026-10-12). It is the only copy: SharedUI, Client and SeedTool
+           inherit it through their reference to Core. -->
+      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
     </ItemGroup>
 
 </Project>

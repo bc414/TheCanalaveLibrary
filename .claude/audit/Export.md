@@ -11,7 +11,8 @@ generation: `IExportService` (Core) + `ServerExportService` + per-format writers
 
 ## Feature 54 — Content Download/Export
 - **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11; re-verified WU-StoryLifecycle,
-  2026-09-30 — nullable publish date, "Not yet published" header; see its Stage note below).**
+  2026-09-30 — nullable publish date, "Not yet published" header; re-verified WU-DependencyCVEs,
+  2026-10-12 — the `ExportDom` walks on AngleSharp 1.8.4; see their Stage notes below).**
 - **L3-Logic — N/A** (trigger lives in Stories components). **L3.5 — N/A** (no components).
 - **L4 — N/A. L4.5 — Stage 5. L5 — N/A. L6 — N/A. L8 — N/A.**
 
@@ -54,6 +55,18 @@ was recorded only under `audit/Stories.md` F5) and was added by its review fixes
 only that the writer accepts the null, since its text is compressed),
 `Markdown_KeepsItsIsoDateFormat_ForAPublishedStory`. No UI changed, so no browser pass is owed;
 L4.5 stays 5.
+
+### L2 Stage note (WU-DependencyCVEs, 2026-10-12) — no cell flips; F54 L2 stays 5
+The Server's explicit AngleSharp reference moved 0.17.1 → **1.8.4**, together with HtmlSanitizer
+9.0.892 → 9.2.1039 (tracker E2 closed; the pin rule is in `security.md` §"Dependency Vulnerability
+Scan Cadence"). It serves the writers' DOM walks: `ExportDom`, plus the EPUB, Markdown and TXT
+writers directly. AngleSharp 1.x needed no code change: there was no compile break, and the
+0.17 → 1.x namespace/API-shape fixes the earlier scoping anticipated were never needed. The walks
+only parse already-sanitized stored HTML.
+**Verified:** Unit `ExportWritersTests` and Integration `ExportServiceTests` pass unchanged on the
+new parser, with no serializer diff in any writer's expected output. `ContentImportTests`' export →
+import round trips still survive byte-for-byte. No UI changed, so no browser pass is owed; L4.5
+stays 5.
 
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under

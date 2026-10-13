@@ -22,11 +22,17 @@ updates:
           - "Npgsql*"
       # Everything else (AWSSDK.S3, xunit, bunit, FluentAssertions, Respawn, Testcontainers.*, ...)
       # is left ungrouped and gets its own PR per bump — no cross-package version constraint.
+      # One exception is enforced by review, not by a group: AngleSharp is also the sanitizer's
+      # parser. An AngleSharp PR is a sanitizer change: it stays inside the range the current
+      # HtmlSanitizer declares, and a new major waits for an HtmlSanitizer release that declares
+      # it (security.md pin rules).
     ignore:
-      # ImageSharp 4.x switched to a build-time license-key requirement; the project deliberately
-      # stays on the 3.1.x Split-License line (free for this project's scale, no key). Patch/minor
-      # 3.1.x bumps (incl. security fixes) still flow. See TheCanalaveLibrary.Server.csproj comment
-      # and canalave-conventions/security.md "Upload Content Pipeline".
+      # ImageSharp 4.x switched to a build-time license-key requirement, and the project holds at
+      # 3.1.12, the last key-free release. 3.2.0 (2026-10-09) backported the same key check
+      # together with the 2026-10 security fixes, so a 3.2.x minor PR still arrives and fails
+      # CI's Release build for want of a key. That is expected until the owner rules on tracker
+      # E9. See TheCanalaveLibrary.Server.csproj comment and canalave-conventions/security.md
+      # "Upload Content Pipeline".
       - dependency-name: "SixLabors.ImageSharp"
         update-types: ["version-update:semver-major"]
 

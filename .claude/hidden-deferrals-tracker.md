@@ -860,15 +860,29 @@ unless noted. All sit under Stage-5 cells.
   - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half was unbuilt.
   - **Resolution: built in full — envelope, endpoint audit, client translation, and a session-expiry UI affordance.** `AddProblemDetails()` + a `/api`-scoped `ApiExceptionHandler` (traceId-carrying 500s); `EndpointHelpers.ExecuteWriteAsync` renamed `ExecuteAsync` and applied to every typed-exception-throwing read endpoint (found and fixed a live gap: `StoryEndpoints`' filter/random-batch/filter-candidates reads were still 500ing on malformed ship input); new `SessionExpiredException`/`ServerFaultException` Core types; `ClientHttpHelpers` gained `ThrowIfReadFailedAsync`, ten private write translators unified, ten gated read services translated; new `ErrorAlert.razor` adopted across 19 SharedUI components (8 SOLO editor pages named as a follow-up, not silently dropped). Also closed **D5** in the same pass. Detail: `workplan.md` WU-ErrorHandling2.
 
-- [ ] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — accepted-risk live CVE** `[off-grid · high · launch]`
+- [x] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — CLOSED (2026-10-12, WU-DependencyCVEs)** `[off-grid · high · launch]`
   - Grid: security is a global condition, no cell; F66 reads 5.
-  - Source: `security.md` §"Accepted-risk register — AngleSharp"; `roadmap.md` Phase 7.
+  - Source: `security.md` §"Dependency Vulnerability Scan Cadence" (was §"Accepted-risk register — AngleSharp"); `roadmap.md` Phase 7.
   - Context: Transitively pinned by HtmlSanitizer 9.x (can't just bump). Mitigated by the sanitizer allow-list; root-cause fix = replace `Ganss.Xss` with a custom AngleSharp-1.5.2 sanitizer behind the existing seam. Vuln scan stays report-only until then. A shipped known-vulnerable dep is invisible on a feature×layer grid.
+  - **Resolution: the zero-code path.** HtmlSanitizer 9.2.1039 accepts AngleSharp `≥ 1.7.2`, so the
+    fix was HtmlSanitizer 9.0.892 → 9.2.1039 with the Server's direct AngleSharp 0.17.1 → **1.8.4**.
+    Tests.RazorComponents' bUnit-transitive 1.4.0 is pinned to 1.8.4 too. It is 1.8.4, not the
+    floor, because AngleSharp's own repository advisory GHSA-cgp3-27rh-pcp2 (SVG `<style>`
+    serialization mXSS) covers 1.3.1–1.8.1. That advisory is not yet in the reviewed database the
+    vuln scan reads. There was no compile break and no serializer diff in any tier. The
+    custom-sanitizer plan is retired.
+    - `HtmlSanitizationServiceTests` gained both advisories' payloads and one parser canary each.
+    - Mutation-checked: on 0.17.1 the pgww canary fails, and on 1.7.2 the cgp3 canary fails.
+    - `dotnet list ... --vulnerable` no longer lists AngleSharp.
+    - Detail: `workplan.md` WU-DependencyCVEs.
 
 - [ ] **E3 — Security Phase-7 Deferred Register** `[off-grid · high · launch]` — *Deliberate (deployment-time).*
   - Grid: none.
   - Source: `security.md` §"Phase-7 Deferred Register"; `roadmap.md` Phase 7.
   - Context: Cloudflare TLS Full-Strict, origin firewall to CF ranges, `ForwardedHeaders`, serving uploads from a separate origin (+ CSP `img-src` tightening), Turnstile on registration, HSTS tuning, real-domain CSP-enforce verification, and promoting the vuln scan from report-only to a hard gate.
+  - **Added 2026-10-12 (WU-DependencyCVEs):** a patched .NET runtime on the deploy host. The package
+    scan cannot see the shared runtime, and GHSA-cvvh-rhrc-wg4q affects runtime ≤ 10.0.9. The
+    hard-gate promotion now also waits on **E9**: ImageSharp is still listed.
 
 - [x] **E4 — Default OG/social image is an SVG, not a raster — CLOSED (2026-07-31, WU-SweepRiders)** `[off-grid · low · launch]`
   - Grid: `Seo/` cluster has no row; consuming features (F4/F6/F20/F35/F38) read 5.
@@ -925,6 +939,29 @@ unless noted. All sit under Stage-5 cells.
   - Fix shape: `ApiExceptionHandler` maps `BadHttpRequestException` to 400. `SubmitReportAsync` checks
     the reason id against `report_reasons` and refuses an unknown one with `ModerationValidationException`.
     Then sweep the other request DTOs that carry lookup ids.
+
+- [ ] **E9 — ImageSharp 3.1.12 carries five 2026-10 advisories; every patched line needs a Six Labors license key** `[off-grid · high · launch]` — *Owner decision. Filed 2026-10-12 by WU-DependencyCVEs.*
+  - Grid: no cell moves. F4 L2 (cover upload) and F20–F22 L2 (avatar upload) read 5; `Images/`
+    has no row of its own.
+  - Source: `security.md` §"Upload Content Pipeline" (library paragraph) and §"Dependency
+    Vulnerability Scan Cadence" (accepted-risk entry); the csproj comment.
+  - The advisories (published 2026-10-07): GHSA-j3p4-wp97-rph4, GHSA-j9gm-c75j-xc9q and
+    GHSA-jjfr-hcj7-qf5w (high); GHSA-gwg2-r3hj-4w44 and GHSA-wmxv-xphr-5c9g (moderate). They are
+    fixed in 4.1.2, and in 3.2.0 (2026-10-09, ImageSharp PR #3208, "Backport v3 security fixes and
+    license enforcement"). The 3.2.0 nupkg's `build/SixLabors.ImageSharp.targets` runs
+    `ValidateLicenseTask` before `CoreCompile`. A Release build without `SixLaborsLicenseKey` fails,
+    and CI builds Release. A Debug build only warns.
+  - Why it is open: the settled rule was "stay on 3.1.x (key-free); revisit only if 3.1.x stops
+    receiving security patches". That trigger has now fired. The choice is the owner's:
+    - **(a)** apply for Six Labors community licensing (free but application-based, per
+      sixlabors.com/pricing), then add the key as a CI secret and a dev user-secret, and take 3.2.x
+      (or 4.x);
+    - **(b)** swap the upload pipeline to another decoder library;
+    - **(c)** keep 3.1.12 as standing accepted risk.
+  - Interim posture (WU-DependencyCVEs): accepted risk. Every vector is unreachable through
+    `ImageUploadProcessor`; the per-advisory analysis is in `security.md`. Two Unit tests guard the
+    two reachable-in-principle halves (the BigTIFF PoC, the ICC CLUT PoC). The report-only vuln
+    scan keeps listing ImageSharp, and E3's hard-gate promotion waits on this item.
 
 ---
 

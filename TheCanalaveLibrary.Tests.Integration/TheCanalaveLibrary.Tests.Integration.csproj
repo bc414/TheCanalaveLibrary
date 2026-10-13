@@ -14,6 +14,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageReference Include="Respawn" Version="7.0.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <!-- TEST-ONLY security pin for a transitive. Testcontainers 4.13 pulls SSH.NET 2025.1.0, which
+         carries GHSA-mggc-4xg6-vcxf and GHSA-q939-rpr3-3284 (ScpClient only; Testcontainers never
+         uses SCP). 2026.0.0 lists no breaking changes. Delete this pin once Testcontainers
+         (4.16+) carries it (WU-DependencyCVEs, 2026-10-12). -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

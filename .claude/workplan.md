@@ -17,18 +17,19 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-CounterSymmetry (2026-09-30) — owner rulings **D21–D24**.
-  - **Every counter has a recompute:** `ContentCounterRecalculator` (11 content counters) runs nightly
-    before `UserStatRecalculator`; counters are post-commit, primary write first.
-  - **Check-then-act per family:** the USI rows and partition, `group_members` and vouches are
-    `ON CONFLICT` upserts; the gem/highlight/vouch limits are stated-soft (an inference, owner-flagged).
-  - **Producers fixed:** creating a group counts as joining; published-only `Story.WordCount`; atomic
-    `VersionCount`; the like toggles return the landed count; a double lineage approve is refused.
-  - **Badges:** zero-count counter-backed badges hidden through one shared predicate. F50 L4.5 went
-    to 1 (no browser), then back to 5 after its browser pass the same day.
-  - **Review fixes:** the USI ensure re-read retries instead of answering 401; owed tests; Built banners.
-  - **Browser pass:** a stale lineage row fixed; H23 narrowed to an owner call; **D12/H24** filed (the WU filed **D11/H23**).
-    `dotnet test`: Unit 1,081, RazorComponents 770, Integration 1,380. **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle", §"Check-then-act posture".
+- **Last landed:** WU-DependencyCVEs (2026-10-12) — the NuGet advisory sweep from the 2026-10-12
+  resume build.
+  - **Patched:**
+    - `System.Security.Cryptography.Xml` → 10.0.12 (one pin in Core; three redundant pins deleted);
+    - `SSH.NET` → 2026.0.0 (test-only pin);
+    - **E2 closed**: HtmlSanitizer 9.2.1039 with AngleSharp **1.8.4**, not the 1.7.2 floor, because
+      AngleSharp's repository advisory GHSA-cgp3 covers ≤ 1.8.1.
+  - **Owner-open:** ImageSharp 3.1.12 stays as accepted risk. Every patched line needs a Six Labors
+    build-time license key, so the choice is **tracker E9**. All five vectors are unreachable through
+    the upload pipeline, and two Unit tests guard the reachable-in-principle ones.
+  - The vuln scan lists only ImageSharp. `dotnet test`: Unit 1,089, RazorComponents 770, Integration
+    1,380. **Pointers:** its DONE entry; `security.md` §"Dependency Vulnerability Scan Cadence".
+  Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
@@ -235,8 +236,9 @@ references it, does not restate it.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
-  (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, and
-  **WU-NotificationCorrectness** is next in the campaign's build order.
+  (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
+  2026-10-12 resume) the unplanned WU-DependencyCVEs, and **WU-NotificationCorrectness** is next in
+  the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -261,9 +263,10 @@ references it, does not restate it.
   2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**);
   **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
-  H23 to an owner check the same day and opened **D12/H24**)),
+  H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
+  **E2** and opened **E9**, the ImageSharp licensing call the owner has to make),
   including two **high-priority security items:
-  E2 and E3**. **A7** is the
+  E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
@@ -274,7 +277,8 @@ references it, does not restate it.
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
   fixes — and 20 — WU-ModerationIntegrity's two derived account-status refusals — added
-  2026-09-30). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  2026-09-30). Also not a numbered decision row: tracker **E9**, ImageSharp licensing (a Six Labors
+  key, a library swap or standing risk; filed by WU-DependencyCVEs, 2026-10-12). Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -428,6 +432,84 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-DependencyCVEs — the 2026-10-12 NuGet advisory sweep: Crypto.Xml, SSH.NET and AngleSharp patched, tracker E2 closed, ImageSharp held as accepted risk pending the owner (tracker E9) (cross-cutting; extends `RichText/`, `Export/`, `Import/`, `Images/`, the csproj set) — DONE ✓ (2026-10-12)
+
+- **Cells:** none flipped. The work sits beneath Stage-5 cells (F6 L2 sanitizer, F54 L2, F63 L2,
+  F4/F20 L2 via `Images/`) or has no cell (E2). No migration.
+- **Trigger:** the 2026-10-12 resume build reported NuGet advisories; warnings had grown 93 → 125
+  since the campaign started. Orchestrator amendment §"WU-DependencyCVEs". This WU took over E2
+  from WU-TrackerFixes.
+- **What landed:**
+  1. **`System.Security.Cryptography.Xml` 10.0.9 → 10.0.12** (GHSA-23rf/-8q5v/-cvvh/-g8r8/-mmjf,
+     high). Only Core's graph needs it: legacy `Microsoft.AspNetCore.Identity` 2.3.11 pulls it in
+     through `DataProtection` 2.3.0. Core keeps the one pin, with a why-comment. The redundant direct
+     pins in SharedUI, Client and AppHost were deleted: SharedUI and Client inherit Core's, and
+     AppHost's graph has no consumer.
+  2. **`SSH.NET` pinned to 2026.0.0** in Tests.Integration (test-only; Testcontainers 4.13's
+     transitive 2025.1.0 had two high `ScpClient` advisories, a path Testcontainers never uses).
+  3. **E2: `HtmlSanitizer` 9.0.892 → 9.2.1039, direct `AngleSharp` 0.17.1 → 1.8.4**, and the
+     bUnit-transitive 1.4.0 in Tests.RazorComponents pinned to 1.8.4. This was the zero-code path:
+     no compile break, no serializer diff.
+     - **Why 1.8.4, not the 1.7.2 floor the earlier scoping proposed:** AngleSharp's repository
+       advisory GHSA-cgp3-27rh-pcp2 (2026-09-19; SVG `<style>` serialization mXSS) covers
+       1.3.1–1.8.1. It is not yet in the reviewed database the scan reads.
+     - The pin rule changed from "exactly the floor" to "inside the sanitizer's declared range,
+       newest patched 1.x, every bump gated by the sanitizer tests" (Doc-Touch moment 2,
+       `security.md` pin rules).
+  4. **ImageSharp 3.1.12 kept as accepted risk** (five 2026-10-07 advisories). Both patched lines
+     (3.2.0 and 4.1.2+) now run Six Labors' build-time license check, and a Release build fails
+     without a key. That fired the old "revisit if 3.1.x stops getting security patches" trigger.
+     Every vector is unreachable through `ImageUploadProcessor`, and the analysis per advisory is in
+     `security.md`. **Filed tracker E9** for the owner's choice: a key, a library swap or standing
+     risk.
+  5. **Docs:**
+     - `security.md`: pin rules, the E2 resolution, the sweep table, the ImageSharp accepted risk, a
+       pipeline rule, and a patched-runtime item in the Phase-7 register;
+     - `layer2-services.md`: the allow-list's mXSS paragraph;
+     - the comment in each touched csproj;
+     - the `dependabot.yml` comments;
+     - tracker E2 ticked, E3 extended, E9 filed;
+     - `roadmap.md`: the Phase-7 AngleSharp bullet struck and an E9 bullet added.
+- **Left alone:**
+  - the ImageSharp version (owner-open, E9);
+  - removing the legacy `Microsoft.AspNetCore.Identity` 2.3.11 from Core, the root of the Crypto.Xml
+    chain (out of scope);
+  - bumping bUnit or Testcontainers instead of pinning (the amendment asked for pins);
+  - the host runtime, which is a deploy-time item (Phase-7 register, tracker E3). The dev machine
+    runs 10.0.11, already patched.
+  - The planned AngleSharp attribute-escaping test was dropped: AngleSharp, through 1.8.4, still
+    writes `<`/`>` raw inside serialized attribute values. The 1.5.0 fix never covered that half
+    of the advisory text; the allow-list covers it.
+- **Verification:**
+  - `dotnet list ... --vulnerable --include-transitive` lists only ImageSharp (E9).
+  - Build: 0 errors, 33 warnings (was 125): the three pre-existing C# warnings plus the ImageSharp
+    NU190x lines.
+  - `dotnet test`: Unit 1,089 (+8), RazorComponents 770, Integration 1,380, all green. The four
+    gates pass.
+  - New Unit tests:
+    - `HtmlSanitizationServiceTests` +6: both advisories' payloads in a 4-case theory, plus one
+      parser canary per advisory;
+    - `ImageUploadProcessorAdvisoryTests` (2, non-parallel collection): the BigTIFF IFD-loop PoC is
+      rejected at the sniff under a deadline; the truncated-CLUT ICC PoC passes through as raw
+      bytes, < 48 MB allocated (measured ≈ 130 KB).
+  - Mutation-checked:
+    - back on 0.17.1, the pgww canary fails;
+    - on 1.7.2, the cgp3 canary fails;
+    - a TIFF module in the sniff reproduces the advisory's hang, and the test fails on its deadline;
+    - reading `IccProfile.Entries` allocates 114.9 MB and fails.
+  - No browser in this environment, and none owed: no UI changed, and ImageSharp did not change
+    version, so the amendment's upload pass does not trigger.
+- **Hand-offs:**
+  - **WU-TrackerFixes:** skip its §1 C / E2 entirely, including the §5 sanitizer tests (landed here,
+    minus the dropped href-escaping test).
+  - `AllocationSensitiveCollection` (Tests.Unit) is reusable by any test that measures process-wide
+    allocation.
+- **Pointers:**
+  - `security.md` §"Upload Content Pipeline" and §"Dependency Vulnerability Scan Cadence";
+  - the Stage notes in `audit/Chapters.md` F6 L2, `audit/Export.md` F54, `audit/Import.md` F63 and
+    `audit/ImageStorage.md` L2;
+  - tracker E2/E3/E9.
 
 ## WU-CounterSymmetry — counter & concurrency doctrine: every counter derived and reconciled, post-commit counters, check-then-act hardened per family, creating a group counts as joining (worksheet D21–D24; extends `Profiles/`, `Groups/`, `Following/`, `UserStoryInteractions/`, `Chapters/`, `Comments/`, `Recommendations/`, `Moderation/`, `Badges/`, `Stories/`, `Users/`) — DONE ✓ (2026-09-30)
 

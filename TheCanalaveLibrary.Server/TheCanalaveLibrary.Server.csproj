@@ -15,23 +15,13 @@
              AddDbContext + UseNpgsql is used instead (Program.cs); see layer2-services.md
              "DbContext Registration". Npgsql.EntityFrameworkCore.PostgreSQL below is the provider
              that registration actually needs. -->
-        <!-- Explicit reference for the Export/Import DOM walks (WU38c/WU38d) — was transitive via
-             HtmlSanitizer. PINNED to 0.17.1: HtmlSanitizer 9.x has a hard AngleSharp (= 0.17.1)
-             constraint; floating to 1.x resolves but risks runtime MissingMethodException inside
-             the sanitizer (the trust boundary). Bump only together with an HtmlSanitizer release
-             that targets AngleSharp 1.x (upstream mganss/HtmlSanitizer#491, open since 2023;
-             #614 tracks 1.5.2 — no release yet).
-             KNOWN VULN — ACCEPTED RISK: 0.17.1 carries CVE-2026-54570 / GHSA-pgww-w46g-26qg, a
-             moderate (CVSS 6.9) mXSS via MathML <annotation-xml>, fixed in AngleSharp 1.5.0. Our
-             sanitizer allowlist (ServerHtmlSanitizationService — 13 tags + href only) strips the
-             <annotation-xml> element and the encoding attribute at every untrusted-HTML boundary,
-             so the vector cannot survive sanitization. Root-cause fix (custom AngleSharp-1.5.2
-             sanitizer, drop Ganss.Xss, float this ref off 0.17.1) is a Phase 7 launch-readiness
-             item in roadmap.md; rationale + mitigation in canalave-conventions/security.md
-             "Dependency Vulnerability Scan Cadence". Dependabot's AngleSharp bump PRs are CLOSED,
-             not ignored (dependabot.yml carries no AngleSharp ignore), and the advisory is
-             dismissed as risk-accepted in the GitHub Security tab. -->
-        <PackageReference Include="AngleSharp" Version="0.17.1" />
+        <!-- Explicit reference for the Export/Import DOM walks (WU38c/WU38d). It is ALSO the parser
+             HtmlSanitizer (below) runs on, so it stays inside the range that HtmlSanitizer release
+             declares (9.2.1039: >= 1.7.2, same major), on the newest patched 1.x. Every bump is a
+             sanitizer change, so HtmlSanitizationServiceTests must be green (security.md "Dependency
+             Vulnerability Scan Cadence", pin rules). 1.8.4 clears CVE-2026-54570 (tracker E2) and
+             AngleSharp's repo advisory GHSA-cgp3-27rh-pcp2 (1.3.1-1.8.1) (WU-DependencyCVEs). -->
+        <PackageReference Include="AngleSharp" Version="1.8.4" />
         <!-- S3-compatible image storage (WU-S3Garage): one client for Garage (dev) and
              Cloudflare R2 (prod). See S3ImageStorageService for the wire-format constraints
              (unchunked uploads, WHEN_REQUIRED checksums) that keep both endpoints working. -->
@@ -54,12 +44,13 @@
              crosses the threshold, this needs a paid license or a writer swap — same discipline
              as the ImageSharp pin below. -->
         <PackageReference Include="QuestPDF" Version="2026.7.1" />
-        <!-- Upload sniff + re-encode pipeline (WU-Security, ImageUploadProcessor). PINNED to the
-             3.1.x line deliberately: v4.0 switched to a build-time license-key requirement
-             ($(SixLaborsLicenseKey) — build fails without one), while 3.1.x stays on the Split
-             License (free below the small-business threshold, no key). Dependabot is told to
-             ignore the major bump (.github/dependabot.yml). See security.md "Upload Content
-             Pipeline". -->
+        <!-- Upload sniff + re-encode pipeline (WU-Security, ImageUploadProcessor). HELD at 3.1.12,
+             the last key-free release. 4.x and 3.2.x (3.2.0 shipped the 2026-10 security fixes)
+             both run a build-time license check: a Release build fails without
+             $(SixLaborsLicenseKey). KNOWN VULNS, ACCEPTED RISK pending the owner (tracker E9):
+             five 2026-10 advisories, every vector unreachable through ImageUploadProcessor (see
+             security.md "Dependency Vulnerability Scan Cadence"). Dependabot ignores the major
+             bump (.github/dependabot.yml). Do not take a 3.2.x PR without a key. -->
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
         <!-- EPUB import reader (WU38d): battle-tested against wild files (AO3/Calibre/FicHub) —
              we generate clean EPUBs ourselves (zero-dep ZipArchive in EpubWriter) but parse
@@ -75,7 +66,10 @@
         <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.9" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
-        <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
+        <!-- Ganss.Xss — the sanitizer allow-list (ServerHtmlSanitizationService). The AngleSharp
+             reference above must stay inside the range this release declares (9.2.1039:
+             AngleSharp >= 1.7.2). -->
+        <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
         <!-- Transactional email (WU-Email): SmtpEmailSender speaks SMTP to whatever the
              Email:Provider switch points at (Mailpit dev inbox under Aspire, a real provider in
              prod — see cross-cutting.md "Identity & Auth"). MailKit, not the obsolete

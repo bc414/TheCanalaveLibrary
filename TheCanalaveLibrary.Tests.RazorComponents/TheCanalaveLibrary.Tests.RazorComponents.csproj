@@ -10,6 +10,11 @@
   <ItemGroup>
     <!-- bUnit provides the Blazor component hosting/rendering infrastructure for tests. -->
     <PackageReference Include="bunit" Version="2.7.2" />
+    <!-- TEST-ONLY security pin for a transitive. bUnit 2.7.2 floors AngleSharp at 1.4.0, which
+         carries CVE-2026-54570 (GHSA-pgww-w46g-26qg) and GHSA-cgp3-27rh-pcp2. This pin keeps it on
+         the same version the Server pins (security.md pin rules). Move it with the Server's
+         AngleSharp reference (WU-DependencyCVEs, 2026-10-12). -->
+    <PackageReference Include="AngleSharp" Version="1.8.4" />
     <PackageReference Include="coverlet.collector" Version="10.0.1" />
     <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />

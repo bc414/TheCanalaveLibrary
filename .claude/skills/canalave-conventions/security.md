@@ -43,13 +43,17 @@ actual bytes. Pipeline, in order:
    pipeline: it proves the file is a genuine image and discards polyglot payloads, trailing
    data, and crafted metadata that survive a signature check alone.
 
-Library: **SixLabors.ImageSharp, pinned to the 3.1.x line** (Split License — free below the
+Library: **SixLabors.ImageSharp, held at 3.1.12** (Split License — free below the
 small-business revenue threshold; a hobby fanfiction site qualifies. Re-check terms if the
-project ever takes money beyond donations). **Do not bump to 4.x**: v4 switched to a
-build-time license-key requirement (`$(SixLaborsLicenseKey)` — the build fails without one);
-Dependabot ignores the major bump (`.github/dependabot.yml`). Patch/minor 3.1.x security fixes
-still flow. Revisit only if 3.1.x stops receiving security patches. Constants live on
-`ImageUploadProcessor`.
+project ever takes money beyond donations). **Do not bump to 4.x or 3.2.x without the owner's
+call (tracker E9):** both lines run Six Labors' build-time license check
+(`$(SixLaborsLicenseKey)` — a Release build fails without one, a Debug build only warns). 3.2.0
+(2026-10-09) shipped the 2026-10 security fixes *together with* that check, so the 3.1.x line
+gets no more security patches. That fired the old rule's revisit trigger. Until the owner picks
+a key, a library swap or standing risk, the five 2026-10 advisories are accepted risk; see
+§"Dependency Vulnerability Scan Cadence". Dependabot ignores the major bump
+(`.github/dependabot.yml`). Its 3.2.x minor-bump PR fails CI's Release build for want of a key,
+which is expected, not a regression. Constants live on `ImageUploadProcessor`.
 
 **Rules:**
 - No storage implementation ever writes caller-supplied bytes; both consume
@@ -59,6 +63,12 @@ still flow. Revisit only if 3.1.x stops receiving security patches. Constants li
   bulk-import feature.
 - SVG stays off the allow-list permanently — SVG is XML that can carry scripts (stored XSS);
   raster only.
+- The pipeline decodes and encodes **only** the three allow-listed formats (`SniffConfiguration`
+  serves both `Identify` and `Load`), runs no image processor beyond `AutoOrient`/`Resize`, and
+  **never reads `IccProfile.Entries`** (the ICC profile passes through as raw bytes). These three
+  keep the 2026-10 ImageSharp advisories unreachable on 3.1.12.
+  `ImageUploadProcessorAdvisoryTests` guards the TIFF and ICC halves with the advisories' own
+  payloads.
 
 ## Write Throttling (service layer — the transport-agnostic boundary)
 
@@ -284,25 +294,67 @@ and pre-beta-harmless.
 them. Promotion to a hard gate is a Phase 7 launch-readiness checklist item (a known-vuln
 dependency becomes launch-blocking once real users exist).
 
-**Accepted-risk register — AngleSharp 0.17.1 (CVE-2026-54570 / GHSA-pgww-w46g-26qg).** Moderate
-(CVSS 6.9) mXSS via MathML `<annotation-xml>` (HTML integration-point mishandling + unescaped
-`<`/`>` in serialized attributes), fixed in AngleSharp 1.5.0. **Cannot upgrade:** `HtmlSanitizer`
-9.x hard-pins `AngleSharp (= 0.17.1)` and no release targets 1.x (upstream mganss/HtmlSanitizer
-#491 open since 2023, #614 tracks 1.5.2); a direct override risks a runtime `MissingMethodException`
-in the sanitizer trust boundary. **Mitigation (why this is accepted, not fixed):** the HTML
-sanitizer allow-list (`layer2-services.md` §"User HTML Is Sanitized Once, On Save" — 13 tags +
-`href` only, no `style`/`class`/arbitrary attributes) strips the `<annotation-xml>` element and the
-`encoding` attribute at *every* untrusted-HTML boundary (editor output + all five import formats),
-so the vector cannot survive sanitization; the direct AngleSharp use (export/import DOM walks) only
-parses our own already-sanitized stored content. The report-only scan will keep listing it — that
-is expected, not a regression. **Handling:** Dependabot's AngleSharp bump PRs are **closed, not
-ignored** — `dependabot.yml` deliberately carries *no* AngleSharp entry, so a *different* future
-AngleSharp advisory still surfaces; the specific advisory is dismissed as risk-accepted in the
-GitHub Security tab. **Root-cause fix** (a custom AngleSharp-1.5.2 sanitizer behind the existing
-`IHtmlSanitizationService` seam — drop `Ganss.Xss`, float the direct ref off 0.17.1, backed by an
-XSS-payload test corpus + security review) is a Phase 7 launch-readiness item in `roadmap.md`
-(the vuln-scan hard gate above blocks on it once real users exist). If an HtmlSanitizer release on
-AngleSharp 1.x lands first, that is the zero-code path instead.
+**Pin rules.** Every explicit pin of a package that would otherwise float transitively carries a
+comment in its csproj saying why it exists. A pin in a test project says it is test-only. Two
+pins carry extra rules:
+- **AngleSharp moves with HtmlSanitizer.** The Server's direct `AngleSharp` reference (used by the
+  export/import DOM walks) is also the parser the sanitizer, our trust boundary, runs on. It stays
+  inside the range the `HtmlSanitizer` release in use declares (at or above its floor, same
+  major), on the newest patched 1.x stable, and never below an advisory's fix. Treat every
+  AngleSharp bump as a sanitizer change: it lands only with `HtmlSanitizationServiceTests`
+  (including the mXSS canaries) and the Export/Import tests green. A new AngleSharp major waits for
+  an HtmlSanitizer release that declares it; the 0.17 → 1.x jump is why. On every bump, also read
+  AngleSharp's own repository advisories. They can land before the GitHub-reviewed database that
+  the scan reads; GHSA-cgp3 did. Tests.RazorComponents (bUnit) pins the same AngleSharp version.
+- **ImageSharp stays at 3.1.12** until the owner rules on tracker E9 (§"Upload Content Pipeline").
+
+**Resolved 2026-10-12 (WU-DependencyCVEs) — AngleSharp 0.17.1 (CVE-2026-54570 /
+GHSA-pgww-w46g-26qg, tracker E2).** This was an accepted risk from 2026-07 to 2026-10. AngleSharp
+did not treat `<annotation-xml encoding="text/html">` as an HTML integration point, so its DOM
+disagreed with a browser's (an mXSS); fixed in 1.5.0. HtmlSanitizer 9.0.892 hard-pinned
+`AngleSharp [0.17.1]`. HtmlSanitizer 9.2.1039 accepts `≥ 1.7.2`, so the fix was the zero-code path
+this section had pre-authorized: HtmlSanitizer 9.0.892 → 9.2.1039, and the direct AngleSharp
+0.17.1 → **1.8.4**. 1.8.4 rather than the floor 1.7.2, for one reason: AngleSharp's own repository
+advisory **GHSA-cgp3-27rh-pcp2** (2026-09-19, moderate; SVG `<style>` text serialized raw, another
+mXSS) covers 1.3.1–1.8.1 and is fixed in 1.8.2. That advisory is not in the GitHub-reviewed
+database yet, so `dotnet list --vulnerable` cannot see it. There was no compile break and no
+serializer diff in any tier. The planned "custom AngleSharp-1.5.2 sanitizer" is retired as
+unneeded. Through 1.8.4, AngleSharp still writes `<`/`>` raw inside serialized attribute values;
+the advisory text names this as an ingredient, but the 1.5.0 fix did not change it. So the
+allow-list remains the defence in depth (`layer2-services.md` §"User HTML Is Sanitized Once, On
+Save"): it admits no attribute except a scheme-checked `href`, and it stripped the vector on
+0.17.1 too. `HtmlSanitizationServiceTests` carries both advisories' payloads, plus one parser
+canary per advisory.
+
+**Sweep 2026-10-12 (WU-DependencyCVEs).** The 2026-10-12 build listed these advisories (GitHub
+publication dates run from 2026-07-17 to 2026-10-07). They were cleared as follows:
+
+| Package | Scope | Advisories | Resolution |
+|---|---|---|---|
+| `System.Security.Cryptography.Xml` 10.0.9 | Core, and everything that references it. Legacy `Microsoft.AspNetCore.Identity` 2.3.x pulls it in through `DataProtection` 2.3.0. | GHSA-23rf-6693-g89p, -8q5v-6pqq-x66h, -cvvh-rhrc-wg4q, -g8r8-53c2-pm3f, -mmjf-rqrv-855v (high) | Core's pin raised to 10.0.12 (patched from 10.0.10). The redundant direct pins in SharedUI, Client and AppHost were removed: the first two inherit Core's, and nothing in AppHost's graph uses the package. |
+| `SSH.NET` 2025.1.0 | **Test-only**: `Testcontainers` 4.13 in Tests.Integration. Only `ScpClient` is affected, and Testcontainers never uses SCP. | GHSA-mggc-4xg6-vcxf, GHSA-q939-rpr3-3284 (high) | Pinned to 2026.0.0 (no breaking changes listed). |
+| `AngleSharp` 0.17.1 / 1.4.0 | Server, plus **test-only** bUnit 2.7.2 in Tests.RazorComponents | GHSA-pgww-w46g-26qg (moderate); the target also had to clear GHSA-cgp3-27rh-pcp2 | Both moved to 1.8.4. See the resolution above. |
+| `SixLabors.ImageSharp` 3.1.12 | Server upload pipeline | GHSA-j3p4-wp97-rph4, -j9gm-c75j-xc9q, -jjfr-hcj7-qf5w (high); -gwg2-r3hj-4w44, -wmxv-xphr-5c9g (moderate) | **Accepted risk, pending owner (tracker E9).** See below. |
+
+**Accepted risk — ImageSharp 3.1.12, pending tracker E9.** The fixes ship only in 4.1.2+ and
+3.2.0+, and both run the license check (§"Upload Content Pipeline"). On 3.1.12 every vector is
+unreachable through `ImageUploadProcessor`, the only ImageSharp consumer:
+- **j3p4** (float TIFF + `HistogramEqualization`): no TIFF decoder is configured, and no histogram
+  processor is ever called.
+- **j9gm, jjfr** (TIFF CCITT T4/T6 *encoders*): the pipeline only encodes JPEG, PNG and WebP.
+- **wmxv** (BigTIFF IFD loop): only the TIFF decoder reaches `ReadValues64`. EXIF inside
+  JPEG/PNG/WebP takes the classic-TIFF path. Guarded by a Unit test that feeds the advisory's
+  24-byte PoC.
+- **gwg2** (ICC CLUT allocation): on v1–v3 this is reachable only through the lazy
+  `IccProfile.Entries`, which the pipeline never reads. Guarded by a Unit test that feeds the
+  advisory's PoC profile and bounds the allocation.
+
+The report-only scan keeps listing ImageSharp until E9 is decided. That is expected, not a
+regression.
+
+**The scan cannot see the host runtime.** GHSA-cvvh-rhrc-wg4q also affects the .NET 10 shared
+runtime ≤ 10.0.9. A framework-dependent deploy takes whatever runtime its host has, so the host
+must run a patched .NET servicing release. This is a Phase-7 register item (below).
 
 ## Phase-7 Deferred Register (launch-readiness picks these up)
 
@@ -322,3 +374,7 @@ Security items that only make sense at deployment — deliberately **not** built
   stable; `preload` only when certain.
 - **CSP enforce verification against the real domain** — one browse pass with enforcement on
   in the production topology before launch.
+- **Patched .NET runtime on the host.** The deploy host or base image runs the current .NET 10
+  servicing release (≥ 10.0.10 for the 2026-07 runtime advisories) and moves with each Patch
+  Tuesday. The package scan cannot see the shared runtime (§"Dependency Vulnerability Scan
+  Cadence").

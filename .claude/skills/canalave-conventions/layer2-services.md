@@ -591,14 +591,15 @@ blockquote, ul, ol, li, a` (+ `a[href]` with safe schemes, normalized `rel`/`tar
 that persists `EditorView` output injects `IHtmlSanitizationService` and calls it before persisting;
 if the toolbar ever gains a button, extend the allow-list in the same change.
 
-**Security consequence — the allow-list is also a live vuln mitigation.** The sanitizer's parser
-(AngleSharp) is pinned to 0.17.1, which carries CVE-2026-54570 (mXSS via MathML `<annotation-xml>`;
-see `security.md` "Dependency Vulnerability Scan Cadence" and the `AngleSharp` pin comment in
-`TheCanalaveLibrary.Server.csproj`). This restrictive allow-list is what neutralizes it: stripping
-every element/attribute outside the 13-tag + `href` set removes the `<annotation-xml>` element and
-its `encoding` attribute before they can round-trip. So loosening the allow-list is not purely a
-UX/toolbar decision — adding `svg`, `math`, `style`, or broad attributes re-opens the mXSS surface
-until AngleSharp is off 0.17.1 (tracked as a Phase 7 root-cause fix in `roadmap.md`).
+**Security consequence — the allow-list is defence in depth against parser mXSS.** The
+sanitizer's parser (AngleSharp) moves in lockstep with `HtmlSanitizer` (`security.md` §"Dependency
+Vulnerability Scan Cadence", pin rules). It ran on 0.17.1, with CVE-2026-54570 (mXSS via MathML
+`<annotation-xml>`), until WU-DependencyCVEs moved it to 1.8.4 on 2026-10-12. Through that window
+this restrictive allow-list was the mitigation: stripping every element and attribute outside the
+13-tag + `href` set removes `<annotation-xml>` and its `encoding` attribute before they can
+round-trip. The same holds for the next parser advisory. So loosening the allow-list is not purely
+a UX/toolbar decision: adding `svg`, `math`, `style` or broad attributes widens the surface any
+future parser mXSS can reach, and needs the same security review as a dependency change.
 
 ### Word Count Is Computed Server-Side, On Save — From Stripped Text
 

@@ -108,7 +108,7 @@ write path's `CoverArtRelativeUrl` a pass-through string; both UIs have since sh
 
 ---
 
-## L2 — Stage 5 (WU12, 2026-06-22)
+## L2 — Stage 5 (WU12, 2026-06-22; ImageSharp held at 3.1.12 as accepted risk with advisory guards, WU-DependencyCVEs, 2026-10-12 — last Stage note below)
 
 `IImageStorageService` + `LocalImageStorageService` minted and registered
 (`AddScoped<IImageStorageService, LocalImageStorageService>()`). No write-path call site yet (Stories'
@@ -199,6 +199,35 @@ refitted to real generated fixtures (`TestImages`), each with a spoofed-MIME end
 Browser band (server-only path, 2026-07-06): `/settings` avatar upload of PNG bytes named
 `.jpg` → DB row `profile-{uuid}.png`, served `image/png` with `nosniff`; 3000×100 upload
 stored 2048×68; prior avatar orphan-deleted on replace.
+
+**WU-DependencyCVEs Stage note (2026-10-12) — ImageSharp 3.1.12 kept as accepted risk; L2 remains
+Stage 5.** Five ImageSharp advisories were published 2026-10-07: GHSA-j3p4-wp97-rph4,
+GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (high); GHSA-gwg2-r3hj-4w44 and GHSA-wmxv-xphr-5c9g
+(moderate). They are fixed only in 4.1.2+ and in 3.2.0 (2026-10-09), and both lines now run Six
+Labors' build-time license check, which fails a Release build without a key. The WU-Security pin
+rule ("stay on 3.1.x; revisit only if 3.1.x stops receiving security patches") has therefore fired.
+The choice of a key, a library swap or standing risk is the owner's: tracker **E9**. **No package
+or pipeline code changed.**
+- **Why it is acceptable meanwhile.** Every vector is unreachable through `ImageUploadProcessor`:
+  - no TIFF decoder is configured (`SniffConfiguration` serves both `Identify` and `Load`);
+  - only JPEG, PNG and WebP are encoded;
+  - no histogram processor runs;
+  - `IccProfile.Entries` is never read (ICC passes through as raw bytes).
+
+  Per-advisory analysis: `security.md` §"Dependency Vulnerability Scan Cadence". The pipeline rule
+  is now written in §"Upload Content Pipeline" Rules.
+- **Verified (Unit tier):** new `ImageUploadProcessorAdvisoryTests` (2), in a non-parallel
+  collection, each feeding an advisory's own PoC:
+  - the 24-byte BigTIFF with a 5×10⁹-entry IFD is rejected at the sniff, under a 10 s deadline;
+  - a PNG carrying the 200-byte truncated-CLUT ICC profile is processed with < 48 MB allocated
+    (measured ≈ 130 KB), and the output keeps the identical profile bytes.
+
+  Mutation-checked: adding `TiffConfigurationModule` to the sniff reproduces the advisory's hang
+  (the test fails on the deadline). Reading `IccProfile.Entries` after decode allocates 114.9 MB
+  (fails). The existing `ImageUploadProcessorTests` and the Integration storage tests are unchanged
+  and green.
+- No browser pass is owed: ImageSharp did not change version and no UI changed. This environment has
+  no browser in any case.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

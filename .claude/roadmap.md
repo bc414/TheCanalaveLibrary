@@ -104,10 +104,15 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   - **CI hardening for a live master** — add `push: master` trigger + branch protection + promote
     the vuln scan from report-only to a hard gate (all deliberately deferred from Phase 0 until
     master means "what's deployed" — see `middle_plan_v2.md` §Resolved).
-  - **Clear the AngleSharp 0.17.1 mXSS at the root (CVE-2026-54570)** — the vuln-scan hard gate
-    above will block on this unless cleared first. Fix: replace `Ganss.Xss` with a custom
-    AngleSharp-1.5.2 sanitizer behind the existing seam. Currently risk-accepted (mitigated by the
-    13-tag/`href`-only allow-list) — see `security.md` "Accepted-risk register."
+  - ~~**Clear the AngleSharp 0.17.1 mXSS at the root (CVE-2026-54570)**~~ **DONE 2026-10-12
+    (WU-DependencyCVEs, tracker E2).** HtmlSanitizer 9.2.1039 lifted its AngleSharp 0.17.1 pin, and
+    AngleSharp moved to 1.8.4. This was the zero-code path, and the custom-sanitizer plan is retired.
+    See `security.md` §"Dependency Vulnerability Scan Cadence".
+  - **Decide ImageSharp licensing (tracker E9).** The vuln-scan hard gate above blocks on it.
+    3.1.12 carries five 2026-10 advisories, and every patched line (3.2.x, 4.1.2+) needs a Six Labors
+    build-time license key. Options: a key, a library swap, or standing accepted risk. Until the
+    owner decides, the risk is accepted (all five vectors are unreachable through the upload
+    pipeline). See `security.md` §"Upload Content Pipeline".
   - **TLS/domain** (Cloudflare Registrar).
   - **Activate verified-crawler serving** — flip `Seo:TrustVerifiedBots` once the origin-lockdown
     item above lands, and verify the real Cloudflare verified-bot header contract at that time.
@@ -154,7 +159,8 @@ this table adds sequencing only, it doesn't restate content.*
 
 **Why this order:** the debt-paydown burst (07-24 → 07-27) hasn't run dry — tracker groups A–H
 still hold roughly 20 open items, two flagged high-priority security (E2, E3 — both already
-deliberately gated to Phase 7/launch, not moved up by this reanalysis). Tiers 1–2 continue that
+deliberately gated to Phase 7/launch, not moved up by this reanalysis; E2 has since closed,
+2026-10-12, and E9 — ImageSharp licensing, an owner call — took its place). Tiers 1–2 continue that
 burst a little further on the cheapest, most-unblocked items rather than context-switching back to
 feature work mid-burst; Tier 3 onward is the pivot back onto the Phase 2/3 critical path once it's
 done.
@@ -191,10 +197,12 @@ reanalysis found no case for moving any of them up: A8 (post-mvp-mobile), B8 (po
 (post-launch). F2/F3/F4/F7 are already tracked above via the Decisions table and the Phase 7
 checklist, not re-listed here. H4's PDF-import half stays a deliberate future-format candidate.
 
-**E2 (AngleSharp CVE) flagged, not moved.** Tracker priority is `high`, but the risk is accepted
-and mitigated (the 13-tag/`href`-only allow-list strips the attack vector) with a concrete Phase 7
-root-cause fix already designed. Leaving it at Phase 7 is a decision worth your explicit
-re-confirmation given the `high` label, not a silent default this reanalysis is making for you.
+**E2 (AngleSharp CVE): resolved 2026-10-12 (WU-DependencyCVEs).** HtmlSanitizer 9.2.1039 lifted
+its AngleSharp 0.17.1 hard pin, so the CVE cleared with a two-line package bump instead of the
+Phase 7 custom-sanitizer rewrite. **E9 (ImageSharp licensing) is the open successor.** Its
+priority is `high` because the five advisories are high/moderate, but the risk is accepted and
+every vector is unreachable through the upload pipeline. Only the owner can choose a license key,
+a library swap or standing risk; it gates the Phase 7 vuln-scan hard gate.
 
 Group G is fully closed (2026-07-30) — G1's genuine residual (mid-session account-status
 responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above) shipped
