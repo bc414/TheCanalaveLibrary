@@ -66,7 +66,7 @@ public sealed class ImageUploadProcessorTests
 
         Func<Task> act = () => BuildSut().ProcessAsync(content, "image/svg+xml");
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.Should().ThrowAsync<ImageUploadValidationException>();
         content.Position.Should().Be(0, "the claimed-MIME fast-fail must fire before any byte is read");
     }
 
@@ -77,7 +77,7 @@ public sealed class ImageUploadProcessorTests
 
         Func<Task> act = () => BuildSut().ProcessAsync(content, "image/png");
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.Should().ThrowAsync<ImageUploadValidationException>();
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class ImageUploadProcessorTests
 
         Func<Task> act = () => BuildSut().ProcessAsync(gifBytes, "image/png");
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.Should().ThrowAsync<ImageUploadValidationException>();
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class ImageUploadProcessorTests
 
         Func<Task> act = () => BuildSut().ProcessAsync(content, "image/png");
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.Should().ThrowAsync<ImageUploadValidationException>();
     }
 
     [Fact]
@@ -116,8 +116,33 @@ public sealed class ImageUploadProcessorTests
 
         Func<Task> act = () => BuildSut().ProcessAsync(content, "image/png");
 
-        (await act.Should().ThrowAsync<ArgumentException>())
-            .WithMessage("*dimensions*");
+        (await act.Should().ThrowAsync<ImageUploadValidationException>())
+            .WithMessage("This image is 50,000 × 50,000 pixels.*");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Refusals_AreUserFacing_WithTheirOwnReadableText()
+    {
+        // The circuit half of the rejection contract (security.md §"Upload Content Pipeline"
+        // Rules): ExceptionPresenter shows a refusal's own text only for a typed user-facing
+        // exception. A BCL ArgumentException (the pre-2026-10-12 contract) made the circuit show
+        // the generic error and log at Error. The HTTP half is ImageUploadEndpointsTests.
+        (Func<Task> Act, string Expected)[] refusals =
+        [
+            (() => BuildSut().ProcessAsync(new MemoryStream(TestImages.Png(4, 4)), "image/svg+xml"),
+                ImageUploadRules.UnsupportedTypeMessage),
+            (() => BuildSut().ProcessAsync(new MemoryStream("not an image"u8.ToArray()), "image/png"),
+                ImageUploadProcessor.UnrecognizedMessage),
+            (() => BuildSut().ProcessAsync(new NonSeekableStream(new byte[ImageUploadRules.MaxBytes + 1]), "image/png"),
+                "Images can be at most 10 MB."),
+        ];
+
+        foreach ((Func<Task> act, string expected) in refusals)
+        {
+            ImageUploadValidationException ex = (await act.Should().ThrowAsync<ImageUploadValidationException>()).Which;
+            ExceptionPresenter.IsUserFacing(ex).Should().BeTrue();
+            ExceptionPresenter.GetUserMessages(ex).Should().Equal(expected);
+        }
     }
 
     // ── Transformations ───────────────────────────────────────────────────────────

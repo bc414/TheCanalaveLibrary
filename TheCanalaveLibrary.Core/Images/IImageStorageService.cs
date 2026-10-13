@@ -31,6 +31,8 @@ public interface IImageStorageService
     /// <param name="ownerId">StoryId for <see cref="ImageKind.Cover"/>, UserId for
     /// <see cref="ImageKind.ProfilePicture"/>.</param>
     /// <returns>A relative path (e.g. <c>/uploads/stories/5/cover-{uuid}.jpg</c>), never a full URL.</returns>
+    /// <exception cref="ImageUploadValidationException">The upload pipeline refused the file (type,
+    /// size, unreadable bytes or dimensions); the message is user-facing.</exception>
     Task<string> SaveAsync(Stream content, string contentType, ImageKind kind, int ownerId);
 
     /// <summary>Deletes a previously saved image by its stored relative path. No-ops if not found.</summary>

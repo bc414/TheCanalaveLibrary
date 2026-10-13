@@ -1,3 +1,4 @@
+using System.Globalization;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -18,6 +19,11 @@ namespace TheCanalaveLibrary.Server;
 /// (EXIF/XMP/IPTC removed, ICC kept) → downscale to the stored ceiling → re-encode. Re-encoding is
 /// the real security payload: it proves the bytes are a genuine image and discards polyglot
 /// payloads and trailing data that survive a signature check alone.
+/// <para>
+/// Every input-caused refusal throws <see cref="ImageUploadValidationException"/> with user-written
+/// text, so both render phases show the same readable message (security.md §"Upload Content
+/// Pipeline" Rules).
+/// </para>
 /// </summary>
 public class ImageUploadProcessor(
     IWriteRateLimitService writeRateLimit,
@@ -32,6 +38,12 @@ public class ImageUploadProcessor(
 
     /// <summary>Stored images are downscaled so their longest side never exceeds this.</summary>
     public const int MaxStoredDimension = 2_048;
+
+    /// <summary>User-facing rejection text: the bytes are not a JPEG, PNG or WebP image.</summary>
+    public const string UnrecognizedMessage = "This file isn't a JPEG, PNG or WebP image.";
+
+    /// <summary>User-facing rejection text: the header identified, but the pixel data won't decode.</summary>
+    public const string UnreadableMessage = "This image couldn't be read. The file may be damaged or incomplete.";
 
     // Only the three allow-listed formats get decoders — anything else (GIF, BMP, TIFF, SVG,
     // polyglots) fails Identify below regardless of what the claimed MIME said.
@@ -67,14 +79,15 @@ public class ImageUploadProcessor(
         buffer.Position = 0;
         ImageInfo info = SniffOrThrow(decoderOptions, buffer);
         IImageFormat format = info.Metadata.DecodedImageFormat
-            ?? throw new ArgumentException("Uploaded file is not a recognized image.", nameof(content));
+            ?? throw new ImageUploadValidationException(UnrecognizedMessage);
 
         // Decompression-bomb guard from header metadata alone — no pixels decoded yet.
         if (info.Width > MaxSourceDimension || info.Height > MaxSourceDimension ||
             (long)info.Width * info.Height > MaxSourcePixels)
         {
-            throw new ArgumentException(
-                $"Image dimensions {info.Width}x{info.Height} exceed the supported maximum.", nameof(content));
+            throw new ImageUploadValidationException(string.Create(CultureInfo.InvariantCulture,
+                $"This image is {info.Width:N0} × {info.Height:N0} pixels. Images can be at most " +
+                $"{MaxSourceDimension:N0} pixels on a side and {MaxSourcePixels / 1_000_000} megapixels in total."));
         }
 
         buffer.Position = 0;
@@ -132,7 +145,7 @@ public class ImageUploadProcessor(
         }
         catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException)
         {
-            throw new ArgumentException("Uploaded file is not a recognized image.", nameof(buffer), ex);
+            throw new ImageUploadValidationException(UnrecognizedMessage, ex);
         }
     }
 
@@ -145,7 +158,7 @@ public class ImageUploadProcessor(
         catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException)
         {
             // Identify passed but the pixel data is corrupt/crafted — same rejection contract.
-            throw new ArgumentException("Uploaded file is not a valid image.", nameof(buffer), ex);
+            throw new ImageUploadValidationException(UnreadableMessage, ex);
         }
     }
 
@@ -154,6 +167,7 @@ public class ImageUploadProcessor(
         JpegFormat => new JpegEncoder(),
         PngFormat => new PngEncoder(),
         WebpFormat => new WebpEncoder(),
+        // Unreachable: SniffConfiguration decodes only these three. A programming error, not input.
         _ => throw new ArgumentException($"Unsupported image format: {format.Name}", nameof(format)),
     };
 
@@ -171,8 +185,8 @@ public class ImageUploadProcessor(
             destination.Write(chunk, 0, read);
             if (destination.Length > ImageUploadRules.MaxBytes)
             {
-                throw new ArgumentException(
-                    $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(source));
+                throw new ImageUploadValidationException(
+                    $"Images can be at most {ImageUploadRules.MaxBytes / (1024 * 1024)} MB.");
             }
         }
     }

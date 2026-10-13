@@ -14,6 +14,16 @@ public abstract class CanalaveValidationException : Exception
         Errors = errors;
     }
 
+    /// <summary>
+    /// Keeps the low-level cause (e.g. a decoder's exception) on the chain for spans and logs; the
+    /// user still sees only <see cref="Errors"/>.
+    /// </summary>
+    protected CanalaveValidationException(string message, IReadOnlyList<string> errors, Exception? innerException)
+        : base(message, innerException)
+    {
+        Errors = errors;
+    }
+
     /// <summary>User-written, user-facing error lines for inline display.</summary>
     public IReadOnlyList<string> Errors { get; }
 }

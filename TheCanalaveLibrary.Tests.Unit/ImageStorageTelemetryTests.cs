@@ -106,7 +106,7 @@ public sealed class ImageStorageTelemetryTests : IDisposable
 
         Func<Task> act = () => sut.SaveAsync(content, "image/png", ImageKind.Cover, ownerId: 1);
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.Should().ThrowAsync<ImageUploadValidationException>();
         Activity activity = captured.Should().ContainSingle().Which;
         activity.Status.Should().Be(ActivityStatusCode.Error);
         activity.Events.Should().Contain(e => e.Name == "exception",

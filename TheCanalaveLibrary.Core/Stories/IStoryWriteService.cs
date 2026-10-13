@@ -49,5 +49,7 @@ public interface IStoryWriteService
     /// <returns>The new relative URL to store on the story.</returns>
     /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/> exists.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller does not own the story.</exception>
+    /// <exception cref="ImageUploadValidationException">The upload pipeline refused the file (type,
+    /// size, unreadable bytes or dimensions); the message is user-facing.</exception>
     Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId);
 }

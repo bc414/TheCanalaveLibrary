@@ -65,6 +65,16 @@ which is expected, not a regression. Constants live on `ImageUploadProcessor`.
   bulk-import feature.
 - SVG stays off the allow-list permanently — SVG is XML that can carry scripts (stored XSS);
   raster only.
+- **Every refusal is user-facing.** A refusal the uploader caused (claimed type, byte cap,
+  unrecognized bytes, undecodable pixels, the dimension guard) throws
+  `ImageUploadValidationException` (Core `Images/`, a `CanalaveValidationException`) with
+  user-written text; any decoder exception rides along as its inner exception. The circuit's
+  `ExceptionPresenter` then shows that text, and the endpoint answers 400 with it as `Detail`,
+  which the WASM client rethrows as its feature's validation exception. Never throw a BCL
+  `ArgumentException` for upload input: the circuit showed the generic error and logged at Error,
+  and WASM showed "(Parameter 'buffer')" (found by the WU-DependencyCVEs browser pass,
+  2026-10-12). Tests: Unit `ImageUploadProcessorTests` (the circuit half) and Integration
+  `ImageUploadEndpointsTests` (the HTTP half).
 - The pipeline decodes and encodes **only** the three allow-listed formats (`SniffConfiguration`
   serves both `Identify` and `Load`), runs no image processor beyond `AutoOrient`/`Resize`, and
   **never reads `IccProfile.Entries`** (the ICC profile passes through as raw bytes). These three

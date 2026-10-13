@@ -5,6 +5,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
+using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Tests.Unit;
@@ -44,8 +45,9 @@ public sealed class ImageUploadProcessorAdvisoryTests
             BuildSut().ProcessAsync(new MemoryStream(bigTiff), "image/png"));
         Func<Task> act = () => processing.WaitAsync(TimeSpan.FromSeconds(10));
 
-        await act.Should().ThrowAsync<ArgumentException>(
-            "the BigTIFF payload must fail the JPEG/PNG/WebP-only sniff, not reach a TIFF decoder");
+        (await act.Should().ThrowAsync<ImageUploadValidationException>(
+                "the BigTIFF payload must fail the JPEG/PNG/WebP-only sniff, not reach a TIFF decoder"))
+            .WithMessage(ImageUploadProcessor.UnrecognizedMessage);
     }
 
     [Fact]

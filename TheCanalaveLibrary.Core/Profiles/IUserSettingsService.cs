@@ -73,5 +73,7 @@ public interface IUserSettingsService
     /// <param name="contentType">MIME type (e.g. <c>"image/jpeg"</c>).</param>
     /// <returns>The new relative URL stored on the user.</returns>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    /// <exception cref="ImageUploadValidationException">The upload pipeline refused the file (type,
+    /// size, unreadable bytes or dimensions); the message is user-facing.</exception>
     Task<string> UploadProfilePictureAsync(Stream content, string contentType);
 }

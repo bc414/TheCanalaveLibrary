@@ -25,11 +25,17 @@ public static class ImageUploadRules
         ["image/webp"] = "webp"
     };
 
-    /// <summary>Maps an allowed MIME type to its file extension, or throws <see cref="ArgumentException"/>.</summary>
+    /// <summary>
+    /// Maps an allowed MIME type to its file extension, or throws
+    /// <see cref="ImageUploadValidationException"/> (user-facing: the claimed type is the uploader's).
+    /// </summary>
     public static string ExtensionFor(string contentType) =>
         AllowedContentTypes.TryGetValue(contentType, out string? extension)
             ? extension
-            : throw new ArgumentException($"Unsupported image content type: {contentType}", nameof(contentType));
+            : throw new ImageUploadValidationException(UnsupportedTypeMessage);
+
+    /// <summary>User-facing rejection text for a claimed type outside the allow-list.</summary>
+    public const string UnsupportedTypeMessage = "Images must be JPEG, PNG or WebP files.";
 
     /// <summary>Reverse lookup for serving: extension → MIME type (null when unknown).</summary>
     public static string? ContentTypeForExtension(string extension) =>
