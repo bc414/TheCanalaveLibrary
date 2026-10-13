@@ -82,8 +82,9 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
 - **L5 — Stage 5 (resolved 2026-06-27; the client's sprite root comes from the server since
   WU-ParityAndRemaining, 2026-10-13, and the fallback chain's `unknown.png` step follows it since its
-  review fixes — Unit-, RazorComponents- and Integration-tested, stage unchanged, the note just
-  below).** The prior Stage-4 divergence (two separate impls with
+  review fixes — Unit-, RazorComponents- and Integration-tested, stage unchanged; browser-verified on
+  both render phases by its browser pass the same day, which also fixed the chain's endless 404 loop
+  on a missing sprite — the note just below).** The prior Stage-4 divergence (two separate impls with
   different behaviors) is resolved: the two impls collapsed into one `OptimisticSpriteReadService` in
   Core (registered on both Server and Client). No endpoint is needed for the URL construction itself.
   No WASM proxy required; SharedUI components inject the Core service directly on both sides.
@@ -114,6 +115,20 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   renders only after a typeahead search, which its suite does not drive, so it rests on the Unit test
   and a reading of the one-line call. Output is byte-identical with the key unset, so L4.5 stays 5;
   H37 step 5 adds the missing-sprite fallback check.
+  **Browser verification (2026-10-13, H37 step 5) — L4.5 stays 5.** Server-only path, key unset. Every
+  WASM full load showed one `GET /api/client-config` (200, `{"spriteBaseUrl":"/sprites/themes"}`) before
+  its first API call, and Bulbasaur's chip rendered its static sprite on both phases (the animated
+  `.webp` 404s, then the `.png`). A fixture sprite identifier with no file (`psql`: tag 1 Cynthia →
+  `e2e-missing-sprite`, restored to NULL after) exposed a **runtime bug, fixed**: `sprite-fallback.js`
+  compared `img.src`, which is always absolute, with the root-relative `data-static`, so it re-set the
+  same src on every error. The browser fetched the missing `.png` 800+ times in seconds and never
+  reached `unknown.png`; clearing `onerror` stopped nothing, because the delegated listener drives the
+  chain. Pre-existing (the chain predates the CSP move to data-* markers), on the chain this WU's review
+  fixes touched. It now compares resolved URLs (`layer4-style.md` §"Out-of-Band Asset Images Always
+  Carry an onerror Fallback"). Re-verified on the circuit (full load) and on WASM (a client-side
+  navigation, so the markup came from the client's `ISpriteReadService`): the missing static `.png` and
+  `unknown.png` were each requested once, and the chip shows `unknown.png`. No tier runs browser JavaScript
+  (`testing.md`), so the browser pass is the check.
 - **L6/L8 — N/A.** (L7 dissolved 2026-07-06.)
 
 - **L4.5-Browser verification (2026-07-02) — Feature 3 → L4.5=5.** The optimistic-URL design was

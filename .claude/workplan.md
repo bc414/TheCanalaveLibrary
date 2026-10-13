@@ -17,18 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ParityAndRemaining (2026-10-13) — service audit §2.7 and §2.12. WASM parity:
-  a validation 400 carries an `errors` array and every client factory takes the list (a story's
-  refused save no longer reads "Story validation failed."), the sprite root reaches WASM through
-  `GET /api/client-config`, the re-split binds camelCase, an anonymous reader never calls the durable
-  marks, the Explore pivot keeps its message. Defects: one-level threading service-enforced (D12's
-  "Left open"), the comment edited marker and spoiler flag (migration `WU_ParityAndRemaining_CommentDateEdited`),
-  atomic group and chapter creates, tag-type trust, the EPUB/DOCX decompression bound, legacy-encoding
-  imports, fanon/rec filter fixes, no fabricated messaging participant. It flipped **F24, F26 and F49
-  L4.5 5→1** (no browser; tracker **H37**, which also carries H12's re-check). Filed: row 29 / **F26**
-  (edits under a takedown), H37; D11 annotated. Its review fixes: the tag gate's type read untracked,
-  the `unknown.png` fallback on the sprite root, `layer5-wasm.md`'s read-translator rule, three missing
-  tests. `dotnet test`: Unit 1,344, RazorComponents 872, Integration 1,652. **Pointer:** its DONE entry.
+- **Last landed:** WU-ParityAndRemaining (2026-10-13) — service audit §2.7 and §2.12. WASM parity: a
+  validation 400 carries an `errors` list to every client factory, the sprite root reaches WASM
+  (`GET /api/client-config`), the anonymous reader never calls the durable marks, the Explore pivot
+  keeps its message. Defects: one-level threading enforced, the comment edited marker and spoiler flag
+  (migration `WU_ParityAndRemaining_CommentDateEdited`), atomic group and chapter creates, tag-type
+  trust, the archive bound, legacy-encoding imports, fanon/rec filter fixes, no fabricated participant.
+  It flipped **F24, F26 and F49 L4.5 5→1**; its browser pass the same day drove all of H37 on both
+  phases, returned them to 5, closed H37 and H12, and fixed three runtime bugs: the WASM re-split
+  crashed the editor (now `ResplitAsync`: a client never blocks on a task), a missing sprite looped
+  forever, and an emptied editor passed every required rich-text check (`RichTextContent.IsBlank`).
+  Filed: row 29 / **F26**; H22, F6b annotated. `dotnet test`: Unit 1,375, RazorComponents 874,
+  Integration 1,652. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
@@ -276,7 +276,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11**,
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -307,8 +307,9 @@ references it, does not restate it.
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; its WASM re-check waited on
-  WU-ParityAndRemaining P1, which landed 2026-10-13, and is now step 1 of tracker **H37** (owed: no
-  browser was available) — see WU-StoryLifecycle's and WU-ParityAndRemaining's DONE entries. Tracker **H13**'s
+  WU-ParityAndRemaining P1, which landed 2026-10-13, and passed as step 1 of tracker **H37**, whose pass
+  ran the same day, returned F24/F26/F49 L4.5 to 5, closed H37 and H12 and fixed three runtime bugs —
+  see WU-StoryLifecycle's and WU-ParityAndRemaining's DONE entries. Tracker **H13**'s
   access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry. Tracker
   **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
   to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21**'s pass, WU-TptHardDelete's
@@ -323,7 +324,10 @@ references it, does not restate it.
   L4.5 to 5 and closed with no runtime bug — see WU-AuthorStoryDelete's DONE entry. Tracker **H35**'s
   pass, WU-PrivateMessageEmail's settings section, its email in Mailpit, the unsubscribe pages and the
   privacy form's pointer, ran 2026-10-13, returned F20/F43/F49 L4.5 to 5 and closed; it fixed one
-  runtime bug and filed **D20** — see WU-PrivateMessageEmail's DONE entry.)
+  runtime bug and filed **D20** — see WU-PrivateMessageEmail's DONE entry. Tracker **H37**'s pass,
+  WU-ParityAndRemaining's WASM error lists, edited marker, edit spoiler toggle, deleted participant,
+  client config, anonymous reader and imports, ran 2026-10-13, returned F24/F26/F49 L4.5 to 5 and
+  closed with H12; it fixed three runtime bugs — see WU-ParityAndRemaining's DONE entry.)
 
 ---
 
@@ -477,9 +481,11 @@ is pending except where a bullet says so.
 ## WU-ParityAndRemaining — the InteractiveAuto/WASM parity breaks (validation error lists over the wire, the client's sprite root, the re-split's camelCase read, the anonymous reader's durable marks, the Explore pivot's message) and the remaining confirmed service defects (reply depth, atomic group and chapter creates, tag trust, the edited marker, archive and encoding imports, three filter/fabrication fixes) (service audit §2.7 and §2.12; worksheet D12's "Left open"; extends `Client/Http/`, `Comments/`, `Groups/`, `Chapters/`, `Stories/`, `Tags/`, `Import/`, `Recommendations/`, `Messaging/`, `Sprites/`, `Discovery/`, `Data/`) — DONE ✓ (2026-10-13)
 
 - **Cells:** **F24, F26 and F49 L4.5 5→1** (the "(edited)" marker, the edit spoiler toggle, the
-  deleted-participant rendering; no browser was available, tracker **H37**). Built beneath Stage-5
+  deleted-participant rendering; no browser was available, tracker **H37**), and **1→5** by its browser
+  pass the same day. Built beneath Stage-5
   cells: F23/F24/F26 L1–L3.5, F38 L2, F6 L2, F7 L3-Logic, F12 L2, F4 L2, F63 L2/L5, F28 L2, F49 L2/L3.5,
-  F3 L5, F33 L5. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+  F3 L5, F33 L5; the browser pass's fixes beneath F63 L3-Logic/L5, F3 (the sprite chain's script) and the required rich-text fields'
+  L2 (F23, F35, F6, F49, F4). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** spec `wu-specs/WU-ParityAndRemaining.md` and its amendment (R12 builds on
   WU-UserDeletion's label; X6 is owner-deferred). D36/D37 pending, so no registration-shape change.
 - **What landed:**
@@ -540,7 +546,8 @@ is pending except where a bullet says so.
   clause had a test, the flat-tag one gained its own there), the stored-type check, the doubled
   member, the rec lift, the EPUB guard, a reader's warning, the fabricated participant. Migration applied, rolled back and
   re-applied on the server-only dev DB. Gates: doc-hygiene, design-tokens, render-modes, a11y pass.
-  **No browser was available**: tracker **H37** (eight steps, H12's re-check first).
+  **No browser was available** at the build: tracker **H37** (eight steps, H12's re-check first), driven
+  by the browser pass below the same day, which closed H37 and H12.
 - **Review fixes (2026-10-13).** Three reviews raised 12 findings, 11 distinct after merging duplicates;
   all were real and none needed an owner ruling.
   1. **The tag gate cached tag types on the circuit.** Its `ToDictionaryAsync` ran its selectors in
@@ -567,8 +574,51 @@ is pending except where a bullet says so.
   gates pass. No stage moved. Stage notes: `audit/Tags.md` F12, `audit/Sprites.md` F3,
   `audit/Comments.md` F26, `audit/Groups.md` F38, `audit/Discovery.md` F33; headlines in
   `audit/Stories.md` F4 and `audit/Import.md` F63.
-- **Pointers:** the audit Stage notes above; `layer5-wasm.md` §"The Error-Translation Contract" and
-  §"Server configuration the client needs"; tracker H37, F26, D11; roadmap row 29.
+- **Browser pass (2026-10-13). F24, F26 and F49 L4.5 1→5; H37 and H12 closed; three runtime bugs
+  fixed.**
+  - **Setup.** All eight H37 steps on the server-only path, standing workbench (not reset; the WU's
+    migration was already applied), `psql` after every write. Circuit proven by `_blazor/negotiate` and
+    no `/api` call (Auto hash cleared before each full load), WASM by the action's `/api` request.
+    Actors: TestUser, ReaderGamma, AuthorAlpha, ModUser, anonymous.
+  - **GIF:** `e2e-WU-ParityAndRemaining.gif` (WASM: the new-story save listing the server's sentences).
+  - **Bugs fixed** (commit "browser-pass fixes"): (1) on WASM the re-split crashed the story editor (the
+    synchronous client blocked on HTTP and the runtime refuses the wait); `IContentImportService.ResplitAsync`,
+    and `StoryChapterImport` awaits it and shows a refusal; (2) a missing sprite's static `.png` was
+    re-requested forever and `unknown.png` never reached (`sprite-fallback.js` compared an absolute
+    `img.src` with a relative URL); (3) an untouched editor's `<p><br></p>` passed every required
+    rich-text validation (an empty comment was posted); `RichTextContent.IsBlank` now backs all
+    sixteen. After the fixes: Unit 1,375 (+31 `RichTextBlankTests`), RazorComponents 874 (+2
+    `StoryChapterImportTests`), Integration 1,652; the four gates pass. Conventions: `layer5-wasm.md`
+    ("A client method never blocks on a task"), `layer2-services.md` §"Three-Tiered Validation",
+    `layer4-style.md` (the sprite chain), `testing.md` (what the tiers can't see).
+  - **What it saw:** the steps' results are in tracker H37 and the audit notes. Also driven: the
+    reply-to-reply and group-spoiler 400s, the taken group name on create and rename (both phases), an
+    atomic group and chapter create, a re-typed tag refused and then accepted on the same circuit, and
+    a signed-in reader's marks still written. Not browser-driven (no UI path): P5, R4, R7, R8, R11.
+  - **Not covered:** a screen reader on "(edited)" and the toggle's keyboard order (**F6b**). H22
+    annotated: the optional half of the blank-markup class is unbuilt.
+  - **Logs.** No console error; no `fail:`/`crit:` beyond the known antiforgery key-ring line on the
+    first request (this browser last ran the Aspire path).
+  - **Tooling notes:** `run-server/SKILL.md` corrects the coordinate-frame formula and adds lazy images
+    in a hidden tab, stale-page refusals through `psql`, and Quill input.
+  - **Dev-DB state left (server-only).**
+    - Comments 1 (TestUser), 3 (ReaderGamma), 4 (AuthorAlpha's profile-wall comment) and 5 (TestUser's
+      group-wall comment) carry edited text and `date_edited`; comment 1's spoiler flag went on and off
+      (false), comment 3's stayed true.
+    - New: comment 11 (TestUser's edited reply to comment 1) and comment 12 (TestUser on blog post 2,
+      posted empty by bug 3, then edited to text).
+    - Story 13 (TestUser, Draft) was saved twice (`last_updated_date` moved) and gained unpublished
+      chapter 27 "E2E Parity: atomic chapter" (version 30, notes stored as `<p><br></p>`, H22).
+    - Group 7 "E2E Parity: atomic create" (TestUser admin).
+    - ModUser's `user_story_interactions` row on story 12 (started and completed), plus reading-progress
+      from the reads.
+    - Fixtures restored: story 13's `post_approval_status` (2), tag 30's type (Genre), tag 1's
+      `sprite_identifier` (NULL).
+- **Pointers:** the audit Stage notes above (and their browser-verification bullets in
+  `audit/Comments.md`, `Messaging.md`, `Stories.md`, `Import.md`, `Sprites.md`, `Chapters.md`,
+  `Groups.md`, `Tags.md`, `BlogPosts.md`); `layer5-wasm.md` §"The Error-Translation Contract",
+  §"Server configuration the client needs" and §"Client Service Implementations"; tracker H37 and H12
+  (closed), F26, D11, H22, F6b; roadmap row 29.
 
 ---
 

@@ -574,7 +574,9 @@ each "off".
   denied any translation is corrected; Unit `WasmParityClientTests`, mutation-checked, stage
   unchanged. Its review fixes the same day corrected the convention the old class doc had cited:
   `layer5-wasm.md` §"Reads with non-scalar parameters" now says the translator follows the endpoint,
-  so a read that can throw a feature validation exception reuses `ThrowIfWriteFailedAsync`; docs only)**
+  so a read that can throw a feature validation exception reuses `ThrowIfWriteFailedAsync`; docs only.
+  Not browser-driven by its browser pass: no Explore control builds malformed ship criteria, so the
+  pivot's 400 is reachable only over the API; the Unit test is the check)**
   — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`

@@ -102,9 +102,9 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
@@ -127,7 +127,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
 | 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
-| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A |
+| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |

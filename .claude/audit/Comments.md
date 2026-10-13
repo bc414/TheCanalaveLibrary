@@ -88,7 +88,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
-- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note; one-level threading service-enforced in all four contexts since WU-ParityAndRemaining, 2026-10-13 — see the Features 23 + 24 + 26 Stage note below Feature 26):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
+- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note; one-level threading service-enforced in all four contexts since WU-ParityAndRemaining, 2026-10-13, and an emptied editor refused since its browser pass the same day — see the Features 23 + 24 + 26 Stage note below Feature 26):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
   in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
   `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
   verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
@@ -174,9 +174,9 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
 - Narrative: `audit/AccessGate.md` F66.
 
 ## Feature 24 — Comment Display & Pagination
-- **L4.5 — Stage 1 (WU-ParityAndRemaining, 2026-10-13).** The "(edited)" marker is new markup on
-  `CommentItem` and no browser was available; tracker **H37** holds the pass. Every other layer below
-  stays 5.
+- **L4.5 — Stage 5 (browser-verified 2026-10-13, WU-ParityAndRemaining's browser pass; it had gone
+  5→1 at the WU for the new "(edited)" marker).** Seen on chapter, blog-post, group and profile
+  comments on both render phases; Stage note below Feature 26. Every other layer below stays 5.
 - **L1 — Stage 5** (`base_comments.date_edited` since WU-ParityAndRemaining, 2026-10-13 — Stage note
   below Feature 26). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
   (WU-L5Sweep) and the site now runs global InteractiveAuto; comment display + pagination verified
@@ -292,8 +292,9 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
     showed "♥ 4", the landed count, not the stale 2 + 1. `like_count` read 4, with four like rows.
 
 ## Feature 26 — Spoiler Comments
-- **L4.5 — Stage 1 (WU-ParityAndRemaining, 2026-10-13).** The edit form of a chapter root now offers
-  the spoiler toggle, and no browser was available; tracker **H37** holds the pass.
+- **L4.5 — Stage 5 (browser-verified 2026-10-13, WU-ParityAndRemaining's browser pass; it had gone
+  5→1 at the WU for the edit form's spoiler toggle).** The toggle appears on chapter roots only, seeded
+  from the comment, on both render phases; Stage note below.
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23; the edit-time spoiler toggle since
   WU-ParityAndRemaining, 2026-10-13, its seed RazorComponents-tested since the review fixes — Stage note below):** See Feature 24 Stage-5 note.
   Completion-gated reveal built in `CommentItem`: `HandleRevealClick()` → immediate reveal if
@@ -381,11 +382,12 @@ and edit composers unmount, so only the persistent composer needed this). **Veri
 post → comment appears, composer shows placeholder; second post confirms. Not bUnit-coverable
 (Quill JS interop is faked in that tier).
 
-### Features 23 + 24 + 26 — WU-ParityAndRemaining Stage note (2026-10-13): one-level threading enforced; the edited marker and the edit-time spoiler flag
+### Features 23 + 24 + 26 — WU-ParityAndRemaining Stage note (2026-10-13): one-level threading enforced; the edited marker and the edit-time spoiler flag; browser-verified the same day
 
 Service audit §2.12's comment items, and the reply-depth defect worksheet D12's "Left open" paragraph
-homed there. Grid: **F24 and F26 L4.5 5→1** (new markup, no browser; tracker **H37**). Every other
-touched cell stays 5: these close gaps beneath sound cells.
+homed there. Grid: **F24 and F26 L4.5 5→1** at the WU (new markup, no browser; tracker **H37**), and
+**back to 5** by its browser pass the same day (last bullet). Every other touched cell stays 5: these
+close gaps beneath sound cells.
 - **F23 L2 — one-level threading.** `ServerCommentWriteService.RequireTopLevelParentAsync` runs in all
   four `Post*CommentAsync` methods after the same-context parent check: a parent that is itself a reply
   is a `CommentValidationException` ("Replies can only be made to top-level comments.", 400). Before,
@@ -424,6 +426,29 @@ touched cell stays 5: these close gaps beneath sound cells.
   `IModeratableContent` types).
 - Mutation-checked: dropping the depth refusal fails all four theory cases; stamping on a no-op fails
   the re-save test.
+- **Browser verification (2026-10-13, tracker H37 steps 2–3; F24/F26 L4.5 1→5).** Server-only path,
+  standing workbench, `psql` after every write. Circuit proven by `_blazor/negotiate` and no `/api`
+  call (Auto hash cleared before the full load); WASM by the `PUT /api/comments/{id}` request.
+  - **"(edited)":** TestUser's chapter root (circuit), a blog-post comment (WASM), the group-wall comment
+    (WASM), and AuthorAlpha's profile-wall comment (WASM) each showed a muted "(edited)" after the date,
+    titled "Edited Oct 13, 2026", with `base_comments.date_edited` set. A save with nothing changed
+    (circuit chapter root; WASM group comment) left `date_edited` as it was and wrote no `UPDATE`.
+  - **The edit toggle:** on TestUser's chapter root it opened unticked (circuit); ticking and saving
+    blurred the comment and set `chapter_comments.is_spoiler` (and re-stamped `date_edited`); unticking
+    on WASM cleared it. ReaderGamma's spoiler root opened ticked on WASM, and a text-only save kept
+    `is_spoiler = true` (the review fixes' seed). A reply (circuit), a blog-post, a group and a profile
+    comment (WASM) showed no toggle and saved.
+  - **F23:** a reply has no Reply button; a `POST /api/comments/chapter` replying to a reply answered 400
+    "Replies can only be made to top-level comments.", and a spoiler flag on a group comment answered
+    400 "Only chapter comments can be marked as spoilers.", both with no row written.
+  - **Runtime bug fixed (F23 L2):** Post Comment with an untouched editor posted an empty comment (the
+    editor's `<p><br></p>` passed `string.IsNullOrWhiteSpace`). The five comment validations now use
+    `RichTextContent.IsBlank`, swept with the other eleven required rich-text fields (`layer2-services.md`
+    §"Three-Tiered Validation"). Re-verified: an empty post reads "Comment text must not be empty." on
+    the circuit (chapter) and on WASM (blog post, 400), and nothing is written. Tier: Unit
+    `RichTextBlankTests`.
+  - **Not covered:** a screen reader on the marker's `title` and the toggle's keyboard order (tracker
+    **F6b**). No console error; no `fail:`/`crit:` line beyond the known antiforgery key-ring line.
 
 ## L4.5-Browser verification (2026-07-01) — F23 + F24 + F25 + F26 → Stage 5, no new bugs
 

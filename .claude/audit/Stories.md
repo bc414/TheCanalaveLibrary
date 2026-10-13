@@ -118,7 +118,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   WU-ParityAndRemaining 2026-10-13, its type read untracked since its review fixes the same day — Integration-tested, stage unchanged, rule and Stage note in
   `audit/Tags.md` Feature 12; a refused save's error list now reaches WASM line for line instead of
   "Story validation failed." (service audit §2.7.1), Unit- and Integration-tested — the
-  WU-ParityAndRemaining note under Feature 4's Stage notes; re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); browser-driven on both render phases with `psql` by its browser pass the same day, on Local and on Garage; see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+  WU-ParityAndRemaining note under Feature 4's Stage notes, browser-verified and an emptied summary refused since its browser pass the same day, Unit-tested; re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); browser-driven on both render phases with `psql` by its browser pass the same day, on Local and on Garage; see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -177,7 +177,10 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 5 (1→5, WU-AuthorStoryDelete browser pass, 2026-10-13: the Delete story
+- **L4.5-Browser — Stage 5 (re-verified by WU-ParityAndRemaining's browser pass, 2026-10-13: a
+  refused save and a refused submit list the server's sentences on WASM as on the circuit, a re-typed
+  tag is refused on save and accepted again on the same circuit, and an emptied summary is refused —
+  the WU-ParityAndRemaining Stage note under Feature 4; before that 1→5, WU-AuthorStoryDelete browser pass, 2026-10-13: the Delete story
   section and `StoryDeleteDialog` driven on the circuit and on WASM — the typed-title gate, the saved
   title under an unsaved edit, Unpublish instead in place, the downloads, the delete and its landing, a
   taken-down story's delete-only editor, a double-space title, a booked slot returned, and the
@@ -206,7 +209,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   index beyond the existing PK/unique/slug set; the story-table read indexes ("to be added by
   query need") landed as the sort spines under Feature 5 (see its L6 note).
 
-### Feature 4 — WU-ParityAndRemaining Stage note (2026-10-13) — no flip: a refused save reads the same on WASM
+### Feature 4 — WU-ParityAndRemaining Stage note (2026-10-13) — no flip: a refused save reads the same on WASM; browser-verified the same day
 
 Service audit §2.7.1, worst for stories: the server put a validation exception's error list into
 `ProblemDetails.Detail` only, joined, and `StoryValidationException`'s message is the fixed "Story
@@ -223,6 +226,29 @@ and Integration `ApiErrorEnvelopeTests` (+3: `POST /api/stories` carries every `
 real `ClientStoryWriteService` over the real host rebuilds the exact list; a non-validation 400 has no
 `errors`). Mutation-checked by suppressing the extension. No browser was available: H12's remaining WASM
 re-check is now step 1 of tracker **H37**. F4 L4.5 stays 5 (no markup changed).
+
+**Browser verification (2026-10-13, tracker H37 step 1; closes H12).** Server-only path, standing
+workbench, as TestUser; WASM proven by the `/api` request and no `_blazor/negotiate`, the circuit by the
+reverse after clearing the Auto hash.
+- **Refused save.** `/story/new` with only a title and short description: WASM's `POST /api/stories`
+  answered 400 with `errors` and the editor listed the Setting and Genre sentences; the circuit listed
+  the same. With an empty form both phases stop at the client-side Title and Short Description checks
+  first, so H37's "every missing field" reads as the server's list once those two are filled. No story
+  row was written.
+- **Refused submit.** On TestUser's draft story 13, opened with a valid "Status when published", `psql`
+  then set `post_approval_status` to Draft (a stale page): Submit answered 400 and showed "You must
+  select a Status for the story to move to once approved." on WASM and on the circuit; `story_status_id`
+  stayed Draft. The fixture was restored.
+- **The tag gate (`audit/Tags.md` F12).** With the editor open, `psql` re-typed Adventure (tag 30, a
+  Genre on story 13) to Content Warning: Save showed "Tag(s) 30 don't match their stored type — remove
+  and re-add them." on WASM and on the circuit. Re-typed back, the next Save on the **same circuit**
+  succeeded (`last_updated_date` moved): the review fixes' untracked type read, observed live.
+- **Runtime bug fixed (F4 L2):** the summary editor's `<p><br></p>` passed the "Long description is
+  required" check, so a story could be created with an empty summary. `StoryValidations` now uses
+  `RichTextContent.IsBlank` (swept with the other required rich-text fields; `layer2-services.md`
+  §"Three-Tiered Validation"). Re-verified on WASM: the same `/story/new` save now lists "Long
+  description is required" with the Setting and Genre lines. Tier: Unit `RichTextBlankTests`.
+- No console error; no `fail:`/`crit:` line beyond the known antiforgery key-ring line.
 
 ### Feature 4 / Feature 5 — WU-StoryLifecycle Stage note (2026-09-30) — the story lifecycle is enforced; publish dates mean "first went live"
 

@@ -424,6 +424,9 @@ code change:
    day.
 4. > **Built:** WU-ParityAndRemaining (2026-10-13) — the sync path reads through `ClientHttpHelpers`' sync helpers (web
    > options). The finding below is history.
+   > **Superseded the same day by its browser pass:** the synchronous call itself crashed on WASM (the
+   > runtime refuses a blocking wait), so the re-split never ran there. The method is now `ResplitAsync`
+   > and the sync helpers are gone (`layer5-wasm.md` §"Client Service Implementations"; `audit/Import.md`).
 
    **WASM import re-split returns blank drafts. HIGH (WASM only), CONFIRMED.** The one hand-rolled
    sync JSON path deserializes camelCase with case-sensitive defaults

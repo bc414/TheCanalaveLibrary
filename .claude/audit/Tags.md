@@ -403,9 +403,17 @@ unchanged).
     `LinkGroupAsync_OnAFlatTagAxis_AnAuthorWhoseOnlyMatchingStoryIsTakenDown_IsNotInvited` (a Setting
     base tag with custom names on two stories, one taken down), which fails with that clause removed.
     With the projection test above, `StoryTaggingTests` is +7 and `FanonPipelineTests` +2.
+  - **Browser pass (2026-10-13).** On TestUser's draft story 13 (Setting Canalave City, Genre Adventure),
+    with the editor open, `psql` re-typed Adventure (tag 30) to Content Warning: Save answered "Tag(s) 30
+    don't match their stored type — remove and re-add them." on WASM and on the circuit. With Adventure
+    re-typed back to Genre, the next Save **on the same circuit** succeeded (`last_updated_date` moved):
+    the projected read is fresh on a live circuit, as the Integration test claims. Tag 30 was restored.
+    The fanon invitation and the doubled pairing member have no UI path that builds them; they rest on
+    the Integration tests above.
 - **L2 — Stage 5 (tag existence, stored type and the doubled pairing member enforced, and fanon invites
   skip taken-down stories on both axes, WU-ParityAndRemaining 2026-10-13; the type read untracked since
-  its review fixes — Integration-tested, stage unchanged, the note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
+  its review fixes — Integration-tested, stage unchanged; the stored-type refusal and the fresh read on
+  one circuit browser-driven by its browser pass the same day — the note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
   sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 5 (WU-L6, 2026-07-07 — resolved
   as already-covered, no DDL: the tag-filter probes are correlated EXISTS on `(story_id, tag_id)`
   = the `story_tags` PK, and no probe reads `priority`; the proposed reverse composite

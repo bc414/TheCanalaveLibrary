@@ -333,8 +333,9 @@ throttling persists. **Recognize the symptom cluster and foreground/recreate the
 suspecting the app.**
 
 **Coordinates are a documented contract, not a stable one.** `computer` coordinates live in
-screenshot-pixel space = CSS px × `devicePixelRatio` (Windows commonly 1.25), and the mapping
-moves whenever the window/viewport changes. Pin the viewport with `resize_window` (≈1280×720) at
+screenshot-pixel space, which is not always CSS px × `devicePixelRatio`: on 2026-10-13 a 1267-CSS-px
+viewport at DPR 1.25 reported a 1512-wide frame, a factor of 1.19. Compute it as the reported frame
+width ÷ `innerWidth` (each screenshot states its frame). The mapping moves whenever the window/viewport changes. Pin the viewport with `resize_window` (≈1280×720) at
 session start if coordinate clicks are unavoidable — but prefer refs and `form_input`, which don't
 depend on the mapping at all.
 
@@ -409,6 +410,16 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
       user. That gives the 403. Swap back the same way.
     - **Hidden-tab focus.** In a hidden tab a ref-based click on an input can miss the focus, so typed
       text goes nowhere. A coordinate click lands; check the field's `value` after typing.
+- **Lazy images and stale-page refusals** (verified 2026-10-13, WU-ParityAndRemaining browser pass).
+  - In a hidden tab, `loading="lazy"` images stay unrequested until a `computer` screenshot paints the
+    tab; take one, wait, then read `naturalWidth` and `read_network_requests`. A missing sprite needs a
+    fixture: point a tag's `sprite_identifier` at a name with no file through `psql`, and restore it.
+  - A server-side refusal the UI's own gate hides (a disabled Submit, a client-side check) is reachable
+    as a stale page: open the editor, change the row under it with `psql` (say, a story's
+    `post_approval_status`, or a tag's `tag_type_id`), then act. Restore the row afterwards.
+  - Quill fields: typing into a `ql-editor` after a coordinate click works; setting `innerHTML` and
+    dispatching `input` also works for the edit and compose editors. Check `.innerHTML` before acting,
+    since an editor that missed the input sends its empty `<p><br></p>` (refused since 2026-10-13).
 - **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
   progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
   one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.

@@ -167,7 +167,9 @@ requires an authenticated user.") became the shared text; no test asserted them,
   must act on. The probe now carries `.IgnoreQueryFilters(["ContentRating"]) // elevated read:` —
   visibility is the guard's job, settled just above it. The false comment "it only ever returns false"
   is rewritten. Tier: Integration `RecommendationReadServiceTests.GetForStory_AMatureOffAuthorWithAReveal_SeesTheNeedsRevisionRec`;
-  mutation-checked by removing the lift. `GetForStoryAsync`: Approved only; highlighted/spotlighted
+  mutation-checked by removing the lift. Not browser-driven by its browser pass (the fixture needs a
+  mature-off author with a revealed M story and a NeedsRevision rec); the Integration test is the check.
+  `GetForStoryAsync`: Approved only; highlighted/spotlighted
   first then DatePosted desc; per-viewer `IsLikedByCurrentUser` via short-circuited EXISTS subquery
   (EF Core anonymous-safe pattern). `ToggleLikeAsync`: load rec with filtered `Likes` include,
   add/remove, atomic counter update, return `RecommendationLikeResultDto`. **No notification

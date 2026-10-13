@@ -98,11 +98,19 @@ answers an anonymous caller 401 (it was 403). `GetSiteAnnouncementsAsync`'s unpu
 *downgrade* is deliberately not a gate and is unchanged. Verified by the existing Integration blog-post
 suites.
 
-- **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30, a lost delete race 404s since its review fixes, all three subtypes HTTP-driven by its browser pass the same day — see the Stage notes above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30, a lost delete race 404s since its review fixes, all three subtypes HTTP-driven by its browser pass the same day — see the Stage notes above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36; an emptied editor's content refused on all six create/edit DTOs since the WU-ParityAndRemaining browser pass, 2026-10-13, Unit-tested — the note just below). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; group-post `PUT`/`DELETE` routes + client twins since WU-TptHardDelete, 2026-09-30, Unit-tested since its review fixes, the routes HTTP-driven by its browser pass the same day).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
   the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **Required content refuses blank markup — no flip (2026-10-13, the WU-ParityAndRemaining browser
+  pass).** The pass found an empty comment posted from an untouched editor (`<p><br></p>` passed
+  `string.IsNullOrWhiteSpace`) and swept every required rich-text field. All six blog-post DTO
+  validations (profile, group and site; create and edit) now test `Content` with
+  `RichTextContent.IsBlank`, so an emptied editor reads "Content must not be empty." instead of
+  publishing an empty post. Rule: `layer2-services.md` §"Three-Tiered Validation". Tier: Unit
+  `RichTextBlankTests`. The blog editors were not browser-driven for it; the same helper's refusal was
+  seen live on comments and on the story summary.
 - **WU-ErrorHandling note (2026-07-06).** Both editors (`BlogPostEditorPage`,
   `GroupBlogPostEditorPage`) embed `DraftAutosave` (`draft:blogpost:{id|new}`,
   `draft:groupblogpost:new:{groupId}`; Title + Content), cleared on successful submit;

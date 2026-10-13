@@ -1369,6 +1369,11 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     `/settings`, the Privacy form's "Private messages" select should announce "Emails about new
     messages: Notification settings" as its description. The `aria-describedby` wiring is verified in
     the DOM; the announcement has not been heard.
+  - Also for the screen-reader and keyboard run (added 2026-10-13 by the WU-ParityAndRemaining browser
+    pass): a comment's "(edited)" marker carries its date only in a `title` attribute, which screen
+    readers often skip and keyboard users cannot reach; and the edit form's "Contains spoilers for
+    future chapters" checkbox should be reachable and announced in order after the editor. Both render
+    and work with a mouse on both phases.
 
 - [ ] **F7 — Operational-resilience gaps (no WU, no row, no decision)** `[off-grid · med · launch]`
   - Source: `middle-addendum.md` §3 items 8–14.
@@ -1823,7 +1828,11 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Unblocked 2026-07-31: H10 had the whole `/Account/*` funnel returning 500, so none of these
     flows could be driven at all until it was fixed. Natural next candidate.
 
-- [ ] **H12 — Story-lifecycle UI: browser-verified 2026-09-30; one WASM re-check, now step 1 of H37** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available. Narrowed 2026-09-30 by the WU-StoryLifecycle browser pass. P1 landed 2026-10-13 (WU-ParityAndRemaining); the re-check is folded into **H37** step 1, and closing H37 closes this entry.*
+- [x] **H12 — Story-lifecycle UI: browser-verified 2026-09-30; the WASM re-check passed 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available. Narrowed 2026-09-30 by the WU-StoryLifecycle browser pass. P1 landed 2026-10-13 (WU-ParityAndRemaining); the re-check is folded into **H37** step 1, and closing H37 closes this entry. Closed 2026-10-13 by the WU-ParityAndRemaining browser pass (H37 step 1).*
+  - **Closed:** on WASM, a refused save (`/story/new` with no summary or tags) listed the server's
+    sentences ("Long description is required", Setting, Genre), and a refused submit (a stale page
+    whose saved "Status when published" `psql` had set to Draft) showed "You must select a Status for
+    the story to move to once approved." The circuit showed the same lines. Detail: **H37**.
   - Grid: **F4, F47 and F48 L4.5 are back at 5.** The review fixes had flipped them 5→1; the browser
     pass drove all four surfaces this entry listed, on circuit and WASM against `psql`:
     1. the lifecycle panel (untrusted and trusted submit, withdraw, revise, published moves, the
@@ -2037,6 +2046,13 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
       (and any other `EditorView`-fed optional field) does not.
     - Fix shape: normalize empty editor HTML to null at the editor's pull (or in the service's
       sanitize step), plus a test.
+    - *Annotated 2026-10-13 by the WU-ParityAndRemaining browser pass:* the **required** half of this
+      class is built. `RichTextContent.IsBlank` (Core/RichText/) now refuses blank markup in all
+      sixteen required-field validations (`layer2-services.md` §"Three-Tiered Validation"). The
+      optional half here is unbuilt; it should use the same helper. Its sites: `ServerChapterWriteService`'s
+      top and bottom notes (create, new version, edit), `VouchButton` (which matches only the exact
+      `<p><br></p>`), and the profile bio (`ProfileSettingsForm`'s `EditorView`). Group and series
+      descriptions are plain textareas and are not in the class.
 - [ ] **H23 — WU-CounterSymmetry's `UserCard` manual-grant rider: owner check (the browser pass is done)** `[decision · low · beta]` — *Filed 2026-09-30, when WU-CounterSymmetry ran with no browser available. Narrowed 2026-09-30 by its browser pass to the one owner check below.*
   - Grid: **F50 L4.5 is back at 5.** The WU had lowered it 5→1. The pass drove all three steps on both
     render phases, with `psql` as ground truth, on a reset workbench:
@@ -2444,7 +2460,36 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     H17's first bullet. Its detail (no rollback, the same-file precedent, the test location) now lives
     there. The id stays retired so citations of it resolve here; track the work under **H17**.
 
-- [ ] **H37 — WU-ParityAndRemaining browser pass: WASM error lists, the edited marker and edit spoiler toggle, the deleted participant, the client config, the re-split** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ParityAndRemaining, which ran with no browser available. Closing it closes **H12**.*
+- [x] **H37 — WU-ParityAndRemaining browser pass: WASM error lists, the edited marker and edit spoiler toggle, the deleted participant, the client config, the re-split: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-ParityAndRemaining, which ran with no browser available. Closing it closes **H12**. Closed 2026-10-13 by its browser pass, which also closed H12.*
+  - **Result:** all eight steps ran on the server-only path (standing workbench, not reset; `psql` after
+    every write) on the circuit and on WASM. F24, F26 and F49 L4.5 1→5 (`status.md`).
+    - **Three runtime bugs, fixed** (commit "browser-pass fixes"): step 7's re-split crashed the story
+      editor on WASM (a blocking wait the WASM runtime refuses; now `ResplitAsync`); step 5's missing
+      sprite re-requested its static `.png` forever and never reached `unknown.png`
+      (`sprite-fallback.js` compared an absolute `img.src` with a relative URL); and an untouched
+      comment editor posted an empty comment (`<p><br></p>` passed every required rich-text check;
+      `RichTextContent.IsBlank` now backs all sixteen).
+    - **Steps 1–8:** the WASM error lists and the refused submit (both phases); "(edited)" with its
+      date tooltip, and a no-op save that left `date_edited` alone (chapter, blog-post, group and
+      profile comments); the edit spoiler toggle on chapter roots only, seeded from the comment, with a
+      text-only save keeping the flag; "[deleted user]" with the default avatar and no link in the list
+      row and thread header; one `GET /api/client-config` before the first API call, sprites rendering,
+      and the chain ending at `unknown.png`; no start/complete `POST` for an anonymous reader (a
+      signed-in one still writes both); the re-split keeping titles and text; the Windows-1252 import
+      with its warning, and no warning for UTF-8.
+    - **Also driven:** a reply has no Reply button and a reply-to-reply `POST` answers 400 with the
+      sentence; a spoiler flag on a group comment answers 400; the taken group name on create and
+      rename (both phases); an atomic group create (admin row in the same transaction) and chapter
+      create; a re-typed tag refused on save, then accepted on the same circuit once re-typed back (the
+      review fixes' untracked read).
+    - **Not browser-driven** (no UI path builds them; Integration and Unit cover them): P5's malformed
+      ship criteria, R4's taken-down fanon invitation, R7's doubled pairing member, R8's archive bound,
+      R11's mature-off author probe.
+    - **Not covered:** a screen reader on the "(edited)" `title` and the edit toggle's keyboard order,
+      added to **F6b**.
+    - **Narrative:** the browser-verification bullets in `audit/Comments.md`, `Messaging.md`,
+      `Stories.md`, `Import.md`, `Sprites.md`, `Chapters.md`, `Groups.md`, `Tags.md`, `BlogPosts.md`;
+      `workplan.md` WU-ParityAndRemaining.
   - Grid: **F24, F26 and F49 L4.5 went 5→1** (new markup). F3, F4, F7, F33 and F63 stay 5 (no markup
     changed), but their WASM steps are below. Returns F24/F26/F49 L4.5 to 5.
   - Steps (force WASM by a revisit; force the circuit by clearing the Auto-mode localStorage hash and a

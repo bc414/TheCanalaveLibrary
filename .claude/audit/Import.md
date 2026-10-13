@@ -22,16 +22,20 @@ Feature 53. *(As-built names corrected 2026-07-27; the build note below always h
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).
 - **L2 / L3-Logic / L3.5 / L4 — Stage 5 (archive decompression bound, legacy-encoding fallback with a
   warning, and the WASM re-split's camelCase read, WU-ParityAndRemaining 2026-10-13 — Unit-tested, stage
-  unchanged, the Stage note below; WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
+  unchanged; its browser pass the same day drove the encoding warning and the re-split on both render
+  phases and made the re-split async after it crashed the editor on WASM, RazorComponents-tested — the
+  Stage note below; WU38d, 2026-07-11; L2's readers re-verified on AngleSharp
   1.8.4 + HtmlSanitizer 9.2.1039 by WU-DependencyCVEs, 2026-10-12, and browser-driven on both render
   phases by its browser pass the same day — Stage note below; tracker H25 holds two pre-existing
   editor defects that pass found; the three parse routes' `ImportParse` limiter is pinned by an Integration metadata test since WU-ThrottleCoverage, 2026-10-13, which also filed tracker D16 — an import of more than five chapters commits five and then refuses; Stage note below).** **L4.5 —
   Stage 5** (see note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
-  service need a client impl; the re-split's sync read binds camelCase since WU-ParityAndRemaining,
-  2026-10-13 — Unit-tested, stage unchanged, the L2/L5 Stage note below).** Endpoints + client impl live (WU-L5Sweep), incl. the three
-  multipart parse endpoints + `Resplit` — which stays a real network hop despite its
-  synchronous/pure look (server-only `IHtmlSanitizationService` dependency; see WU-L5Sweep's Import
+  service need a client impl; the re-split binds camelCase since WU-ParityAndRemaining, 2026-10-13, and is
+  async since its browser pass the same day (the synchronous client crashed on WASM) — Unit- and
+  RazorComponents-tested, browser-driven on both phases, stage unchanged, the L2/L5 Stage note below).**
+  Endpoints + client impl live (WU-L5Sweep), incl. the three
+  multipart parse endpoints + `ResplitAsync` — which stays a real network hop despite its
+  pure look (server-only `IHtmlSanitizationService` dependency; see WU-L5Sweep's Import
   notes). Not browser-driven in the flip's wave. Full wave narrative: `workplan.md` WU-GlobalFlip.
   **L6/L8 — N/A.**
 
@@ -116,7 +120,7 @@ WU moved was driven through the real import UIs, with `psql` after each commit:
   The Markdown import's blockquote lost its quote and gained empty paragraphs once Quill loaded it.
   Saving the draft chapter then landed the author on "Page not found".
 
-### L2/L5 Stage note (WU-ParityAndRemaining, 2026-10-13) — no cell flips; F63 stays 5
+### L2/L5 Stage note (WU-ParityAndRemaining, 2026-10-13) — no cell flips; F63 stays 5; browser-verified the same day
 
 Service audit §2.12 (two import items) and §2.7.4.
 - **Archive bound (EPUB and DOCX).** New `Server/Import/ArchiveGuard.EnsureWithinLimits`, called after
@@ -131,12 +135,12 @@ Service audit §2.12 (two import items) and §2.7.4.
   passes the warnings through; `ImportReviewPanel` renders `Message`, so no UI change. Before, a
   Notepad file's curly quotes became U+FFFD with no warning. Rule: `layer2-services.md` §"Export &
   Import" → "Text decoding".
-- **L5 — the WASM re-split.** `ClientContentImportService.Resplit` read its JSON with the case-sensitive
+- **L5 — the WASM re-split.** `ClientContentImportService.Resplit` (now `ResplitAsync`) read its JSON with the case-sensitive
   default options, so the server's camelCase `title`/`html` never bound and every re-split draft came
-  back blank on WASM; its 400/401 detail never bound either. It now reads through
-  `ClientHttpHelpers.ReadNullableFromJson`/`ReadProblemDetail` (the sync twins of the async helpers,
-  same web options and payload); the private `ProblemPayload` copy is gone. Rule: `layer5-wasm.md`
-  §"Client Service Implementations" ("Every JSON read uses the web defaults").
+  back blank on WASM; its 400/401 detail never bound either. It read through sync twins of the async
+  helpers (same web options and payload) until the browser pass below made the call async; the private
+  `ProblemPayload` copy is gone. Rule: `layer5-wasm.md` §"Client Service Implementations" ("Every JSON
+  read uses the web defaults").
 - Tier: Unit — `ImportArchiveAndEncodingTests` (14: the byte cap by real bytes and across entries, the
   entry cap, rewind, a corrupt archive, both service paths with the production entry cap, four decoder
   cases, and all three text readers passing the warning to the draft) and `WasmParityClientTests` (the
@@ -145,6 +149,29 @@ Service audit §2.12 (two import items) and §2.7.4.
   guard call, dropping a reader's warning, and the default-options re-split each fail a test. No
   browser was available: a WASM re-split is a step of tracker **H37**; no markup changed, so L4.5
   stays 5.
+- **Browser verification (2026-10-13, H37 steps 7–8).** Server-only path, TestUser on draft story 13's
+  editor, "One document holding the whole story", files built in the page (a `File` in a
+  `DataTransfer`); nothing was committed.
+  - **Runtime bug fixed (L5):** on WASM, switching "Split chapters at:" crashed the editor to the error
+    boundary with `PlatformNotSupportedException` ("Cannot wait on monitors on this runtime"). The
+    interface method was synchronous and the client blocked on its HTTP call; the class doc's belief
+    that the WASM handler falls back to a synchronous request was wrong. So the re-split never worked
+    on WASM, before or after the camelCase fix above. `IContentImportService.ResplitAsync` replaces it
+    (server `Task.FromResult` over the same split, client an awaited POST, the endpoint awaits), the
+    sync helpers are gone, and `StoryChapterImport` awaits it, disables the picker meanwhile, and shows
+    a refused re-split's message with the drafts kept (nothing caught a refusal before). Rule:
+    `layer5-wasm.md` §"Client Service Implementations" ("A client method never blocks on a task").
+    Tier: RazorComponents `StoryChapterImportTests` (+2) and the async `WasmParityClientTests`; the
+    WASM wait itself is invisible to every tier (`testing.md`).
+  - **Re-split, after the fix:** a Markdown file with two `#` parts and three "Chapter N" lines opened
+    as "Part One"/"Part Two" (14 and 7 words); "Chapter N" lines gave "Part One" (2 words) then
+    Chapter 1–3 with their text; "Don't split" gave one 25-word draft. That was WASM (two
+    `POST /api/content-import/resplit` 200, no console error); the circuit (no `/api` call) gave the
+    same drafts for the first two, before the fix and after it.
+  - **Legacy encoding:** a `.txt` with Windows-1252 bytes (0x93/0x94, 0x91/0x92, 0x97, 0xE9) read as
+    “hello”, ‘goodbye’, — and café, with "This file wasn't saved as UTF-8, so it was read as
+    Windows-1252…" listed above the drafts, on the circuit and on WASM (`POST
+    /api/content-import/document` 200). The same text saved as UTF-8 showed no warning.
 
 ### L2 Stage note (WU-ThrottleCoverage, 2026-10-13) — no cell flips; F63 stays 5
 - **Pinned, not changed:** `ExportServiceTests.ImportParseRoutes_CarryTheImportParseLimiter` (Integration)
