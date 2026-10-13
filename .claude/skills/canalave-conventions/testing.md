@@ -374,6 +374,23 @@ repeats the initial load's `SELECT`), pass `fireOnMatch: 2` so the interceptor f
 match. Precedent: `CounterSymmetryTests.SetState_TheEnsuredRowDeletedBeforeItsReRead_*` (review fixes,
 2026-09-30).
 
+**A service with a second dependency on the write context can't use `CreateService` as is.** It resolves
+every dependency but the context from the scope, so a scoped collaborator that takes
+`ApplicationDbContext` (e.g. `SpotlightPlacementRelease` under `ServerStoryWriteService`) gets the
+scope's own context: its statements run on another connection, outside the transaction under test. Build
+the service by hand over the intercepted context and pass the collaborator constructed over that same
+context (`ActivatorUtilities.CreateInstance<T>(sp, writeDb, new Collaborator(writeDb))`), as production DI
+shares the scoped one. To prove a transaction-scoped advisory lock is held at a given statement, make the
+interleaved SQL a `DO` block that raises when `pg_try_advisory_lock(...)` succeeds from the second
+connection. Precedent: `StoryDeletionTests.TheStoryRowIsDeleted_WhileTheSpotlightBookingLockIsHeld`
+(WU-AuthorStoryDelete, 2026-10-13).
+
+**A re-entry test must not await the second call before asserting it was refused.** When a gated fake
+makes a call wait (a `TaskCompletionSource` the test releases later), a second call that the guard failed
+to stop waits on the same gate, so awaiting it hangs the run instead of failing the test. Start it, assert
+the fake's call log, then release the gate and await both. Precedent:
+`StoryEditorPageTests.WhileADeleteRuns_TheOtherWritesAreDisabled_AndNoneStarts` (WU-AuthorStoryDelete).
+
 ## Counter convergence: after a wired op, the reconciler corrects nothing (WU-CounterSymmetry)
 
 The regression that matters for a denormalized counter is the wired path drifting away from its

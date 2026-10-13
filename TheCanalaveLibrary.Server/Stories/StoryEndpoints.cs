@@ -29,7 +29,7 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — every
 /// <see cref="IStoryWriteService"/> method requires an authenticated user, and
-/// update/cover-upload/cover-remove/status-transition additionally enforce story ownership via
+/// update/cover-upload/cover-remove/status-transition/delete additionally enforce story ownership via
 /// <c>UnauthorizedAccessException</c>, translated to 403 by <see cref="EndpointHelpers.ExecuteAsync"/>.
 /// <c>POST /{storyId}/status</c> (WU-StoryLifecycle) is author-only for the same reason: the author
 /// lifecycle table is enforced in the service; moderator approve/reject live on ModerationEndpoints.
@@ -188,6 +188,17 @@ public static class StoryEndpoints
                 EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await stories.RemoveCoverArtAsync(storyId);
+                    return Results.NoContent();
+                }))
+            .RequireAuthorization();
+
+        // The author story delete (owner ruling D15, WU-AuthorStoryDelete): a hard delete, primary author
+        // only, under any moderation state. 204, or 401/403/404 through ExecuteAsync. Bodiless like the
+        // cover DELETE above, so the same antiforgery note applies.
+        group.MapDelete("/{storyId:int}", (IStoryWriteService stories, int storyId) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                {
+                    await stories.DeleteStoryAsync(storyId);
                     return Results.NoContent();
                 }))
             .RequireAuthorization();

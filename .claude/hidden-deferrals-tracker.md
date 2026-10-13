@@ -346,7 +346,8 @@ decision work that has no row at all.
   - Since WU-UserDeletion (2026-10-13) the account-deletion page tells users plainly that "Stories and
     blog posts can't be deleted on the site yet". Whoever builds the blog-post delete UI must update that
     sentence and add the path to its delete-it-first list (`DeletePersonalData.razor` is D13's compliance
-    surface; `cross-cutting.md` §"Account deletion"). WU-AuthorStoryDelete owes the same for stories.
+    surface; `cross-cutting.md` §"Account deletion"). WU-AuthorStoryDelete owed the same for stories and
+    paid it (2026-10-13): the page now names Delete story and says only blog posts can't be deleted yet.
   - **Unowned (noted 2026-10-13 by the WU-UserDeletion review fixes):** D13's rider (i) is a binding
     owner rule that this item leaves unmet, and no campaign WU spec picks it up (WU-AuthorStoryDelete
     covers stories only). `cross-cutting.md` rule 1 and `roadmap.md`'s D13 Resolved entry now name the
@@ -1207,6 +1208,7 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
 - [ ] **F3 — Legal/policy track** `[decision · high · launch]`
   - Source: `roadmap.md` Decision row 10; `middle-addendum.md` §3 items 1–7.
   - Context: ToS, privacy policy, **DMCA designated agent** (addendum flags this as highest-value/lowest-cost), COPPA age assertion, mature-content interstitial-vs-verification, GDPR erasure confirmation, trademark/fan-project disclaimer. The one-line row 10 badly understates a multi-item backlog.
+  - **The ToS must state D15's author-control position** (owner ruling D15's promulgation list; added WU-AuthorStoryDelete, 2026-10-13): an author may delete their own story at any time, irreversibly, and TCL does not undertake to be a fossil record against the author's wishes. No ToS or help surface exists yet, so nothing was written.
 
 - [ ] **F4 — Email production path (provider + domain + deliverability DNS)** `[decision · med · launch]`
   - Source: `roadmap.md` Decision row 8 / `middle_plan_v2.md` Resolved "Email mechanism"; `middle-addendum.md` §3 #13.
@@ -1419,6 +1421,10 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     *because* it was reported is arguably an outcome a reporter should hear about.
   - Once ruled, each site is a one-line `ReportLedger.CloseForDestroyedTargetsAsync` call inside its
     own transaction.
+  - **Site 5's author half is built (WU-AuthorStoryDelete, 2026-10-13) and leaves zombies as described:**
+    `DeleteStoryAsync` closes nothing, so open reports on the story and on its chapter comments stay
+    Open; Integration `StoryDeletionTests` pins that the `Report` row survives unchanged. Its ids are
+    the story id and the `TptDelete.StoryCommentsAsync` subquery, both in hand inside its transaction.
 
 - [ ] **F14 — Reinstating an account sends the user no notification** `[decision · low · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X6).*
   - Grid: F47 L2=5 (unchanged).
@@ -1574,6 +1580,27 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     sixth credit in one sitting waits three minutes; a sixth arc, list or series waits two
     (`ContentCreate`). Alternatives: a looser tier, or the re-request branch only with the bypass
     accepted.
+
+- [ ] **F24 — Five edges of D15's author story delete that its text does not rule** `[decision · low · beta]` — *Filed 2026-10-13 by WU-AuthorStoryDelete. Promoted the same day to `roadmap.md` decision row 27.*
+  - Grid: no cell moves on its account (F4 L2/L3-Logic/L3.5/L5 and F55 L2 stay 5).
+  - (a) **A live block.** D15: "if the booked block has not started, the slot returns to redeemable;
+    if it has already aired, it is consumed". Built: `StartDate > now` returns the slot, so a block that
+    is live at deletion counts as started and its slot is consumed (`SpotlightPlacementRelease`).
+  - (b) **The moderator hard delete** (`ApplyHardDeleteAsync`, Story branch) still leaves an unstarted
+    placement's slot `Redeemed`: D15 scoped slot return to "an author's unilateral act". If yes, it is a
+    one-line call to `SpotlightPlacementRelease` inside `InResolveTransactionAsync`.
+  - (c) **Telling the sponsor.** Nothing notifies a sponsor whose slot came back (no notification type
+    exists for it). The slot simply reappears on their `/spotlight` page.
+  - (d) **The download out's scope.** `StoryDeleteDialog` offers `StoryDownloadLinks`, which export what
+    the author can read publicly: `GetChaptersForExportAsync` takes published primary versions only,
+    and a taken-down story 404s (the read context's `IsTakenDown` filter). The dialog says "published
+    chapters only". Widening the export for an author is an Export-cluster call (`layer2-services.md`
+    §"Export & Import": "export = what you can read").
+  - (e) **A taken-down story has no Delete button.** `GetStoryForEditAsync` keeps the `IsTakenDown`
+    filter, so the editor 404s on a taken-down story and its author can delete it only over
+    `DELETE /api/stories/{id}` — the case D15 calls the most load-bearing. Options: lift the filter for
+    the author's edit read (which also opens property edits, consistent with `content-safety.md`'s
+    "so they can often fix it"), or a delete entry point elsewhere.
 
 ---
 
@@ -2193,6 +2220,30 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        fast — please wait N seconds" with the em dash intact (review fixes: it was unlabeled).
     9. Optional: an import of seven chapters reproduces tracker **D16** (five committed, then the wait
        message).
+- [ ] **H34 — WU-AuthorStoryDelete browser pass: the story delete dialog, its two outs and the deletion page's Stories line** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-AuthorStoryDelete; no browser was available to it.*
+  - Grid: **F4 and F52 L4.5 5→1** (`status.md`). F4's editor gained a Delete story section and
+    `StoryDeleteDialog`; F52's deletion page changed its delete-it-first copy. No browser has seen
+    either. This pass returns both to 5. RazorComponents (`StoryDeleteDialogTests`,
+    `StoryEditorPageTests`) and Integration (`StoryDeletionTests`, `StoryEndpointsTests`,
+    `BlobCleanupTests`, `StaticSsrPageRenderTests`) cover the behavior.
+  - Steps (1–5 on the circuit, then again on a WASM revisit; check each delete with `psql`):
+    1. `/story/{id}/edit` on a published story with chapters, a comment and a cover: "Delete story…"
+       sits last on the page and opens the dialog. Its heading is "Delete this story permanently?", the
+       copy names chapters, comments, recommendations and reading progress, and the Delete button stays
+       disabled until the saved title is typed exactly (try a different case, then a trailing space).
+    2. Edit the title field without saving, open the dialog: it still asks for the **saved** title.
+    3. "Unpublish instead": the dialog closes, the Publication panel reads Draft with "Unpublished —
+       the story is a draft again.", and unsaved form edits survive (no reload).
+    4. The download links in the dialog each download a file (the story's published chapters only).
+    5. Type the title and delete: the page leaves for `/user/{you}/authored`, the story is gone there and
+       at its old URL (404), `psql` shows no `stories`/`chapters`/`base_comments` rows for it, the cover
+       URL 404s, and the editor's localStorage key `draft:story:{id}` is gone.
+    6. Spotlight: as a sponsor, book a future block on another author's story; the author deletes it;
+       the sponsor's `/spotlight` page offers the slot again.
+    7. A Draft or PendingApproval story's dialog shows no Unpublish-instead button.
+    8. `/Account/Manage/DeletePersonalData`: the Stories line reads "use Delete story at the bottom of the
+       story's edit page" with the taken-down caveat, and the old "Stories and blog posts can't be
+       deleted" line is gone.
 
 ---
 

@@ -65,6 +65,14 @@ public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadSe
         await ThrowIfWriteFailedAsync(response);
     }
 
+    /// <summary>Bodiless <c>DELETE api/stories/{id}</c> → 204: the author story delete (owner ruling
+    /// D15). 401/403/404 come back as the contract's exceptions through the shared mapping.</summary>
+    public async Task DeleteStoryAsync(int storyId)
+    {
+        HttpResponseMessage response = await Http.DeleteAsync($"api/stories/{storyId}");
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     /// <summary>Status-code → contract-exception translation (inverse of StoryEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>

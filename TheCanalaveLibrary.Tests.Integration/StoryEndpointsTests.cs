@@ -285,4 +285,61 @@ public class StoryEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    // ── DELETE /api/stories/{id} — the author story delete (owner ruling D15, WU-AuthorStoryDelete) ──
+
+    private async Task<bool> StoryExistsAsync(int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Stories.AnyAsync(s => s.StoryId == storyId);
+    }
+
+    [Fact]
+    public async Task Delete_Author_Returns204_AndTheStoryIsGone()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(authorId);
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StoryExistsAsync(storyId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_NonAuthor_Returns403_AndTheStoryStays()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(await SeedUserAsync("other"));
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await StoryExistsAsync(storyId)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_Anonymous_Returns401_AndTheStoryStays()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{storyId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await StoryExistsAsync(storyId)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_MissingStory_Returns404()
+    {
+        SetActiveUser(await SeedUserAsync("author"));
+
+        HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{int.MaxValue}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

@@ -176,6 +176,11 @@ table, one statement per child kind, run inside the caller's transaction —
   costs a round-trip per row and is the shape three sites forgot to copy.
 - Reply sets are closed under each parent scope (the `Post*CommentAsync` methods refuse a parent from
   another scope), so one statement per scope removes every reply too.
+- **A story is a scope of its own** (`TptDelete.StoryCommentsAsync`): one statement over every chapter
+  of the story, joining through `chapters` —
+  `DELETE FROM base_comments WHERE comment_id IN (SELECT cc.comment_id FROM chapter_comments cc JOIN chapters c ON c.chapter_id = cc.chapter_id WHERE c.story_id = @id)`.
+  Replies are chapter comments of the same story, so the set is closed. Used by the moderation hard
+  delete and the author story delete (owner ruling D15); never a loop of the chapter-scope statement.
 - **A future group-delete path must add a group-scope method** (`group_comments` and `group_blog_posts`
   plus each post's dependents). None exists today because nothing deletes a group (D47(b) is pending);
   until it is written, the RESTRICT FKs make such a path fail on its first group with children.
@@ -456,7 +461,13 @@ current set (folded in at the 2026-07-18 migration collapse; originals were migr
 `R2_ViewCountToDailyStoryStats` and `R4_MvccStorageTuning`):
 - **`daily_story_stats`** — migration-managed ground-truth stat table, deliberately outside the EF
   model (accumulated, not a rebuildable L8 mart): raw `CREATE TABLE` + `COMMENT ON TABLE`. Ordered
-  before the MVCC block, which tunes it too.
+  before the MVCC block, which tunes it too. **Its `story_id` carries `REFERENCES stories (story_id) ON
+  DELETE CASCADE`, and that clause is load-bearing:** it is how a deleted story's view rows go (the
+  author story delete, owner ruling D15, deletes no stat row explicitly — `layer2-services.md`
+  §"Author story deletion"), so `SiteDailyStatAggregator`'s unjoined view total stops counting them. A
+  regeneration that drops the clause leaves no compile or migration error, only a site view total that
+  counts deleted stories forever; Integration `ViewCountFlushTests.DeletingAStory_CascadesItsStatRows`
+  and `StoryDeletionTests` catch it.
 - **MVCC storage tuning** — `ALTER TABLE … SET (fillfactor / autovacuum_vacuum_scale_factor)` on
   `user_chapter_interactions`, `daily_story_stats`, `user_story_interactions`.
 

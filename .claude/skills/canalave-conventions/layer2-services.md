@@ -355,8 +355,8 @@ wall) is deleted in this order, inside **one** `CreateExecutionStrategy().Execut
    row lock needs one (§"Resolve paths — lock, guard, then transition"); `ApplyHardDeleteAsync` sits
    inside that transaction and moves no `UserStats` counter. The captured blob is deleted best-effort in
    its own `try` (a failed notification must not skip the erasure, nor the reverse): §"Image Storage —
-   blob ownership and cleanup", rule 2. Built at `ResolveWithRemovalAsync(hardDelete: true)`; D15's
-   author story delete inherits it.
+   blob ownership and cleanup", rule 2. Built at `ResolveWithRemovalAsync(hardDelete: true)` and at
+   D15's author story delete (`DeleteStoryAsync`, §"Author story deletion" below).
 
 Why the order is forced, and why the FKs are RESTRICT: `layer1-data-model.md` §"Hard-deleting a content
 parent". Skip step 1 and the delete fails with 23001 (`restrict_violation` — Postgres reports an
@@ -382,8 +382,9 @@ partial delete.
   `ServerBlogPostWriteService.DeleteBlogPostAsync`/`DeleteGroupBlogPostAsync`/`DeleteSiteBlogPostAsync`
   (raw SQL for the post too); `ServerModerationWriteService.ApplyHardDeleteAsync` (Story, BlogPost —
   `InResolveTransactionAsync` clears the tracker); `UserDeletionService` (the profile wall; clears the
-  tracker too). A comment, poll or recommendation delete removes a loaded entity of its own and needs
-  no helper.
+  tracker too); `ServerStoryWriteService.DeleteStoryAsync` (the author story delete, D15 — story scope,
+  raw `ExecuteDeleteAsync` for the story row, clears the tracker). A comment, poll or recommendation
+  delete removes a loaded entity of its own and needs no helper.
 
 **Blog-post lifecycle methods are per subtype.** Each subtype has its own update/delete pair with its
 own gate: profile posts (`UpdateBlogPostAsync`/`DeleteBlogPostAsync`, author-only), group posts
@@ -393,6 +394,71 @@ author-owns-own-row precedent of `EditCommentAsync`), site posts (`UpdateSiteBlo
 own child set** (`writeDb.ProfileBlogPosts…Select(p => new { p.AuthorId })`), never on the base set: an
 id of another subtype is `KeyNotFoundException`, never a half-applied base-table update. An authorless
 post (`AuthorId` NULL after account deletion) is owned by nobody — `UnauthorizedAccessException`.
+
+## Author story deletion (owner ruling D15, WU-AuthorStoryDelete 2026-10-13)
+
+**The position.** Archive permanence is rejected: an author has absolute control over their own
+stories. `IStoryWriteService.DeleteStoryAsync(storyId)` is a **true hard delete** — self-service, no
+reason, no moderator, irreversible. No grace window, no tombstone or "[deleted story]" page, no
+cooldown, no mod approval, no `IsWithdrawn` soft state. Unpublish (D1's `published → Draft`) stays the
+*reversible* option and is offered first in the confirm dialog, but it is not the ceiling.
+- **Primary author only.** `Story.AuthorId` gates it, like every other story write. A co-author or beta
+  reader cannot delete (credit and access, not ownership — D15: not a deferral). A NULL author (an
+  anonymized story) is owned by nobody.
+- **Unconditional under moderation.** An open report, `PendingApproval` or `IsTakenDown` never blocks
+  it, and no "can't delete evidence" gate exists. The write context is unfiltered, so nothing extra is
+  needed. The moderation record survives without the content: `reports` has no FK to `stories`,
+  `ReportedUserId` (D8) keeps the author answerable, and sanctions are account-level.
+
+**The order** — one `CreateExecutionStrategy().ExecuteAsync` + `BeginTransactionAsync`, never a loop
+of `DeleteChapterAsync` (that would renumber and refresh word counts for a parent that is going away,
+in O(chapters) transactions):
+1. *Before the strategy:* `RequireUserId()`, then a projected owner gate on the write context
+   (`KeyNotFoundException` / `UnauthorizedAccessException`). No `IWriteRateLimitService` call — deletes
+   are unthrottled (`security.md` §"Write Throttling").
+2. *Inside the delegate:* `ChangeTracker.Clear()` first, then the transaction.
+3. Capture the cover path (`story_listings.cover_art_relative_url`) inside the transaction, before the
+   row delete (D14 rule 2) — a retried delegate recaptures it.
+4. `TptDelete.StoryCommentsAsync` — every chapter comment and reply of the story, one statement
+   through `base_comments` (D10 at story scope). Must precede step 6: `chapter_comments.chapter_id` is
+   RESTRICT.
+5. `SpotlightPlacementRelease.ReleaseUnstartedForStoryAsync` — returns the slots of unstarted
+   placements (§"Community Spotlight" → "Slot return when a story is deleted"). Must precede step 6:
+   the cascade removes the placement rows that name the slots.
+6. `writeDb.Stories.Where(s => s.StoryId == id && s.AuthorId == userId).ExecuteDeleteAsync()` —
+   `Story` is not TPT, so the LINQ set delete is legal. **0 rows is a lost race** (another tab deleted
+   it first): throw `KeyNotFoundException` inside the delegate, so the transaction rolls back and the
+   loser answers 404 exactly as a sequential re-delete does.
+7. Commit. *After the strategy returns:* the cover blob, best-effort in its own `try` (a Warning naming
+   the path; the orphan sweep is the backstop), then one `LogInformation` recording the deletion
+   (story, author, slots returned) — the durable trace of an irreversible user act.
+
+**Everything else cascades at the database; no hand-enumeration in service code.** The `stories` FKs
+cascade listing, detail, chapters (and through them contents and read state), tags, characters,
+pairings, arcs, co-authors, beta readers, acknowledgments, recommendations, spotlight placements,
+series / custom-list / group entries (and the group-folder assignments), user-story interactions (and
+their recommendation sources), external links and lineage in both directions. `ProfileBlogPost.StoryId`
+and `User.PinnedStoryId` are SET NULL. **`daily_story_stats` cascades too**, through the `REFERENCES
+stories ON DELETE CASCADE` its raw DDL carries (`layer1-data-model.md` §"Migrations" → the re-append
+list), so the site aggregator stops counting the story's views without an explicit delete. D15's text
+said that table had no FK and needed a raw `DELETE`; the premise was false and the redundant statement
+is not written (correction recorded on the worksheet's D15 Built line).
+
+**Counters: none touched** (D15 "Counters", D21). `User.ApprovedStorySubmissions` is a record of a
+decision, monotonic (D1): deleting an approved story never decrements it and never revokes
+`CanAutoApprove` — a decrementable trust count is farmable (§"Records of a decision are not
+counters"). Every other affected number (`StoriesWritten`, `WordsWritten`, `RecommendationsReceived`,
+`FavoritesOnStories`, readers' `StoriesRead`/`InProgress`, commenters' `CommentsWritten`, third
+parties' `RecommendationsWritten`, acknowledgment counters) is a derived aggregate that the F58
+recompute corrects; a falling count is correct, not drift (D21).
+
+**Accepted dangles — verified, never swept.** `notifications.related_entity_id` naming the story has no
+FK: the enricher drops a miss, the presenter renders a null title as the type's generic text, and both
+click sites guard a null `TargetUrl`, so a dangling row is inert and never throws (Integration-tested).
+`reports` rows survive by design (the ledger). The same class, tolerated by the same ruling:
+`user_content_reveals.entity_id` (no FK; serial ids are never reused) and the L8 marts, whose readers
+join `stories`. **Open reports** against the story or its chapter comments stay Open and drop out of
+the queue (the target no longer materializes) — owner-open, tracker **F13** site 5.
 
 ## Signal Buffering — in-process write buffers for loss-tolerant signals
 
@@ -626,9 +692,10 @@ rejected for every class:
    before the row delete (a cascade removes the rows that name them), and deletes them after the commit,
    outside the execution-strategy retry (a retried delegate must not re-delete, and a blob delete cannot
    roll back). Best-effort: catch, log a Warning naming the path, carry on. Built at
-   `UserDeletionService` (the avatar) and `ResolveWithRemovalAsync(hardDelete: true)` (the story cover;
-   a soft removal never touches the blob, because it is reversible). Author story deletion (D15) is the
-   third site and inherits this rule; so does any future terminal path. **A row that survives keeps its
+   `UserDeletionService` (the avatar), `ResolveWithRemovalAsync(hardDelete: true)` (the story cover;
+   a soft removal never touches the blob, because it is reversible) and the author story delete
+   (`DeleteStoryAsync`, D15 — the third site, WU-AuthorStoryDelete 2026-10-13). Any future terminal
+   path inherits this rule. **A row that survives keeps its
    blob:** stories survive their author's deletion anonymized (D13), so their covers stay (whether to
    strip them is decision row 25).
 3. **The daily sweep is the fault-class backstop, never the mechanism of erasure.**
@@ -661,8 +728,8 @@ rejected for every class:
    machines) at one bucket or one upload folder: each one's sweep sees the other's blobs as orphans.
 
 D14 also routes a launch item here: `/uploads/{**key}` is served `immutable` for a year, so deleting
-an object does not evict CDN copies. The illegal-content path needs a cache purge once Cloudflare sits
-in front of R2 (roadmap Phase 7).
+an object does not evict CDN copies. The illegal-content path and the author story delete (D15) need a
+cache purge once Cloudflare sits in front of R2 (roadmap Phase 7).
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
 
@@ -3187,6 +3254,24 @@ notifies via `INotificationWriteService`, and stamps `GoLiveNotifiedUtc` (fires-
 is the stamp, not the dedup heuristic). A placement whose whole window elapsed while the server
 was down is never notified late — the `EndDate > now` condition ages it out silently.
 `TestAppFactory` removes the worker; integration tests drive the sweep body directly.
+
+**Slot return when a story is deleted (owner ruling D15's sub-ruling, built WU-AuthorStoryDelete
+2026-10-13).** A placement cascades off its story, but the slot is a third party's *entitlement*, not a
+record, so an author's unilateral delete must not silently consume it: **if the booked block has not
+started (`StartDate > now`), the slot returns to `Available`; once it has started, the slot stays
+`Redeemed`** (consumed — a slot whose placement is gone is "Redeemed with no placement"). A block that is
+live at the moment of deletion counts as started; that is the build's reading of "has not started" vs
+"already aired", flagged for the owner (`roadmap.md` decision row 27 (a)). Mechanism:
+`SpotlightPlacementRelease` (`Server/Spotlight/`, server-only scoped class, registered beside
+`SpotlightGoLiveSweeper`) shares the caller's write context and so runs inside the caller's
+transaction. It takes the booking lock (`SpotlightLocks.BookingLockSql`, the one const both it and
+`RedeemSlotAsync` use), so a sponsor cannot book the story between the release and the cascade, then
+flips the unstarted placements' slots set-based. Deliberately **not** a member of
+`ISpotlightWriteService`: that interface is WASM-registered, and whether a server-only member may sit on
+one is worksheet D37, still pending. The monthly grant cap counts `Status != Revoked`, so a returned slot is not a new
+grant and the cap is unaffected. Only the author delete calls it: the moderator hard delete still
+leaves the slot `Redeemed`, and nobody tells the sponsor a slot came back — both unruled (decision row
+27 (b)/(c)).
 
 ## Naming
 

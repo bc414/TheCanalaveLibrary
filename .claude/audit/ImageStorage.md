@@ -55,7 +55,9 @@ revisit — this list is D14's own text:**
 - A blob is referenced by exactly one row; the method that writes it persists its reference (write →
   persist → best-effort delete old). No write DTO carries a blob path.
 - Every terminal deletion path captures the paths before the row delete and deletes the blobs after the
-  commit, outside the retry, best-effort with a Warning. D15's author story delete inherits this.
+  commit, outside the retry, best-effort with a Warning. D15's author story delete inherits this (built
+  WU-AuthorStoryDelete 2026-10-13: `DeleteStoryAsync` captures the cover inside its transaction and
+  deletes it after the strategy; Integration `BlobCleanupTests`, narrative in `audit/Stories.md` F4).
 - The sweep is the backstop, never the erasure mechanism: unfiltered reference read, 24 h grace window,
   log-only first cycle, a per-cycle cap, store → DB direction only, rows naming a missing blob logged
   and never acted on.

@@ -514,6 +514,9 @@ builder.Services.AddScoped<ISpotlightReadService, ServerSpotlightReadService>();
 builder.Services.AddScoped<ISpotlightWriteService, ServerSpotlightWriteService>();
 builder.Services.AddScoped<ISpotlightSlotAllocator, ServerSpotlightSlotAllocator>();
 builder.Services.AddScoped<SpotlightGoLiveSweeper>();
+// Server-only: the author story delete returns an unstarted booking's slot (owner ruling D15,
+// WU-AuthorStoryDelete). Not on ISpotlightWriteService, which is WASM-registered (worksheet D37 pending).
+builder.Services.AddScoped<SpotlightPlacementRelease>();
 builder.Services.AddHostedService<SpotlightGoLiveWorker>();
 // Notifications (WU22) — L2 read/write services (Features 41/42/43).
 // WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.

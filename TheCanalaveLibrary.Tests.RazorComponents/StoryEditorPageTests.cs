@@ -1,5 +1,6 @@
 using AngleSharp.Dom;
 using Bunit;
+using Bunit.TestDoubles;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,10 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// reason reaches the panel (it rendered the field's name), and a refused save leaves the Quill-owned
 /// editor markup alone (it killed the circuit). Since WU-BlobCleanup (owner ruling D14): the cover is an
 /// immediate commit outside the save, a 403 on it renders the forbidden state, and (its review fixes) a
-/// cover call never overlaps a save or a status change, in either order.
+/// cover call never overlaps a save or a status change, in either order. Since WU-AuthorStoryDelete (owner
+/// ruling D15): the delete confirms against the SAVED title, clears the draft backup and leaves for the
+/// author's Authored tab; a refusal stays in the dialog; Unpublish instead runs in place; and the delete is
+/// a fourth write that never overlaps the others (the dialog itself: <see cref="StoryDeleteDialogTests"/>).
 /// <para>
 /// Setup: the chapter-manager, arc-manager and chapter-import panels (each with services of its own)
 /// are bUnit stubs. <see cref="StoryPropertiesForm"/> and <see cref="DraftAutosave"/> render for real —
@@ -373,6 +377,172 @@ public class StoryEditorPageTests : BunitContext
         _writes.Calls.Should().Equal(["Create"]);
     }
 
+    // ── Author story delete (owner ruling D15, WU-AuthorStoryDelete 2026-10-13) ─────────────────────
+
+    private const int AuthorUserId = 5;
+    private const string SavedTitle = "Lifecycle Story"; // RenderEditor's StoryEditDTO.Title
+
+    private static Task OpenDeleteAsync(IRenderedComponent<StoryEditorPage> cut) =>
+        cut.Find("button[aria-label='Delete this story']").ClickAsync(new());
+
+    private static Task TypeConfirmationAsync(IRenderedComponent<StoryEditorPage> cut, string text) =>
+        cut.Find("#story-delete-confirm").InputAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = text });
+
+    private static IElement ConfirmDelete(IRenderedComponent<StoryEditorPage> cut) =>
+        cut.Find("button[aria-label='Delete story permanently']");
+
+    private void SignInAsTheAuthor() =>
+        this.AddAuthorization().SetAuthorized("Author").SetClaims(
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, AuthorUserId.ToString()));
+
+    [Fact]
+    public async Task Delete_ConfirmsAgainstTheSavedTitle_NotAnUnsavedEdit_ThenDeletes_ClearsTheDraft_AndLeavesForTheAuthorsStories()
+    {
+        SignInAsTheAuthor();
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+        await cut.Find("#story-title").ChangeAsync(new() { Value = "An unsaved new title" });
+
+        await OpenDeleteAsync(cut);
+        await TypeConfirmationAsync(cut, "An unsaved new title");
+        ConfirmDelete(cut).HasAttribute("disabled").Should().BeTrue(
+            "the confirmation string is the saved title; an unsaved edit must not become it");
+
+        await TypeConfirmationAsync(cut, SavedTitle);
+        await ConfirmDelete(cut).ClickAsync(new());
+
+        _writes.Calls.Should().Equal([$"Delete:{StoryId}"]);
+        JSInterop.Invocations.Should().Contain(i => i.Identifier == "canalaveDraft.clear"
+            && (string?)i.Arguments[0] == $"draft:story:{StoryId}",
+            "the device-local backup must not outlive the story");
+        Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri
+            .Should().EndWith($"/user/{AuthorUserId}/authored");
+    }
+
+    [Fact]
+    public async Task Delete_WithNoIdentityCascade_LeavesForTheHomePage()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+
+        await OpenDeleteAsync(cut);
+        await TypeConfirmationAsync(cut, SavedTitle);
+        await ConfirmDelete(cut).ClickAsync(new());
+
+        _writes.Calls.Should().Equal([$"Delete:{StoryId}"]);
+        new Uri(Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri)
+            .AbsolutePath.Should().Be("/");
+    }
+
+    [Fact]
+    public async Task ARefusedDelete_ShowsTheMessageInTheDialog_AndStaysOnThePage()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.InProgress);
+        string before = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri;
+        _writes.DeleteFailure = new UnauthorizedAccessException("You can only delete your own stories.");
+
+        await OpenDeleteAsync(cut);
+        await TypeConfirmationAsync(cut, SavedTitle);
+        await ConfirmDelete(cut).ClickAsync(new());
+
+        cut.Find("[role=dialog]").TextContent.Should().Contain(ExceptionPresenter.PermissionMessage);
+        Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri.Should().Be(before);
+        JSInterop.Invocations.Should().NotContain(i => i.Identifier == "canalaveDraft.clear",
+            "the story still exists, so its backup stays");
+        ConfirmDelete(cut).HasAttribute("disabled").Should().BeFalse("the author may try again");
+    }
+
+    [Fact]
+    public async Task UnpublishInstead_ClosesTheDialog_AndRunsTheUnpublishInPlace_WithNoDelete()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.InProgress);
+        _writes.Result = StoryStatusEnum.Draft;
+
+        await OpenDeleteAsync(cut);
+        await cut.Find("button[aria-label='Unpublish this story instead of deleting it']").ClickAsync(new());
+
+        _writes.Requested.Should().Equal([StoryStatusEnum.Draft], "D1's published → Draft, the reversible out");
+        _writes.Calls.Should().BeEmpty("no delete and no reload-triggering save");
+        cut.FindAll("[role=dialog]").Should().BeEmpty();
+        ShownStatus(cut).Should().Be(StoryDisplayFormat.StatusLabel(StoryStatusEnum.Draft));
+        cut.Markup.Should().Contain("Unpublished — the story is a draft again.");
+    }
+
+    [Theory]
+    [InlineData(StoryStatusEnum.Draft)]
+    [InlineData(StoryStatusEnum.PendingApproval)]
+    public async Task AnUnpublishedStory_IsOfferedNoUnpublishOut(StoryStatusEnum status)
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(status);
+
+        await OpenDeleteAsync(cut);
+
+        cut.FindAll("button[aria-label='Unpublish this story instead of deleting it']").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task WhileADeleteRuns_TheOtherWritesAreDisabled_AndNoneStarts()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft, cover: OldCover);
+        _writes.DeleteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await OpenDeleteAsync(cut);
+        await TypeConfirmationAsync(cut, SavedTitle);
+
+        Task delete = ConfirmDelete(cut).ClickAsync(new());
+        try
+        {
+            cut.WaitForAssertion(() => SubmitButton(cut).HasAttribute("disabled").Should().BeTrue());
+            cut.Find("#story-cover-art").HasAttribute("disabled").Should().BeTrue();
+            cut.FindAll("button").Single(b => b.TextContent.Trim() == "Submit for publication")
+                .HasAttribute("disabled").Should().BeTrue();
+
+            // Events that beat the re-render. The second delete is not awaited here: if it started, it would
+            // wait on the same gate, so the assertion below must see it before the gate opens.
+            await cut.Find("form").SubmitAsync();
+            await cut.InvokeAsync(() => cut.FindComponent<StoryPropertiesForm>().Instance.OnRemoveCover.InvokeAsync());
+            await cut.InvokeAsync(() => cut.FindComponent<StoryLifecyclePanel>().Instance
+                .OnTransition.InvokeAsync(StoryStatusEnum.PendingApproval));
+            Task secondDelete = cut.InvokeAsync(() => cut.FindComponent<StoryDeleteDialog>().Instance.OnConfirmDelete.InvokeAsync());
+            _writes.Calls.Should().Equal([$"Delete:{StoryId}"], "no save, cover call or second delete under a delete");
+            _writes.Requested.Should().BeEmpty();
+            _writes.DeleteGate.TrySetResult();
+            await secondDelete;
+        }
+        finally
+        {
+            _writes.DeleteGate.TrySetResult();
+        }
+        await delete;
+    }
+
+    [Fact]
+    public async Task WhileASaveRuns_TheDeleteOpenerIsDisabled_AndADeleteDoesNotStart()
+    {
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(StoryStatusEnum.Draft);
+        _writes.SaveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task save = cut.Find("form").SubmitAsync();
+        try
+        {
+            cut.WaitForAssertion(() => cut.Find("button[aria-label='Delete this story']")
+                .HasAttribute("disabled").Should().BeTrue());
+            await cut.InvokeAsync(() => cut.FindComponent<StoryDeleteDialog>().Instance.OnConfirmDelete.InvokeAsync());
+            _writes.Calls.Should().Equal(["Update"], "no delete starts under a save");
+        }
+        finally
+        {
+            _writes.SaveGate.TrySetResult();
+        }
+        await save;
+    }
+
+    [Fact]
+    public void CreateMode_HasNoDeleteSection()
+    {
+        IRenderedComponent<StoryEditorPage> cut = Render<StoryEditorPage>();
+
+        cut.FindAll("button[aria-label='Delete this story']").Should().BeEmpty();
+        cut.FindComponents<StoryDeleteDialog>().Should().BeEmpty();
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Records each requested target and answers with <see cref="Result"/> (the status the
@@ -435,6 +605,17 @@ public class StoryEditorPageTests : BunitContext
         {
             Calls.Add($"Remove:{storyId}");
             return CoverFailure is null ? Task.CompletedTask : Task.FromException(CoverFailure);
+        }
+
+        public Exception? DeleteFailure { get; set; }
+        public TaskCompletionSource? DeleteGate { get; set; }
+
+        /// <summary>Records "Delete:{storyId}".</summary>
+        public async Task DeleteStoryAsync(int storyId)
+        {
+            Calls.Add($"Delete:{storyId}");
+            if (DeleteGate is not null) await DeleteGate.Task;
+            if (DeleteFailure is not null) throw DeleteFailure;
         }
     }
 

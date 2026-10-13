@@ -26,7 +26,9 @@ public enum SpotlightSlotStatus : short
     /// <summary>Granted, not yet redeemed — the holder can book a placement with it.</summary>
     Available = 0,
 
-    /// <summary>Consumed by a <see cref="CommunitySpotlight"/> placement (terminal).</summary>
+    /// <summary>Consumed by a <see cref="CommunitySpotlight"/> placement. Terminal, except that an
+    /// author's deletion of the story before the booked block starts returns the slot to
+    /// <see cref="Available"/> (owner ruling D15, <c>SpotlightPlacementRelease</c>).</summary>
     Redeemed = 1,
 
     /// <summary>Withdrawn by a moderator before redemption (terminal).</summary>

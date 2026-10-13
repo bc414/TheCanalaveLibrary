@@ -1572,6 +1572,8 @@ unchanged after deleting an approved story; a future-dated spotlight placement r
 redeemable while an aired one does not. *(RazorComponents tier.)* The confirm dialog requires the
 typed title before enabling the destructive action, and offers unpublish and export.
 
+**Built:** WU-AuthorStoryDelete (2026-10-13) — rule now stated in `layer2-services.md` §"Author story deletion" (the slot return in §"Community Spotlight"; unconditional-under-moderation in `content-safety.md` §"Content Removal"; the position in `cross-cutting.md` §"Delete Policy Summary"). **Correction:** `daily_story_stats` *does* carry an FK — `REFERENCES stories (story_id) ON DELETE CASCADE` in its raw DDL — so the cascade already removes the rows; the explicit `DELETE` was not written (it would be the hand-enumeration bullet 2 forbids), and the aggregator test above is built and passes on the cascade alone. The edges this answer does not rule (a live block, the moderator path, telling the sponsor, the download's scope, a taken-down story's missing button) are `roadmap.md` decision row 27.
+
 ## Block D — Notification design remainder
 
 Completes WU-InertFeatures' design inputs (new-chapter fan-out) and the notification-correctness

@@ -11,7 +11,8 @@ public class ServerStoryWriteService(
     IWriteRateLimitService rateLimit,
     IHtmlSanitizationService sanitizer,
     ILogger<ServerStoryWriteService> logger,
-    ITagHierarchyReadService tagHierarchy)
+    ITagHierarchyReadService tagHierarchy,
+    SpotlightPlacementRelease spotlightRelease)
     : ServerStoryReadService(readDbFactory, activeUser, tagHierarchy), IStoryWriteService
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
@@ -280,6 +281,84 @@ public class ServerStoryWriteService(
         await writeDb.SaveChangesAsync();
 
         await DeleteReplacedCoverAsync(oldPath, storyId);
+    }
+
+    public async Task DeleteStoryAsync(int storyId)
+    {
+        // Owner ruling D15 (WU-AuthorStoryDelete): a true hard delete by the primary author, under any
+        // moderation state. Order and rationale: layer2-services.md §"Author story deletion". No
+        // IWriteRateLimitService call — deletes are unthrottled (security.md §"Write Throttling").
+        int userId = ActiveUser.RequireUserId();
+
+        // The gate is a projection on the unfiltered write context, so a taken-down, pending or
+        // reported story passes it: D15 adds no moderation gate. A NULL author (the account was
+        // deleted) matches nobody — int? != int is true for null.
+        var gate = await writeDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => new { s.AuthorId })
+            .FirstOrDefaultAsync();
+        if (gate is null)
+            throw new KeyNotFoundException($"Story with ID {storyId} not found.");
+        if (gate.AuthorId != userId)
+            throw new UnauthorizedAccessException("You can only delete your own stories.");
+
+        string? coverPath = null;
+        int slotsReturned = 0;
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            // Clear first: the circuit-scoped write context can still track rows of this story (a reply
+            // the author posted, the listing a cover call loaded), and a retried attempt must not
+            // inherit the failed one's state (layer2-services.md §"Hard deletes of content parents").
+            writeDb.ChangeTracker.Clear();
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+
+            // Captured inside the transaction, before the row delete (owner ruling D14, rule 2): the
+            // cascade removes the listing row that names the cover. A retry recaptures it.
+            coverPath = await writeDb.StoryListings
+                .Where(l => l.StoryId == storyId)
+                .Select(l => l.CoverArtRelativeUrl)
+                .FirstOrDefaultAsync();
+
+            // Every chapter comment and reply of the story, one statement through base_comments (D10 at
+            // story scope). chapter_comments.chapter_id is RESTRICT, so the story delete below would fail
+            // while one remained.
+            await TptDelete.StoryCommentsAsync(writeDb, storyId);
+
+            // Before the delete, because the cascade removes the placement rows that name the slots.
+            slotsReturned = await spotlightRelease.ReleaseUnstartedForStoryAsync(storyId, DateTime.UtcNow);
+
+            // Story is not TPT, so the LINQ set delete is legal. Everything else cascades at the database
+            // (D15: no hand-enumeration), daily_story_stats included through its raw-DDL FK. The author
+            // predicate rides the WHERE, and 0 rows means another delete won the race: throw inside the
+            // delegate so the transaction rolls back and this call answers as a sequential re-delete does.
+            int deleted = await writeDb.Stories
+                .Where(s => s.StoryId == storyId && s.AuthorId == userId)
+                .ExecuteDeleteAsync();
+            if (deleted == 0)
+                throw new KeyNotFoundException($"Story with ID {storyId} not found.");
+
+            await tx.CommitAsync();
+        });
+
+        // After the strategy returns, never inside the retried delegate (D14): best-effort, and the
+        // orphan sweep collects a blob this misses. No counter moves (D15/D21; ApprovedStorySubmissions
+        // is a monotonic record of a decision).
+        if (coverPath is not null)
+        {
+            try { await imageStorage.DeleteAsync(coverPath); }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Best-effort delete of deleted story {StoryId}'s cover {ImagePath} failed — blob orphaned; the orphan sweep collects it",
+                    storyId, coverPath);
+            }
+        }
+
+        // The durable trace of an irreversible user act.
+        logger.LogInformation(
+            "Story {StoryId} deleted by its author {UserId}; {SlotsReturned} unstarted Spotlight slot(s) returned to their sponsors",
+            storyId, userId, slotsReturned);
     }
 
     /// <summary>

@@ -372,7 +372,9 @@ DB changes. Theme selection UI.
 Draft → PendingApproval → moderator approves to author's chosen PostApprovalStatus. In-place editing
 model (edit buttons on the normal story page, not a separate dashboard). `<AdminControls>` component
 for author-only UI. Cover art upload to R2/MinIO. Slug generation (server-side, never client-editable).
-`StoryPropertiesForm` shared form component for create and edit.
+`StoryPropertiesForm` shared form component for create and edit. The primary author may hard-delete their own
+story from its edit page (owner ruling D15, built WU-AuthorStoryDelete 2026-10-13; `layer2-services.md`
+§"Author story deletion").
 
 **5. Story Browsing & Display** — Story detail page (loads cold partition only when needed), story cards
 (warm partition projection), browsing/listing with status and rating filters. Content rating filtering

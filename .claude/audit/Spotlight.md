@@ -48,6 +48,15 @@ concrete mechanics. Implementation is first-principles.
   new cross-cutting SiteSettings cluster): block duration days, per-story cooldown days, position
   count N, booking horizon days, monthly grant cap.
 - **Slot-grant expiry: deferred.** Grants persist until redeemed or mod-revoked.
+- **A deleted story returns an unstarted booking's slot** (owner ruling D15's sub-ruling, answered
+  2026-08-07; built WU-AuthorStoryDelete 2026-10-13). When an author deletes their story, a placement
+  whose block has not started gives its slot back to the sponsor (`Redeemed → Available`); one whose
+  block has started stays consumed. The placement row goes with the story either way. The slot is a
+  third party's entitlement, not a record, so the "records don't outlive their subject" argument does
+  not cover it. Open for Brian (decision row 27): whether a block that is live at deletion counts as
+  started (built: yes), whether the moderator hard delete returns slots too (built: no), and whether
+  the sponsor is told (built: no). Rule: `layer2-services.md` §"Community Spotlight" → "Slot return
+  when a story is deleted".
 
 ## Deferred (Phase-4 verdict rendered 2026-07-11: past beta)
 
@@ -87,7 +96,7 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   90–92; entity migrated out of legacy `Core/Models/`. Migration-verified: generated clean and
   applied cleanly on startup to the standing dev DB (SeedTool-volume). No L6 pass — the composite
   index shipped with L1 by design (low-volume table); L6 stays N/A.
-- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12 — stage unchanged, Stage note at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
+- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12; an author's story delete returns an unstarted booking's slot through the new server-only `SpotlightPlacementRelease`, owner ruling D15, WU-AuthorStoryDelete 2026-10-13, Integration `StoryDeletionTests` — stage unchanged each time, Stage notes at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
   SiteSettings cluster. Redemption is advisory-lock-serialized under `CreateExecutionStrategy()`.
   Covered by the Integration tier (`SpotlightServiceTests`, 21 tests: grant cap/roles/donation-seam
   NotSupported, every redemption rejection, a two-racers-one-opening concurrency test, sweep
@@ -210,3 +219,30 @@ notifications (source TestUser). Their copy read correctly on both render phases
 deleted-sponsor path stays Integration-only: driving it would mean deleting a seeded account. The full
 pass is in `audit/Notifications.md`, in the WU-NotificationCorrectness browser verification Stage
 note. The placement stays live through its block (dev-DB state: the workplan entry).
+
+### WU-AuthorStoryDelete Stage note (2026-10-13; owner ruling D15's sub-ruling) — F55 L2 stays 5: a deleted story's unstarted booking returns its slot
+
+The Settled bullet "A deleted story returns an unstarted booking's slot", built. Rule:
+`layer2-services.md` §"Community Spotlight" → "Slot return when a story is deleted".
+- **New `SpotlightPlacementRelease`** (`Server/Spotlight/`, scoped, server-only, registered beside
+  `SpotlightGoLiveSweeper`). `ReleaseUnstartedForStoryAsync(storyId, nowUtc)` takes the booking lock and
+  sets every `Redeemed` slot whose placement on the story has `StartDate > now` back to `Available`, in
+  the caller's transaction (it shares the scoped write context). Only `ServerStoryWriteService.DeleteStoryAsync`
+  calls it, just before the story row's delete; the placement rows go with the story's cascade. It is not
+  on `ISpotlightWriteService`, which is WASM-registered (worksheet D37 pending).
+- **New `SpotlightLocks.BookingLockSql`**: the advisory-lock statement, hoisted out of `RedeemSlotAsync` so
+  both call sites share one literal. `RedeemSlotAsync`'s behavior is unchanged.
+- **Comments corrected:** `SpotlightSlotStatus.Redeemed` is terminal except for this return;
+  `SpotlightSlot.Placement` is also null on a `Redeemed` slot whose story was deleted after its block
+  started, or hard-deleted by a moderator.
+- **Verified:** Integration `StoryDeletionTests` — a future block's slot comes back and the sponsor's
+  `GetMyAvailableSlotsAsync` lists it again; a live and an aired placement's slots stay `Redeemed`;
+  another story's booking is untouched; a second delete after the sponsor rebooked the slot elsewhere
+  touches nothing; and the booking lock is held, from a second connection's view, at the moment the
+  story row is deleted. Mutation-checked (no release, no `StartDate` test, `EndDate` in its place, no
+  story filter, no lock — each fails a test). The existing `SpotlightServiceTests` pass unchanged
+  (`DeletedStory_CascadesPlacement` deletes the row directly, so its slot stays `Redeemed`, as before).
+- **No UI change:** a returned slot simply reappears on the sponsor's `/spotlight` page, so F55 L4.5
+  stays 5; tracker H34 step 6 drives it once.
+- **Open (decision row 27, tracker F24):** a live block counts as started (built); the moderator hard
+  delete returns no slot; the sponsor is not notified.

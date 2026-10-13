@@ -62,4 +62,22 @@ public interface IStoryWriteService
     /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/> exists.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
     Task RemoveCoverArtAsync(int storyId);
+
+    /// <summary>
+    /// Deletes the caller's own story — a <b>true hard delete</b>, irreversible (owner ruling D15): no
+    /// tombstone, no grace window, no moderator approval. Its chapters, every comment and reply on them,
+    /// recommendations of it, readers' interactions and progress, and its list, series, group and
+    /// lineage entries all go with it; an unstarted Community Spotlight booking returns its slot to the
+    /// sponsor; the cover blob is deleted after the commit. Only the <b>primary author</b>
+    /// (<c>AuthorId</c>) may delete — a co-author may not, and a story whose author deleted their
+    /// account is owned by nobody. <b>Unconditional under moderation:</b> it succeeds with open reports,
+    /// while <c>PendingApproval</c> and while taken down; the reports survive. Touches no counter
+    /// (<c>ApprovedStorySubmissions</c> is monotonic). See <c>layer2-services.md</c> §"Author story
+    /// deletion".
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The caller is not signed in.</exception>
+    /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/> exists (including
+    /// one a concurrent delete removed first).</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's primary author.</exception>
+    Task DeleteStoryAsync(int storyId);
 }

@@ -313,6 +313,15 @@ cover image is erased too, after the commit (owner ruling D14; `layer2-services.
 blob ownership and cleanup"). Deleting the object does not evict CDN copies of it: the purge step is a
 Phase-7 item (`roadmap.md`, "CDN purge on a hard delete").
 
+**An author's own story delete is unconditional under moderation** (owner ruling D15, built
+WU-AuthorStoryDelete 2026-10-13). An open report, a pending submission or an active takedown never
+blocks `DeleteStoryAsync`, and no "you can't delete evidence" gate exists. Such a gate would buy
+nothing: the `Report` row has no FK to the story and survives, `ReportedUserId` (D8) keeps the author
+answerable, and sanctions are account-level, so an author who deletes a reported story stays exactly
+as attributable and sanctionable as before. A gate would also fail the ruling's most load-bearing case,
+the author who wants the work gone *because* it drew attention. Rule: `layer2-services.md` §"Author
+story deletion".
+
 **Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
 `HasQueryFilter` in `ReadOnlyApplicationDbContext.OnModelCreating` (composable alongside `"ContentRating"`
 and `"GroupAudience"` — all display/visibility filters live on the read context only; see "Content Rating

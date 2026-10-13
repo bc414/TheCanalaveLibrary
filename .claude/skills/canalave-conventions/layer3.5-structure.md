@@ -357,6 +357,17 @@ Comment State"):
 Backdrop click cancels (safe default before a destructive action); `@onclick:stopPropagation` on the
 panel keeps clicks inside the dialog from bubbling to the backdrop.
 
+**A confirm that needs more than Confirm/Cancel is a `Modal` consumer, not a `ConfirmDialog`
+variant.** When the destructive action needs an input (typed confirmation), a confirm button that
+stays disabled until that input matches, or extra actions offered first, build a feature dialog
+directly on `Modal` and leave `ConfirmDialog`'s two-button contract alone for its consumers. First
+instance: `StoryDeleteDialog` (`SharedUI/Stories/`, owner ruling D15, WU-AuthorStoryDelete
+2026-10-13) — presentational (no `@inject`), it offers its two outs (Unpublish instead, a download)
+before a labelled title input, and its filled-danger delete button enables only on an exact, trimmed,
+case-sensitive match against the **saved** title the page passes in (never the live form value: an
+unsaved title edit must not become the confirmation string). Backdrop dismissal is a Cancel, as in
+`ConfirmDialog`, and the typed text is cleared whenever the dialog opens.
+
 **Escape-key dismissal is still deferred, not blocking — this remains settled.** `Modal` carries an
 ARIA `role="dialog"` and an accessible name, but deliberately **no focus trap, no `aria-modal`, and
 no Escape handling** — that is WU-A11y-Keyboard's scope (paired with the Phase-3 L4 freeze sweep;

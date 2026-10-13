@@ -8,7 +8,8 @@ namespace TheCanalaveLibrary.Server;
 ///
 /// <para><b>Concurrency:</b> block capacity is a count-then-insert check, safe only when
 /// serialized — the whole redemption runs in one transaction holding
-/// <c>pg_advisory_xact_lock(hashtext('canalave_spotlight_booking'))</c>, wrapped in
+/// <see cref="SpotlightLocks.BookingLockSql"/> (<c>pg_advisory_xact_lock(hashtext('canalave_spotlight_booking'))</c>,
+/// also taken by <see cref="SpotlightPlacementRelease"/>), wrapped in
 /// <c>CreateExecutionStrategy()</c> because <c>EnableRetryOnFailure</c> refuses bare
 /// user-initiated transactions (the <c>UserDeletionService</c> precedent). Redemption volume is
 /// a handful per month — one global lock is deliberate simplicity, not a bottleneck.</para>
@@ -68,9 +69,9 @@ public class ServerSpotlightWriteService(
 
             await using var transaction = await writeDb.Database.BeginTransactionAsync();
 
-            // Serialize all bookings — the capacity check below is count-then-insert.
-            await writeDb.Database.ExecuteSqlRawAsync(
-                "SELECT pg_advisory_xact_lock(hashtext('canalave_spotlight_booking'))");
+            // Serialize all bookings — the capacity check below is count-then-insert. The author story
+            // delete's slot release takes the same lock (SpotlightLocks).
+            await writeDb.Database.ExecuteSqlRawAsync(SpotlightLocks.BookingLockSql);
 
             // ── Slot: mine + Available ─────────────────────────────────────────────────────────
             SpotlightSlot? slot = await writeDb.SpotlightSlots

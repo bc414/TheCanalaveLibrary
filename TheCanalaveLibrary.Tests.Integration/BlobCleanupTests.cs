@@ -11,8 +11,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 
 /// <summary>
 /// Owner ruling D14's inline sites (WU-BlobCleanup): every terminal deletion path deletes the blobs its
-/// rows named, after the commit, best-effort. Built at account deletion (the avatar) and the moderation
-/// hard delete (the story cover). Each fault test injects a store whose delete throws and checks that the
+/// rows named, after the commit, best-effort. Built at account deletion (the avatar), the moderation
+/// hard delete (the story cover) and, since WU-AuthorStoryDelete (owner ruling D15, 2026-10-13), the
+/// author story delete (the story cover). Each fault test injects a store whose delete throws and checks that the
 /// deletion still completes, a Warning names the path, and the daily sweep then collects the blob — the
 /// two owners composing. The Garage half of the hard delete is <see cref="BlobCleanupGarageTests"/>.
 /// Tier: Integration.
@@ -254,6 +255,95 @@ public sealed class BlobCleanupTests(PostgresFixture postgres) : IntegrationTest
         (await db.Notifications.AnyAsync(n => n.RecipientUserId == reporterId
                                               && n.NotificationTypeId == NotificationTypeEnum.ReportResolved))
             .Should().BeTrue("an erasure failure must not skip the notifications behind it");
+    }
+
+    // ── Author story delete: the third inline site (owner ruling D15, WU-AuthorStoryDelete) ────────
+
+    private ServerStoryWriteService StoryWritesOver(IServiceProvider services, IImageStorageService storage,
+        FakeLogger<ServerStoryWriteService> log) =>
+        ActivatorUtilities.CreateInstance<ServerStoryWriteService>(services, storage, log);
+
+    [Fact]
+    public async Task AuthorStoryDelete_DeletesTheCoverBlob_AfterTheCommit_AndLogsTheDeletion()
+    {
+        int authorId = await SeedUserAsync("blob-story-deleter");
+        int storyId = await SeedStoryAsync(authorId);
+        IServiceProvider services = NewScope();
+        LocalImageStorageService storage = _store.Create(services);
+        string cover = await SaveAsync(storage, ImageKind.Cover, storyId);
+        await SetCoverAsync(storyId, cover);
+        FakeLogger<ServerStoryWriteService> log = new();
+        SetActiveUser(authorId);
+
+        await StoryWritesOver(services, storage, log).DeleteStoryAsync(storyId);
+
+        _store.Exists(cover).Should().BeFalse("the row that named the cover is gone, so the blob goes too (D14 via D15)");
+        log.Collector.GetSnapshot().Should().ContainSingle(r => r.Level == LogLevel.Information)
+            .Which.StructuredState.Should().Contain(new KeyValuePair<string, string?>("StoryId", storyId.ToString()))
+            .And.Contain(new KeyValuePair<string, string?>("UserId", authorId.ToString()),
+                "an irreversible user act leaves a durable trace");
+        log.Collector.GetSnapshot().Should().NotContain(r => r.Level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task AuthorStoryDelete_WithNoCover_AttemptsNoBlobDelete()
+    {
+        int authorId = await SeedUserAsync("blob-story-deleter-no-cover");
+        int storyId = await SeedStoryAsync(authorId);
+        IServiceProvider services = NewScope();
+        ThrowingDeleteImageStorageService storage = new(_store.Create(services));
+        SetActiveUser(authorId);
+
+        await StoryWritesOver(services, storage, new FakeLogger<ServerStoryWriteService>()).DeleteStoryAsync(storyId);
+
+        storage.DeleteAttempts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AuthorStoryDelete_WhenTheBlobDeleteFails_StillDeletes_Warns_AndTheSweepCollectsTheOrphan()
+    {
+        int authorId = await SeedUserAsync("blob-story-deleter-fails");
+        int storyId = await SeedStoryAsync(authorId);
+        IServiceProvider services = NewScope();
+        LocalImageStorageService realStorage = _store.Create(services);
+        string cover = await SaveAsync(realStorage, ImageKind.Cover, storyId);
+        await SetCoverAsync(storyId, cover);
+        ThrowingDeleteImageStorageService failing = new(realStorage);
+        FakeLogger<ServerStoryWriteService> log = new();
+        SetActiveUser(authorId);
+
+        await StoryWritesOver(services, failing, log).DeleteStoryAsync(storyId);
+
+        using (IServiceScope check = Factory.Services.CreateScope())
+            (await check.ServiceProvider.GetRequiredService<ApplicationDbContext>().Stories.AnyAsync(s => s.StoryId == storyId))
+                .Should().BeFalse("a failed blob delete never fails the story delete");
+        failing.DeleteAttempts.Should().Equal([cover], "captured inside the transaction, attempted once after the commit");
+        log.Collector.GetSnapshot().Should().ContainSingle(r => r.Level == LogLevel.Warning)
+            .Which.StructuredState.Should().Contain(new KeyValuePair<string, string?>("ImagePath", cover));
+        _store.Exists(cover).Should().BeTrue("orphaned for the sweep, not lost");
+
+        _store.Age(cover, PastGrace);
+        ImageOrphanSweepResult sweep = await SweeperOverTheStore(NewScope()).SweepAsync(dryRun: false);
+
+        sweep.Deleted.Should().Be(1);
+        _store.Exists(cover).Should().BeFalse("the backstop collects what the inline delete missed");
+    }
+
+    [Fact]
+    public async Task AuthorStoryDelete_ThatIsRefused_LeavesTheCoverBlob()
+    {
+        int authorId = await SeedUserAsync("blob-story-owner");
+        int storyId = await SeedStoryAsync(authorId);
+        IServiceProvider services = NewScope();
+        LocalImageStorageService storage = _store.Create(services);
+        string cover = await SaveAsync(storage, ImageKind.Cover, storyId);
+        await SetCoverAsync(storyId, cover);
+        SetActiveUser(await SeedUserAsync("blob-story-stranger"));
+
+        Func<Task> act = () => StoryWritesOver(services, storage, new FakeLogger<ServerStoryWriteService>()).DeleteStoryAsync(storyId);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        _store.Exists(cover).Should().BeTrue("nothing was deleted, so the blob stays named");
     }
 
     private async Task<(long ReportId, int ReporterId)> SeedAndGetReportAsync(string cover, int storyId, int authorId)

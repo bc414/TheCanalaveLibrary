@@ -26,7 +26,9 @@
        (tracker E11). The picture/cover lines follow owner ruling D14 (WU-BlobCleanup, 2026-10-13): the
        avatar's file is deleted with the account; covers stay with the surviving stories until decision
        row 25 says otherwise, so the delete-it-first list names Remove cover (its review fixes, the same
-       day). *@
+       day). The Stories line follows owner ruling D15 (WU-AuthorStoryDelete, 2026-10-13): Delete story on
+       the edit page; a taken-down story's editor does not load, so the page says it has no such path
+       (roadmap.md decision row 27 (e)). Blog posts still have no delete button (tracker B25). *@
     <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
         <p>
             <strong>Deleting your account cannot be undone.</strong> Your account is deleted outright, and
@@ -67,6 +69,11 @@
         <section class="flex flex-col gap-1">
             <h4 class="font-semibold">Want something gone rather than kept? Delete it first</h4>
             <ul class="list-disc pl-5">
+                <li>
+                    Stories: use Delete story at the bottom of the story's edit page. It deletes the story, its chapters and
+                    everything on them for good. A story a moderator has taken down can't be opened in its editor, so it
+                    can't be deleted this way.
+                </li>
                 <li>Comments: use Delete on each comment.</li>
                 <li>Chapters: use the chapter list in your story's editor.</li>
                 <li>Cover images: use Remove cover in your story's editor.</li>
@@ -86,7 +93,7 @@
                     Poll votes: use Retract vote on a poll that is still open.
                     Votes on a closed poll stay in its results, without your name.
                 </li>
-                <li>Stories and blog posts can't be deleted on the site yet, so they are kept without your name.</li>
+                <li>Blog posts can't be deleted on the site yet, so they are kept without your name.</li>
                 <li>Private messages you sent can't be deleted. They stay in the other person's inbox.</li>
             </ul>
         </section>

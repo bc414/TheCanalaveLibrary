@@ -21,7 +21,9 @@
    The cover is never on a write DTO (owner ruling D14): in edit mode a picked file is uploaded and
    persisted at once (UploadCoverArtAsync) and "Remove cover" clears it (RemoveCoverArtAsync); in
    create mode the picked file waits for CreateStoryAsync's id. Form-cancel does not revert a cover.
-   Its three writes (a cover call, the save, a status change) never overlap (see CoverChangeBlocked). *@
+   Its four writes (a cover call, the save, a status change, the delete) never overlap (see
+   CoverChangeBlocked). Edit mode ends with "Delete story" (owner ruling D15, WU-AuthorStoryDelete):
+   StoryDeleteDialog confirms against the SAVED title and offers Unpublish instead and a download first. *@
 
 <PageTitle>@(StoryId.HasValue ? "Edit Story" : "New Story")</PageTitle>
 
@@ -60,7 +62,7 @@ else
                 <StoryLifecyclePanel CurrentStatus="_currentStatus"
                                      SavedPostApprovalStatus="_savedPostApprovalStatus"
                                      RejectionReason="@_rejectionReason"
-                                     IsBusy="@(_transitioning || _coverUploadBusy || _viewModel.IsLoading)"
+                                     IsBusy="@(_transitioning || _coverUploadBusy || _viewModel.IsLoading || _deleting)"
                                      OnTransition="HandleTransitionAsync" />
             </div>
         }
@@ -79,7 +81,7 @@ else
                              OnRequestLinkVerification="HandleRequestLinkVerification"
                              OnCoverSelected="HandleCoverSelectedAsync"
                              CoverUploadBusy="_coverUploadBusy"
-                             OtherWriteInFlight="_transitioning"
+                             OtherWriteInFlight="@(_transitioning || _deleting)"
                              OnRemoveCover="HandleRemoveCoverAsync"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
@@ -115,6 +117,36 @@ else
                     Manage acknowledgments →
                 </a>
             </div>
+
+            @* Author story delete (owner ruling D15, WU-AuthorStoryDelete) — last on the page, behind a
+               typed-title confirm. The server is the authority (author-only, any moderation state). *@
+            <section class="mt-10 flex flex-col gap-2 rounded-xl border border-(--color-border) bg-(--color-surface) p-4"
+                     aria-labelledby="story-delete-heading">
+                <h2 id="story-delete-heading" class="text-lg font-semibold text-(--color-text)">Delete story</h2>
+                <p class="text-sm text-(--color-text-muted)">
+                    Permanently deletes this story, its chapters, and every comment, recommendation and reader's progress
+                    on it. It can't be undone.
+                </p>
+                <button type="button"
+                        class="self-start rounded-md bg-(--color-danger)/15 px-3 py-1.5 text-sm font-medium text-(--color-danger) ring-1 ring-(--color-danger)/30 transition-colors hover:bg-(--color-danger)/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Delete this story"
+                        disabled="@CoverChangeBlocked"
+                        @onclick="OpenDeleteDialog">
+                    Delete story…
+                </button>
+            </section>
+
+            <StoryDeleteDialog IsOpen="_deleteDialogOpen"
+                               IsOpenChanged="@(open => _deleteDialogOpen = open)"
+                               StoryId="StoryId.Value"
+                               StoryTitle="@_savedTitle"
+                               CanUnpublish="@StoryLifecycle.IsPublished(_currentStatus)"
+                               IsBusy="_deleting"
+                               ErrorMessages="_deleteErrors"
+                               ShowSignIn="_deleteErrorIsSessionExpired"
+                               OnConfirmDelete="HandleDeleteConfirmedAsync"
+                               OnUnpublish="HandleUnpublishInsteadAsync"
+                               OnCancel="CloseDeleteDialog" />
         }
     </div>
 }
@@ -139,14 +171,25 @@ else
     private bool _coverUploadBusy;
     private IBrowserFile? _pendingCoverFile;
 
-    // The page's three writes (a cover call, the save, the status change) never overlap (WU-BlobCleanup
-    // review fixes, 2026-10-13; layer2-services.md, "the write context stays plain AddDbContext"): the
-    // save ends in a forceLoad reload that would abort an upload still streaming, and under
-    // InteractiveServer every write here shares the circuit's one scoped write context, which refuses a
-    // second operation mid-flight. Each write's controls are disabled while another runs (the form's
-    // CoverUploadBusy/OtherWriteInFlight/IsLoading, the lifecycle panel's IsBusy), and each handler
-    // re-checks, for an event that beat the re-render.
-    private bool CoverChangeBlocked => _coverUploadBusy || _viewModel.IsLoading || _transitioning;
+    // The page's four writes (a cover call, the save, the status change, the delete) never overlap
+    // (WU-BlobCleanup review fixes, 2026-10-13; the delete joined at WU-AuthorStoryDelete;
+    // layer2-services.md, "the write context stays plain AddDbContext"): the save and the delete end in a
+    // forceLoad navigation that would abort an upload still streaming, and under InteractiveServer every
+    // write here shares the circuit's one scoped write context, which refuses a second operation
+    // mid-flight. Each write's controls are disabled while another runs (the form's
+    // CoverUploadBusy/OtherWriteInFlight/IsLoading, the lifecycle panel's IsBusy, the delete opener and
+    // dialog), and each handler re-checks, for an event that beat the re-render.
+    private bool CoverChangeBlocked => _coverUploadBusy || _viewModel.IsLoading || _transitioning || _deleting;
+
+    // Author story delete (owner ruling D15, WU-AuthorStoryDelete). _savedTitle is the PERSISTED title —
+    // the dialog's confirmation string — captured at load, so an unsaved title edit in the form never
+    // becomes what the author must type (the save path reloads the page, which recaptures it).
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string _savedTitle = "";
+    private bool _deleteDialogOpen;
+    private bool _deleting;
+    private readonly List<string> _deleteErrors = [];
+    private bool _deleteErrorIsSessionExpired;
 
     // Lifecycle state (WU-StoryLifecycle, D1), loaded from the edit DTO's read echoes. A new story
     // is always Draft. _savedPostApprovalStatus is the PERSISTED value — the form's select edits
@@ -249,6 +292,7 @@ else
         _currentStatus = dto.StoryStatusId;
         _savedPostApprovalStatus = dto.PostApprovalStatus;
         _rejectionReason = dto.RejectionReason;
+        _savedTitle = dto.Title;
     }
 
     /// <summary>
@@ -259,7 +303,7 @@ else
     private async Task HandleTransitionAsync(StoryStatusEnum target)
     {
         // Never start a second write under one in flight (see CoverChangeBlocked).
-        if (!StoryId.HasValue || _coverUploadBusy || _viewModel.IsLoading || _transitioning) return;
+        if (!StoryId.HasValue || CoverChangeBlocked) return;
 
         bool wasPublished = StoryLifecycle.IsPublished(_currentStatus);
         _transitioning = true;
@@ -301,7 +345,7 @@ else
     private async Task HandleValidSubmit()
     {
         // The submit is disabled while another write runs; this guards the click that beat the re-render.
-        if (_coverUploadBusy || _transitioning || _viewModel.IsLoading) return;
+        if (CoverChangeBlocked) return;
 
         _viewModel.IsLoading = true;
         _viewModel.ServerValidationErrors.Clear();
@@ -462,6 +506,87 @@ else
         {
             _coverUploadBusy = false;
         }
+    }
+
+    // ── Author story delete (owner ruling D15, WU-AuthorStoryDelete) ─────────────────────────────
+
+    private void OpenDeleteDialog()
+    {
+        if (!StoryId.HasValue || CoverChangeBlocked) return;
+        _deleteErrors.Clear();
+        _deleteErrorIsSessionExpired = false;
+        _deleteDialogOpen = true;
+    }
+
+    private void CloseDeleteDialog()
+    {
+        if (_deleting) return;
+        _deleteDialogOpen = false;
+        _deleteErrors.Clear();
+        _deleteErrorIsSessionExpired = false;
+    }
+
+    /// <summary>
+    /// The typed title matched. Deletes, clears the device-local draft backup (it must not outlive the
+    /// story), then leaves with a full document load — this page hosts Quill (see the save path's
+    /// comment) and its route no longer exists. A refusal stays in the dialog and the page stays put.
+    /// </summary>
+    private async Task HandleDeleteConfirmedAsync()
+    {
+        if (!StoryId.HasValue || CoverChangeBlocked) return;
+
+        _deleting = true;
+        _deleteErrors.Clear();
+        _deleteErrorIsSessionExpired = false;
+        try
+        {
+            await StoryWriteService.DeleteStoryAsync(StoryId.Value);
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Deleting story {StoryId} failed unexpectedly", StoryId);
+            _deleteErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _deleteErrorIsSessionExpired = ex is SessionExpiredException;
+            _deleting = false;
+            return;
+        }
+
+        // The story is gone; the backup is device-local convenience. A failure here must not strand the
+        // author on a page whose story no longer exists, so it is logged and the navigation still runs.
+        try
+        {
+            if (_autosave is not null) await _autosave.ClearAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Clearing the draft backup of deleted story {StoryId} failed", StoryId);
+        }
+
+        NavigationManager.NavigateTo(await AfterDeleteTargetAsync(), forceLoad: true);
+    }
+
+    /// <summary>The author's own Authored tab, where the story is now gone; the home page if the identity
+    /// cascade is absent. Read from <c>AuthenticationState</c> (identity-and-authorization.md, "the two
+    /// identity sources") — never <c>IActiveUserContext</c> in SharedUI.</summary>
+    private async Task<string> AfterDeleteTargetAsync()
+    {
+        if (AuthState is null) return "/";
+        AuthenticationState state = await AuthState;
+        string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(idStr, out int id)
+            ? $"/user/{id}/{ProfileTabSlug.For(ProfileTab.Authored)}"
+            : "/";
+    }
+
+    /// <summary>The dialog's reversible out: close it and run the lifecycle panel's own unpublish
+    /// (published → Draft, D1), which updates the status in place and reports through the panel's
+    /// alerts. No reload, so unsaved form edits survive.</summary>
+    private async Task HandleUnpublishInsteadAsync()
+    {
+        if (CoverChangeBlocked) return;
+        CloseDeleteDialog();
+        await HandleTransitionAsync(StoryStatusEnum.Draft);
     }
 
     /// <summary>Author requests per-link review (WU39) — refreshes only the link statuses, not the whole edit DTO, so in-progress unsaved edits elsewhere on the form survive.</summary>

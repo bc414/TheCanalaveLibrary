@@ -48,6 +48,9 @@ public class SpotlightSlot
     public virtual User? GrantedByUser { get; set; }
 
     /// <summary>The placement this slot was redeemed into (null while <see cref="Status"/> is
-    /// <see cref="SpotlightSlotStatus.Available"/> or <see cref="SpotlightSlotStatus.Revoked"/>).</summary>
+    /// <see cref="SpotlightSlotStatus.Available"/> or <see cref="SpotlightSlotStatus.Revoked"/>, and on a
+    /// <see cref="SpotlightSlotStatus.Redeemed"/> slot whose placement cascaded away with its story: one
+    /// its author deleted once the block had started (owner ruling D15 — the slot stays consumed), or one
+    /// a moderator hard-deleted, which returns no slot).</summary>
     public virtual CommunitySpotlight? Placement { get; set; }
 }

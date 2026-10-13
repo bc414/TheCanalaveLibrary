@@ -134,6 +134,14 @@ context, since even a genuine replica would trail the primary slightly.
 - **Content parent → TPT child** (chapter → chapter comments, blog post → its comments and polls,
   group → group comments and group posts): RESTRICT. The service deletes the base rows first through
   `TptDelete` (owner ruling D10; `layer1-data-model.md` §"Hard-deleting a content parent").
+- **Author story deletion** (owner ruling D15, built WU-AuthorStoryDelete 2026-10-13): archive
+  permanence is rejected. The primary author may hard-delete their own story at any time, under any
+  moderation state, irreversibly; everything that exists only because of the story (comments,
+  recommendations, reading state, list/series/group entries, lineage links) goes with it, an unstarted
+  Spotlight booking returns its slot, and moderation records survive. Rule: `layer2-services.md`
+  §"Author story deletion". The stated test for what survives a deletion is D11/D13's: **does the
+  record keep its meaning once its subject is gone?** A poll vote and a DM do; nothing attached to a
+  story does.
 - **Interaction data** (follows, interactions, badges, settings): CASCADE on user. **Poll votes are
   the one exception** (owner ruling D13): see "Account deletion" below.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
@@ -225,9 +233,12 @@ data (Recital 26). Anonymizing in place is therefore not retention under an exce
 bind every future change:
 1. **The anonymization must be genuine.** The user must be able to delete their own content before
    deleting the account, and the deletion page must say so. Severing the FK does nothing for content
-   whose text identifies its author. **Not yet met for two content types** (the page says so):
-   stories have no self-delete (WU-AuthorStoryDelete, D15, adds it and the page's link), and blog posts
-   of every subtype have a service delete but no button (tracker **B25**, which no WU owns yet). A
+   whose text identifies its author. **Met for stories** since WU-AuthorStoryDelete (owner ruling D15,
+   2026-10-13): Delete story on the story's edit page, which the deletion page names. One gap: a
+   taken-down story's editor does not load (the edit read keeps the takedown filter), so its author has
+   the API but no button (`roadmap.md` decision row 27 (e)). **Not yet met
+   for blog posts** (the page says so): every subtype has a service delete but no button (tracker
+   **B25**, which no WU owns yet). A
    recommendation the story's author removed (`Rejected`, the sticky block record) refuses its
    writer's delete; whether this rule reaches it is owner-open (tracker **F20**).
 2. **No retained mapping, ever.** No `deleted_user → old_user_id` table, for support or any other

@@ -654,7 +654,8 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     "My X" anonymous semantics discriminator (zero-state vs 401); CancellationToken policy
     (expensive-reads-only — ratify); server-only methods living on WASM-registered interfaces
     (split before the surface freezes); story deletion doesn't exist for authors (archive
-    permanence — say so); `StoriesInProgress` vs Actively-Reading formula (settled — ratify with
+    permanence — say so) [ruled D15: archive permanence rejected, author hard delete; built
+    WU-AuthorStoryDelete 2026-10-13 — `layer2-services.md` §"Author story deletion"]; `StoriesInProgress` vs Actively-Reading formula (settled — ratify with
     the visible consequence stated); hidden-favorite fan-out membership (doctrine says include
     hidden-only favoriters in type 15; code excludes them — pick one) [ruled D17: include; built WU-InertFeatures 2026-09-30]; USI dates partition
     written-never-read (schema §3.5 — build the date-sorted shelves, ratify as future-proofing, or

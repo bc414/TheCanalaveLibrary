@@ -96,7 +96,9 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   - **CDN purge on a hard delete** — `/uploads/{**key}` is served `max-age=31536000, immutable`, so
     deleting an object (the illegal-content hard delete, which D14 made erase the story's cover)
     does not evict CDN copies. Once Cloudflare sits in front of R2, the hard-delete path needs a
-    cache-purge step. Flagged by owner ruling D14, not designed there.
+    cache-purge step. Flagged by owner ruling D14, not designed there. The author story delete (D15,
+    WU-AuthorStoryDelete 2026-10-13) erases a cover the same way and needs the same step; its spec's X8
+    routed it here.
   - **Uptime & alerting** — safely-exposed health endpoint (exposure mechanism itself undecided)
     + external pinger + an alert channel that reaches Brian.
   - **Sending-domain DNS (SPF/DKIM/DMARC)** — part of decision row 8 below; must verify before
@@ -150,7 +152,8 @@ for a notification D5's own scope does not reach. Row 24 was added the same day 
 promoted out of `hidden-deferrals-tracker.md` **F21**: a sub-edge D23's rider did not rule. Row 25 was
 added the same day by WU-BlobCleanup, promoted out of **F22**: two owner rulings (D13, D14) disagree on
 one edge. Row 26 was added the same day by WU-ThrottleCoverage, promoted out of **F23**: three
-follow-ups of D20's throttle half that its text leaves to the owner.
+follow-ups of D20's throttle half that its text leaves to the owner. Row 27 was added the same day by
+WU-AuthorStoryDelete, promoted out of **F24**: five edges of D15 that its text does not rule.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -171,6 +174,7 @@ follow-ups of D20's throttle half that its text leaves to the owner.
 | 24 | **Should a poll's anonymity mode be frozen by the database once votes exist, like its vote mode?** D23's `ConfigLocked` rider named `AllowMultiple`, and WU-PollVoteIntegrity froze it with an FK (`layer2-services.md` §"Check-then-act posture"). `AnonymityMode` (with `ResultsVisibility` and `DateOpened`) still freezes only through `UpdatePollAsync`'s `hasVotes` read, so an owner's edit that crosses the first vote can land: a vote cast under `Anonymous` is then named under `Public`. | As built (the status quo, not a ruling): the service check only. The window is one request wide. | D23's classification test reads two ways here: a reader publishes a name (a constraint), or the voter's intent is disappointed (a policy). The status quo works against the lock's own stated purpose: F37's Settled bullet says the freeze "prevents retroactive anonymity exposure", and that is the one-request window the default leaves open. D23's rider says "the first-vote-vs-config-edit boundary … needs the same treatment in the same WU". The build read that as `AllowMultiple` only, since the sentence is about the restructure depending on it; read as the whole boundary, it would cover this field too. The fix costs one column per vote row. Tracker **F21**. |
 | 25 | **When an account is deleted, do the covers of its stories go?** D14 says the account deletion collects "the cover paths of every story the user authored … since the cascade removes the rows that name them" and deletes those blobs. The premise does not hold: `stories.author_id` is `SET NULL`, and D13 (one day earlier) ratified stories as surviving anonymized, so those rows live on and still name their covers. | As built (non-destructive, reversible; not a ruling): the covers stay with the surviving stories. Only the avatar is deleted. D14's principle ("the blob is gone when the row is gone") does not reach a row that survives, and deleting the blobs would break live stories' covers and leave every such row naming a missing blob. | Read literally, D14 asks for erasure the D13 survival set does not need; read by its principle, it asks for nothing here. A cover is the author's upload, and could be personal (a photo, their art), so "strip them" is a defensible erasure choice: null `CoverArtRelativeUrl` on the user's stories inside the deletion transaction and delete the blobs post-commit (a small build in `UserDeletionService`, plus the deletion page's copy). Rule text: `layer2-services.md` §"Image Storage — blob ownership and cleanup". Tracker **F22**. |
 | 26 | **Three follow-ups of D20's throttle half.** **(a)** The `Vote` and `Reveal` bucket sizes: D20 requires a row for each new kind but names no number. **(b)** Group story-add (`IGroupWriteService.AddStoryAsync`): each add of a distinct story notifies every opted-in member (type 60) and the story's author (25). Since D16 both anchor on the new `GroupStory` row, so dedup never merges two adds, and a group admin's remove + re-add mints a new row and notifies again. Throttle it (under which kind, at what rate), or ratify it exempt? **(c)** `RepeatRequest` charges *every* notifying acknowledgment and lineage request, first requests included, so crediting a sixth collaborator in one sitting waits three minutes. | As built (not rulings): **(a)** both 10 burst / 10 per min, mirroring Comment/Message, the most generous ratified tier, and labelled provisional in code and in `security.md`. **(b)** Unthrottled; the bound today is that members opted in (`NotifyForNewStory`) and can leave, and a story can sit in a group once. **(c)** Every notifying request is charged: a revoke or delete followed by a fresh request leaves no trace of the repeat, so a state guard ("one re-request per decline", which D20 also allowed) would not close the vector. | **(a)** D20 sets limits by tier and left these two blank. **(b)** D20's enumeration needs a reason for every unthrottled surface, and the honest bound here is weaker than "dedup holds"; adding a bucket is a coverage call, which D20 reserved to you. **(c)** D20 rules that the vector closes, not the mechanism; the alternatives are a looser tier, or charging only the re-request branch and accepting the revoke/delete bypass. Rule text: `security.md` §"Write Throttling". Tracker **F23**. |
+| 27 | **Five follow-ups of D15's author story delete.** **(a)** "If the booked block has not started, the slot returns to redeemable; if it has already aired, it is consumed": which side is a block that is **live** at the moment of deletion on? **(b)** Should the moderator hard delete (the illegal-content path) also return the slots of unstarted placements? D15 scoped the entitlement argument to "an author's unilateral act". **(c)** Should the sponsor be notified when a slot comes back? **(d)** The dialog's download out exports what the author can read publicly: published primary chapters only, and a taken-down story 404s. Should the author's export include their unpublished chapters (and work on a taken-down story) so they "leave with their own copy"? **(e)** A taken-down story's editor does not load (the edit read keeps the `IsTakenDown` filter, as it did before D15), so its author can delete it over the API but has no Delete button — the case D15 calls the most load-bearing. | As built (not rulings): **(a)** live = started, so the slot is consumed (`StartDate > now` is the test). **(b)** No: `SpotlightPlacementRelease` is called only by `DeleteStoryAsync`. **(c)** No notification. **(d)** Published chapters only, and the dialog says so. **(e)** No UI path; the service honours the ruling. | **(a)** D15 states both halves and leaves the boundary unstated. **(b)** D15 grounded slot return in the author acting unilaterally; a moderator removing illegal content is a different actor and the ruling does not reach it. **(c)** A notification is user-visible policy D15 does not mention. **(d)** "Export = what you can read" is a ratified Export rule (`layer2-services.md` §"Export & Import"); widening it for authors is an Export design call. **(e)** Opening the editor for a taken-down story also opens its property edits (which `content-safety.md`'s "so they can often fix it" implies), and a delete entry point elsewhere is new UI — either reshapes surfaces beyond D15's text. Rule text: `layer2-services.md` §"Author story deletion" and §"Community Spotlight". Tracker **F24**. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -237,6 +241,24 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **Author story deletion (worksheet D15) — answered 2026-08-07, built WU-AuthorStoryDelete
+  2026-10-13.** No decision row: it came out of the service audit's §3.20. Archive permanence is
+  rejected: the primary author may hard-delete their own story, self-service and irreversibly, under
+  any moderation state (`DeleteStoryAsync`, `DELETE /api/stories/{id}`, a typed-title dialog on the
+  edit page that offers Unpublish instead and a download first). One transaction: story-scope
+  `TptDelete`, the Spotlight slot return (an unstarted booking's slot goes back to the sponsor), the
+  story row; everything else cascades; the cover blob after the commit (D14's third inline site); no
+  counter touched. **Corrected, not built:** D15's "`daily_story_stats` has no FK, delete it
+  explicitly" — the raw DDL carries `ON DELETE CASCADE`, so the cascade already removes the rows and the
+  site view total stops counting them (the test D15 asked for is built and passes). Rule:
+  `layer2-services.md` §"Author story deletion" and §"Community Spotlight" (slot return);
+  `cross-cutting.md` §"Delete Policy Summary"; `content-safety.md` §"Content Removal" (unconditional
+  under moderation); `layer3.5-structure.md` (the dialog on `Modal`). Narrative: `audit/Stories.md` F4,
+  `audit/Spotlight.md` F55. **Still open:** decision row **27** (a live block, the moderator path,
+  telling the sponsor, the download's scope, a taken-down story's missing button; tracker **F24**),
+  zombie reports on the deleted story (tracker **F13** site 5), and the ToS line stating the position
+  (tracker **F3**).
+
 - **Throttle coverage (worksheet D20, the throttle-coverage half only) — answered 2026-08-07, built
   WU-ThrottleCoverage 2026-10-13.** No decision row: it came out of the service audit's §3.13/§2.5.
   "Select by cost" stands; the rule was simply never run against the full surface list. Built:
@@ -266,7 +288,7 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   purpose, and "orphans accepted" is rejected for every class:
   - An **inline delete at every terminal deletion path**, captured before the row delete and run after
     the commit, outside the retry: the avatar at account deletion, the cover at a moderation hard
-    delete. D15's author story delete inherits the rule.
+    delete. D15's author story delete inherits the rule (built WU-AuthorStoryDelete, 2026-10-13).
   - A **daily orphan sweep** (`ImageOrphanSweeper`) as the backstop for fault residue. It reads the
     references unfiltered, has a 24 h grace window, a dry-run first cycle and a per-cycle cap, and
     acts store → DB only (D14). Build choices on top, marked *(derived)* in the rule: generated upload
@@ -296,9 +318,10 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   "Account deletion"; `layer2-services.md` §"Group Membership and Role Model" and §"Account actions"
   (the Group shape). Narrative: `audit/Identity.md` F52, `audit/BlogPosts.md` F37,
   `audit/Messaging.md` F49, `audit/Groups.md` F38/F40, `audit/Moderation.md` F46/F47,
-  `audit/Notifications.md` (type 62). **Rider (i) is not yet met for two content types:** stories have
-  no self-delete (WU-AuthorStoryDelete, D15) and blog posts no delete button (tracker **B25**, which no
-  WU owns yet); the deletion page names both. Still open: an exact multi-choice voter count after a
+  `audit/Notifications.md` (type 62). **Rider (i) was not met for two content types:** stories had
+  no self-delete (met since WU-AuthorStoryDelete, D15, 2026-10-13, except a taken-down story's missing
+  button, decision row 27 (e)) and blog posts have no delete button (tracker **B25**, which no WU owns
+  yet); the deletion page names both. Still open: an exact multi-choice voter count after a
   deletion (tracker **F17**), a sender-side message delete (**F18**), the bare ids in polymorphic
   columns (**F19**), whether rider (i) reaches a recommendation the story's author removed (**F20**),
   whether type 62 names the moderator (decision row **23**), and D47(b). Rider (iii)'s "any auth/IP

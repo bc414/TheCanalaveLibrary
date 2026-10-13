@@ -5,7 +5,10 @@ impact** (§5.24) — `L1 = N/A`.
 
 ## Shared Context
 No entities. No components in this folder — the download *trigger* lives in the consuming feature
-(Stories: per-format anchor links on the story page + StoryCard caret). Pure application-layer
+(Stories: per-format anchor links on the story page + StoryCard caret; since WU-AuthorStoryDelete,
+2026-10-13, also `StoryDeleteDialog`'s "keep a copy first" out, owner ruling D15 — it exports what the
+author can read publicly, published chapters only, and whether an author's export should include their
+unpublished chapters is `roadmap.md` decision row 27 (d)). Pure application-layer
 generation: `IExportService` (Core) + `ServerExportService` + per-format writers + `ExportEndpoints`
 (Server), all in the `Export/` cluster.
 
