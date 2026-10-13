@@ -127,6 +127,19 @@ F66.
 
 ## Feature 21 — User Profile Display
 
+**WU-TrackerFixes Stage note (2026-10-13) — trackers B16 and B17; L4.5 5→1, other cells unchanged.**
+- **Story-tab page size (B16).** `StoryPageSize` was a constant 20; it is now `_storyPageSize`, the
+  **viewer's** `DefaultPaginationSize`, resolved in `OnInitializedAsync` for signed-in viewers
+  (anonymous viewers keep 20 and never call the settings read). The three story-filter constructions
+  carry it; the blog tab keeps its own 20 (not a story listing).
+- **Blog-tab Report (B17).** `BlogPostCard`'s Report is wired for signed-in non-owners and opens the
+  page's single `ReportDialog` with `ReportedEntityType.BlogPost`.
+- Tests: **RazorComponents** `ProfilePageTests` +4 (a signed-in visitor's 50 setting reaches the story
+  listing; an anonymous viewer keeps 20 with no settings call; a visitor's Report opens the dialog;
+  none for anonymous viewers or the owner). The class now signs viewers in through
+  `AddAuthorization()` (the story tabs' `TagFilter` renders an `AuthorizeView`). **L4.5 5→1:** no browser
+  was available; tracker **H38** steps 1–2.
+
 - **L1 — Stage 5.**
 - **L2 — Stage 5** (WU30, 2026-06-24). `IUserProfileReadService` built in `Server/Profiles/`:
   `GetProfileHeaderAsync(userId, includePrivate)` — `ProfileVisibility` gating, stats conditional,
@@ -156,6 +169,8 @@ F66.
 - **L4-Style — Stage 5** (WU30). Tailwind v4 token-based styling; banner avatar initials placeholder;
   stats strip with bold counter values; badge row; action buttons (follow/vouch/edit). Visual sign-off
   pending human run at `/user/{id}`. Stage-6 gate = human visual approval.
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the story tabs' page size and the blog
+  tab's Report, undriven — tracker H38; Stage note at this feature's top).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; profile page verified in a real WASM runtime during the
   flip's browser wave (header, stats, vouches, tabs). Full wave narrative + the 7 bugs found/fixed:

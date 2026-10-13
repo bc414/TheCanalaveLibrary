@@ -52,6 +52,15 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 
 ## Feature 4 — Story Creation & Editing
 
+**WU-TrackerFixes Stage note (2026-10-13) — the editor's error surface (the WU-ErrorHandling2
+follow-up); L4.5 5→1, other cells unchanged.** `StoryPropertiesViewModel` derives from the new
+`EditorFormViewModel` (`SharedUI/Errors/`), and `StoryPropertiesForm` renders its server error through
+`ErrorAlert` with `ShowSignIn`. `StoryEditorPage`'s three handlers call `ClearServerErrors()` /
+`ShowServerError(ex)`, which set the messages and the session flag together. Tests: **RazorComponents**
+`StoryPropertiesFormTests` +1 (an expired session offers Sign in, a later refusal replaces it, Clear
+removes it; fails with append semantics) and `StoryEditorPageTests` +1 (a session-expired save). **L4.5
+5→1:** no browser was available; tracker **H38** step 6.
+
 **WU-ErrorHandling note (2026-07-06).** `StoryEditorPage` embeds `DraftAutosave`
 (`draft:story:{id|new}`; prose fields only — Title/ShortDescription/LongDescription; structured
 tag/character picker state deliberately excluded, re-selecting is cheap, re-typing is not);
@@ -177,7 +186,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 5 (re-verified by WU-ParityAndRemaining's browser pass, 2026-10-13: a
+- **L4.5-Browser — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the editor's server error renders through `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5, re-verified by WU-ParityAndRemaining's browser pass, 2026-10-13: a
   refused save and a refused submit list the server's sentences on WASM as on the circuit, a re-typed
   tag is refused on save and accepted again on the same circuit, and an emptied summary is refused —
   the WU-ParityAndRemaining Stage note under Feature 4; before that 1→5, WU-AuthorStoryDelete browser pass, 2026-10-13: the Delete story

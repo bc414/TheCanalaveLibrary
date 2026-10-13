@@ -156,6 +156,18 @@ requires an authenticated user.") became the shared text; no test asserted them,
   migration. Verified via integration test: duplicate submit raises `RecommendationValidationException`.
 
 ## Feature 28 — Recommendation Display
+
+**WU-TrackerFixes Stage note (2026-10-13) — tracker B17; L4.5 5→1, other cells unchanged.**
+`RecommendationCard` gains `[Parameter] EventCallback<int> OnReport`, rendered last in the action row
+("Report", `aria-label="Report this recommendation"`) when the rec is not the viewer's own and the host
+wires it. `RecommendationSection` hosts its own `ReportDialog` (the `CommentSection` pattern) and wires
+`OnReport` only for signed-in viewers. Not wired on `DeepDiveTab`, `ExploreTab` or
+`CommunitySpotlightDisplay` (scope boundary: every rec stays reportable from its story). Tests:
+**RazorComponents** `RecommendationCardTests` +2 (raises the id; absent on own and when unwired) and
+`RecommendationSectionTests` +2 (a signed-in click opens the section's dialog and loads reasons; none
+for anonymous viewers); `StoryPageTests` and `StoryExternalLinksRowTests` register the report fake.
+**L4.5 5→1:** no browser was available; tracker **H38** step 3.
+
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
   (`RecommendationLikesAndConstraints`). Now fully stage 5.
@@ -194,6 +206,8 @@ requires an authenticated user.") became the shared text; no test asserted them,
   like with rollback (`CommentSection.HandleLike` pattern), Hidden-Gem toggle, `ConfirmDialog` delete.
   This is the surface WU25 embeds. Covering tier: RazorComponents.
 - **L4 — Stage 5 (WU29, visual sign-off 2026-06-23).**
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the card's Report and the section's dialog,
+  undriven — tracker H38; Stage note at this feature's top).** It was 5 before.
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F27's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: `RecommendationReadServiceTests`
   (Integration): `GetForStoryAsync` returns Approved-only recs with correct projection (spotlighted

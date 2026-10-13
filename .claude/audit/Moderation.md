@@ -48,12 +48,35 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-10-13, WU-UserDeletion — `ReportedEntityType.Group` added as a ledger-only type, the
-submission allow-set unchanged, no flip; F47's WU-UserDeletion Stage note; before that 2026-09-30,
-WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
-L4.5 = 5, L5 = 5, L6 = 5. L1 stays 5 with the WU_ModerationIntegrity migration applied. L4.5 went 5→1
-at the review fixes (the duplicate refusal and the WASM rate-limit message changed undriven) and back
-to 5 at the browser pass the same day (tracker **H19** closed; note below).
+**Stages (updated 2026-10-13, WU-TrackerFixes — every allow-set type has a report entry point, a
+Message report needs a participant, and `ReportDialog`'s refusal renders through `ErrorAlert` (tracker
+B17), L2 changed beneath the cell, **L4.5 5→1**, Stage note below; before that the same day,
+WU-UserDeletion — `ReportedEntityType.Group` added as a ledger-only type, the submission allow-set
+unchanged, no flip; F47's WU-UserDeletion Stage note; before that 2026-09-30, WU-ModerationIntegrity
+browser verification):** L1–L3.5 = 5, L4 = 3, L4.5 = **1** (tracker **H38**), L5 = 5, L6 = 5. L1 stays 5
+with the WU_ModerationIntegrity migration applied. Before WU-TrackerFixes, L4.5 went 5→1 at the
+WU-ModerationIntegrity review fixes (the duplicate refusal and the WASM rate-limit message changed
+undriven) and back to 5 at the browser pass the same day (tracker **H19** closed; note below).
+
+**WU-TrackerFixes Stage note (2026-10-13) — tracker B17 closed; F46 L2 changed beneath the cell, L4.5 5→1.**
+- **Entry points.** BlogPost (`BlogPostCard` on the profile Blog tab and the group page, "Report post"
+  on `BlogPostPage` — not on a site announcement, decision row 30 / tracker F27), Recommendation
+  (`RecommendationCard`, through `RecommendationSection`'s own dialog) and Message (`MessageItem` →
+  `MessageThread` → `MessagesPage`). Signed-in viewers only; hidden on own content. Narratives in F21,
+  F28, F36, F40 and F49. `BatchLoadTargetsAsync`'s, `AdjustActiveReportCountAsync`'s and
+  `ApplyRemovalAsync`'s BlogPost/Recommendation/Message arms are now reachable from the app.
+- **The one behavior change (kind (g)).** `RequireReportableTargetAsync`'s `Message` arm answered
+  `true` on the unenforced assumption that nobody else could learn a message id. Ids are sequential,
+  so any signed-in user could queue a stranger's private message. A Message target is now visible only
+  when the reporter is a participant of its conversation (a null reporter fails); otherwise the same
+  `KeyNotFoundException` as a missing id. `ModerationIntegrityTests`' sibling-closing test files its
+  sibling from the other participant.
+- **`ReportDialog`'s refusal** renders through `ErrorAlert` with `ShowSignIn` (the WU-ErrorHandling2
+  follow-up; `ReportDialogTests`, new).
+- Tests: **Integration** `ParentVisibilityContractTests` +2 (a participant's message report lands; a
+  non-participant's is refused like a missing id, and no row is written — fails with the arm back to
+  `true`). **RazorComponents** in the features named above, plus `ReportDialogTests` (2).
+- **L4.5 5→1:** no browser was available; tracker **H38** steps 2–4 and 6.
 
 **WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46 L4.5 1→5.** `ReportDialog`
 on both render phases, `psql` after every submit:
@@ -149,9 +172,10 @@ Detail: `audit/Notifications.md` F41's browser note. Band-wide rules: the cluste
 - **A Message target's visibility means participation** (kind (g)): the reporter must be a participant
   of the message's conversation, so a null reporter fails. This is a defect fix under the settled
   kind-(g) rule, not a new decision; it is the one behavior change in B17.
-- **Scope boundary, not a deferral:** `NewsPage` announcement cards stay unwired (moderator-authored;
-  whether they are reportable is an open owner call), as do the rec cards on `DeepDiveTab`,
-  `ExploreTab` and `CommunitySpotlightDisplay` (every rec stays reportable from its story).
+- **Scope boundary, not a deferral:** site announcements get no Report control — not on `NewsPage`'s
+  cards, and not on `BlogPostPage` (moderator-authored; whether they are reportable is an open owner
+  call, decision row 30 / tracker F27). The rec cards on `DeepDiveTab`, `ExploreTab` and
+  `CommunitySpotlightDisplay` stay unwired too (every rec stays reportable from its story).
 
 **Stage note (WU34 — 2026-06-25):** L1=5, L2=5, L3=5, L3.5=5 (all verified: `dotnet test` green,
 298 integration tests + 417 unit tests). `IModerationReadService`/`IModerationWriteService` implemented in
@@ -179,9 +203,24 @@ user report could exist. A "Report user" control now lives on `ProfilePage`'s ba
 `UserCard.OnReport` — declared and `HasDelegate`-gated since WU34, wired by nobody — is now wired at
 `VouchList` and both tree-search tabs. Full narrative + verification: Feature 47's
 WU-UserModeration Stage note below. **Still unreachable, filed as tracker item B17:** BlogPost,
-Recommendation and PrivateMessage remain in the allow-set with no report entry point.
+Recommendation and PrivateMessage remain in the allow-set with no report entry point. *(Closed
+2026-10-13 by WU-TrackerFixes — every allow-set type now has one; its Stage note at the top of this
+section.)*
 
 ## Feature 47 — Moderation Queue & Actions
+
+**WU-TrackerFixes Stage note (2026-10-13) — dead profile links and the stale Sign-in flag; L4.5 5→1,
+other cells unchanged.**
+- **Links.** The queue's User target linked `/user/{UserName}` (`ServerModerationReadService`'s batch
+  enrichment) and `/mod/users/{id}`'s View profile `/user/{Username}`; the route is `/user/{UserId:int}`,
+  so both 404'd. Both use the id. **Integration** `ModerationServiceTests` +1 (the queue row's
+  `TargetUrl`); **RazorComponents** `ModUsersPageTests` (the View profile href).
+- **The flag travels with the message** (the WU-ErrorHandling2 follow-up). `ModReportsPage`'s
+  "A removal reason is required." return reset no `_actionErrorIsSessionExpired`, so a prior
+  expired-session failure left a Sign in link beside it. `AccountActionPanel` showed the parent's flag
+  beside its own local validation string. Both fixed; **RazorComponents** `ModReportsPageTests` +1 and
+  `AccountActionPanelTests` +1, each failing with the fix reverted.
+- **L4.5 5→1:** no browser was available; tracker **H38** steps 7–8.
 
 **Settled — `Group` targets and the assign-admin action, F46/F47 (owner ruling D13 edge (b), D8's
 seventh-type amendment and D47's floor; settled for WU-UserDeletion 2026-10-13). Do not revisit:**
@@ -574,7 +613,10 @@ has seen, tracker H29 — Stage note at the top of this section; its review fixe
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
-L4.5 = **5**: WU-UserDeletion lowered it to 1 and its browser pass returned it to 5, both 2026-10-13
+L4.5 = **1**: WU-TrackerFixes lowered it, 2026-10-13 (the queue's User-target link and View profile
+now use the id route, and the removal and account-action refusals carry an honest Sign-in flag, all
+undriven — tracker **H38** steps 7–8; its Stage note at the top of this section). Before that it was
+**5**: WU-UserDeletion lowered it to 1 and its browser pass returned it to 5, both 2026-10-13
 (Group rows in "Show resolved" and the founder's history driven on both render phases, tracker H29
 closed — the browser verification note at the top of this section). Before that it was 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
 standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
@@ -830,9 +872,18 @@ author of a revoke/restore is `roadmap.md` decision row 15.
 
 ## Feature 48 — Story Approval Workflow
 
+**WU-TrackerFixes Stage note (2026-10-13) — the stale Sign-in flag; L4.5 5→1, other cells unchanged.**
+`ModSubmissionsPage`'s three "A rejection reason is required." returns (story, external account,
+external link) reset their `_…IsSessionExpired` flag, so an expired-session failure no longer leaves a
+Sign in link beside the validation message (the WU-ErrorHandling2 follow-up; `error-handling.md`).
+Tests: **RazorComponents** `ModSubmissionsPageStoriesTests` +1 (the story reject sequence; fails with
+the reset removed). **L4.5 5→1:** no browser was available; tracker **H38** step 7.
+
 **Stages (updated 2026-09-30, WU-ModerationIntegrity — L2 changes beneath the cell, no flip; the
-WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5**
-(the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed
+WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (5→1 at
+WU-TrackerFixes, 2026-10-13: `/mod/submissions`' three reject reasons no longer inherit a stale Sign-in
+flag, undriven — tracker **H38** step 7; its Stage note at the top of this section. Before that 5:
+the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed
 undriven; the browser pass drove them on circuit and WASM and returned it to 5 — browser-verification
 Stage note at the end of this section), L5 = 5, L6/L8 = N/A. WU-ModerationIntegrity's two F48 changes
 (the queue read's service gate, `ReportedUserId` on the trust-waiver audit row) are in its Stage note,

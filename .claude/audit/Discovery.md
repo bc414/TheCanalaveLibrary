@@ -229,6 +229,21 @@ Regression-covered by `TagFilterTests.LateSeed_AfterFirstRender_DisplaysItsChips
 re-seed guard from the start.
 
 ## Feature 31 — Search Page (`/discover`)
+
+**WU-TrackerFixes Stage note (2026-10-13) — tracker B16 closed; L4.5 5→1, other cells unchanged.**
+`ResultsFilterPanel.ApplyAsync` hardcoded `PageSize = 20` for every sorted Apply. It now echoes
+`InitialFilter.PageSize`, copied in `OnParametersSet` **ahead of** the `_userHasInteracted` guard: the
+panel has no page-size control, so a late seed must still land. `SearchPage` seeds `_filter.PageSize`
+from the signed-in viewer's `DefaultPaginationSize` beside the random batch size, before the first
+load; its device-local restore keeps that size (the snapshot stores ids only). Anonymous viewers keep
+20 and never call the settings read. `BookshelvesPage` and `ProfilePage` do the same (F17, F21);
+`TreeSearchPage` pages by `TreeSearchRequest` and needed nothing. No new parameter and no server cap
+(D20's bounds half, pending). Settled note: "the panel's page size" below. Tests: **RazorComponents**
+`ResultsFilterPanelTests` +2 (the echo; the size still tracks the dispatcher after the user's first
+interaction, which fails with the copy moved below the guard) and `SearchPageTests` +1 (a 35 setting
+sizes the first sorted load and the next Apply). **L4.5 5→1:** no browser was available; tracker **H38**
+step 1.
+
 - **L1 — N/A** (queries Story/USI/StoryListing; the per-user override table's key change, WU-SchemaHardening
   2026-10-13, is a Shared Context entity change with no L1 cell — Stage note at the end of this feature).
   **L2 — Stage 5** (WU23 built the Source=All query;
@@ -240,6 +255,9 @@ re-seed guard from the start.
   **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
   **L4 — Stage 1.**
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the sorted page size follows the reader
+  setting, undriven — tracker H38; Stage note at this feature's top).** It was 5 from the
+  2026-07-02 browser pass (the L4.5-Browser verification note at the end of this file).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; search page verified in a real WASM runtime during the
   flip's browser wave (random batch + filtered `POST /query` + sort switch). Full wave narrative +
@@ -399,7 +417,8 @@ re-seed guard from the start.
     closes, but fixing it means passing an `InitialPageSize` seed through a shared cross-cutting
     component's contract, not a SearchPage-local change. Filed as a new tracker item so the fix
     enumerates every `ResultsFilterPanel` consumer up front, one WU, rather than landing as a
-    point fix.
+    point fix. *(Tracker B16, closed 2026-10-13 by WU-TrackerFixes — Stage note at this feature's
+    top.)*
 
   **How verified:** `dotnet build` green (0 errors). `dotnet test` green: Unit 776, RazorComponents
   635, Integration 1021. New test files: `DiscoveryFilterSettingsServiceTests.cs` (Integration —

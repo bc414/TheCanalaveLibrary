@@ -153,8 +153,10 @@ else
             }
 
             @* Report (tracker B17): signed-in non-authors only — the report endpoint requires auth.
-               Same Control recipe as BlogPostCard's footer Report. *@
-            @if (_currentUserId is not null && !isAuthor)
+               Same Control recipe as BlogPostCard's footer Report. Not on a site announcement:
+               whether staff announcements are reportable is an open owner call (tracker F27),
+               the same boundary that leaves NewsPage's cards unwired. *@
+            @if (_currentUserId is not null && !isAuthor && Post.Kind != BlogPostKind.Site)
             {
                 <button type="button"
                         class="text-sm text-(--color-text-muted) hover:text-danger hover:underline"

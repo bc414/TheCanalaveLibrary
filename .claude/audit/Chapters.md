@@ -28,6 +28,15 @@ of both `EditorView`'s output and the sanitizer.
 
 ## Feature 6 — Chapter Writing & Versioning
 
+**WU-TrackerFixes Stage note (2026-10-13) — the editor's error surface (the WU-ErrorHandling2
+follow-up); L4.5 5→1, other cells unchanged.** `ChapterEditorViewModel` derives from the new
+`EditorFormViewModel`, and `ChapterPropertiesForm` renders through `ErrorAlert` with `ShowSignIn` (it was
+an `InlineAlert`). `ChapterEditorPage`'s save and its four secondary handlers (import-as-version,
+publish, set primary, add version) now clear before trying and replace on failure: before, those four
+appended without clearing, so an earlier failure lingered after a success. Tests: **RazorComponents**
+(the shared view-model behavior through `StoryPropertiesFormTests`; no chapter-page test drives the
+four handlers). **L4.5 5→1:** no browser was available; tracker **H38** step 6.
+
 **WU-ErrorHandling note (2026-07-06) — editor draft safety live.** `ChapterEditorPage` embeds
 `DraftAutosave` (`draft:chapter:{contentId}` / `draft:chapter:new:{storyId}`): 10s change-only
 localStorage capture of Title/ChapterText/notes/VersionName, restore banner on return, backup
@@ -261,7 +270,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
   per-version controls. `ChapterEditorPage` orchestrates all.
 - **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
-- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24; the chapter delete re-driven on both
+- **L4.5-Browser — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the editor's errors render through `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5: WU-ChapterArcBrowserPass, 2026-07-24; the chapter delete re-driven on both
   render phases by the WU-TptHardDelete browser pass, 2026-09-30 — its note under L2 above).** Real-circuit pass closes the
   WU45 deferral. See the WU-ChapterArcBrowserPass Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the

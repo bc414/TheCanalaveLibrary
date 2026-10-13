@@ -17,18 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ParityAndRemaining (2026-10-13) — service audit §2.7 and §2.12. WASM parity: a
-  validation 400 carries an `errors` list to every client factory, the sprite root reaches WASM
-  (`GET /api/client-config`), the anonymous reader never calls the durable marks, the Explore pivot
-  keeps its message. Defects: one-level threading enforced, the comment edited marker and spoiler flag
-  (migration `WU_ParityAndRemaining_CommentDateEdited`), atomic group and chapter creates, tag-type
-  trust, the archive bound, legacy-encoding imports, fanon/rec filter fixes, no fabricated participant.
-  It flipped **F24, F26 and F49 L4.5 5→1**; its browser pass the same day drove all of H37 on both
-  phases, returned them to 5, closed H37 and H12, and fixed three runtime bugs: the WASM re-split
-  crashed the editor (now `ResplitAsync`: a client never blocks on a task), a missing sprite looped
-  forever, and an emptied editor passed every required rich-text check (`RichTextContent.IsBlank`).
-  Filed: row 29 / **F26**; H22, F6b annotated. `dotnet test`: Unit 1,375, RazorComponents 874,
-  Integration 1,652. **Pointer:** its DONE entry.
+- **Last landed:** WU-TrackerFixes (2026-10-13) — the campaign's tracker sweep. Closed **B16** (the
+  panel's page size follows the reader setting on `/discover`, Bookshelves and the profile story tabs),
+  **B17** (every report target has an entry point; a message is reportable only by a participant of its
+  conversation — the one behavior change), **D8** (a blog-post notification stops naming a post its
+  recipient can no longer open; 33 split onto its own kind) and **H7** (the test merges, the last
+  `Task.Delay` ordering hack, one `SeedUserStatAsync`). Built amendment U11: `ErrorAlert` on the eight SOLO
+  surfaces (`EditorFormViewModel`; `GroupPage`'s toasts made inline) and the stale Sign-in flag. Fixed the
+  last two dead `/user/{name}` links. U10 not taken (F6b). It flipped **F4, F6, F17, F21, F28, F31, F35,
+  F36, F37, F40, F42, F46, F47, F48, F49 L4.5 5→1** (no browser; tracker **H38**). Filed row 30 / **F27**.
+  `dotnet test`: Unit 1,375, RazorComponents 898, Integration 1,660. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-ParityAndRemaining — service audit §2.7 and §2.12 (WASM parity, the remaining service defects; row 29/F26 filed, H37/H12 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
@@ -247,7 +246,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13); **WU-TrackerFixes** is next in the campaign's build order, then WU-DocCorrections.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13), then WU-TrackerFixes (the tracker sweep, 2026-10-13); **WU-DocCorrections** is next and last in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -261,7 +260,7 @@ references it, does not restate it.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
   exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed, and
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
-  B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
+  B14/B15/B16/H9 newly opened (B16 since closed, WU-TrackerFixes 2026-10-13) — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 was closed by
   WU-ThrottleCoverage, 2026-10-13; D6 was routed to WU-ModerationIntegrity, which left it open (a rejection files
   no `Report` row, so D8(b) does not cover it); **F10/H13** opened by WU-AccessGateSweep2,
@@ -276,15 +275,14 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b,
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
-  lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
-  left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
-  (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
+  lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2's named
+  follow-up (the 8 SOLO editor pages' `ErrorAlert` adoption) was built by WU-TrackerFixes, 2026-10-13. WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–29** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–30** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -302,7 +300,9 @@ references it, does not restate it.
   28 — five defaults D18's private-message email left to the build (on by default, no sender text,
   archive mutes, the run reading of its formula, no account-status gate) — added the same day by
   WU-PrivateMessageEmail, (e) by its review fixes; 29 — whether an author may edit content a moderator
-  took down (freeze or remediate) — added the same day by WU-ParityAndRemaining, tracker **F26**).
+  took down (freeze or remediate) — added the same day by WU-ParityAndRemaining, tracker **F26**; 30 —
+  whether site announcements are reportable — added the same day by WU-TrackerFixes, tracker **F27**).
+  Tracker **H38**, WU-TrackerFixes' browser pass (fifteen L4.5 cells at 1), is owed.
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -425,13 +425,6 @@ cells/verification) when built.
 - **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6.
-- **Tracker D8 → WU-TrackerFixes** (the worksheet-decisions campaign's tracker sweep) — **Cells:**
-  F41/F42 L2 (stay 5). **Scope:** `BlogPostDirect` stops resolving a post whose author has since
-  gone Private or that is unpublished, for the non-author types 13–16 and 100; 33 keeps resolving
-  for the post's author. The tracker recommends the type split. Then give the `PollUpdated` arm its
-  post title back; it is title-free until then. **Pointer:** tracker D8;
-  `audit/Notifications.md` §"WU-NotificationCorrectness review fixes Stage note". **Deps:** none.
-  Routed 2026-10-13.
 *(WU-NotifEmail moved to the DONE run below, 2026-07-31.)*
 ---
 
@@ -477,6 +470,58 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-TrackerFixes — the tracker sweep: page size follows the reader setting (B16), a report entry point for every target and a participant-only message report (B17), blog-post notifications by recipient (D8), the test-hygiene backlog (H7), `ErrorAlert` on the SOLO surfaces (amendment U11), the last dead profile links (extends `Discovery/`, `Bookshelves/`, `Profiles/`, `Moderation/`, `BlogPosts/`, `Recommendations/`, `Messaging/`, `Groups/`, `Notifications/`, `Errors/`, `Stories/`, `Chapters/`, the Integration and RazorComponents suites) — DONE ✓ (2026-10-13)
+
+- **Cells:** **F4, F6, F17, F21, F28, F31, F35, F36, F37, F40, F42, F46, F47, F48, F49 L4.5 5→1** (visible
+  behavior changed with no browser available; tracker **H38**). Built beneath Stage-5 cells: F31/F17/F21
+  L3-Logic, F46 L2 (the participant rule), F35/F36 L2 (`AuthorId`), F42 L2 (D8), F47 L2 (the link). No
+  migration. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
+- **Trigger:** spec `wu-specs/WU-TrackerFixes.md` and amendments U10/U11. §1 C / E2 was done by
+  WU-DependencyCVEs; §1 E's three razor links by the WU-AccessGateSweep2 browser pass; B18 by
+  WU-ModerationIntegrity. Tracker D8 was routed here by the WU-NotificationCorrectness review fixes.
+- **What landed** (five commits: moment-1 docs `058e30b`, H7 `c4f3ef8`, B16/B17/D8/links `21eac93`,
+  U11 `6e8d4a1`, moment-3 docs and the site-announcement boundary):
+  1. **B16.** `ResultsFilterPanel` echoes `InitialFilter.PageSize`, copied ahead of its interaction
+     guard; `SearchPage`, `BookshelvesPage` and `ProfilePage`'s story tabs seed it from the signed-in
+     viewer's `DefaultPaginationSize` before the first load (anonymous viewers keep 20, no settings
+     call). `TreeSearchPage` needed nothing. No new parameter, no server cap (D20 bounds pending).
+  2. **B17.** Report on `BlogPostCard` (profile, group — `BlogPostListingDto.AuthorId` hides it on own
+     posts), `BlogPostPage` ("Report post"), `RecommendationCard` (via the section's own dialog) and
+     `MessageItem` (via `MessageThread` → `MessagesPage`). **Behavior change:** a `Message` report needs
+     the reporter to be a participant (kind (g)); message ids are sequential, so before this any user
+     could queue a stranger's message.
+  3. **D8, the type split.** 33 → new `OwnBlogPost` kind (as stored); `BlogPostDirect` (13–16, 100) drops
+     an unpublished post and a Private author's profile post; `PollUpdated` names its post again.
+  4. **H7.** 24 bUnit tests folded (every assertion kept; the 25th no longer existed); the
+     `SiteAnnouncementServiceTests` `Task.Delay` replaced by pinned stamps; `SeedUserStatAsync` hoisted to
+     `IntegrationTestBase` (nine copies removed or wrapped).
+  5. **U11.** `EditorFormViewModel` (`SharedUI/Errors/`) under the four form view models; the forms,
+     `PollEditorForm` and `ReportDialog` render `ErrorAlert`; `GroupPage`'s eight toasts became three
+     inline alerts that log unexpected failures. The non-reset flag fixed in `ModReportsPage`,
+     `ModSubmissionsPage` (×3) and `AccountActionPanel`.
+  6. **Links.** The mod queue's User target and `/mod/users/{id}`'s View profile used the username;
+     the route is `/user/{UserId:int}`.
+  7. **Docs.** Moment 1: `layer3.5-structure.md` (page-size seed), `layer2-services.md` (report entry
+     points, the participant rule, three blog-post kinds), `error-handling.md` (the adoption rules; its
+     false `<ErrorAlert Error=…>` line corrected), Settled notes in Discovery F31, Moderation F46,
+     Notifications; tracker corrections (B19's stray bullets to B13, H7's stale phases and flake note,
+     H6's spoiler bullet struck, H8 re-verified, also in `deferred-work.md`). Moment 2: `testing.md`
+     (the shared `SeedUserStatAsync`; ordering tests pin stamps). Moment 3: the Stage notes and headlines
+     below, `status.md`, tracker, roadmap.
+- **Left alone:** U10 (optional): `aria-modal` ahead of the focus trap contradicts the settled
+  `audit/Accessibility.md` rule, and the combobox roles belong with F6b's screen-reader run (annotated
+  there). The Explore/DeepDive/Spotlight rec cards and site announcements stay unwired (scope boundary;
+  the second is decision row 30 / **F27**, owner-open). C2–C6 (WU-L6MeasurePass), the needs-owner items
+  (A1, A7, A9, B15, B19, D4, H6, H11) and the browser/manual items (F6b, H2, H4, H9) per the spec's §2.
+- **Verification:** build 0 errors, no new warnings in touched files; **Unit 1,375** (the PollUpdated
+  presenter test rewritten), **RazorComponents 898** (874 → 863 by the merges, +35), **Integration
+  1,660** (+8). Every new test was mutation-checked against a targeted revert (listed in the commit
+  bodies). check-doc-hygiene, check-design-tokens, check-render-modes and check-a11y pass. No browser
+  was available: tracker **H38** holds eight steps.
+- **Pointers:** Stage notes at the top of Stories F4, Chapters F6, UserStoryInteractions F17,
+  Profiles F21, Recommendations F28, Discovery F31, BlogPosts F35/F36/F37, Groups F40, Notifications F42,
+  Moderation F46/F47/F48, Messaging F49; tracker B16, B17, D8, H7, F27, H38, F6b; roadmap row 30.
 
 ## WU-ParityAndRemaining — the InteractiveAuto/WASM parity breaks (validation error lists over the wire, the client's sprite root, the re-split's camelCase read, the anonymous reader's durable marks, the Explore pivot's message) and the remaining confirmed service defects (reply depth, atomic group and chapter creates, tag trust, the edited marker, archive and encoding imports, three filter/fabrication fixes) (service audit §2.7 and §2.12; worksheet D12's "Left open"; extends `Client/Http/`, `Comments/`, `Groups/`, `Chapters/`, `Stories/`, `Tags/`, `Import/`, `Recommendations/`, `Messaging/`, `Sprites/`, `Discovery/`, `Data/`) — DONE ✓ (2026-10-13)
 

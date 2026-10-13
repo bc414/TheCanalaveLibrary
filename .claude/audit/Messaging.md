@@ -127,6 +127,14 @@ Rules: `layer2-services.md` §"Private-Message Email" and §"Outbound email pipe
 
 ## Feature 49 — Private Messaging
 
+**WU-TrackerFixes Stage note (2026-10-13) — tracker B17's message half; L4.5 5→1, L2 changed beneath
+F46.** `MessageItem` gains `OnReport` (beside the timestamp, only on the other party's message);
+`MessageThread` passes its new `OnReportMessage` to every item; `MessagesPage` hosts a `ReportDialog`
+and opens it with `ReportedEntityType.Message`. The server now accepts a message report only from a
+participant of its conversation (F46's note). Tests: **RazorComponents** `MessageItemTests` +1,
+`MessageThreadTests` +1 (bubbles the id), `MessagesPageTests` +1 (the dialog opens with reasons);
+**Integration** in F46. **L4.5 5→1:** no browser was available; tracker **H38** step 4.
+
 **Settled — a deleted participant (owner ruling D13 edge (a), answered 2026-08-06; settled for
 WU-UserDeletion 2026-10-13). Do not revisit:**
 - **One participant left: the conversation survives intact.** The remaining participant keeps her
@@ -197,7 +205,7 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: Report on the other party's messages, undriven — tracker H38; Stage note at this feature's top). Before that, Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
   deleted participant is a null `OtherParticipant`, rendered by `ConversationListItem` and
   `MessageThread` themselves (default avatar, a muted "[deleted user]", no link), seen on both render
   phases; tracker **H37** closed (the WU-ParityAndRemaining note below). Before that:

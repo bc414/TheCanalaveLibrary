@@ -273,6 +273,11 @@ helpers on `IntegrationTestBase`:
   Respawn wipes them before each test and their IDs are non-deterministic.
 - `SeedStoryAsync(int? authorId = null)` — creates a minimal story with a GUID-suffixed
   title, returns the new `StoryId`.
+- `SeedUserStatAsync(int userId, Action<UserStat>? configure = null)` — inserts the user's
+  `UserStat` row, optionally pre-setting counters (`s => s.StoriesWritten = n`). No production path
+  creates the row at registration, so every counter producer (an `ExecuteUpdateAsync`) silently
+  no-ops without it. One shared helper since WU-TrackerFixes (2026-10-13; tracker H7) — do not add a
+  private copy; wrap it when a test needs a computed value.
 - `SetActiveUser(FakeActiveUserContext value)` — swaps the `IActiveUserContext` singleton
   for this test's factory.
 
@@ -280,6 +285,12 @@ Because tests reset cleanly, **absolute assertions are allowed and expected**: e
 ordering from empty, "must be the only row", reject-at-limit. Write the natural test — call
 the service N times to reach the limit, then assert the (N+1)th call throws. No top-up logic,
 no precondition-seeding-via-DB workaround.
+
+**An ordering test pins its timestamps; it never sleeps between writes.** Two saves can land in the
+same clock tick, and a `Task.Delay` only makes the tie rarer. Set the `DateCreated` (or whichever
+column orders) through `ApplicationDbContext` after the writes — `NotificationServiceTests.
+SetNotificationDateCreatedAsync`, `SiteAnnouncementServiceTests.SetBlogPostDateCreatedAsync`
+(the last `Task.Delay` ordering hack, removed by WU-TrackerFixes 2026-10-13; tracker H7).
 
 **The DB is shared within a single run (one container, one `PostgresFixture`)**, so tests must
 still run serially. This is enforced by `[assembly: CollectionBehavior(DisableTestParallelization
@@ -417,8 +428,9 @@ D24's `GroupsJoined` oscillation would have been caught.
 - **Interleaved race tests are exempt.** Their competing row is raw SQL that skips the counter on
   purpose, and D23 accepts the flip-delta double count under true concurrency. A reconciler pass would
   correct both by design. Such a test asserts the counter value only.
-- **Seed `UserStat` rows first.** `SeedUserAsync` never creates one, and the real-time
-  `ExecuteUpdateAsync` silently no-ops without it, so a counter test that skips the seed asserts 0 == 0.
+- **Seed `UserStat` rows first** (`IntegrationTestBase.SeedUserStatAsync`). `SeedUserAsync` never
+  creates one, and the real-time `ExecuteUpdateAsync` silently no-ops without it, so a counter test
+  that skips the seed asserts 0 == 0.
   Seed a row for every user whose counter the test reads, plus every user the op touches, so that
   `CountersCorrected == 0` is not polluted by the recalculator's own missing-row inserts. Seed it
   with the ground truth the test's direct inserts already created: a `SeedStoryAsync` story bypasses

@@ -2771,8 +2771,9 @@ The rules for every wiring:
 - A host passes `OnReport` only when the viewer is signed in, because
   `POST /api/moderation/reports` requires authorization.
 - The leaf hides the control on the viewer's own content.
-- Not wired, as a scope boundary: `NewsPage` announcement cards (site announcements are
-  moderator-authored, and whether they are reportable is an open owner call), and the rec cards on
+- Not wired, as a scope boundary: site announcements, on `NewsPage`'s cards and on `BlogPostPage`
+  (moderator-authored; whether they are reportable is an open owner call, decision row 30 / tracker
+  F27 — the API still accepts a `BlogPost` report on one, as it always has), and the rec cards on
   `DeepDiveTab`, `ExploreTab` and `CommunitySpotlightDisplay` (every rec stays reportable from its
   story's `RecommendationSection`).
 

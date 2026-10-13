@@ -251,7 +251,7 @@ decision work that has no row at all.
     - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
     - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
-- [ ] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.*
+- [x] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.* Every allow-set type now has an entry point: `BlogPostCard` (profile Blog tab, group page — `BlogPostListingDto.AuthorId` hides it on the viewer's own post), `BlogPostPage`'s "Report post" (not on a site announcement — decision row 30 / F27), `RecommendationCard` via `RecommendationSection`'s own dialog, and `MessageItem` via `MessageThread` to `MessagesPage`. Signed-in viewers only; hidden on own content. **Behavior change:** a `Message` report now requires the reporter to be a participant of the conversation (kind (g)). Rule: `layer2-services.md` §"Moderation Services" → "Report entry points". Narrative: `audit/Moderation.md` F46. RazorComponents + Integration tested; browser pass owed (H38).
   - Grid: F46 L1–L3.5=5 — invisible there, same shape as the User half this item's sibling closed.
   - Source: `ServerModerationWriteService.AllowedReportTargets` (all six types); repo-wide the only
     `ReportDialog.OpenAsync` call sites pass `Story` (5) or `Comment` (2).
@@ -416,7 +416,7 @@ decision work that has no row at all.
   - Next: once a call is made on what "collapsed" should mean for a thread, wire the setting's
     initial state and build the toggle affordance in the same pass.
 
-- [ ] **B16 — `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for every sorted-mode Apply** `[inert · low · anytime]` — *Found building WU-DiscoveryOverrideUI's random-batch-size fix, 2026-07-31.*
+- [x] **B16 — `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for every sorted-mode Apply — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · low · anytime]` The panel echoes `InitialFilter.PageSize`, copied ahead of its interaction guard; `SearchPage`, `BookshelvesPage` and `ProfilePage`'s story tabs seed it from the signed-in viewer's `DefaultPaginationSize` before the first load (anonymous viewers keep 20); `TreeSearchPage` needed nothing. The entry's "seed pattern" option, with no new parameter (`StoryFilterDto` already carries `PageSize`). Rule: `layer3.5-structure.md` §"Seed state vs. live fetch in filter components". Narrative: `audit/Discovery.md` F31. RazorComponents tested; browser pass owed (H38). — *Found building WU-DiscoveryOverrideUI's random-batch-size fix, 2026-07-31.*
   - Grid: F31/F14/F17/F21 (the panel's consumers — `/discover`, Bookshelves, Profile story tabs)
     cells unaffected — invisible there, same shape as B0/B14/B15.
   - Source: `SharedUI/Discovery/ResultsFilterPanel.razor` `ApplyAsync` (`PageSize = 20` literal);
@@ -766,7 +766,7 @@ unless noted. All sit under Stage-5 cells.
     question, so it is recorded rather than fixed. A status move deliberately does not touch
     `LastUpdatedDate` (`layer2-services.md` §"Story Lifecycle"); this item is about chapters only.
 
-- [ ] **D8 — Blog-post notifications keep showing a post's title after its author goes Private** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness, which re-scoped it without building it (2026-10-12); its review fixes routed it to WU-TrackerFixes (2026-10-13; see the last bullets).*
+- [x] **D8 — Blog-post notifications keep showing a post's title after its author goes Private — DONE (WU-TrackerFixes, 2026-10-13)** `[latent-risk · low · beta]` — *Filed 2026-09-30 by the WU-AccessGateSweep2 review fixes; routed to WU-NotificationCorrectness, which re-scoped it without building it (2026-10-12); its review fixes routed it to WU-TrackerFixes (2026-10-13; see the last bullets).*
   - Grid: F41/F42 L2=5 (unchanged).
   - Source: `NotificationEnricher.BatchLoadEntitiesAsync`, `BlogPostDirect` branch (used by
     `NewBlogPostByFollowedUser`/`OnFollowedStory`/`OnFavoritedStory`/`OnReadItLaterStory`,
@@ -805,6 +805,13 @@ unless noted. All sit under Stage-5 cells.
   - **Owner: WU-TrackerFixes** (the campaign's tracker sweep, which works from this file's open items),
     routed by the WU-NotificationCorrectness review fixes on 2026-10-13. Recommended shape: the type
     split above. It keeps the enricher recipient-agnostic, which the email flusher needs.
+  - **Built 2026-10-13 (WU-TrackerFixes), the type split:** `NewCommentOnBlog` (33) resolves through a
+    new `OwnBlogPost` kind as stored; `BlogPostDirect` (13–16, 100) drops an unpublished post of any
+    subtype and a profile post whose author is `Private`. `PollUpdated`'s arm names the post again.
+    Integration `CommentAndBlogNotificationTests` (the author's 33 keeps its title, a follower's 13 loses
+    it, under both triggers; a UsersOnly control; a group post's 100 by publish state). Rule:
+    `layer2-services.md` §"Polymorphic RelatedEntityId" → "Three blog-post kinds". Browser pass for the
+    100 copy owed (H38).
 
 - [ ] **D9 — Moderator free-text reasons travel in the query string** `[latent-risk · low · launch]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass; not decided there.*
   - Grid: F47/F48 L5=5 (unchanged).
@@ -1082,7 +1089,7 @@ unless noted. All sit under Stage-5 cells.
   - Source: `error-handling.md` §"The API error envelope" (was §"Deferred (Phase-5-adjacent)");
     `roadmap.md` §"Recommended next work units" (row struck).
   - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half was unbuilt.
-  - **Resolution: built in full — envelope, endpoint audit, client translation, and a session-expiry UI affordance.** `AddProblemDetails()` + a `/api`-scoped `ApiExceptionHandler` (traceId-carrying 500s); `EndpointHelpers.ExecuteWriteAsync` renamed `ExecuteAsync` and applied to every typed-exception-throwing read endpoint (found and fixed a live gap: `StoryEndpoints`' filter/random-batch/filter-candidates reads were still 500ing on malformed ship input); new `SessionExpiredException`/`ServerFaultException` Core types; `ClientHttpHelpers` gained `ThrowIfReadFailedAsync`, ten private write translators unified, ten gated read services translated; new `ErrorAlert.razor` adopted across 19 SharedUI components (8 SOLO editor pages named as a follow-up, not silently dropped). Also closed **D5** in the same pass. Detail: `workplan.md` WU-ErrorHandling2.
+  - **Resolution: built in full — envelope, endpoint audit, client translation, and a session-expiry UI affordance.** `AddProblemDetails()` + a `/api`-scoped `ApiExceptionHandler` (traceId-carrying 500s); `EndpointHelpers.ExecuteWriteAsync` renamed `ExecuteAsync` and applied to every typed-exception-throwing read endpoint (found and fixed a live gap: `StoryEndpoints`' filter/random-batch/filter-candidates reads were still 500ing on malformed ship input); new `SessionExpiredException`/`ServerFaultException` Core types; `ClientHttpHelpers` gained `ThrowIfReadFailedAsync`, ten private write translators unified, ten gated read services translated; new `ErrorAlert.razor` adopted across 19 SharedUI components (8 SOLO editor pages named as a follow-up, not silently dropped — built 2026-10-13 by WU-TrackerFixes, with the stale-flag sweep). Also closed **D5** in the same pass. Detail: `workplan.md` WU-ErrorHandling2.
 
 - [x] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — CLOSED (2026-10-12, WU-DependencyCVEs)** `[off-grid · high · launch]`
   - Grid: security is a global condition, no cell; F66 reads 5.
@@ -1376,6 +1383,11 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     readers often skip and keyboard users cannot reach; and the edit form's "Contains spoilers for
     future chapters" checkbox should be reachable and announced in order after the editor. Both render
     and work with a mouse on both phases.
+  - **Not taken by WU-TrackerFixes (2026-10-13), recorded:** the campaign offered this item's static ARIA
+    slice as optional. `aria-modal="true"` ahead of the focus trap is exactly what `audit/Accessibility.md`
+    and `layer3.5-structure.md` settle against (it tells assistive tech the background is inert when it
+    is not), and the `CanalaveTypeahead` combobox roles are only verifiable by the screen-reader and
+    keyboard run this item already owns. Both stay here.
 
 - [ ] **F7 — Operational-resilience gaps (no WU, no row, no decision)** `[off-grid · med · launch]`
   - Source: `middle-addendum.md` §3 items 8–14.
@@ -1724,6 +1736,18 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
   - As built: edits allowed (the status quo). A freeze is one `IsTakenDown` guard per edit method plus
     a refusal message; remediation needs a re-review path first.
 
+- [ ] **F27 — Are site announcements reportable?** `[decision · low · beta]` — *Filed 2026-10-13 by WU-TrackerFixes (its spec's B17 scope boundary). Promoted the same day to `roadmap.md` decision row 30.*
+  - Grid: no cell moves on its account (F35/F36 L2, F46 L2 stay 5).
+  - Source: B17's wiring gave every other `BlogPost` surface a Report control. Site announcements
+    (`SiteBlogPost`) are moderator-authored, so a report on one asks moderators to review their own
+    staff content.
+  - As built (default): no Report control on `NewsPage`'s cards or on `BlogPostPage` for a site
+    announcement. The server is unchanged: `SubmitReportAsync` still accepts a `BlogPost` report on a
+    visible site announcement, as it always has.
+  - If the owner says yes: wire `NewsPage`'s cards like `BlogPostCard` elsewhere and drop the
+    `BlogPostKind.Site` exclusion on `BlogPostPage`. If no: refuse a site-announcement target in
+    `RequireReportableTargetAsync` too, so the API matches the UI.
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1791,7 +1815,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md:1022`.
     - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).
 
-- [ ] **H7 — Open test-hygiene backlog** `[test-gap · low · anytime]`
+- [x] **H7 — Open test-hygiene backlog — DONE (WU-TrackerFixes, 2026-10-13)** `[test-gap · low · anytime]` The C-consolidate merges are done (24 tests folded, every assertion kept; the spec's 25th no longer existed), the last `Task.Delay` ordering hack is gone (`SiteAnnouncementServiceTests`), and `SeedUserStatAsync` is one `IntegrationTestBase` helper (nine private copies removed or wrapped). `testing.md` states both rules. Commit `c4f3ef8`.
   - Source: `test-hygiene-manifest.md` (retired 2026-07-27 — this item is now the ledger of record; the manifest's §5 table lists the individual merge targets).
   - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5). The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists, so the manifest's two mobile merge rows are void. Suite is green, so nothing signals the pending cleanup.
   - **Corrected 2026-10-13 (WU-TrackerFixes):** the three non-bUnit phases this item listed as open were already executed by commit `3adfba0` (2026-07-18, "Test cleanup"): the `NotificationServiceTests` `Task.Delay` → `SetNotificationDateCreatedAsync` flake fix, the Integration format-dupes (`GroupServiceTests`, `ImageStorageServiceTests`, `S3ImageStorageServiceTests`, `SavedTagSelectionServiceTests`, `RecommendationWriteServiceTests`) and the Unit tautology trim (`ModerationValidationsTests`, `EmailBodiesTests`, `EmailOptionsTests`, `SocialDescriptionHelperTests`). The manifest header was written mid-commit. The `CanalaveTypeaheadTests` "known flake" note was stale too: it was root-caused and fixed 2026-07-18 (`workplan-archive.md` §"WU-IntTestPerf follow-ups"). WU-TrackerFixes takes the open remainder (the 25 merges), the last `Task.Delay` ordering hack (`SiteAnnouncementServiceTests`) and the `SeedUserStatAsync` hoist WU-CounterSymmetry pointed at.
@@ -2524,6 +2548,38 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        delimiter: the drafts keep their titles and text (they came back blank before).
     8. **Legacy encoding.** Import a `.txt` saved as Windows-1252 with curly quotes: they read correctly
        and the review panel shows the "wasn't saved as UTF-8" warning.
+
+- [ ] **H38 — WU-TrackerFixes browser pass: page size, the new Report controls, the blog-post notification titles, the inline refusals** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-TrackerFixes, which ran with no browser available.*
+  - Grid: **F4, F6, F17, F21, F28, F31, F35, F36, F37, F40, F42, F46, F47, F48 and F49 L4.5 went 5→1**
+    (`status.md`). Closing this returns them to 5. Every behavior below is covered by the RazorComponents
+    or Integration tier; what is owed is the rendering and the interaction on both render phases.
+  - Steps, each on the circuit and on WASM, `psql` after every write:
+    1. **Page size (B16).** Set Reader settings' default page size to 50. `/discover` with Date published
+       sort, a bookshelf tab and a profile's Favorites tab each show 50 cards and a pager sized to 50;
+       Apply keeps 50. Signed out, each shows 20.
+    2. **Blog post Report (B17).** As a signed-in non-author: Report on a profile Blog-tab card, on a
+       group page's blog card and "Report post" on `/blog/{id}`; each opens the dialog and files a row
+       (`reports.reported_entity_type = 3`). None appears on your own posts, signed out, or on a site
+       announcement.
+    3. **Recommendation Report.** On a story page, Report on another member's recommendation opens the
+       section's dialog and files a row; none on your own.
+    4. **Message Report.** In `/messages/{id}`, Report beside the other party's message files a row; none
+       beside your own. A hand-built `POST /api/moderation/reports` for a message in someone else's
+       conversation answers 404.
+    5. **Notification titles (D8).** A follower's "posted a blog entry" notification loses its title and
+       link after the author goes Private (bell and inbox); the author's own
+       "commented on your blog post" keeps both. Edit a poll on a profile post: the voters' "A poll you
+       voted on in {post} was changed" names the post.
+    6. **Inline refusals (the ErrorAlert adoption).** With the session expired on WASM (delete the auth
+       cookie): a story save, a chapter save, a blog-post save, a poll save (`/polls` and a post's poll
+       panel), a site announcement save, a group blog post, a report submit, and Join group each show
+       the message with a Sign in link in place, no error boundary and no toast. A group's story
+       remove/file refusal shows above the stories, an unfile from the folder tree inside it.
+    7. **Moderator flags.** On `/mod/reports` and `/mod/submissions`, an expired-session refusal followed
+       by an empty-reason confirm shows "…reason is required." with no Sign in link; the same in the
+       account-action panel.
+    8. **Links.** `/mod/reports`' User-target link and `/mod/users/{id}`'s View profile open
+       `/user/{id}` (they 404'd before).
 
 ---
 

@@ -265,7 +265,8 @@ Generation" → "Filtering semantics" and §"Email fan-out".
 - **Left open:** tracker **D8** (blog-post titles after the author goes Private) was routed here by
   the WU-AccessGateSweep2 review fixes. It is not built: its one-line fix would blank the post
   author's own type-33 notifications, and an unpublished post is the same leak. Re-scoped in the
-  tracker; the review fixes routed it to WU-TrackerFixes.
+  tracker; the review fixes routed it to WU-TrackerFixes, which built it 2026-10-13 (F42's Stage
+  note).
 
 ## WU-NotificationCorrectness review fixes Stage note (2026-10-13) — F42/F43/F49 L4.5 5→1; F41/F42/F43 L2 stay 5
 
@@ -291,7 +292,8 @@ name.
 - **F42 L3 — presenter.** 90 is actor-free. Decision row 19 is unruled, and the arm had answered it
   "yes" in the bell, the inbox and the default-on email. 100 is title-free: its post title resolves
   through `BlogPostDirect`, which does not drop a post its author has since made Private or
-  unpublished (tracker D8, now routed to WU-TrackerFixes).
+  unpublished (tracker D8, now routed to WU-TrackerFixes — built there 2026-10-13, and the title is
+  back; F42's WU-TrackerFixes Stage note).
 - **Docs.**
   - The two code stamps that carried the template's 2026-09-30 now read 2026-10-12.
   - `audit/Spotlight.md` F55: 21 tests.
@@ -795,6 +797,21 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
 
 ## Feature 42 — Notification Display
 
+**WU-TrackerFixes Stage note (2026-10-13) — tracker D8 closed; F42 L2 stays 5, L4.5 5→1.**
+`NotificationEnricher` split its post-linked blog kind by recipient (the tracker's recommended type
+split; Settled note "blog-post targets by recipient" in the Shared Context above):
+- `NewCommentOnBlog` (33) resolves through a new `OwnBlogPost` kind, as stored: its recipient is the
+  post's author.
+- `BlogPostDirect` (13–16, 100) drops an unpublished post of any subtype, and a profile post whose
+  author's `ProfileVisibility` is `Private`, in the same single query (a TPT-root `is`/cast predicate).
+  A dropped post is a miss: no title, no link.
+- `PollUpdated`'s presenter arm names the post again ("A poll you voted on in {post} was changed").
+Tests: **Integration** `CommentAndBlogNotificationTests` +5 (under both triggers a follower's 13 loses
+title and link while the author's 33 keeps them; a UsersOnly control keeps the title; a group post's 100
+by publish state). Mutation-checked: 33 back on `BlogPostDirect`, and the profile filter removed, each
+fail. **Unit** `NotificationPresenterTests` (the 100 arm with and without a title). **L4.5 5→1:** the
+100 copy changed undriven; tracker **H38** step 5.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
 `RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
@@ -807,7 +824,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41).** **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top).** **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: `PollUpdated` names its post again, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

@@ -563,6 +563,21 @@ WU's code.**
 
 ## Feature 40 — Group Display
 
+**WU-TrackerFixes Stage note (2026-10-13) — tracker B17's group half and the inline refusals (the
+WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
+- **Blog-section Report (B17).** `BlogPostCard` gets `IsOwner` from the listing's new `AuthorId` and
+  `OnReport` for signed-in viewers. The page's single `ReportDialog` moved from inside the stories
+  `<section>` to page level so the blog section reaches it.
+- **Refusals inline, never toasts.** The page's eight catch sites showed `Toasts.Show(...)`, which
+  `error-handling.md` reserves for non-blocking system events. Join/leave refusals now show in an
+  `ErrorAlert` under the membership controls, story add/remove/file refusals above the stories, and the
+  folder tree's unassign refusal inside the tree; each carries Sign in for an expired session. A
+  non-user-facing failure now logs at Error with the group id (it was silent). `IToastService` is no
+  longer injected.
+- Tests: **RazorComponents** `GroupPageTests` +4 (Report on another member's post and not the viewer's
+  own; none for anonymous viewers; an inline join refusal with Sign in; an inline remove refusal that a
+  fresh attempt clears). **L4.5 5→1:** no browser was available; tracker **H38** steps 2 and 6.
+
 - **Settled — group content FKs are RESTRICT (owner ruling D10, 2026-08-06; built WU-TptHardDelete
   2026-09-30).** `group_comments.group_id` and `group_blog_posts.group_id` refuse a group delete while
   the group has comments or posts: deleting the group could never reach their `base_comments` /
@@ -681,7 +696,7 @@ WU's code.**
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- **L4.5 — Stage 5 (5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the blog section's Report and the inline refusals, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
   panel, its stale-tab refusal and the sole admin's leave warning were driven on both render phases
   (browser verification Stage note above; tracker **H29** closed). It was 5 from the 2026-07-01/02 pass
   (the "L4.5-Browser verification" section below) through the later browser-verified WUs.

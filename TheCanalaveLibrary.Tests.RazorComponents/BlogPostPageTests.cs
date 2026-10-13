@@ -340,6 +340,15 @@ public class BlogPostPageTests : BunitContext
         ReportPostButton(RenderPage(MakePost())).Should().BeNull("nobody reports their own post");
     }
 
+    [Theory]
+    [InlineData(BlogPostKind.Group, true)]
+    [InlineData(BlogPostKind.Site, false)] // staff announcements: an open owner call (tracker F27)
+    public void ReportPost_ByPostKind(BlogPostKind kind, bool offered)
+    {
+        AuthenticateAs(ViewerId);
+        (ReportPostButton(RenderPage(MakePost(kind: kind))) is not null).Should().Be(offered);
+    }
+
     [Fact]
     public void ReportPost_IsHidden_ForAnonymousViewers()
     {
