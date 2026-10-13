@@ -371,7 +371,15 @@ unchanged).
     not the stored type (a forged type passed `CanSave`'s required Setting/Genre rule and the
     Primary-Genre cap); a Character tag in `StoryTags`; a non-Character tag as a `CharacterTagId` (both
     stored silently before). After the block the DTO's types are the database's, so `CanSave`'s type
-    rules and the mapper's ContentWarning coercion are sound.
+    rules and the mapper's ContentWarning coercion are sound. **Review fixes (same day):** the load was
+    `ToDictionaryAsync` straight off `writeDb.Tags`, whose selectors run in memory, so it tracked whole
+    `Tag` rows on the circuit-scoped write context; after an admin re-typed a tag, the same circuit's
+    next save was judged on the cached type (the fresh declaration refused, the stale one accepted)
+    until the circuit ended. It now projects `{ TagId, TagTypeId }` first, untracked and fresh. Rule:
+    `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" → "A gate that only reads another entity's values
+    projects them". Tier: Integration
+    `StoryTaggingTests.OnOneCircuit_AfterAnAdminReTypesATag_TheNextSaveIsJudgedOnTheStoredType` (one
+    scope as the circuit, the re-type from a second scope), failing with the projection removed.
   - **Pairings: §4 #5 resolved by enforcing.** Both WU37 rules were already enforced (since
     2026-07-26); the audit read `StoryMappers` in isolation. The residual was a member listed twice
     (`[0, 0, 1]` passed the ≥2-distinct rule, then the mapper added two members with one primary key — a
@@ -388,11 +396,16 @@ unchanged).
     `StoryTaggingTests` +6 (forged type, missing tag id, missing character id, Character tag as a flat
     tag, Genre tag as a character, a doubled pairing member; before the fix the missing id and the
     doubled member threw `DbUpdateException`, the rest were accepted) and `FanonPipelineTests` +1 (a
-    taken-down story's author is neither invited nor marked told). Mutation-checked: dropping the
-    stored-type check, the doubled-member check or the `!IsTakenDown` each fails its test.
+    taken-down story's author is neither invited nor marked told, on the Character axis).
+    Mutation-checked: dropping the stored-type check, the doubled-member check or the Character
+    branch's `!IsTakenDown` each fails its test. The flat-tag branch (`StoryTags`, every non-Character
+    axis) has its own `!IsTakenDown` and had no test; the review fixes (same day) added its twin,
+    `LinkGroupAsync_OnAFlatTagAxis_AnAuthorWhoseOnlyMatchingStoryIsTakenDown_IsNotInvited` (a Setting
+    base tag with custom names on two stories, one taken down), which fails with that clause removed.
+    With the projection test above, `StoryTaggingTests` is +7 and `FanonPipelineTests` +2.
 - **L2 — Stage 5 (tag existence, stored type and the doubled pairing member enforced, and fanon invites
-  skip taken-down stories, WU-ParityAndRemaining 2026-10-13 — Integration-tested, stage unchanged, the
-  note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
+  skip taken-down stories on both axes, WU-ParityAndRemaining 2026-10-13; the type read untracked since
+  its review fixes — Integration-tested, stage unchanged, the note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
   sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 5 (WU-L6, 2026-07-07 — resolved
   as already-covered, no DDL: the tag-filter probes are correlated EXISTS on `(story_id, tag_id)`
   = the `story_tags` PK, and no probe reads `priority`; the proposed reverse composite

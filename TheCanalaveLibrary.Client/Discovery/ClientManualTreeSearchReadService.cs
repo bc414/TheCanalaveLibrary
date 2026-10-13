@@ -18,7 +18,8 @@ namespace TheCanalaveLibrary.Client;
 /// <c>EnsureSuccessStatusCode</c> turned it into an <see cref="HttpRequestException"/> and the message
 /// was lost on WASM (service audit §2.7.7). The story pivot and the node-display read stay
 /// <c>EnsureSuccessStatusCode</c>: their endpoints are plain pass-throughs that never answer a typed
-/// 400, so any failure there is a client bug or a fault.</para>
+/// 400, so any failure there is a client bug or a fault (layer5-wasm.md §"Reads with non-scalar
+/// parameters" → "Which translator a read uses").</para>
 ///
 /// <para>The interface's <c>CancellationToken ct = default</c> parameters are kept for contract
 /// conformance but never threaded into the HttpClient calls — layer5-wasm.md §"CancellationToken

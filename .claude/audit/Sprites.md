@@ -81,7 +81,8 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   quoting"). Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
 - **L5 — Stage 5 (resolved 2026-06-27; the client's sprite root comes from the server since
-  WU-ParityAndRemaining, 2026-10-13 — Unit- and Integration-tested, stage unchanged, the note just
+  WU-ParityAndRemaining, 2026-10-13, and the fallback chain's `unknown.png` step follows it since its
+  review fixes — Unit-, RazorComponents- and Integration-tested, stage unchanged, the note just
   below).** The prior Stage-4 divergence (two separate impls with
   different behaviors) is resolved: the two impls collapsed into one `OptimisticSpriteReadService` in
   Core (registered on both Server and Client). No endpoint is needed for the URL construction itself.
@@ -101,6 +102,18 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   wiring has no test tier (no WASM host in the suite); a WASM boot showing the
   `/api/client-config` request and sprites is a step of tracker **H37**. L4.5 stays 5: with the key
   unset the root is unchanged.
+  **Review fixes (same day).** The doctrine was still not true for the whole chain: `TagChip`,
+  `TagSelector` (its typeahead result row) and `CharacterEntry` built `data-unknown` as a hardcoded
+  `/sprites/themes/{slug}/unknown.png` on both phases, so after a cutover the last fallback pointed at
+  the app origin. `ISpriteReadService` gains `GetUnknownSpriteUrl(slug)` (`{baseUrl}/{slug}/unknown.png`
+  in `OptimisticSpriteReadService`) and the three leaves call it; no component spells the root now.
+  Rule: `layer2-services.md` §"Sprite URLs Are Resolved At Render Time", `render-and-layout.md`'s seam
+  paragraph, `layer4-style.md`'s fallback-chain item. Tier: Unit `SpriteReadServiceTests` (+2: default
+  and configured root) and RazorComponents `TagChipTests`/`CharacterEntryTests` (+1 each: under a
+  configured root, `data-unknown` uses it; both fail with the hardcode restored). `TagSelector`'s row
+  renders only after a typeahead search, which its suite does not drive, so it rests on the Unit test
+  and a reading of the one-line call. Output is byte-identical with the key unset, so L4.5 stays 5;
+  H37 step 5 adds the missing-sprite fallback check.
 - **L6/L8 — N/A.** (L7 dissolved 2026-07-06.)
 
 - **L4.5-Browser verification (2026-07-02) — Feature 3 → L4.5=5.** The optimistic-URL design was

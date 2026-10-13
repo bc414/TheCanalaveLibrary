@@ -28,7 +28,8 @@ Feature 53. *(As-built names corrected 2026-07-27; the build note below always h
   editor defects that pass found; the three parse routes' `ImportParse` limiter is pinned by an Integration metadata test since WU-ThrottleCoverage, 2026-10-13, which also filed tracker D16 — an import of more than five chapters commits five and then refuses; Stage note below).** **L4.5 —
   Stage 5** (see note).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
-  service need a client impl).** Endpoints + client impl live (WU-L5Sweep), incl. the three
+  service need a client impl; the re-split's sync read binds camelCase since WU-ParityAndRemaining,
+  2026-10-13 — Unit-tested, stage unchanged, the L2/L5 Stage note below).** Endpoints + client impl live (WU-L5Sweep), incl. the three
   multipart parse endpoints + `Resplit` — which stays a real network hop despite its
   synchronous/pure look (server-only `IHtmlSanitizationService` dependency; see WU-L5Sweep's Import
   notes). Not browser-driven in the flip's wave. Full wave narrative: `workplan.md` WU-GlobalFlip.

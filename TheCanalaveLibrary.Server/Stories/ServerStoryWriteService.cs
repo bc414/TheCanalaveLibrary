@@ -458,6 +458,11 @@ public class ServerStoryWriteService(
         List<string> errors = [];
 
         // ── Tag existence and type (trust only Tag rows) ─────────────────────────────────
+        // Projected BEFORE materializing: ToDictionaryAsync's selectors run in memory, so without the
+        // Select it would load and track whole Tag entities on this circuit-scoped context, and a later
+        // save on the same circuit would compare against that cached TagTypeId after an admin re-typed
+        // the tag (identity resolution never overwrites a tracked entity). A scalar projection is
+        // untracked and always fresh (WU-ParityAndRemaining review fixes, 2026-10-13).
         List<int> referencedIds = dto.StoryTags.Select(st => st.TagId)
             .Concat(dto.StoryCharacters.Select(sc => sc.CharacterTagId))
             .Distinct().ToList();
@@ -465,6 +470,7 @@ public class ServerStoryWriteService(
             ? []
             : await writeDb.Tags
                 .Where(t => referencedIds.Contains(t.TagId))
+                .Select(t => new { t.TagId, t.TagTypeId })
                 .ToDictionaryAsync(t => t.TagId, t => t.TagTypeId);
 
         List<int> missing = referencedIds.Where(id => !storedTypes.ContainsKey(id)).Order().ToList();

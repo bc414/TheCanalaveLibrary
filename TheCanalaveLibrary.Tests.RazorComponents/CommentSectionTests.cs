@@ -290,6 +290,28 @@ public class CommentSectionTests : BunitContext
         _fakeService.EditCalls.Should().ContainSingle().Which.IsSpoiler.Should().BeTrue();
     }
 
+    /// <summary>
+    /// The toggle is seeded from the comment (WU-ParityAndRemaining review fixes, 2026-10-13). A chapter
+    /// root always sends its toggle's value, so without the seed a text-only edit of a spoiler root sent
+    /// <c>IsSpoiler = false</c> and silently un-spoilered it; the non-spoiler test above cannot tell
+    /// seeded from defaulted.
+    /// </summary>
+    [Fact]
+    public async Task CommentSection_EditingASpoilerChapterRoot_WithoutTouchingTheToggle_KeepsItASpoiler()
+    {
+        _fakeService.SetGetResult(new CommentPageDto([MakeComment(22L, authorId: 42, isSpoiler: true)], 1));
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
+            .Add(c => c.ChapterId, 1)
+            .Add(c => c.CurrentUserId, 42));
+
+        await cut.Find("button[aria-label='Edit comment']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.FindAll("input[type=checkbox]")[0].HasAttribute("checked")
+            .Should().BeTrue("the edit's toggle is seeded from the comment's flag");
+        await cut.Find("button[aria-label='Save']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        _fakeService.EditCalls.Should().ContainSingle().Which.IsSpoiler.Should().BeTrue();
+    }
+
     [Fact]
     public async Task CommentSection_EditingABlogComment_SendsNoSpoilerFlag_AndOffersNoToggle()
     {

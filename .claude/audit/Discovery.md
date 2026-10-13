@@ -572,7 +572,10 @@ each "off".
   `EnsureSuccessStatusCode`, the `ClientTreeSearchReadService` shape; the story pivot and node displays
   stay `EnsureSuccessStatusCode` because their endpoints never answer a typed 400; the class doc that
   denied any translation is corrected; Unit `WasmParityClientTests`, mutation-checked, stage
-  unchanged)** — endpoints + client impl live (WU-L5Sweep) and the
+  unchanged. Its review fixes the same day corrected the convention the old class doc had cited:
+  `layer5-wasm.md` §"Reads with non-scalar parameters" now says the translator follows the endpoint,
+  so a read that can throw a feature validation exception reuses `ThrowIfWriteFailedAsync`; docs only)**
+  — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
   WU-GlobalFlip. **L6 — Stage 2** (no

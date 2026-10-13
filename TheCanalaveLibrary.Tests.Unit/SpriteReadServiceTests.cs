@@ -77,6 +77,24 @@ public class SpriteReadServiceTests
 
         result.Should().Be("https://cdn.example.com/sprites/themes/pokemon/static/snorlax.png");
     }
+
+    // ── the unknown.png placeholder follows the same root (WU-ParityAndRemaining review fixes) ──
+
+    [Fact]
+    public void GetUnknownSpriteUrl_DefaultBase_IsTheThemesPlaceholder()
+    {
+        var sut = BuildSut();
+
+        sut.GetUnknownSpriteUrl("pokemon").Should().Be("/sprites/themes/pokemon/unknown.png");
+    }
+
+    [Fact]
+    public void GetUnknownSpriteUrl_CustomBaseUrl_MovesWithTheCutover()
+    {
+        var sut = BuildSut("https://cdn.example.com/sprites/themes");
+
+        sut.GetUnknownSpriteUrl("dark").Should().Be("https://cdn.example.com/sprites/themes/dark/unknown.png");
+    }
 }
 
 /// <summary>

@@ -26,8 +26,9 @@ references it, does not restate it.
   atomic group and chapter creates, tag-type trust, the EPUB/DOCX decompression bound, legacy-encoding
   imports, fanon/rec filter fixes, no fabricated messaging participant. It flipped **F24, F26 and F49
   L4.5 5→1** (no browser; tracker **H37**, which also carries H12's re-check). Filed: row 29 / **F26**
-  (edits under a takedown), H37; D11 annotated. `dotnet test`: Unit 1,342, RazorComponents 869,
-  Integration 1,649. **Pointer:** its DONE entry.
+  (edits under a takedown), H37; D11 annotated. Its review fixes: the tag gate's type read untracked,
+  the `unknown.png` fallback on the sprite root, `layer5-wasm.md`'s read-translator rule, three missing
+  tests. `dotnet test`: Unit 1,344, RazorComponents 872, Integration 1,652. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
@@ -535,10 +536,37 @@ is pending except where a bullet says so.
   `ApiErrorEnvelopeTests` +5; `UserDeletionServiceTests` updated), all green. Mutation-checked in one
   batch of 16 mutants, every one failing its test: the `errors` extension, the re-split options, the
   reader gate, the pivot translation, the depth check, the no-op stamp, the group backstop, the chapter
-  transaction, both fanon `!IsTakenDown`, the stored-type check, the doubled member, the rec lift, the
-  EPUB guard, a reader's warning, the fabricated participant. Migration applied, rolled back and
+  transaction, the fanon `!IsTakenDown` (corrected by the review fixes: only the Character branch's
+  clause had a test, the flat-tag one gained its own there), the stored-type check, the doubled
+  member, the rec lift, the EPUB guard, a reader's warning, the fabricated participant. Migration applied, rolled back and
   re-applied on the server-only dev DB. Gates: doc-hygiene, design-tokens, render-modes, a11y pass.
   **No browser was available**: tracker **H37** (eight steps, H12's re-check first).
+- **Review fixes (2026-10-13).** Three reviews raised 12 findings, 11 distinct after merging duplicates;
+  all were real and none needed an owner ruling.
+  1. **The tag gate cached tag types on the circuit.** Its `ToDictionaryAsync` ran its selectors in
+     memory, so it tracked whole `Tag` rows on the circuit-scoped write context; after an admin re-typed
+     a tag, the same circuit judged the next save on the old type. It projects `{ TagId, TagTypeId }`
+     first. Rule added to `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" ("A gate
+     that only reads another entity's values projects them").
+  2. **The sprite cutover still missed `unknown.png`.** Three leaves hardcoded it on both phases.
+     `ISpriteReadService.GetUnknownSpriteUrl` now builds it from the configured root; the seam
+     paragraphs in `layer2-services.md`, `render-and-layout.md` and `layer4-style.md` say so; H37 step 5
+     gains the fallback check.
+  3. **`layer5-wasm.md` contradicted P5** (and the story listing reads since WU-ErrorHandling2): it said
+     non-scalar reads skip `ThrowIfWriteFailedAsync`. §"Reads with non-scalar parameters" now says the
+     translator follows the endpoint; the Error-Translation Contract states the exception.
+  4. **Tests the WU lacked:** the fanon flat-tag `!IsTakenDown`, the edit-toggle seed on a spoiler root,
+     the group rename's race backstop.
+  5. **Doc drift:** stale present-tense sentences in Groups F38 and Comments F26; "Rows 7–10" named the
+     wrong rows; Import F63's L5 headline; D11's grid line gains F6.
+
+  Each new test fails with its fix reverted (six mutants in one batch). **Unit 1,344** (+2:
+  `SpriteReadServiceTests`), **RazorComponents 872** (+3: `CommentSectionTests`, `TagChipTests`,
+  `CharacterEntryTests`), **Integration 1,652** (+3: `StoryTaggingTests`, `FanonPipelineTests`,
+  `GroupCreateIntegrityTests`), all green; build 0 errors, no new warnings in touched files; the four
+  gates pass. No stage moved. Stage notes: `audit/Tags.md` F12, `audit/Sprites.md` F3,
+  `audit/Comments.md` F26, `audit/Groups.md` F38, `audit/Discovery.md` F33; headlines in
+  `audit/Stories.md` F4 and `audit/Import.md` F63.
 - **Pointers:** the audit Stage notes above; `layer5-wasm.md` §"The Error-Translation Contract" and
   §"Server configuration the client needs"; tracker H37, F26, D11; roadmap row 29.
 

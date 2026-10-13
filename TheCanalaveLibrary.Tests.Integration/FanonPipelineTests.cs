@@ -236,6 +236,61 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
         }
     }
 
+    /// <summary>
+    /// The flat-tag twin of the test above (WU-ParityAndRemaining review fixes, 2026-10-13): the sweep
+    /// has a second author query, over <c>StoryTags</c>, for every non-Character axis, and its own
+    /// <c>!IsTakenDown</c> had no test. A Setting base tag with custom names on two stories, one taken down.
+    /// </summary>
+    [Fact]
+    public async Task LinkGroupAsync_OnAFlatTagAxis_AnAuthorWhoseOnlyMatchingStoryIsTakenDown_IsNotInvited()
+    {
+        string name = $"Flat{Guid.NewGuid():N}"[..12];
+        int flatBaseId, flatTargetId;
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            string s = Guid.NewGuid().ToString("N")[..8];
+            Tag flatBase = new() { TagName = $"Region-{s}", TagTypeId = TagTypeEnum.Setting, AllowCustomName = true };
+            Tag flatTarget = new() { TagName = $"Orre-{s}", TagTypeId = TagTypeEnum.Setting, IsFanon = true, ParentTag = flatBase };
+            db.Tags.AddRange(flatBase, flatTarget);
+            await db.SaveChangesAsync();
+            flatBaseId = flatBase.TagId;
+            flatTargetId = flatTarget.TagId;
+        }
+
+        int liveStoryId = await SeedStoryAsync(_authorA);
+        int removedStoryId = await SeedStoryAsync(_authorB);
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.StoryTags.AddRange(
+                new StoryTag { StoryId = liveStoryId, TagId = flatBaseId, Priority = TagPriority.Supporting, CustomName = name },
+                new StoryTag { StoryId = removedStoryId, TagId = flatBaseId, Priority = TagPriority.Supporting, CustomName = name });
+            await db.SaveChangesAsync();
+            await db.Stories.Where(st => st.StoryId == removedStoryId)
+                .ExecuteUpdateAsync(u => u.SetProperty(st => st.IsTakenDown, true));
+        }
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using (IServiceScope scope = NewScope())
+        {
+            IFanonWriteService fanon = scope.ServiceProvider.GetRequiredService<IFanonWriteService>();
+            (await fanon.LinkGroupAsync(new FanonLinkCreateDto(name, flatBaseId, flatTargetId)))
+                .Should().Be(1, "only the live story's author is invited");
+        }
+
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Notifications.Where(n => n.NotificationTypeId == NotificationTypeEnum.TagUpdateSuggestion)
+                    .Select(n => n.RecipientUserId).ToListAsync())
+                .Should().Equal([_authorA]);
+            (await db.TagAdoptionStates.Where(st => st.TargetTagId == flatTargetId && st.DateNotified != null)
+                    .Select(st => st.UserId).ToListAsync())
+                .Should().Equal([_authorA], "the removed story's author is not marked as told either");
+        }
+    }
+
     [Fact]
     public async Task LinkGroupAsync_TheLinkingModeratorsOwnUse_GetsNoInvitation()
     {

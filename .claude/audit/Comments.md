@@ -295,7 +295,7 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
 - **L4.5 — Stage 1 (WU-ParityAndRemaining, 2026-10-13).** The edit form of a chapter root now offers
   the spoiler toggle, and no browser was available; tracker **H37** holds the pass.
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23; the edit-time spoiler toggle since
-  WU-ParityAndRemaining, 2026-10-13 — Stage note below):** See Feature 24 Stage-5 note.
+  WU-ParityAndRemaining, 2026-10-13, its seed RazorComponents-tested since the review fixes — Stage note below):** See Feature 24 Stage-5 note.
   Completion-gated reveal built in `CommentItem`: `HandleRevealClick()` → immediate reveal if
   `UserHasCompletedStory`, else sets `_showSpoilerConfirm` (in-item `ConfirmDialog` — no service
   needed); `_isRevealed` is ephemeral (re-hides on page load, §5.9.1). Blur cover uses Tailwind
@@ -322,9 +322,10 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
 - **L2 — Stage 5 (WU19, 2026-06-23; editable through `UpdateCommentDto.IsSpoiler` since
   WU-ParityAndRemaining, 2026-10-13 — Stage note below):** `IsSpoiler` flows through `PostChapterCommentDto.IsSpoiler` →
   `PostChapterCommentAsync` sets `ChapterComment.IsSpoiler` → stored in DB → projected into `CommentDto.IsSpoiler`
-  in the read service → surfaces to WU20's `CommentItem` as a `[Parameter]`. No separate write method —
-  spoiler flag is set at post time only; editing a comment does not change its spoiler state (WU20 may
-  revisit). **Verified:** Integration tier — `PostChapterComment_IsSpoilerTrue_RoundTrips` confirms
+  in the read service → surfaces to WU20's `CommentItem` as a `[Parameter]`. No separate write method:
+  the flag is set at post time and, since WU-ParityAndRemaining (2026-10-13), changed through
+  `EditCommentAsync`'s `UpdateCommentDto.IsSpoiler` (chapter comments only; null = unchanged; the Stage
+  note below). WU19 shipped it post-time only. **Verified (WU19):** Integration tier — `PostChapterComment_IsSpoilerTrue_RoundTrips` confirms
   `IsSpoiler = true` persists and reads back correctly.
 ### WU-ComponentSoundness Stage note (2026-06-27)
 
@@ -413,7 +414,10 @@ touched cell stays 5: these close gaps beneath sound cells.
   `_editSpoiler` (seeded from the comment on Edit) and offers the toggle on chapter-context roots
   only; `HandleEditSaveAsync` sends `IsSpoiler` for those and null for everything else. Tier:
   RazorComponents `CommentSectionTests` (chapter root sends the toggle; a blog edit and a chapter reply
-  send null, the blog edit offers no toggle).
+  send null, the blog edit offers no toggle). The review fixes (same day) added the seed's own test: a
+  spoiler chapter root's toggle opens checked, and a text-only save sends `IsSpoiler = true`. The
+  first toggle test used a non-spoiler comment, so it passed with the seed line deleted, and losing the
+  seed silently un-spoilers a root on every text edit; the new test fails with the seed removed.
 - **Not built (recorded):** `EditCommentAsync`'s other two §2.12 clauses. No edit throttle: D20 makes
   edits exempt, conditional on text caps (`security.md` enumeration). No takedown check: owner-open,
   `roadmap.md` decision row 29 / tracker **F26** (freeze, or let the author remediate, across all four

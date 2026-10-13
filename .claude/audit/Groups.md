@@ -166,7 +166,7 @@ started at `groups_joined` 1, a member of the standard group only.
 - The WASM profile then read "2 groups".
 
 - **L1 — Stage 5.** `Group` + `GroupMember` with role/audience model.
-- **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30; create counts as joining + `JoinAsync` upsert WU-CounterSymmetry, 2026-09-30 — see its Stage note; create is one commit and a taken name is a 400 on create and rename, WU-ParityAndRemaining, 2026-10-13 — Integration-tested, stage unchanged, the note just below).**
+- **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30; create counts as joining + `JoinAsync` upsert WU-CounterSymmetry, 2026-09-30 — see its Stage note; create is one commit and a taken name is a 400 on create and rename, WU-ParityAndRemaining, 2026-10-13 — Integration-tested, both races included since its review fixes, stage unchanged, the note just below).**
   **WU-ParityAndRemaining note (2026-10-13) — no flip (service audit §2.12).** `CreateGroupAsync`
   committed the group and its creator's Admin row in two saves (a failure between them left an
   admin-less group), and a duplicate name reached `ix_groups_group_name` as a raw 500. Now: the creator's
@@ -179,9 +179,13 @@ started at `groups_joined` 1, a member of the standard group only.
   Rule: `layer2-services.md` §"Group Rating Waterfall" → "Group names are unique, byte-wise". Tier:
   Integration `GroupCreateIntegrityTests` (7: duplicate create, case-differing name allowed, rename onto
   another name, keeping its own name, the interleaved race, both rows committed, and `POST /api/groups`
-  answering 400); the race test is mutation-checked against a backstop matching the wrong index. `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
+  answering 400); the race test is mutation-checked against a backstop matching the wrong index. The
+  review fixes (same day) added an eighth, the rename's interleaved race (another group takes the name
+  between `UpdateGroupAsync`'s pre-check and its `UPDATE`: the same refusal, the stored name unchanged,
+  the tracker empty), mutation-checked by disabling that catch. `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
   `ServerGroupReadService` / `ServerGroupWriteService` in `Server/Groups/`; CQRS-lite inheritance.
-  `CreateGroupAsync` stamps creator as Admin in a second `SaveChangesAsync`. `JoinAsync` / `LeaveAsync`
+  `CreateGroupAsync` adds the creator's Admin membership through `group.GroupMembers` and commits it
+  with the group in one `SaveChangesAsync` (WU-ParityAndRemaining; WU32 used a second save). `JoinAsync` / `LeaveAsync`
   idempotent. DI registered in `Program.cs`. Migration `WU32_Groups` applied (data-preserving column
   rename `rating → audience_rating`). Covers: `GroupAudience` named filter, `GroupAudienceTypeMapper`,
   domain exceptions (`GroupValidationException`, `ContentRatingExceededException`).

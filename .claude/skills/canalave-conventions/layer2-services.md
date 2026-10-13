@@ -249,6 +249,13 @@ Mechanics:
   `ChangeTracker.Clear()` (WU-PrivateMessageEmail review fixes, 2026-10-13). Per-request callers (the
   Identity pages, the consent endpoints) load fresh by construction; what remains is the milliseconds
   between their load and their save, Identity's own design, accepted.
+  **A gate that only reads another entity's values projects them; it never tracks the entity.** A
+  validation that decides on columns it will not write (the story save's tag-type check reads
+  `Tag.TagTypeId`) selects scalars or an anonymous type before materializing, so the read is untracked
+  and fresh on every call. Watch `ToDictionaryAsync(key, element)` and `ToListAsync` straight off the
+  entity set: their selectors run in memory after whole entities were loaded and tracked. The story
+  gate did exactly that, so a tag an admin re-typed was judged on the circuit's cached type until the
+  circuit ended (WU-ParityAndRemaining review fixes, 2026-10-13; §"Legality rules").
 - **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
   (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
   `AddDbContextFactory` also registers the context type itself as a scoped service.
@@ -609,9 +616,12 @@ component** via two injected/cascaded values:
    claims off the cascaded `ClaimsPrincipal`; those claims are present in both the prerender and
    interactive passes, so the resolved `<img src>` is byte-identical across the SSR→interactive
    handoff — **no flicker**.
-2. **`@inject ISpriteReadService`** — a render-pure URL builder with a single method
-   `GetSpriteUrl(string slug, string id, bool prefersAnimated)` producing
-   `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. **SharedUI components may inject
+2. **`@inject ISpriteReadService`** — a render-pure URL builder:
+   `GetSpriteUrl(string slug, string id, bool prefersAnimated)` produces
+   `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`, and `GetUnknownSpriteUrl(string slug)` the
+   fallback chain's last step, `{SpriteBaseUrl}/{slug}/unknown.png` (added by WU-ParityAndRemaining's
+   review fixes, 2026-10-13; three leaves had hardcoded `/sprites/themes` for it). Every URL in the
+   chain comes from this service; no component spells the root. **SharedUI components may inject
    `ISpriteReadService`** — it is not `IActiveUserContext`. `ISpriteReadService` is implemented in
    Core (no server/host dependency), registered on both server and client; the
    `IActiveUserContext`-never-in-SharedUI rule is unchanged.
@@ -700,7 +710,9 @@ for wwwroot). At R2/CDN time, changing this one config value — together with a
 assets — is the complete cutover; no code changes. That holds for **both** halves: the server reads the
 key once into its `ClientConfigDto` singleton, and the WASM client receives the same value from
 `GET /api/client-config` at boot (`layer5-wasm.md` §"Server configuration the client needs";
-WU-ParityAndRemaining, 2026-10-13 — before it, `Client/Program.cs` hardcoded the default). Uploads have the analogous seam:
+WU-ParityAndRemaining, 2026-10-13 — before it, `Client/Program.cs` hardcoded the default). It holds
+for the whole fallback chain only because every step's URL comes from `ISpriteReadService` (the
+`unknown.png` step since the WU's review fixes). Uploads have the analogous seam:
 `S3ImageStorageService` has existed since WU-S3Garage (2026-07-05), and `ImageStorage:PublicBaseUrl`
 is wired but unset, because every upload is still served same-origin through the app (static files in
 Local mode, the `/uploads/{**key}` endpoint in S3 mode). The two features converge on one CDN but do
@@ -2118,10 +2130,16 @@ All rules are enforced by `ServerStoryWriteService` via `StoryValidationExceptio
 | Declared type = stored type | `StoryTagDTO.TagTypeEnum` equals the row's `Tag.TagTypeId` (a forged type bypassed `CanSave`'s required Setting/Genre rule and the Primary-Genre cap) | Reject |
 | Character tags only in `StoryCharacters` | A Character-type tag in `StoryTags`, or a non-Character tag as `CharacterTagId` | Reject |
 
-Rows 7–10 were added by WU-ParityAndRemaining (2026-10-13). The first block of
+The last four rows (pairing member listed twice, tag exists, declared type = stored type, Character
+tags only in `StoryCharacters`) were added by WU-ParityAndRemaining (2026-10-13). The first block of
 `ValidateStructuredTagGatesAsync` loads `TagId → TagTypeId` for every referenced id; once it passes, the
 DTO's types are the database's, so `CanSave`'s type rules and the mapper's ContentWarning coercion are
-sound. **Both WU37 pairing rules were already enforced here** (since 2026-07-26); service audit §4 #5
+sound. That load is a **scalar projection** (`Select(t => new { t.TagId, t.TagTypeId })` before
+`ToDictionaryAsync`, whose selectors run in memory): loading whole `Tag` rows would track them on the
+circuit-scoped write context, and after an admin re-typed a tag the same circuit's next save was judged
+against the cached type (fixed by the WU's review fixes, 2026-10-13; the general rule is §"Read-Context
+Concurrency: Factory Per Method" → "A gate that only reads another entity's values projects them").
+**Both WU37 pairing rules were already enforced here** (since 2026-07-26); service audit §4 #5
 read `StoryMappers` in isolation, where the in-range check is **defensive only** — it never decides a
 rule, because the DTO is validated upstream before the mapper runs.
 

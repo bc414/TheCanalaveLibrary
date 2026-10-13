@@ -831,7 +831,8 @@ unless noted. All sit under Stage-5 cells.
     un-verifies it (worksheet D44 is the related pending question). The guard shape is ready
     (WU-ModerationIntegrity's lock-and-guard), but no source cites these methods, so it is not built.
 - [ ] **D11 — Create-create and delete-delete races that still 500 (D23's "crash → harden", not swept)** `[latent-risk · low · beta]` — *Filed 2026-09-30 by WU-CounterSymmetry. Its spec excluded these: D23 chose to promulgate its classification test "rather than a one-time sweep".*
-  - Grid: F16, F18, F19, F25, F28, F36, F38, F51 and F9 L2 stay 5 (unchanged).
+  - Grid: F6, F16, F18, F19, F25, F28, F36, F38, F51 and F9 L2 stay 5 (unchanged; F6 joined with the
+    chapter-number site below).
   - Source: `layer2-services.md` §"Check-then-act posture": a visible 500 is never a posture, so each
     site below is "harden" under the test. WU-CounterSymmetry built the four sites D23 named (USI and
     its date partition, `group_members`, vouches).
@@ -870,8 +871,9 @@ unless noted. All sit under Stage-5 cells.
     WU made the create one transaction (no orphan pointer) but did not change the numbering; at Read
     Committed the transaction does not serialize the read. Fix shape: catch 23505 on that index and
     retry the delegate once, or take the story row `FOR UPDATE` first.
-  - **Handled elsewhere, not in this list:** `CreateGroupAsync`'s duplicate-name race is a 400 since
-    WU-ParityAndRemaining (2026-10-13; the index-named backstop). `VoteAsync`'s create-create races (both `poll_votes`
+  - **Handled elsewhere, not in this list:** `CreateGroupAsync`'s duplicate-name race, and
+    `UpdateGroupAsync`'s rename onto a name taken mid-save, are a 400 since WU-ParityAndRemaining
+    (2026-10-13; the index-named backstop, both interleave-tested since its review fixes). `VoteAsync`'s create-create races (both `poll_votes`
     unique indexes) and its delete-delete race are never a 500 since WU-PollVoteIntegrity (2026-10-13),
     which made single-choice a database constraint (D23's poll row). Each answers a 400, except that
     since its review fixes a race whose rows already stand as asked (the voter's own double submit)
@@ -2462,6 +2464,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        "[deleted user]", with no profile link. Both render phases.
     5. **Client config.** On a WASM load, the network panel shows one `GET /api/client-config` (200,
        `{"spriteBaseUrl":"/sprites/themes"}`) before the first API call, and tag sprites still render.
+       A tag chip whose sprite file is missing still falls back to the theme's `unknown.png` on both
+       phases (the review fixes moved that URL onto `ISpriteReadService`; with the key unset the markup
+       is unchanged).
     6. **Anonymous reader.** Signed out, on WASM, scroll chapter 1 of a story past 90%, and the last
        chapter of a Completed story: no `POST` to the USI start/complete routes and no console error.
     7. **Re-split on WASM.** Import a multi-chapter document ("One file, many chapters"), switch the

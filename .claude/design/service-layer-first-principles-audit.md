@@ -413,7 +413,9 @@ code change:
    get the full write impl (least-privilege void); two write instances per scope. Mechanical
    sweep; pick binding-vs-forwarding as the canonical shape (§3.12).
 3. > **Built:** WU-ParityAndRemaining (2026-10-13) — `GET /api/client-config` + `ClientRuntimeConfig` (`layer5-wasm.md`
-   > §"Server configuration the client needs"). The finding below is history.
+   > §"Server configuration the client needs"). Its review fixes (same day) moved the fallback chain's `unknown.png`
+   > step, hardcoded in three leaves on both phases, onto the same root (`ISpriteReadService.GetUnknownSpriteUrl`).
+   > The finding below is history.
 
    **Sprite base-URL config seam doesn't reach WASM. MEDIUM (latent), CONFIRMED.** Server reads
    `Sprites:BaseUrl`; `Client/Program.cs:30` hardcodes `"/sprites/themes"`. The doctrine's

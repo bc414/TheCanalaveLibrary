@@ -14,7 +14,7 @@
             @if (Chip.SpriteIdentifier is not null && _themeCtx is not null)
             {
                 var staticSrc = Sprites.GetSpriteUrl(_themeCtx.Slug, Chip.SpriteIdentifier, prefersAnimated: false);
-                var unknownSrc = $"/sprites/themes/{_themeCtx.Slug}/unknown.png";
+                var unknownSrc = Sprites.GetUnknownSpriteUrl(_themeCtx.Slug);
                 <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, Chip.SpriteIdentifier, _themeCtx.PrefersAnimated)"
                      data-static="@staticSrc"
                      data-unknown="@unknownSrc"

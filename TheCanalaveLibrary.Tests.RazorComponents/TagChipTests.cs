@@ -87,6 +87,26 @@ public class TagChipTests : BunitContext
         img.GetAttribute("data-unknown").Should().NotBeNullOrEmpty();
     }
 
+    /// <summary>
+    /// The whole fallback chain follows <c>Sprites:BaseUrl</c> (WU-ParityAndRemaining review fixes,
+    /// 2026-10-13): <c>data-unknown</c> was a hardcoded <c>/sprites/themes/…</c>, so after a CDN cutover
+    /// the last fallback still pointed at the app origin.
+    /// </summary>
+    [Fact]
+    public void TagChip_UnderAConfiguredSpriteRoot_EveryFallbackStepUsesIt()
+    {
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("https://cdn.example/sprites"));
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
+
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
+            .Add(c => c.Tag, dto)
+            .AddCascadingValue(DefaultTheme));
+
+        IElement img = cut.Find("img");
+        img.GetAttribute("data-static").Should().Be("https://cdn.example/sprites/pokemon/static/pikachu.png");
+        img.GetAttribute("data-unknown").Should().Be("https://cdn.example/sprites/pokemon/unknown.png");
+    }
+
     [Fact]
     public void TagChip_WhenNoThemeContextCascaded_DoesNotRenderImg()
     {

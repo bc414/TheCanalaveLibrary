@@ -197,16 +197,36 @@ Trigger: any parameter beyond scalar/enum/`int[]`/`IReadOnlyCollection<int>`.
 group.MapPost("/query", async (IStoryReadService stories, StoryFilterDto filter) =>
     Results.Ok(await stories.GetListingsAsync(filter)));
 
-// Client: mirrors with PostAsJsonAsync, same as a write call minus ThrowIfWriteFailedAsync
-// (a malformed filter DTO is a client bug, not a user-facing validation case — reads don't carry
-// the write path's typed-exception contract).
+// Client: mirrors with PostAsJsonAsync. Its error translation follows the ENDPOINT, not the verb
+// (below): this one is wrapped in EndpointHelpers.ExecuteAsync because malformed ship criteria are a
+// StoryValidationException the user must read, so the client rebuilds it with the write translator.
 public async Task<PagedResult<StoryListingDto>> GetListingsAsync(StoryFilterDto filter)
 {
     HttpResponseMessage response = await Http.PostAsJsonAsync("api/stories/query", filter);
-    response.EnsureSuccessStatusCode();
+    await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+        response, errs => new StoryValidationException([.. errs]));
     return (await response.Content.ReadFromJsonAsync<PagedResult<StoryListingDto>>())!;
 }
 ```
+
+**Which translator a read uses** is decided by what its endpoint can answer, not by GET vs POST
+(WU-ParityAndRemaining review fixes, 2026-10-13 — this section used to say every non-scalar read
+mirrors a write "minus `ThrowIfWriteFailedAsync`", which the story listing reads had contradicted
+since WU-ErrorHandling2):
+- **The server impl can throw a feature validation exception** (a typed 400 whose message the user
+  must read), so the endpoint is wrapped in `EndpointHelpers.ExecuteAsync`: the client reuses
+  `ClientHttpHelpers.ThrowIfWriteFailedAsync` with that family's factory, so the exception type and
+  its error list survive the hop. Instances: the story listing reads (`GetListingsAsync`,
+  `GetRandomBatchAsync`, `FilterCandidateIdsAsync`) and tree-search `SearchAsync` (ship-criteria
+  `StoryValidationException`) and the Explore user pivot `GetUserNeighborsAsync` (its optional
+  `StoryFilterDto`, since WU-ParityAndRemaining). The fanon adoption reads and the bookshelf read
+  rebuild their cluster's type through the same helper.
+- **The endpoint is wrapped but throws only BCL guard exceptions** (`TraverseAsync`'s
+  `ArgumentException`): `ThrowIfReadFailedAsync`, whose 400 arm surfaces the detail as an
+  `InvalidOperationException` (§"The Error-Translation Contract").
+- **The endpoint is a plain pass-through that never answers a typed 400** (the Explore story pivot,
+  the node-display read, the co-occurrence pair): `EnsureSuccessStatusCode` — a failure there is a
+  client bug or a fault, not a user-facing validation case.
 
 Sub-route naming: `/query` when the interface has exactly one such read; a short descriptive
 segment (`/neighbors/story`, `/neighbors/user`, `/traverse`) when it has more than one — mirror the
@@ -369,7 +389,12 @@ shared helper) — a private override is reserved for a *documented deviation* f
 disambiguation), not for the standard arms. Read services whose server counterpart can throw get
 the same treatment via `ThrowIfReadFailedAsync` (added at WU-ErrorHandling2 — the read-side twin,
 same table minus the 429/validation-factory arms); genuinely public reads (theme resolution, tag
-directory, external-platform lookup) are left untranslated by design.
+directory, external-platform lookup) are left untranslated by design. **The exception:** a read
+whose server impl can throw a feature validation exception the user must read (the story listing
+reads, tree-search `SearchAsync`, the Explore user pivot) reuses `ThrowIfWriteFailedAsync` with
+that family's factory, since only it rebuilds the type and the error list — §"Reads with
+non-scalar parameters" → "Which translator a read uses" (WU-ParityAndRemaining review fixes,
+2026-10-13).
 
 ## Client Service Implementations
 

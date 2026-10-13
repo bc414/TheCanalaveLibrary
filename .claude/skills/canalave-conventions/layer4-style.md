@@ -275,7 +275,10 @@ broken-image glyph is never an acceptable render. Three sanctioned shapes, picke
 element means:
 
 1. **Fallback chain** when a lesser variant is still meaningful — sprites:
-   `onerror="spriteFallback(this)"` walks animated `.webp` → static `.png` → `unknown.png`.
+   `onerror="spriteFallback(this)"` walks animated `.webp` → static `.png` → `unknown.png`. Every
+   step's URL comes from `ISpriteReadService` (`GetSpriteUrl`, `GetUnknownSpriteUrl`), never a
+   hardcoded root, so the chain follows `Sprites:BaseUrl` (`layer2-services.md` §"Sprite URLs Are
+   Resolved At Render Time").
 2. **Hide** when adjacent text already carries the meaning — badge icons:
    `onerror="this.style.display='none'"` (`UserCard`, `BadgeSettingsForm`).
 3. **Placeholder swap** when the slot must stay visually occupied — avatars (`onerror` → the

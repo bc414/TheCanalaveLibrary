@@ -277,10 +277,13 @@ immediacy, the shape of the fix is an SSR round-trip that reissues the cookie. (
 factory's header since WU12; browser-verified end-to-end in `audit/Sprites.md`, 2026-07-02.)
 
 **`SpriteBaseUrl` config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`).
-The resolver builds: `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. Changing this one
+The resolver builds: `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`, and the fallback
+chain's last step `{SpriteBaseUrl}/{slug}/unknown.png` (`GetUnknownSpriteUrl`). Changing this one
 setting + Rclone syncing assets is the complete R2/CDN cutover — zero code change, on both render
 phases: the WASM client takes the value from `GET /api/client-config` at boot (`layer5-wasm.md`
-§"Server configuration the client needs"; WU-ParityAndRemaining, 2026-10-13). Uploads have the
+§"Server configuration the client needs"; WU-ParityAndRemaining, 2026-10-13). That holds because
+no component spells the root: the `unknown.png` step was a hardcoded `/sprites/themes` in three
+leaves until the WU's review fixes (2026-10-13). Uploads have the
 analogous seam, `ImageStorage:PublicBaseUrl` (wired, unset: `S3ImageStorageService` exists since
 WU-S3Garage, 2026-07-05, and every upload is still served same-origin through the app); sprites
 and uploads converge on one CDN but do **not** share a storage service (sprites have no runtime

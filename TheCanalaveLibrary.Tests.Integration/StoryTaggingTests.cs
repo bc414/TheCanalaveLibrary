@@ -354,6 +354,50 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
             .Which.Errors.Should().Equal(["A pairing can't list the same character twice."]);
     }
 
+    /// <summary>
+    /// The gate reads stored types as a scalar projection (WU-ParityAndRemaining review fixes,
+    /// 2026-10-13). Its first version materialized whole <c>Tag</c> entities, which the circuit-scoped
+    /// write context tracked; after an admin re-typed a tag, the same circuit's next save was judged
+    /// against the cached type — the fresh declaration refused, the stale one accepted. One DI scope
+    /// stands in for one circuit; the re-type runs in a second scope, as an admin's would.
+    /// </summary>
+    [Fact]
+    public async Task OnOneCircuit_AfterAnAdminReTypesATag_TheNextSaveIsJudgedOnTheStoredType()
+    {
+        int movingTagId;
+        using (IServiceScope seed = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seed.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Tag moving = new() { TagName = $"Moving-{Guid.NewGuid():N}"[..20], TagTypeId = TagTypeEnum.Genre };
+            db.Tags.Add(moving);
+            await db.SaveChangesAsync();
+            movingTagId = moving.TagId;
+        }
+
+        SetActiveUser(_authorId);
+        using IServiceScope circuit = Factory.Services.CreateScope();
+        IStoryWriteService writeService = circuit.ServiceProvider.GetRequiredService<IStoryWriteService>();
+        StoryTagDTO Declared(TagTypeEnum type) =>
+            new() { TagId = movingTagId, TagTypeEnum = type, Priority = TagPriority.Supporting };
+
+        await writeService.CreateStoryAsync(BuildCreateDto(extraFlatTags: [Declared(TagTypeEnum.Genre)]));
+
+        using (IServiceScope admin = Factory.Services.CreateScope())
+        {
+            await admin.ServiceProvider.GetRequiredService<ApplicationDbContext>().Tags
+                .Where(t => t.TagId == movingTagId)
+                .ExecuteUpdateAsync(u => u.SetProperty(t => t.TagTypeId, TagTypeEnum.Setting));
+        }
+
+        (await FluentActions.Awaiting(() =>
+                    writeService.CreateStoryAsync(BuildCreateDto(extraFlatTags: [Declared(TagTypeEnum.Genre)])))
+                .Should().ThrowAsync<StoryValidationException>("the editor's type is stale now"))
+            .Which.Errors.Should().ContainSingle(e => e.Contains(movingTagId.ToString()) && e.Contains("stored type"));
+        await FluentActions.Awaiting(() =>
+                writeService.CreateStoryAsync(BuildCreateDto(extraFlatTags: [Declared(TagTypeEnum.Setting)])))
+            .Should().NotThrowAsync("a freshly loaded editor declares the tag's new type");
+    }
+
     private async Task<int> StoryCountAsync()
     {
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -517,6 +561,19 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
         IReadOnlyList<StoryTagDTO>? extraFlatTags = null,
         IReadOnlyList<StoryTagDTO>? flatTagsInsteadOfTheDefaults = null)
     {
+        CreateStoryDTO dto = BuildCreateDto(characters, pairings, extraFlatTags, flatTagsInsteadOfTheDefaults);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+        return await writeService.CreateStoryAsync(dto);
+    }
+
+    private CreateStoryDTO BuildCreateDto(
+        IReadOnlyList<StoryCharacterDto>? characters = null,
+        IReadOnlyList<StoryCharacterPairingDto>? pairings = null,
+        IReadOnlyList<StoryTagDTO>? extraFlatTags = null,
+        IReadOnlyList<StoryTagDTO>? flatTagsInsteadOfTheDefaults = null)
+    {
         List<IStoryTag> flatTags = flatTagsInsteadOfTheDefaults is not null
             ? [.. flatTagsInsteadOfTheDefaults]
             :
@@ -526,7 +583,7 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
                 ..( extraFlatTags ?? [])
             ];
 
-        CreateStoryDTO dto = new()
+        return new CreateStoryDTO
         {
             Title = $"Tagging Test Story {Guid.NewGuid():N}",
             ShortDescription = "Integration test",
@@ -537,10 +594,6 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
             StoryCharacters = (characters ?? []).ToList(),
             StoryCharacterPairings = (pairings ?? []).ToList()
         };
-
-        using IServiceScope scope = Factory.Services.CreateScope();
-        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
-        return await writeService.CreateStoryAsync(dto);
     }
 
     private async Task SeedBaseTagsAsync()

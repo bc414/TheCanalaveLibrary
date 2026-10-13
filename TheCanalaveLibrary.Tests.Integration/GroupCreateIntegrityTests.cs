@@ -14,7 +14,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <list type="bullet">
 /// <item>A taken name is a <see cref="GroupValidationException"/> (400), never the unique index's raw 500
 /// — on create, on a rename onto another group's name, and when a concurrent create lands between the
-/// pre-check and the insert (interleaved with <see cref="InterleavingCommandInterceptor"/>).</item>
+/// pre-check and the insert or a rename's update (interleaved with
+/// <see cref="InterleavingCommandInterceptor"/>; the rename race added by the review fixes).</item>
 /// <item>The group and its creator's Admin membership commit in one save, so a failed create leaves
 /// neither row.</item>
 /// </list>
@@ -101,6 +102,39 @@ public class GroupCreateIntegrityTests(PostgresFixture postgres) : IntegrationTe
         interceptor.Fired.Should().BeTrue();
         (await GroupCountAsync()).Should().Be(1, "only the competing row");
         (await MemberCountAsync()).Should().Be(0, "the creator's membership went down with its group");
+    }
+
+    /// <summary>
+    /// The rename half of the backstop (WU-ParityAndRemaining review fixes, 2026-10-13): another group
+    /// takes the name between <c>UpdateGroupAsync</c>'s pre-check and its <c>UPDATE</c>.
+    /// </summary>
+    [Fact]
+    public async Task ARenameLosingTheRaceForItsNewName_IsTheSameRefusal_AndChangesNothing()
+    {
+        int groupId = await CreateAsync("Galar Fans");
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "UPDATE groups",
+            interleavedSql:
+                "INSERT INTO groups (group_name, creator_id, date_created, audience_rating, max_content_rating) " +
+                $"VALUES ('Paldea Fans', {_userId}, now(), 0, 2);",
+            interceptReaders: true);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerGroupWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerGroupWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            (await FluentActions.Awaiting(() => svc.UpdateGroupAsync(new UpdateGroupDto
+                    {
+                        GroupId = groupId, GroupName = "Paldea Fans", AudienceType = GroupAudienceType.Standard
+                    }))
+                    .Should().ThrowAsync<GroupValidationException>("the race is answered like the check — never a raw 500"))
+                .Which.Errors.Should().Equal(["A group named “Paldea Fans” already exists."]);
+            writeDb.ChangeTracker.Entries().Should().BeEmpty(
+                "the pending rename is detached, so a circuit's next save cannot retry it");
+        }
+
+        interceptor.Fired.Should().BeTrue();
+        (await NameOfAsync(groupId)).Should().Be("Galar Fans");
+        (await GroupCountAsync()).Should().Be(2, "the renamed group and the competing row");
     }
 
     [Fact]

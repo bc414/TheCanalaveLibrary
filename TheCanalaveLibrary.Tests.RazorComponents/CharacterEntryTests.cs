@@ -105,4 +105,23 @@ public class CharacterEntryTests : BunitContext
         received.Should().NotBeNull();
         received!.Priority.Should().Be(TagPriority.Supporting);
     }
+
+    /// <summary>
+    /// The sprite's last fallback follows <c>Sprites:BaseUrl</c> like the rest of the chain
+    /// (WU-ParityAndRemaining review fixes, 2026-10-13; it was a hardcoded <c>/sprites/themes/…</c>).
+    /// </summary>
+    [Fact]
+    public void CharacterEntry_UnderAConfiguredSpriteRoot_TheUnknownFallbackUsesIt()
+    {
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("https://cdn.example/sprites"));
+        TagChipDto chip = MakeChip();
+        chip.SpriteIdentifier = "pikachu";
+
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p => p
+            .Add(c => c.Chip, chip)
+            .Add(c => c.Dto, MakeDto())
+            .AddCascadingValue(new ThemeContext("pokemon", false)));
+
+        cut.Find("img").GetAttribute("data-unknown").Should().Be("https://cdn.example/sprites/pokemon/unknown.png");
+    }
 }
