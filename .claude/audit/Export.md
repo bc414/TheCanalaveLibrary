@@ -9,7 +9,9 @@ No entities. No components in this folder — the download *trigger* lives in th
 2026-10-13, also `StoryDeleteDialog`'s "keep a copy first" out, owner ruling D15 — it exports what the
 author can read publicly, published chapters only, and whether an author's export should include their
 unpublished chapters is `roadmap.md` decision row 27 (d); for a taken-down story, whose export 404s, the
-dialog drops the links and says so — its review fixes, the same day). Pure application-layer
+dialog drops the links and says so — its review fixes, the same day; its browser pass the same day
+saw the dialog's six links answer 200 with an attachment for a published story, and for the same story
+after Unpublish instead, its author signed in; a taken-down story's dialog had no links). Pure application-layer
 generation: `IExportService` (Core) + `ServerExportService` + per-format writers + `ExportEndpoints`
 (Server), all in the `Export/` cluster.
 

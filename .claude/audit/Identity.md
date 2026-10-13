@@ -174,7 +174,7 @@ for WU-UserDeletion 2026-10-13). Do not revisit:**
   which survive anonymized, are kept; whether to strip them is `roadmap.md` decision row 25 (tracker
   **F22**).
 
-**WU-AuthorStoryDelete Stage note (2026-10-13; owner ruling D15) — F52 L4.5 5→1; L2/L3/L4 stay 5.**
+**WU-AuthorStoryDelete Stage note (2026-10-13; owner ruling D15) — F52 L4.5 5→1, and 1→5 at its browser pass the same day; L2/L3/L4 stay 5.**
 D13's rider (i) gains its story path: an author can now delete a story before deleting the account
 (`IStoryWriteService.DeleteStoryAsync`; narrative in `audit/Stories.md` F4). The deletion page, the
 compliance surface, changes with it in the same WU:
@@ -198,6 +198,16 @@ compliance surface, changes with it in the same WU:
   page offers only Delete story." Integration
   `StaticSsrPageRenderTests.DeletePersonalDataPage_EnumeratesTheSurvivalSet_AndTheDeleteFirstPaths`
   asserts the new sentence and that the old caveat is gone; H34 step 8 reads it.
+- **Browser verification (2026-10-13) — F52 L4.5 1→5; tracker H34 closed.** As TestUser on the
+  server-only path, `/Account/Manage/DeletePersonalData` (static SSR) read the Stories line in full,
+  first in the delete-it-first list. That covers "use Delete story at the bottom of the story's edit
+  page" and "This works for a story a moderator has taken down too: its edit page offers only Delete
+  story." The list ends "Blog posts can't be deleted on the site yet, so they are kept without your
+  name.", and the old "Stories and blog posts can't be deleted" line is gone. The rest of the page
+  rendered unchanged. The line's claim was then driven on both render phases: a taken-down story's
+  edit page offered only Delete story, and the delete worked. That ran on the circuit on Local and on
+  WASM on Garage (`audit/Stories.md` F4 browser-verification Stage note). No account was deleted in
+  this pass. The page's delete flow is unchanged and was driven at WU-BlobCleanup's browser pass.
 
 **WU-BlobCleanup Stage note (2026-10-13; owner ruling D14) — F52 L2 stays 5; its review fixes flipped L4.5 5→1, and its browser pass the same day returned it to 5.** The avatar
 bullet of the Settled note above, built (rule: `layer2-services.md` §"Image Storage — blob ownership and
@@ -473,8 +483,10 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
   D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day; the copy rewritten as D13's compliance surface by WU-UserDeletion, 2026-10-13, same Container/role shapes, and corrected by its review fixes the same day (server logs, a closed poll's votes, a removed recommendation); four copy lines added by WU-BlobCleanup and its review fixes, the same day (the profile picture deleted, covers kept, "Remove cover" as the delete-first path, a cover that shows you), same list shapes, Integration-asserted; the Stories delete-first line added and the "Stories and blog posts can't be deleted" line narrowed to blog posts by WU-AuthorStoryDelete, 2026-10-13 (owner ruling D15), same list shape, Integration-asserted, and its taken-down caveat replaced by its review fixes the same day — Stage notes above). L5 — N/A.**
-  **L4.5 — Stage 1 (5→1 at WU-AuthorStoryDelete, 2026-10-13: the Stories line changed, again at its
-  review fixes the same day, and no browser was available; tracker **H34** step 8 reads it). Before that, Stage 5 (1→5 at WU-BlobCleanup's browser
+  **L4.5 — Stage 5 (1→5 at WU-AuthorStoryDelete's browser pass, 2026-10-13: the Stories line and the
+  narrowed blog-post line read in a browser, and the taken-down case it promises driven on both render
+  phases; tracker **H34** closed. It went 5→1 at that WU earlier the same day, when the line changed,
+  again at its review fixes, with no browser). Before that, Stage 5 (1→5 at WU-BlobCleanup's browser
   pass, 2026-10-13: the four new copy lines read in a browser, and an account with a picture deleted
   through the page on Local and on Garage, its blob gone; tracker **H31** closed. It went 5→1 at that
   WU's review fixes earlier the same day, when the copy changed again with no browser).** Before that: 5→1 at

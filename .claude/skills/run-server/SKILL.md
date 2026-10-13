@@ -384,6 +384,21 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
     `javascript_tool` call times out at 45 s, so split long loops; a timed-out script keeps running
     in the page. The tool's output filter can blank some header values; return them transformed
     (say, upper-cased with punctuation replaced).
+  - **Fixtures through the app's own API, and refusals on demand** (verified 2026-10-13,
+    WU-AuthorStoryDelete browser pass).
+    - **Building fixtures.** Sign in through `/dev/wu12/login-as/{user}`, then `fetch` the JSON
+      endpoints from the page as that user. For example: `POST /api/stories` (tags as
+      `{"$type":"storyTag", …}`), `POST …/status?target=1`, `POST /api/chapters` plus
+      `PUT …/published?isPublished=true`, `POST /api/comments/chapter`, and a cover as `FormData`.
+    - **The throttle.** Story and chapter creates share one `ContentCreate` bucket per user, and the
+      sixth create in a burst answers 429. Spread fixtures across authors.
+    - **A lost race.** `fetch(…, {method: 'DELETE'})` the item while its dialog is open, then confirm
+      in the dialog: this gives the 404 on both render phases.
+    - **A stale identity.** `await fetch('/dev/wu12/login-as/Other')` swaps the cookie under a running
+      WASM app, which keeps its cached identity, so the next write reaches the server as the other
+      user. That gives the 403. Swap back the same way.
+    - **Hidden-tab focus.** In a hidden tab a ref-based click on an input can miss the focus, so typed
+      text goes nowhere. A coordinate click lands; check the field's `value` after typing.
 - **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
   progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
   one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.

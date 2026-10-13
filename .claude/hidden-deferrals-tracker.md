@@ -2253,7 +2253,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        fast — please wait N seconds" with the em dash intact (review fixes: it was unlabeled).
     9. Optional: an import of seven chapters reproduces tracker **D16** (five committed, then the wait
        message).
-- [ ] **H34 — WU-AuthorStoryDelete browser pass: the story delete dialog, its two outs and the deletion page's Stories line** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-AuthorStoryDelete; no browser was available to it.*
+- [x] **H34 — WU-AuthorStoryDelete browser pass: the story delete dialog, its two outs and the deletion page's Stories line: browser-verified 2026-10-13 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-AuthorStoryDelete; no browser was available to it. Closed 2026-10-13 by its browser pass.*
+  - **Result:** all ten steps ran and passed; F4 and F52 L4.5 1→5 (`status.md`); no runtime bug.
+    - **Circuit:** steps 1–5 on story 17, with 9 and 10 alongside.
+    - **WASM:** steps 1–5 on story 18 (the GIF) and on story 20 (Unpublish instead, then the delete
+      that returned step 6's slot).
+    - **Aspire (Garage):** step 9 again, on WASM; the cover object left the bucket.
+    - **How each phase was proven:** the circuit by `_blazor/negotiate` and no `/api` call, WASM by the
+      action's `/api` request.
+    - **Refusals:** a lost race (404) on both phases and a stale-identity 403 on WASM, each shown as a
+      readable line inside the dialog.
+    - **Not covered:** keyboard-only use and focus placement stay with the shared `Modal`'s keyboard
+      half, **F6b**.
+    - **Narrative:** `audit/Stories.md` F4 browser-verification Stage note; `audit/Identity.md` F52;
+      `audit/Spotlight.md`; `workplan.md` WU-AuthorStoryDelete.
   - Grid: **F4 and F52 L4.5 5→1** (`status.md`). F4's editor gained a Delete story section and
     `StoryDeleteDialog`; F52's deletion page changed its delete-it-first copy. No browser has seen
     either. This pass returns both to 5. RazorComponents (`StoryDeleteDialogTests`,

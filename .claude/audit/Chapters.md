@@ -234,7 +234,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   count, versioning, promotion, update, Story.WordCount roll-up, validation). Mutation-sanity confirmed:
   adding `"script"` to the sanitizer allow-list → `SanitizesScriptTag` fails; reverted. Server boot:
   homepage/login `200`, DI resolves both services.
-- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5; re-verified by the WU-AuthorStoryDelete review fixes, 2026-10-13 — a taken-down story's chapter editor stays not found now that the story edit read reaches its author; RazorComponents `ChapterEditorPageTakedownTests`; see the Stage note below).** `ChapterEditorPage`
+- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5; re-verified by the WU-AuthorStoryDelete review fixes, 2026-10-13 — a taken-down story's chapter editor stays not found now that the story edit read reaches its author; RazorComponents `ChapterEditorPageTakedownTests`, and browser-checked by its browser pass the same day; see the Stage note below).** `ChapterEditorPage`
   dispatcher with progressive versioning disclosure, publish toggle, author gate, "Set as default" promote,
   "Add alternate version" action. `ChapterEditorViewModel` shields form from DTO fields. See WU26 Phase 1–3 Stage note.
 - **L3.5-Structure — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom also Stage 5).** `ChapterPropertiesForm`
@@ -348,6 +348,11 @@ created or edited here. Behavior is unchanged, so F6 L3-Logic and L4.5 stay 5. *
 `ChapterEditorPageTakedownTests` (2): a taken-down story raises NotFound and renders no form; a live story
 on the same setup renders the new-chapter form, so removing the check fails the first test.
 `dotnet build` 0 errors and `dotnet test` green on all three tiers.
+
+**Browser-checked 2026-10-13** (WU-AuthorStoryDelete's browser pass, circuit, server-only path):
+`/story/16/chapter/new` for a taken-down story read "Page not found" as its author (AuthorAlpha) and
+as TestUser, while the author's `/story/16/edit` opened delete-only. Narrative: `audit/Stories.md` F4
+browser-verification Stage note.
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.

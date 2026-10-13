@@ -96,7 +96,7 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   90–92; entity migrated out of legacy `Core/Models/`. Migration-verified: generated clean and
   applied cleanly on startup to the standing dev DB (SeedTool-volume). No L6 pass — the composite
   index shipped with L1 by design (low-volume table); L6 stays N/A.
-- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12; an author's story delete returns an unstarted booking's slot through the new server-only `SpotlightPlacementRelease`, owner ruling D15, WU-AuthorStoryDelete 2026-10-13, Integration `StoryDeletionTests` — stage unchanged each time, Stage notes at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
+- **L2 — Stage 5** (capacity read service-gated, WU-ModerationIntegrity 2026-09-30; a deleted sponsor no longer wedges the go-live sweep, WU-NotificationCorrectness 2026-10-12; an author's story delete returns an unstarted booking's slot through the new server-only `SpotlightPlacementRelease`, owner ruling D15, WU-AuthorStoryDelete 2026-10-13, Integration `StoryDeletionTests`, and browser-driven the same day (a future booking's slot back on the sponsor's `/spotlight`, a live one's consumed) — stage unchanged each time, Stage notes at the end of this feature). Allocator seam + read/write services + go-live worker/sweeper split +
   SiteSettings cluster. Redemption is advisory-lock-serialized under `CreateExecutionStrategy()`.
   Covered by the Integration tier (`SpotlightServiceTests`, 21 tests: grant cap/roles/donation-seam
   NotSupported, every redemption rejection, a two-racers-one-opening concurrency test, sweep
@@ -244,5 +244,15 @@ The Settled bullet "A deleted story returns an unstarted booking's slot", built.
   (`DeletedStory_CascadesPlacement` deletes the row directly, so its slot stays `Redeemed`, as before).
 - **No UI change:** a returned slot simply reappears on the sponsor's `/spotlight` page, so F55 L4.5
   stays 5; tracker H34 step 6 drives it once.
+- **Browser-driven 2026-10-13** (WU-AuthorStoryDelete's browser pass, server-only path; `psql` after
+  each write).
+  - ModUser granted TestUser two slots. On `/spotlight`, TestUser booked the week of Oct 26 on
+    AuthorBeta's story 20 and the current, live week of Oct 12 on AuthorBeta's story 19.
+  - Story 19 was deleted on the circuit: slot 2 stayed `Redeemed`, its placement went with the story,
+    and the log reported 0 slots returned.
+  - Story 20 was deleted through its editor on WASM: slot 1 went `Available`, its placement went with
+    the story, and the log reported 1 slot returned.
+  - TestUser's `/spotlight` then read "You have 1 spotlight slot" again, with no booked rows.
+  - No cell moves. Narrative: `audit/Stories.md` F4 browser-verification Stage note.
 - **Open (decision row 27, tracker F24):** a live block counts as started (built); the moderator hard
   delete returns no slot; the sponsor is not notified.

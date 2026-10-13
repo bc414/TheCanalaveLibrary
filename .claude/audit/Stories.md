@@ -114,7 +114,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   lifecycle move goes through `TransitionStatusAsync` (author) or approve/reject (moderator).
   `PostApprovalStatus` stays an ordinary editable property. Rule of record: `layer2-services.md`
   §"Story Lifecycle".
-- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; re-verified WU-BlobCleanup, 2026-10-13 — the cover off the update path, `UploadCoverArtAsync` persists it, `RemoveCoverArtAsync`, `StoryEditDTO`; Integration-tested (`StoryCoverTests`, `StoryEndpointsTests`), and browser-driven on both render phases with `psql` by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — `DeleteStoryAsync`, owner ruling D15's author hard delete (story-scope `TptDelete`, the Spotlight slot return, the cover blob after the commit), Integration-tested (`StoryDeletionTests`, `BlobCleanupTests`, `StoryEndpointsTests`); and since its review fixes the same day the edit read reaches a taken-down story's author (flagged `IsTakenDown`; anyone else gets the missing answer), the story-scope comment delete locks the chapters first, and a lost commit acknowledgement is not replayed into a 404 (Integration `StoryDeletionTests` +3); browser-driven on both render phases with `psql` by its browser pass the same day, on Local and on Garage; see the Stage notes below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -145,7 +145,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save, and since its review fixes the same day its three writes (a cover call, the save, a status change) never overlap; RazorComponents-tested (`StoryEditorPageTests`), and browser-driven on both render phases by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — the page drives the story delete (saved-title confirmation, draft backup cleared, leaves for the author's Authored tab) and the dialog's Unpublish instead, and the delete is a fourth write that never overlaps the others; since its review fixes the same day a taken-down story opens delete-only (and the create route never inherits that state), and the post-delete navigation's `forceLoad` is pinned; RazorComponents-tested (`StoryEditorPageTests`), not yet browser-driven (tracker H34); see the Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; re-verified WU-BlobCleanup, 2026-10-13 — the editor uploads a cover on pick and removes it in place, never through the save, and since its review fixes the same day its three writes (a cover call, the save, a status change) never overlap; RazorComponents-tested (`StoryEditorPageTests`), and browser-driven on both render phases by its browser pass the same day; extended WU-AuthorStoryDelete, 2026-10-13 — the page drives the story delete (saved-title confirmation, draft backup cleared, leaves for the author's Authored tab) and the dialog's Unpublish instead, and the delete is a fourth write that never overlaps the others; since its review fixes the same day a taken-down story opens delete-only (and the create route never inherits that state), and the post-delete navigation's `forceLoad` is pinned; RazorComponents-tested (`StoryEditorPageTests`), and browser-driven on both render phases by its browser pass the same day (tracker H34 closed); see the Stage notes).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
   on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
@@ -157,7 +157,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   implements `IEditableStoryProperties` (decoupled from wire DTOs; mapping is at page layer).
   `Routes.razor` switched from `RouteView` to `AuthorizeRouteView` so `[Authorize]` attributes are
   enforced (was silently ignored with `RouteView`).
-- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; re-verified WU-BlobCleanup, 2026-10-13 — `StoryPropertiesForm` raises `OnCoverSelected`/`OnRemoveCover`, `CoverUploadBusy`, a "Remove cover" control, and since its review fixes `OtherWriteInFlight` plus a submit disabled under a cover call; RazorComponents-tested (`StoryPropertiesFormTests`); extended WU-AuthorStoryDelete, 2026-10-13 — new `StoryDeleteDialog` on `Modal` (typed-title input, Unpublish instead, the download links, Cancel then the filled-danger delete) and the editor's Delete story section; since its review fixes the same day the title match collapses whitespace runs (as the label shows them) and a taken-down story's dialog shows one line in place of both outs; RazorComponents-tested (`StoryDeleteDialogTests`); see the Stage notes).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
+- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; re-verified WU-BlobCleanup, 2026-10-13 — `StoryPropertiesForm` raises `OnCoverSelected`/`OnRemoveCover`, `CoverUploadBusy`, a "Remove cover" control, and since its review fixes `OtherWriteInFlight` plus a submit disabled under a cover call; RazorComponents-tested (`StoryPropertiesFormTests`); extended WU-AuthorStoryDelete, 2026-10-13 — new `StoryDeleteDialog` on `Modal` (typed-title input, Unpublish instead, the download links, Cancel then the filled-danger delete) and the editor's Delete story section; since its review fixes the same day the title match collapses whitespace runs (as the label shows them) and a taken-down story's dialog shows one line in place of both outs; RazorComponents-tested (`StoryDeleteDialogTests`), and browser-driven on both render phases by its browser pass the same day; see the Stage notes).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
   Tailwind, all 6 `TagSelector` instances wired with `OnSelectionChanged` + `InitialTagsByType` prefill,
   `EditorView @ref` pull-on-submit via public `GetLongDescriptionAsync()`, `InputFile` for cover art,
   `Rating`+`Status` selects, server validation error display, `IsLoading` disabled-submit guard). No
@@ -173,10 +173,13 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 1 (5→1, WU-AuthorStoryDelete, 2026-10-13: the Delete story section and
-  `StoryDeleteDialog` are new UI that no browser has driven — none was available; tracker **H34** holds
-  the pass that returns this to 5, and its review fixes the same day added the taken-down editor and
-  the whitespace title to it (steps 9–10). Before that, Stage 5 (1→5, WU-BlobCleanup browser pass, 2026-10-13:
+- **L4.5-Browser — Stage 5 (1→5, WU-AuthorStoryDelete browser pass, 2026-10-13: the Delete story
+  section and `StoryDeleteDialog` driven on the circuit and on WASM — the typed-title gate, the saved
+  title under an unsaved edit, Unpublish instead in place, the downloads, the delete and its landing, a
+  taken-down story's delete-only editor, a double-space title, a booked slot returned, and the
+  refusals (404 on both phases, 403 on WASM) shown in the dialog — with `psql`, the upload folder and
+  the Garage bucket after every write; tracker **H34** closed, no runtime bug. It went 5→1 at
+  WU-AuthorStoryDelete earlier that day, with no browser. Before that, Stage 5 (1→5, WU-BlobCleanup browser pass, 2026-10-13:
   the cover flow — upload on pick, "Remove cover", create-with-cover, a refused file, the three writes
   kept apart — driven on the circuit and on WASM with `psql` and the upload folder after every write,
   which closed trackers H31 and H3; it had gone 5→1 at WU-BlobCleanup earlier that day, with no browser.
@@ -186,8 +189,10 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   bugs: a refused save killed the circuit, a published story's editor 301'd to its story page on a full
   load, and the rejection reason rendered as "_rejectionReason". The WU-BlobCleanup pass drove the
   cover-art `InputFile`, the 2026-07-01 cluster note's standing exception, for the first time; it found
-  no bug and filed the feedback polish as tracker **H32**. Detail: the two browser Stage notes below.
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`; the client impls Unit-tested (`ClientStoryCoverServiceTests`) since its review fixes; extended WU-AuthorStoryDelete, 2026-10-13 — `DELETE /api/stories/{id}` + client impl, Integration (`StoryEndpointsTests`: 204/403/401/404) and Unit (`ClientStoryDeleteServiceTests`); its review fixes the same day add the `IsTakenDown` echo to `GET …/edit`'s `StoryEditDTO`, a plain JSON field).** (History: the dead pre-WU12 `HttpStoryReadService`/
+  no bug and filed the feedback polish as tracker **H32**. The WU-AuthorStoryDelete pass drove the
+  delete dialog and its two outs as two authors, a sponsor and a non-author, and found no bug. Detail:
+  the three browser Stage notes below.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl; extended WU-BlobCleanup, 2026-10-13 — `DELETE /api/stories/{id}/cover` + client impl, `GET …/edit` returns `StoryEditDTO`; the client impls Unit-tested (`ClientStoryCoverServiceTests`) since its review fixes; extended WU-AuthorStoryDelete, 2026-10-13 — `DELETE /api/stories/{id}` + client impl, Integration (`StoryEndpointsTests`: 204/403/401/404) and Unit (`ClientStoryDeleteServiceTests`); its review fixes the same day add the `IsTakenDown` echo to `GET …/edit`'s `StoryEditDTO`, a plain JSON field; the WASM leg browser-driven by its browser pass the same day — the `DELETE`, its 403 and 404 mapped to readable messages in the dialog).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
   InteractiveAuto; story CREATE with tags verified end-to-end in a real WASM runtime during the
@@ -570,7 +575,7 @@ The Settled note at the top of this feature, built. Rule of record: `layer2-serv
   - No browser console errors. The server-only log had no `fail:`/`crit:` line. The Aspire log's one
     `fail:` was the documented antiforgery line for a cookie from the other database's key ring.
 
-### Feature 4 (and 5) — WU-AuthorStoryDelete Stage note (2026-10-13; owner ruling D15) — F4 L4.5 5→1; L2/L3-Logic/L3.5/L4/L5 stay 5
+### Feature 4 (and 5) — WU-AuthorStoryDelete Stage note (2026-10-13; owner ruling D15) — F4 L4.5 5→1, and 1→5 at its browser pass the same day; L2/L3-Logic/L3.5/L4/L5 stay 5
 
 The "Author story deletion — settled" note at the top of this feature, built. Rule of record:
 `layer2-services.md` §"Author story deletion" (the slot return in §"Community Spotlight"). Verified by
@@ -632,7 +637,7 @@ The "Author story deletion — settled" note at the top of this feature, built. 
   on a deleted story's report still throws "no account to act on", as WU-ModerationIntegrity kept it, and
   the queue drops such reports anyway; the user-targeted path stays available.
 
-### Feature 4 — WU-AuthorStoryDelete review-fixes Stage note (2026-10-13) — F4 L4.5 stays 1 (H34 extended); L2/L3-Logic/L3.5/L4/L5 stay 5
+### Feature 4 — WU-AuthorStoryDelete review-fixes Stage note (2026-10-13) — F4 L4.5 stays 1 (H34 extended), and 1→5 at the browser pass the same day; L2/L3-Logic/L3.5/L4/L5 stay 5
 
 Three reviews raised 11 findings, 9 distinct; all were real, and none needed an owner ruling. Verified by
 `dotnet build` (0 errors, no new warnings) and `dotnet test` green on all three tiers, plus the four gates.
@@ -683,6 +688,80 @@ Three reviews raised 11 findings, 9 distinct; all were real, and none needed an 
   removed from the taken-down branch.
 - **L4.5** stays 1: tracker **H34** gains step 9 (the taken-down editor, as its author and as another
   user, and its chapter route) and step 10 (a double-space title). No browser was available.
+
+### Feature 4 — WU-AuthorStoryDelete browser-verification Stage note (2026-10-13) — F4 L4.5 1→5; tracker H34 closed; no runtime bug
+
+All ten steps of H34 ran. The server-only path ran against the standing workbench (not reset), and the
+Aspire path against its own database. Every write was checked with `psql`, the upload folder (Local) or
+`garage bucket info` (Garage), the cover URL, and the server log's `Story {id} deleted by its author`
+trace. Circuit runs were proven by `_blazor/negotiate` and no `/api` call, with the Auto hash removed
+before each full load. WASM runs were proven by no negotiate and the action's `/api` request. Actors:
+AuthorAlpha and AuthorBeta (authors), TestUser (sponsor, replier, non-author), ReaderGamma (commenter),
+ModUser (slot grants), and anonymous. Fixtures were built through the app's own JSON API, in-page `fetch`
+as each actor: stories 17–21, published chapters, a comment and a reply, `started` rows, covers, and two
+slots booked through `/spotlight`. GIF: `e2e-WU-AuthorStoryDelete.gif` (WASM: an unsaved title edit,
+the dialog asking for the saved title, the delete, the Authored tab).
+- **Circuit, story 17** (published, two chapters, a comment and a reply, two readers' rows, a cover).
+  - "Delete story…" is the page's last element.
+  - The dialog reads "Delete this story permanently?" and its copy names chapters, comments,
+    recommendations and reading progress.
+  - Delete stays disabled for an empty box, the title in lower case, and a title one letter short. It
+    enables for the exact title, and for the exact title plus a trailing space (trimmed, as built).
+  - With the title field edited and unsaved, the dialog still asks for the saved title, and the typed
+    text clears on reopen.
+  - The six download links each answered 200 with an attachment, and the TXT held both chapters.
+  - **Unpublish instead** closed the dialog. The panel read "Unpublished — the story is a draft again."
+    and `psql` held status 0, while the unsaved title stayed in the field (no reload).
+  - Reopened on the Draft story, the dialog had no Unpublish button. Its downloads still answered 200
+    for the author.
+  - The delete showed "Deleting…" with every control disabled (a `MutationObserver` record), then left
+    for `/user/4/authored`, which no longer listed the story. `draft:story:17` was gone.
+  - `psql` had no rows left for the story, its listing, tags, chapters, contents, the two comments or
+    the two readers' rows. The cover file and its URL were gone (404), and `/story/17` answered 404.
+- **Circuit, story 16** (taken down; AuthorAlpha's fixture from WU-BlobCleanup's pass, with a cover).
+  - As its author: a warning notice and the Delete story section only. The dialog shows "can't be
+    unpublished or downloaded first" in place of both outs, with no links.
+  - A backdrop click cancels. The delete left for the Authored tab, and the cover file and URL were gone.
+  - Report 13 against the story survives, unchanged.
+  - As TestUser, `/story/16/edit` reads "Page not found". `/story/16/chapter/new` is not found for both
+    users.
+- **Circuit, story 19** (AuthorBeta, saved as `E2E Delete:  Double  Space`).
+  - The label shows the title with single spaces, and typing it that way enables the delete.
+  - The story was then deleted from a second request while the dialog stayed open. The dialog's delete
+    showed "That content couldn't be found — it may have been removed." inside the dialog, and the page
+    stayed.
+  - Its live-block booking (slot 2, the current week) kept its slot `Redeemed`, and the log reported 0
+    slots returned.
+- **Circuit, TestUser's story 8** (Pending Approval): no Unpublish instead. As TestUser on AuthorAlpha's
+  story 18, the editor read "You don't have permission to edit this story."
+- **WASM, story 18** (the GIF).
+  - The typed-title gate behaves as on the circuit.
+  - The cookie was switched to TestUser under the running app. The dialog's delete then sent
+    `DELETE /api/stories/18` → 403 and showed "You don't have permission to do that." in the dialog,
+    and `psql` showed the story intact.
+  - Back as AuthorAlpha, the delete sent the `DELETE` and left for `/user/4/authored`.
+    `draft:story:18` was gone, and `psql`, the upload folder and the cover URL showed it all gone.
+- **WASM, story 20** (AuthorBeta; TestUser had booked a future week through `/spotlight`).
+  - Unpublish instead sent `POST …/status?target=0`, read Draft in place, and kept an unsaved short
+    description.
+  - The delete left for `/user/5/authored`. `psql` held slot 1 `Available` and no placement, and the log
+    reported 1 slot returned.
+  - TestUser's `/spotlight` read "You have 1 spotlight slot" again.
+- **WASM, story 21** (a Draft created for the race): a delete from a second request, then the dialog's
+  `DELETE` → 404 showed the same not-found message in the dialog.
+- **Aspire (Garage), story 14** (taken down; AuthorAlpha's fixture from WU-BlobCleanup's pass, with a
+  cover object).
+  - On WASM, the delete-only editor rendered for its author. As TestUser, the edit read answered empty
+    and the page was not found.
+  - The delete left for the Authored tab. The cover URL answered 404, and the bucket went from 2 objects
+    to 1. Report 8 survives.
+- **Endpoint:** anonymous `DELETE /api/stories/18` answered 401, TestUser's 403, and a missing id 404.
+  None deleted anything.
+- **Logs:** the server-only log had no `fail:`/`crit:` line. The Aspire web log's one `fail:` was the
+  documented antiforgery line, from a cookie of the other database's key ring. No browser console errors.
+- **Not covered here:** keyboard-only use and focus placement. The dialog sits on the shared `Modal`,
+  which deliberately has no initial focus, focus trap or Escape yet: tracker **F6b**
+  (WU-A11y-Keyboard).
 
 ## Feature 5 — Story Browsing & Display
 

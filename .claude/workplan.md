@@ -25,7 +25,9 @@ references it, does not restate it.
   offers Unpublish instead and a download first. **D15's "`daily_story_stats` has no FK" was false.** Its
   review fixes built the taken-down case D15 rules (the editor opens **delete-only**), locked the chapters
   against a mid-delete comment, stopped a lost commit acknowledgement replaying into a 404, and matched
-  the title as the label shows it. **F4 and F52 L4.5 5→1** (tracker **H34**). Filed: decision row 27 /
+  the title as the label shows it. It flipped **F4 and F52 L4.5 5→1**; its browser pass the same day
+  drove the dialog, both outs, the taken-down editor and the slot return on both render phases (Local
+  and Garage), returned both to 5 (H34 closed) and found no runtime bug. Filed: decision row 27 /
   tracker F24, D19; F13/F3/B25 annotated. `dotnet test`: Unit 1,263, RazorComponents 852, Integration
   1,590. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-ThrottleCoverage — worksheet D20's throttle half (three new kinds, the unthrottled-surface enumeration, the WASM 429 rebuilt, `AnonPrefs`' shared-default consent leak fixed; row 26, D16–D18/F23 filed, H33 closed by its browser pass); see its DONE entry.
@@ -273,7 +275,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -296,7 +298,7 @@ references it, does not restate it.
   group story-add, first-request friction) — added the same day by WU-ThrottleCoverage; 27 — five
   edges of D15's author story delete (a live block, the moderator path, telling the sponsor, the
   download's scope, how an author finds a taken-down story's editor) — added the same day by WU-AuthorStoryDelete).
-  Tracker **H34** (WU-AuthorStoryDelete's browser pass, returning F4/F52 L4.5 to 5) is owed. Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
@@ -310,7 +312,9 @@ references it, does not restate it.
   the `UserCard` manual-grant rider — see WU-CounterSymmetry's DONE entry. Tracker **H33**'s pass, WU-ThrottleCoverage's
   throttle messages on both render phases, the reveal paths and the consent leak fix, ran 2026-10-13,
   returned F8/F9/F10/F37/F50/F51/F66 L4.5 to 5 and closed; it fixed one runtime bug and filed **D18**
-  — see WU-ThrottleCoverage's DONE entry.)
+  — see WU-ThrottleCoverage's DONE entry. Tracker **H34**'s pass, WU-AuthorStoryDelete's delete dialog, its
+  two outs, the taken-down editor and the deletion page's Stories line, ran 2026-10-13, returned F4/F52
+  L4.5 to 5 and closed with no runtime bug — see WU-AuthorStoryDelete's DONE entry.)
 
 ---
 
@@ -466,8 +470,8 @@ is pending except where a bullet says so.
 - **Cells:** **F4 L4.5 5→1** (the Delete story section and `StoryDeleteDialog` are new UI) and **F52
   L4.5 5→1** (the deletion page's copy changed); no browser was available, tracker **H34** holds the
   pass. Built beneath Stage-5 cells: F4 L2/L3-Logic/L3.5/L4/L5, F55 L2, F52 L4. The review fixes moved
-  no cell (F6 L3-Logic re-verified beneath its 5). Dated 2026-10-13, the session's `currentDate`, as the
-  WUs before it.
+  no cell (F6 L3-Logic re-verified beneath its 5). The browser pass the same day returned F4 and F52
+  L4.5 to 5 (H34 closed). Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** worksheet D15 (answered 2026-08-07) and its spec `wu-specs/WU-AuthorStoryDelete.md`, with
   the amendment (X3 reworded as moot). Routed here: WU-UserDeletion's deletion-copy line, WU-BlobCleanup's
   third inline blob site, WU-ThrottleCoverage's "Deletes and removals" row.
@@ -530,7 +534,7 @@ is pending except where a bullet says so.
   lock removed; the live title as the confirmation string, the delete outside `CoverChangeBlocked`, no
   draft clear, the dialog left open on Unpublish instead, a case-insensitive match, no clear on reopen,
   a Cancel while busy. Gates: doc-hygiene, design-tokens, render-modes, a11y pass. **No browser was
-  available** (H34).
+  available** (H34); the browser pass below ran the same day and closed it.
 - **Review fixes (2026-10-13).** Three reviews raised 11 findings, 9 distinct after merging duplicates.
   All 9 were real; none needed an owner ruling.
   1. **A taken-down story had no Delete button.** D15 rules it ("an active `IsTakenDown` does not block
@@ -558,9 +562,50 @@ is pending except where a bullet says so.
   **Integration 1,590** (+3: `StoryDeletionTests`; `StaticSsrPageRenderTests` assertions updated), all
   green; build 0 errors, no new warnings in touched files; the four gates pass. No browser: **H34** gains
   steps 9–10. Stage notes: `audit/Stories.md` F4, `audit/Chapters.md` F6, `audit/Identity.md` F52.
+- **Browser pass (2026-10-13). F4 and F52 L4.5 1→5; H34 closed; no runtime bug.**
+  - **Setup.** All ten steps of H34 ran. The server-only path used the standing workbench (not reset). The
+    Aspire path (Garage) ran step 9 again. `psql`, the upload folder or `garage bucket info`, the cover URL
+    and the log's `Story {id} deleted by its author` trace were read after every write.
+  - **Phases.** The circuit was proven by `_blazor/negotiate` and no `/api` call (the Auto hash removed
+    before each full load). WASM was proven by the action's `/api` request.
+  - **Actors.** AuthorAlpha, AuthorBeta, TestUser (sponsor, replier, non-author), ReaderGamma, ModUser,
+    anonymous.
+  - **GIF:** `e2e-WU-AuthorStoryDelete.gif` (WASM: an unsaved title edit, the dialog asking for the saved
+    title, the delete, the Authored tab).
+  - **What it saw.** The typed-title gate held: case-sensitive, a trailing space trimmed, a double-space
+    title matched as its label shows it. The saved title held under an unsaved edit. Unpublish instead
+    ran in place, with unsaved edits kept, on both phases. The six downloads answered 200. A Draft or
+    Pending story had no Unpublish button. Each delete showed "Deleting…" with every control
+    disabled, landed on `/user/{id}/authored`, and cleared `draft:story:{id}`. Each deleted story left
+    no rows (story, listing, chapters, contents, comments, readers' rows), and its cover file or object
+    and URL were gone.
+  - **Taken-down stories.** The delete-only editor appeared for the author on the circuit (Local) and on
+    WASM (Garage). Another user and the chapter route got not found, and the takedown reports
+    survived.
+  - **Spotlight.** A future booking's slot came back to its sponsor's `/spotlight`, and a live one's
+    stayed consumed.
+  - **Refusals.** A lost race (404, both phases) and a stale-identity 403 (WASM) showed readable lines in
+    the dialog. The endpoint answered 401 (anonymous), 403 (TestUser) and 404 (missing).
+  - **Logs.** No `fail:`/`crit:` beyond the documented Aspire antiforgery line. No console errors.
+  - **Not covered.** Keyboard-only use and focus stay with the `Modal` keyboard half (F6b).
+  - **Narrative:** the browser Stage notes in `audit/Stories.md` F4, `Identity.md` F52, `Spotlight.md`,
+    `Chapters.md` F6, `ImageStorage.md`, `Export.md`.
+  - **Dev-DB state left (server-only).**
+    - Stories 16–21 are gone: 16 was WU-BlobCleanup's taken-down fixture; 17–21 were created and deleted
+      by this pass. That took with them chapters 22–26, comments 7–10, the readers' `started` rows and
+      the covers of 16–18.
+    - Spotlight slots 1 (TestUser, `Available`) and 2 (TestUser, `Redeemed`, no placement): both granted
+      by ModUser. No placements.
+    - Report 13 survives (resolved, naming deleted story 16).
+    - Profile counters (`StoriesWritten` and the rest) are stale until the next recompute, by design
+      (D15/D21).
+    - Empty `wwwroot/uploads/stories/16/`, `17/` and `18/` folders remain.
+  - **Dev-DB state left (Aspire).** Story 14 (WU-BlobCleanup's taken-down fixture) is deleted and its
+    cover object gone. The bucket holds 1 object (the July `users/1/profile-*.png` orphan). Report 8
+    survives. The containers were stopped afterwards.
 - **Pointers:** `audit/Stories.md` F4 (settled note + Stage notes), `audit/Spotlight.md` F55,
   `audit/Identity.md` F52, `audit/Chapters.md` F6; `layer2-services.md` §"Author story deletion"; `roadmap.md` row 27; tracker
-  F24/H34/F13/D19.
+  F24/H34 (closed)/F13/D19.
 
 ## WU-ThrottleCoverage — the throttle-coverage enumeration: three new write kinds, `ContentCreate` wired to lists/series/arcs, an `ExportGenerate` limiter, every unthrottled surface named with its reason, and the WASM 429 rebuilt from the wire (worksheet D20, throttle half only; service audit §2.5's throttle rows, §2.8's re-request bullet, §4's lineage-reject comments; extends `Security/`, `ContentGate/`, `BlogPosts/`, `Collaboration/`, `Stories/`, `Series/`, `CustomLists/`, `Export/`, `Client/Http/`) — DONE ✓ (2026-10-13)
 
