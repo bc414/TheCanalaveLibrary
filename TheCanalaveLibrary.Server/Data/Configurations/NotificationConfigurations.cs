@@ -109,6 +109,9 @@ public sealed class NotificationTypeConfiguration : IEntityTypeConfiguration<Not
             // Groups (Category 6)
             new { NotificationTypeId = NotificationTypeEnum.NewGroupStory, NotificationKey = "NewGroupStory", DisplayName = "New Group Story", Description = "A new story was added to a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
             new { NotificationTypeId = NotificationTypeEnum.NewGroupBlogPost, NotificationKey = "NewGroupBlogPost", DisplayName = "New Group Blog Post", Description = "A new blog post was made in a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            // Owner ruling D13 edge (b): email on by default — the promoted member did not ask for this
+            // and must be able to find out (WU-UserDeletion, 2026-10-13).
+            new { NotificationTypeId = NotificationTypeEnum.GroupAdminAssigned, NotificationKey = "GroupAdminAssigned", DisplayName = "Group Admin Assigned", Description = "A site moderator made you an admin of a group that had none.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = true, DefaultCollapsed = false },
 
             // Your Stories — approval outcomes (Category 2)
             new { NotificationTypeId = NotificationTypeEnum.StoryApproved, NotificationKey = "StoryApproved", DisplayName = "Story Approved", Description = "Your story submission was approved.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },

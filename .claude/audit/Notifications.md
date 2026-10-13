@@ -363,9 +363,32 @@ request. The browser console showed no errors. **No runtime bug was found.**
 - **Cells:** F42, F43 and F49 L4.5 go 1→5. Tracker H26 is closed. The dev-DB state this pass left is
   listed in the workplan entry.
 
+## WU-UserDeletion Stage note (2026-10-13) — type 62 `GroupAdminAssigned`; F42 L4.5 5→1; F41 L1/L2 stay 5
+
+Owner ruling D13 edge (b): "the promoted user is notified" (the F41 Settled bullet above).
+- **F41 L1.** Migration `WU_UserDeletion_GroupAdminAssigned` seeds `notification_types` row 62
+  (`GroupAdminAssigned`, "Group Admin Assigned", category Groups, `DefaultEmailEnabled = true`,
+  `DefaultCollapsed = false`). Its `Down()` deletes the type's notifications and settings rows first
+  (both FKs are RESTRICT). Rehearsed Up, Down and Up on a dev-DB clone holding a type-62 notification
+  and setting; applied to the server-only dev DB.
+- **F41 L2.** `INotificationWriteService.NotifyGroupAdminAssignedAsync(recipientUserId, groupId)` — no
+  moderator parameter (type-level D5), one `CreateCoreAsync` with a null source and the group as
+  `RelatedEntityId` (D16); ordinary cross-existing dedup applies. Client twin throws
+  `NotExposedOverHttp`; the RazorComponents fake is a no-op. `NotificationEnricher.KindFor` maps 62 to
+  the existing `Group` kind (group name, `/group/{id}`, `GroupAudience` lifted). The producer is
+  `ServerModerationWriteService.AssignGroupAdminAsync`, best-effort after commit, skipping a moderator
+  who assigned themselves. Tier: Integration `GroupAdminRescueTests` (one row to the promoted member,
+  null source, the group id; none on a self-assignment).
+- **F42 L2/L3.** `NotificationPresenter`'s Groups arm for 62 is actor-free: "You were made an admin of
+  {group}" / "You were made a group admin". Tier: Unit `NotificationPresenterTests` (both texts, the
+  moderator's name never appears even when a source is present; 62 joins the actor-free theory and
+  the every-type theories through `CategoryFor`).
+- **F42 L4.5 5→1.** The new copy has not been read in the bell, the inbox or the email; tracker
+  **H29**.
+
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-13, WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip — Stage note above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
@@ -644,7 +667,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; Stage notes above Feature 41).** **L4.5 — Stage 5.** It went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41).** **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13:** the type-62 copy is undriven in a browser — tracker **H29**). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

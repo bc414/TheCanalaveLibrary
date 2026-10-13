@@ -776,6 +776,7 @@ and D13 relies on there being no group-deletion path at all. That is **D47**, at
 block. This amendment covers only what the ledger row records.
 
 **Built:** WU-ModerationIntegrity (2026-09-30) — rule now stated in `layer2-services.md` §"Moderation Services" ("Report submission" → `ReportedUserId`; the entity-carries-current-state paragraph for (b)); the per-user history reads the column and the caveat is gone (tracker B18 closed). The amendment's `Group` arm is WU-UserDeletion's.
+**Built:** WU-UserDeletion (2026-10-13) — the amendment's `Group` arm (`groups.creator_id`, NULL expected) is in `ResolveAnswerableUserIdAsync`; rule now stated in `layer2-services.md` §"Moderation Services" → "Report submission" (`ReportedUserId`). D47 stays pending: Group is ledger-only.
 
 ### D9. Mod-only read gating posture
 
@@ -1300,6 +1301,7 @@ non-member, and calling as a non-moderator each throw. *(RazorComponents tier.)*
 renders an anonymized row as "[deleted user]" with the tally unchanged.
 
 **Built:** WU-UserDeletion (2026-10-13), Part A (the survival set, edge (a), the GDPR posture and the copy) — rule now stated in `cross-cutting.md` §"Delete Policy Summary" → "Account deletion" (poll votes' key in `layer1-data-model.md` §"Column Conventions"). Two sub-edges this answer did not rule are filed for the owner: an exact multi-choice voter count after a deletion (tracker F17) and a sender-side message delete under rider (i) (F18); log retention and bare ids in polymorphic columns are F19.
+**Built:** WU-UserDeletion (2026-10-13), Part B (edge (b): `AssignGroupAdminAsync` with its three guards, the ledger-only `ReportedEntityType.Group`, type 62, the rescue panel and the last-admin leave warning) — rule now stated in `layer2-services.md` §"Group Membership and Role Model" and §"Account actions" (the Group shape).
 
 ### D14. Blob cleanup ownership
 

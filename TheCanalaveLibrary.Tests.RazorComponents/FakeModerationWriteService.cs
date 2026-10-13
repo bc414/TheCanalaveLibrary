@@ -52,4 +52,22 @@ public class FakeModerationWriteService : IModerationWriteService
 
     public Task ReinstateUserAsync(int targetUserId, string reason) =>
         throw new NotImplementedException("FakeModerationWriteService.ReinstateUserAsync not expected in this test.");
+
+    // ── Group rescue (opt-in recording for GroupAdminRescuePanel's tests) ─────────────────────────
+
+    /// <summary>Set to a list to record <see cref="AssignGroupAdminAsync"/> calls; null (the default)
+    /// keeps the throw-on-unexpected contract above.</summary>
+    public List<(int GroupId, int TargetUserId, string Notes)>? AssignGroupAdminCalls { get; set; }
+
+    /// <summary>When set (and recording is on), <see cref="AssignGroupAdminAsync"/> throws it.</summary>
+    public Exception? AssignGroupAdminException { get; set; }
+
+    public Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes)
+    {
+        if (AssignGroupAdminCalls is null)
+            throw new NotImplementedException("FakeModerationWriteService.AssignGroupAdminAsync not expected in this test.");
+        if (AssignGroupAdminException is not null) throw AssignGroupAdminException;
+        AssignGroupAdminCalls.Add((groupId, targetUserId, notes));
+        return Task.CompletedTask;
+    }
 }

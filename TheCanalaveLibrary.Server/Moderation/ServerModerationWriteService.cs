@@ -15,7 +15,10 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Target-type allow-set.</b> Only Story, User, Comment, BlogPost, Recommendation, and
 /// Message may be reported. Any other type throws <see cref="ModerationValidationException"/> (400).
 /// Messages have no <c>ActiveReportCount</c> column — <see cref="AdjustActiveReportCountAsync"/>
-/// is a no-op for that type (<c>content-safety.md</c> §"Report Targets and ActiveReportCount").</para>
+/// is a no-op for that type (<c>content-safety.md</c> §"Report Targets and ActiveReportCount").
+/// <see cref="ReportedEntityType.Group"/> is deliberately absent: it is a ledger-only type that only
+/// <see cref="AssignGroupAdminAsync"/> writes, born resolved, until D47(b) decides what a moderator can
+/// do with a member-filed Group report (owner ruling D13; D47's floor).</para>
 ///
 /// <para><b>IModeratableContent.</b> Story, Comment, BlogPost, and Recommendation implement
 /// <see cref="IModeratableContent"/>; their soft-remove and hard-delete operations are handled
@@ -467,6 +470,76 @@ public class ServerModerationWriteService(
         await writeDb.SaveChangesAsync();
     }
 
+    // ── Group rescue (owner ruling D13 edge (b), WU-UserDeletion 2026-10-13) ──────
+
+    private const string GroupStillHasAdmin =
+        "This group still has an admin. A moderator can only assign an admin to a group that has none.";
+
+    private const string NotAGroupMember =
+        "That user isn't a member of this group. Only a member can be made its admin.";
+
+    public async Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes)
+    {
+        // Exactly three guards (D13): moderator, admin-less group, target already a member. Anything
+        // else — a self-target included — is allowed on purpose. The rest are input checks.
+        int modId = ActiveUser.RequireModerator();
+
+        // writeDb is unfiltered: the moderator acts on ground truth, M-audience groups included.
+        if (!await writeDb.Groups.AnyAsync(g => g.GroupId == groupId))
+            throw new KeyNotFoundException($"Group {groupId} was not found.");
+
+        if (string.IsNullOrWhiteSpace(notes))
+            throw new ModerationValidationException(["Notes are required: say why this member is being made an admin."]);
+        string trimmed = notes.Trim();
+        // Report.ActionTaken's existing column cap — a 400 rather than a 500. Picks no new number.
+        if (trimmed.Length > ActionTakenMaxLength)
+            throw new ModerationValidationException(["Those notes are too long."]);
+
+        // Without this guard the method would override a functioning group's leadership — a far larger
+        // power than the rescue D13 grants. Member-to-member transfer of a living admin role stays absent.
+        if (await writeDb.GroupMembers.AnyAsync(m => m.GroupId == groupId && m.Role == GroupRole.Admin))
+            throw new ModerationValidationException([GroupStillHasAdmin]);
+
+        GroupMember member = await writeDb.GroupMembers
+            .SingleOrDefaultAsync(m => m.GroupId == groupId && m.UserId == targetUserId)
+            ?? throw new ModerationValidationException([NotAGroupMember]);
+
+        // A role change on an existing row, not a membership change: GroupsJoined does not move, and its
+        // recompute (rows, never roles) agrees (D24). Two moderators racing can leave two admins — benign
+        // under D23's posture, so no lock.
+        member.Role = GroupRole.Admin;
+
+        // The Report row is the moderation ledger (§"Account actions" — the Group shape): moderator-filed
+        // (ReporterUserId == ModeratorUserId), opened and resolved together, so no counter call (groups
+        // have none). Reason "Other" with mandatory notes: no misconduct reason fits an administrative
+        // assignment. ReportedUserId is the founder snapshot (D8's Group arm) — NULL whenever the founder
+        // deleted their account, which is the scenario this action exists for.
+        DateTime now = DateTime.UtcNow;
+        writeDb.Reports.Add(new Report
+        {
+            ReportedEntityType = ReportedEntityType.Group,
+            ReportedEntityId = groupId,
+            ReportedUserId = await ResolveAnswerableUserIdAsync(ReportedEntityType.Group, groupId),
+            ReportReasonId = OtherReportReasonId,
+            Notes = trimmed,
+            ReporterUserId = modId,
+            ReportStatusId = ReportStatusEnum.ResolvedActionTaken,
+            ModeratorUserId = modId,
+            ActionTaken = trimmed,
+            DateReported = now,
+            DateResolved = now,
+        });
+
+        await writeDb.SaveChangesAsync();
+
+        // "The promoted user is notified" (D13): null-sourced, so the moderator is never named (D5's
+        // principle). A moderator who assigned themselves gets nothing about their own act (the D4
+        // guardrail's general rule).
+        if (targetUserId != modId)
+            await NotifyBestEffortAsync(() => notifications.NotifyGroupAdminAssignedAsync(targetUserId, groupId),
+                "GroupAdminAssigned", groupId);
+    }
+
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
 
     private const string SubmissionAlreadyHandled = "This submission was already handled.";
@@ -817,10 +890,11 @@ public class ServerModerationWriteService(
 
     /// <summary>
     /// The account answerable for a reported artifact (owner ruling D8): <c>User</c> → that user if the
-    /// row exists; <c>Message</c> → its sender; Story/Comment/BlogPost/Recommendation → the author. NULL =
+    /// row exists; <c>Message</c> → its sender; Story/Comment/BlogPost/Recommendation → the author; <c>Group</c>
+    /// → its founder (<c>groups.creator_id</c>, since WU-UserDeletion). NULL =
     /// no row, or an anonymous/deleted author. Read on the unfiltered write context with projections (no
     /// entity load). The default arm THROWS, so a new <see cref="ReportedEntityType"/> member fails loudly
-    /// until it gets its arm (WU-UserDeletion adds <c>Group</c> → <c>groups.creator_id</c>).
+    /// until it gets its arm.
     /// </summary>
     private async Task<int?> ResolveAnswerableUserIdAsync(ReportedEntityType type, long id) => type switch
     {
@@ -837,6 +911,11 @@ public class ServerModerationWriteService(
             .Where(b => b.BlogPostId == (int)id).Select(b => new { b.AuthorId }).SingleOrDefaultAsync())?.AuthorId,
         ReportedEntityType.Recommendation => (await writeDb.Recommendations
             .Where(r => r.RecommendationId == (int)id).Select(r => new { r.RecommenderId }).SingleOrDefaultAsync())?.RecommenderId,
+        // D8's seventh-type amendment: the founder, read directly — never a lookup of current admins,
+        // which would break the snapshot rule and return nothing in D13's admin-less scenario. NULL once
+        // the founder deleted their account: expected, the one designed NULL.
+        ReportedEntityType.Group => (await writeDb.Groups
+            .Where(g => g.GroupId == (int)id).Select(g => new { g.CreatorId }).SingleOrDefaultAsync())?.CreatorId,
         _ => throw new InvalidOperationException($"No answerable-account rule for {type}"),
     };
 

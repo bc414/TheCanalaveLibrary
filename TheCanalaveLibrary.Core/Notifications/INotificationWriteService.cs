@@ -137,6 +137,17 @@ public interface INotificationWriteService : INotificationReadService
     /// <param name="authorId">The author of the blog post (drop-self source).</param>
     Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId);
 
+    /// <summary>
+    /// Sends <c>GroupAdminAssigned = 62</c> to <paramref name="recipientUserId"/>: a site moderator made
+    /// them an admin of a group that had none (owner ruling D13 edge (b) — "the promoted user is
+    /// notified"). <b>Null-sourced, and deliberately no moderator parameter</b>: D5's principle that a
+    /// moderator's identity is never disclosed through a notification, enforced by the type.
+    /// <c>RelatedEntityId = groupId</c> (D16's single most specific anchor). Called by
+    /// <c>ServerModerationWriteService.AssignGroupAdminAsync</c>, best-effort post-commit, which skips a
+    /// moderator assigning themselves.
+    /// </summary>
+    Task NotifyGroupAdminAssignedAsync(int recipientUserId, int groupId);
+
     // ── Semantic generation methods (WU-InertFeatures — new-chapter fan-out) ─────
 
     /// <summary>

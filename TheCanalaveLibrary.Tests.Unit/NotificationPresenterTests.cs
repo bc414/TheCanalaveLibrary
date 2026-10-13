@@ -230,6 +230,7 @@ public class NotificationPresenterTests
         NotificationTypeEnum.ReportReceived, NotificationTypeEnum.ReportResolved,
         NotificationTypeEnum.ReportResolvedNoAction, NotificationTypeEnum.TagUpdateSuggestion,
         NotificationTypeEnum.SpotlightSlotGranted, NotificationTypeEnum.PollUpdated,
+        NotificationTypeEnum.GroupAdminAssigned,
     ];
 
     [Theory]
@@ -281,6 +282,21 @@ public class NotificationPresenterTests
         var (text, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.YourStoryAddedToGroup,
             NotificationCategoryEnum.YourStories, targetTitle: "Legendary Authors", contextTitle: "The Dragon's Path"));
         text.Should().Be("Your story The Dragon's Path was added to Legendary Authors");
+    }
+
+    [Fact]
+    public void Compose_GroupAdminAssigned_NamesTheGroup_AndNeverTheModerator()
+    {
+        // Owner ruling D13 edge (b) under D5's principle: the row is null-sourced, and even a row that
+        // somehow carried a source must not name the moderator — the arm never interpolates the actor.
+        var (named, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.GroupAdminAssigned,
+            NotificationCategoryEnum.Groups, sourceUserName: "ModUser", targetTitle: "Legendary Authors"));
+        named.Should().Be("You were made an admin of Legendary Authors");
+        named.Should().NotContain("ModUser");
+
+        var (bare, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.GroupAdminAssigned,
+            NotificationCategoryEnum.Groups, sourceUserName: null, targetTitle: null));
+        bare.Should().Be("You were made a group admin");
     }
 
     [Fact]
@@ -421,6 +437,7 @@ public class NotificationPresenterTests
         NotificationTypeEnum.StoryLineageApproved            => NotificationCategoryEnum.Collaborations,
         NotificationTypeEnum.NewGroupStory                  => NotificationCategoryEnum.Groups,
         NotificationTypeEnum.NewGroupBlogPost               => NotificationCategoryEnum.Groups,
+        NotificationTypeEnum.GroupAdminAssigned             => NotificationCategoryEnum.Groups,
         NotificationTypeEnum.ContentRemoved                 => NotificationCategoryEnum.Warnings,
         NotificationTypeEnum.AccountWarning                 => NotificationCategoryEnum.Warnings,
         NotificationTypeEnum.AccountSuspended               => NotificationCategoryEnum.Warnings,

@@ -93,6 +93,26 @@ public interface IModerationWriteService : IModerationReadService
     /// </summary>
     Task ReinstateUserAsync(int targetUserId, string reason);
 
+    // ── Group rescue (owner ruling D13 edge (b), WU-UserDeletion 2026-10-13) ──────
+
+    /// <summary>
+    /// Makes <paramref name="targetUserId"/> an admin of a group that has none — the moderator's remedy
+    /// for an admin-less group (its last admin left or deleted their account), on request. Exactly
+    /// three guards: the caller is a moderator; the group has zero admins (otherwise this would override
+    /// a functioning group's leadership); the target is already a member (a rescue does not invent a
+    /// membership). Member-to-member transfer of a living admin role does not exist.
+    /// <para>Files a moderator-initiated <c>Report</c> as the audit record in the same save:
+    /// <see cref="ReportedEntityType.Group"/> (ledger-only), reason "Other",
+    /// <c>Notes = ActionTaken = notes</c>, <c>ReportedUserId = groups.creator_id</c> (often NULL),
+    /// opened and resolved together. No counter moves (<c>GroupsJoined</c> counts rows, not roles — D24).
+    /// Notifies the promoted user (<c>GroupAdminAssigned</c>, null-sourced) best-effort after commit.</para>
+    /// <para>Throws <see cref="UnauthorizedAccessException"/> for a non-moderator
+    /// (<see cref="InvalidOperationException"/> when anonymous), <see cref="KeyNotFoundException"/> for an
+    /// unknown group, and <see cref="ModerationValidationException"/> when the group still has an admin,
+    /// the target is not a member, or <paramref name="notes"/> is blank or over 1,024 characters.</para>
+    /// </summary>
+    Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes);
+
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
 
     /// <summary>

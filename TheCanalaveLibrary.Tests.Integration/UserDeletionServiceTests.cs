@@ -430,6 +430,10 @@ public class UserDeletionServiceTests(PostgresFixture postgres) : IntegrationTes
                 .Select(m => new { m.UserId, m.Role }).ToListAsync();
             roles.Should().ContainSingle().Which.Should().Be(new { UserId = member, Role = GroupRole.Member },
                 "the group is admin-less — a waiting state a moderator ends (D13 edge (b))");
+
+            SetActiveUser(member);
+            (await scope.ServiceProvider.GetRequiredService<IGroupReadService>().GetByIdAsync(groupId))!
+                .AdminCount.Should().Be(0, "the page reads AdminCount to show a moderator the rescue panel");
         }
     }
 

@@ -812,6 +812,9 @@ unless noted. All sit under Stage-5 cells.
   - WU-ModerationIntegrity (2026-09-30) did not take it (not in its sources) and its new
     `POST /api/moderation/users/{id}/reinstate?reason=` follows the existing shape, so the fix now
     sweeps five endpoints.
+  - WU-UserDeletion (2026-10-13) did not extend the shape: its new
+    `POST /api/moderation/groups/{groupId}/assign-admin` sends its notes in a JSON body
+    (`AssignGroupAdminRequest`), the fix shape this item describes. The sweep stays at five.
 
 - [ ] **D10 — ExternalVerification moderator actions have no status guard** `[latent-risk · low · beta]` — *Filed 2026-09-30 by WU-ModerationIntegrity (its spec's X7); unruled.*
   - Grid: F53 L2=5 (unchanged).
@@ -849,6 +852,13 @@ unless noted. All sit under Stage-5 cells.
     has vanished. Only the narrow window between the ensure-insert and its re-read is closed: the
     re-read retries once. Fix shape: re-ensure and re-apply on a 0-row save, or answer it as a no-op;
     which one is right depends on whether the lost write should land.
+  - **Update-vs-delete (group rescue)**, added by WU-UserDeletion (2026-10-13).
+    `AssignGroupAdminAsync` loads the target's member row (tracked), sets `Role = Admin` and saves with
+    the ledger row. If the member leaves between the load and the save, the save updates nothing and
+    answers a 500 (`DbUpdateConcurrencyException`), with nothing committed. Fix shape: answer it as the
+    "isn't a member" refusal (a 400), detaching the two pending entries first so the circuit's context
+    does not retry them. Not built: D23 did not route the site, and the window is a moderator's click
+    against a member's leave.
   - Fix shape:
     - Inserts: `INSERT … ON CONFLICT DO NOTHING`, with the counter or notification gated on
       rows-affected (the `JoinAsync` shape).
@@ -1448,7 +1458,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [ ] **H6 — Minor by-design gaps on Stage-5 cells** `[polish · low · anytime]`
   - Context (each grid-5, flagged "future pass" in its audit file):
-    - Group **last-admin-leave** unhandled — `layer2-services.md:625`.
+    - ~~Group **last-admin-leave** unhandled — `layer2-services.md:625`~~ — **FIXED 2026-10-13 (WU-UserDeletion, owner ruling D13 edge (b))**: an admin-less group is a waiting state a moderator ends with `AssignGroupAdminAsync`, and the sole admin's Leave warns first. Rule: `layer2-services.md` §"Group Membership and Role Model".
     - **Self-likes** accepted on own comment (F25) — `audit/Comments.md`.
     - **Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`.
     - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
@@ -1824,10 +1834,12 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     4. Open the page in two tabs; delete a folder in one, then create a sub-folder under it from the
        other: "That parent folder no longer exists." and the tree reloads without it.
 
-- [ ] **H29 — WU-UserDeletion browser pass: account deletion's survival set, the deletion copy, the anonymized voter and messaging label** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion, which ran with no browser available.*
-  - Grid: **F37, F49 and F52 L4.5 went 5→1** (the campaign's no-browser precedent): the poll voter
-    list gained a "[deleted user]" branch, the messaging pages read "[deleted user]" for a deleted
-    participant, and the deletion page's copy was rewritten.
+- [ ] **H29 — WU-UserDeletion browser pass: account deletion's survival set, the deletion copy, the anonymized voter and messaging label, the admin-less group rescue** `[test-hygiene · low · beta]` — *Filed 2026-10-13 by WU-UserDeletion, which ran with no browser available.*
+  - Grid: **F37, F49 and F52 L4.5 went 5→1** at Part A (the campaign's no-browser precedent): the poll
+    voter list gained a "[deleted user]" branch, the messaging pages read "[deleted user]" for a deleted
+    participant, and the deletion page's copy was rewritten. **F40, F42 and F47 L4.5 went 5→1** at
+    Part B: the group page's rescue panel and leave warning, the type-62 copy, and Group rows in the
+    queue's "Show resolved".
   - **Steps** (server-only path; both render phases where the page is interactive; `psql` on
     `poll_votes`, `conversations`, `private_messages`, `conversation_participants`, `reports`,
     `group_members` as ground truth). Register two throwaway accounts (the NoOp sender's on-page
@@ -1845,6 +1857,21 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        "[deleted user]" as the other participant, and the thread shows X's message from "[deleted user]".
     5. Delete Y. `psql`: the X–Y conversation and its messages are gone, and Y's open report on the
        message is `ResolvedNoAction` with no moderator and the "both participants" note.
+    6. **Leave warning (F40).** As the sole admin of a group with one other member, Leave opens "Leave as
+       the only admin?"; Stay closes it with nothing written; Leave group leaves (`group_members` has
+       no Admin row for the group). A group with two admins, and a plain member, leave without a prompt.
+    7. **Rescue panel (F40/F47/F42).** As ModUser (a Moderator), open that admin-less group: the "This
+       group has no admin" panel lists the members and keeps "Assign as admin" disabled until a member
+       and notes are given. Assign: a success toast, the page reloads without the panel, `psql` shows the
+       member's role as Admin and one `reports` row (type 6, reason 1, reporter = moderator =
+       ModUser, `ResolvedActionTaken`, the notes). As a plain member the panel never shows. From a stale
+       second tab, assigning again shows "This group still has an admin…" inline.
+    8. **Notification (F42).** As the promoted member: the bell and inbox read "You were made an admin
+       of {group}" with no moderator name, linking to the group; the email (Mailpit, Aspire path) has
+       the same lead line.
+    9. **Queue (F47).** `/mod/reports` with "Show resolved": the row reads "Group: {name}" with a link to
+       the group and offers no action; it is absent from the open queue. The founder's
+       `/mod/users/{id}` history lists it (when the founder still exists).
 
 ---
 

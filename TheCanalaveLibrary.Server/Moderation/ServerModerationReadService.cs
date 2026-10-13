@@ -280,7 +280,9 @@ public class ServerModerationReadService(
     /// bypassed — the report queue is a moderator work surface, not scoped by the reviewer's personal
     /// rating preference (settled 2026-07-18; see <c>content-safety.md</c> §"Moderator review
     /// surfaces are work surfaces"). Every other target type here already carries no rating filter
-    /// (Recommendation/BlogPost/Comment/User/Message), so this keeps all six arms consistent.
+    /// (Recommendation/BlogPost/Comment/User/Message), so this keeps all six content arms consistent. The
+    /// ledger-only <see cref="ReportedEntityType.Group"/> arm (owner ruling D13) lifts <c>GroupAudience</c> for
+    /// the same reason.
     /// </summary>
     private static async Task<Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>>>
         BatchLoadTargetsAsync(
@@ -386,6 +388,24 @@ public class ServerModerationReadService(
                         x => x.MessageId,
                         x => ($"Private Message #{x.MessageId}", (string?)null, 0));
                     break;
+                case ReportedEntityType.Group:
+                {
+                    // Ledger-only rows (the assign-admin action, owner ruling D13): born resolved, so they
+                    // appear under "Show resolved" and in the per-user history. Without this arm Step 3
+                    // would drop them silently. Groups have no ActiveReportCount (0).
+                    var intIds = ids.Select(id => (int)id).ToList();
+                    var groups = await readDb.Groups
+                        // elevated read: mod queue is a work surface — not scoped by the moderator's
+                        // personal mature setting.
+                        .IgnoreQueryFilters(["GroupAudience"])
+                        .Where(g => intIds.Contains(g.GroupId))
+                        .Select(g => new { g.GroupId, g.GroupName })
+                        .ToListAsync();
+                    result[type] = groups.ToDictionary(
+                        x => (long)x.GroupId,
+                        x => ($"Group: {x.GroupName}", (string?)$"/group/{x.GroupId}", 0));
+                    break;
+                }
             }
         }
 

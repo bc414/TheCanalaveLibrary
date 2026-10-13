@@ -7,6 +7,9 @@ namespace TheCanalaveLibrary.Core;
 /// <see cref="FolderTree"/> is the root-level folders; each folder carries its own nested children.
 /// <see cref="Stories"/> carries every story in the group with its <see cref="GroupStoryDto.GroupStoryId"/>
 /// (visible to every viewer — visibility was never gated; only the group/folder write actions are).
+/// <see cref="AdminCount"/> is how many members hold <see cref="GroupRole.Admin"/>: 0 is the admin-less
+/// waiting state (owner ruling D13 edge (b)) that shows a moderator the rescue panel, and 1 makes that
+/// admin's Leave warn first (WU-UserDeletion, 2026-10-13).
 /// </summary>
 public record GroupDetailDto(
     int GroupId,
@@ -20,4 +23,5 @@ public record GroupDetailDto(
     DateTime DateCreated,
     GroupRole? CurrentUserRole,
     IReadOnlyList<GroupFolderDto> FolderTree,
-    IReadOnlyList<GroupStoryDto> Stories);
+    IReadOnlyList<GroupStoryDto> Stories,
+    int AdminCount);

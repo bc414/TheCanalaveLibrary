@@ -7,6 +7,13 @@ public record SubmitReportRequest(
     short ReasonId,
     string? Notes);
 
+/// <summary>
+/// Body of <c>POST /api/moderation/groups/{groupId}/assign-admin</c> (owner ruling D13 edge (b)). A JSON
+/// body, not the query string the older moderator actions use: the notes are free text, and tracker D9
+/// records why free text in a URL is a latent risk (WU-UserDeletion, 2026-10-13).
+/// </summary>
+public record AssignGroupAdminRequest(int TargetUserId, string Notes);
+
 /// <summary>Lookup row for populating the reason dropdown in <c>ReportDialog</c>.</summary>
 public record ReportReasonDto(short ReasonId, string ReasonName, string? Description);
 

@@ -97,7 +97,7 @@ else
                             <span class="text-sm text-(--color-text-muted)">
                                 @(_currentUserRole == GroupRole.Admin ? "Admin" : "Member")
                             </span>
-                            <button type="button" @onclick="HandleLeaveAsync"
+                            <button type="button" @onclick="HandleLeaveClickedAsync"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
                                 Leave
                             </button>
@@ -117,7 +117,23 @@ else
             {
                 <p class="text-sm text-(--color-text) leading-relaxed max-w-2xl">@Group.Description</p>
             }
+
+            @* Owner ruling D13 edge (b): an admin-less group waits for a site moderator. Affordance only —
+               AssignGroupAdminAsync's guards are the control. *@
+            @if (_viewerIsModerator && Group.AdminCount == 0)
+            {
+                <GroupAdminRescuePanel GroupId="@Group.GroupId" OnAssigned="LoadGroupAsync" />
+            }
         </div>
+
+        @* The sole admin's Leave confirms first (D13's recommended rider: warn rather than cure). *@
+        <ConfirmDialog @bind-IsOpen="_confirmLastAdminLeaveOpen" Title="Leave as the only admin?" IsDestructive="true"
+                       ConfirmText="Leave group" CancelText="Stay" OnConfirm="HandleLeaveAsync">
+            <p class="text-(--color-text)">
+                You're this group's only admin. If you leave, it will have no admin until a site moderator
+                assigns one, and no one will be able to edit the group, manage its folders or remove its stories.
+            </p>
+        </ConfirmDialog>
 
         @* ── Two-column layout: main | sidebar ────────────────────────────────────── *@
         <div class="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_280px]">
@@ -265,6 +281,13 @@ else
     // fresh rather than ride a stale prerender payload.
     private GroupRole? _currentUserRole;
     private int? _currentUserId;
+
+    // Resolved from the AuthState cascade at runtime, never persisted (render mode rule): shows the
+    // admin-less rescue panel (D13 edge (b)) to site moderators.
+    private bool _viewerIsModerator;
+
+    // The sole admin's Leave confirm (D13's warn-on-last-admin-leave rider).
+    private bool _confirmLastAdminLeaveOpen;
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _interactionStates =
         new Dictionary<int, UserStoryInteractionStateDto>();
 
@@ -315,6 +338,7 @@ else
             AuthenticationState state = await AuthState;
             string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+            _viewerIsModerator = state.User.IsInRole("Moderator") || state.User.IsInRole("Admin");
         }
 
         if (Group is null)
@@ -438,6 +462,21 @@ else
         {
             Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
+    }
+
+    /// <summary>
+    /// Leave, warned first when the viewer is the group's only admin (owner ruling D13's rider: the
+    /// group would wait admin-less for a moderator). <c>LeaveAsync</c> itself is unchanged — D13 rejects
+    /// auto-promotion and self-claim, so the warning is the whole remedy on this side.
+    /// </summary>
+    private async Task HandleLeaveClickedAsync()
+    {
+        if (_currentUserRole == GroupRole.Admin && Group?.AdminCount == 1)
+        {
+            _confirmLastAdminLeaveOpen = true;
+            return;
+        }
+        await HandleLeaveAsync();
     }
 
     private async Task HandleLeaveAsync()

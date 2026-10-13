@@ -40,6 +40,9 @@ public class GroupPageTests : BunitContext
         };
 
         Services.AddScoped<IGroupWriteService>(_ => _groupService);
+        // The admin-less rescue panel (D13 edge (b)) reads members and writes through the moderation service.
+        Services.AddScoped<IGroupReadService>(_ => _groupService);
+        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         Services.AddScoped<IStoryReadService>(_ => _storyService);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IBlogPostReadService>(_ => new FakeBlogPostReadService());
@@ -72,24 +75,27 @@ public class GroupPageTests : BunitContext
         FolderYId, TestGroupId, ParentFolderId: null, "Folder Y", Rating.M, SortOrder: 1,
         Stories: [], Children: []);
 
-    private GroupDetailDto NewGroupDetail(IReadOnlyList<GroupFolderDto> folderTree) => new(
+    private GroupDetailDto NewGroupDetail(IReadOnlyList<GroupFolderDto> folderTree, int adminCount = 1) => new(
         TestGroupId, "Test Group", "A description.", GroupAudienceType.Standard, Rating.M,
         CreatorId: 1, CreatorDisplayName: "Creator", MemberCount: 3,
         DateCreated: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
         CurrentUserRole: _groupService.Role, FolderTree: folderTree,
-        Stories: [new GroupStoryDto(UnfiledGroupStoryId, UnfiledStoryId), new GroupStoryDto(FiledGroupStoryId, FiledStoryId)]);
+        Stories: [new GroupStoryDto(UnfiledGroupStoryId, UnfiledStoryId), new GroupStoryDto(FiledGroupStoryId, FiledStoryId)],
+        AdminCount: adminCount);
 
-    private IRenderedComponent<GroupPage> RenderGroup(GroupRole? role)
+    private IRenderedComponent<GroupPage> RenderGroup(GroupRole? role, int adminCount = 1, bool asModerator = false)
     {
         _groupService.Role = role;
-        _groupService.GroupDetail = NewGroupDetail([NewFolderX(), NewFolderY()]);
+        _groupService.GroupDetail = NewGroupDetail([NewFolderX(), NewFolderY()], adminCount);
 
         // GroupPage resolves _currentUserId from a plain [CascadingParameter] Task<AuthenticationState>
         // (not <AuthorizeView>), but StoryCard's nested AddToCustomListMenu DOES use AuthorizeView —
         // bUnit's authorization double satisfies both simultaneously (same pattern as StoryCardTests).
         var auth = this.AddAuthorization();
-        if (role is not null)
+        if (role is not null || asModerator)
             auth.SetAuthorized("test-user").SetClaims(new Claim(ClaimTypes.NameIdentifier, "1"));
+        if (asModerator)
+            auth.SetRoles("Moderator");
 
         IRenderedComponent<GroupPage> cut = Render<GroupPage>(p => p.Add(c => c.GroupId, TestGroupId));
         cut.WaitForState(() => cut.Markup.Contains("Test Group"), TimeSpan.FromSeconds(2));
@@ -237,5 +243,73 @@ public class GroupPageTests : BunitContext
         cut.WaitForState(() => _groupService.RemoveStoryCalls.Count > 0, TimeSpan.FromSeconds(2));
 
         _groupService.RemoveStoryCalls.Should().ContainSingle().Which.Should().Be(UnfiledGroupStoryId);
+    }
+
+    // ── The admin-less group (owner ruling D13 edge (b), WU-UserDeletion) ─────────
+
+    private const string RescueHeading = "This group has no admin";
+
+    [Fact]
+    public void RescuePanel_RendersForAModerator_WhenTheGroupHasNoAdmin()
+    {
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member, adminCount: 0, asModerator: true);
+
+        cut.Markup.Should().Contain(RescueHeading);
+        _groupService.GetMembersCalls.Should().Be(1, "the panel loads the members to choose from");
+    }
+
+    [Theory]
+    [InlineData(GroupRole.Member, 0, false)]  // an ordinary member of an admin-less group
+    [InlineData(null, 0, false)]              // anonymous
+    [InlineData(GroupRole.Member, 1, true)]   // a moderator, but the group has an admin
+    [InlineData(null, 2, true)]
+    public void RescuePanel_IsAbsent_UnlessAModeratorViewsAnAdminlessGroup(GroupRole? role, int adminCount, bool asModerator)
+    {
+        IRenderedComponent<GroupPage> cut = RenderGroup(role, adminCount, asModerator);
+
+        cut.Markup.Should().NotContain(RescueHeading);
+        _groupService.GetMembersCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public void SoleAdmin_Leave_OpensTheWarning_AndLeavesOnlyOnConfirm()
+    {
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Admin, adminCount: 1);
+
+        FindButton(cut, "Leave").Click();
+
+        cut.Markup.Should().Contain("Leave as the only admin?");
+        cut.Markup.Should().Contain("until a site moderator");
+        _groupService.LeaveCalls.Should().Be(0, "the sole admin is warned before LeaveAsync runs");
+
+        FindButton(cut, "Leave group").Click();
+
+        cut.WaitForState(() => _groupService.LeaveCalls > 0, TimeSpan.FromSeconds(2));
+        _groupService.LeaveCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void SoleAdmin_Leave_Cancelled_DoesNotLeave()
+    {
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Admin, adminCount: 1);
+
+        FindButton(cut, "Leave").Click();
+        FindButton(cut, "Stay").Click();
+
+        _groupService.LeaveCalls.Should().Be(0);
+        cut.Markup.Should().NotContain("Leave as the only admin?");
+    }
+
+    [Theory]
+    [InlineData(GroupRole.Admin, 2)]   // another admin remains
+    [InlineData(GroupRole.Member, 1)]  // a member never sees the warning
+    public void Leave_WithAnotherAdminLeft_LeavesDirectly(GroupRole role, int adminCount)
+    {
+        IRenderedComponent<GroupPage> cut = RenderGroup(role, adminCount);
+
+        FindButton(cut, "Leave").Click();
+
+        cut.WaitForState(() => _groupService.LeaveCalls > 0, TimeSpan.FromSeconds(2));
+        cut.Markup.Should().NotContain("Leave as the only admin?");
     }
 }

@@ -2694,7 +2694,7 @@ serializes correctly under any isolation level.
 | `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationSuccessesEarned` | recommender | `ServerRecommendationWriteService.RecordSuccessAsync` (new column, WU36) | +1 |
 | `BlogPostsWritten` | author | `ServerBlogPostWriteService` **profile** create/delete only — group posts are untracked, site posts deliberately excluded, while the recompute counts every `base_blog_posts` row (the three disagree; owner-open, tracker **F16**) | ±1 |
-| `GroupsJoined` | member | `ServerGroupWriteService` create/join/leave — creating a group counts as joining it (D24); `JoinAsync`'s `+1` is gated on its `ON CONFLICT` insert landing a row (D23); a moderator role change (WU-GroupAdminRescue) has **no** counter effect | ±1 |
+| `GroupsJoined` | member | `ServerGroupWriteService` create/join/leave — creating a group counts as joining it (D24); `JoinAsync`'s `+1` is gated on its `ON CONFLICT` insert landing a row (D23); a moderator role change (`AssignGroupAdminAsync`, built WU-UserDeletion 2026-10-13) has **no** counter effect | ±1 |
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
 | `StoriesRead`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService.SetUserStoryInteractionStateAsync` / `MarkCompletedAsync` | **transition-delta** |
 | `StoriesInProgress` | acting user | `ServerUserStoryInteractionWriteService.MarkStartedAsync` (+1 on a genuine `HasStarted` flip, not already completed) **and** `SetUserStoryInteractionStateAsync`/`MarkCompletedAsync` (−1 on completing) | **transition-delta** |

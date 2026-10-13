@@ -277,6 +277,8 @@ public class ModUsersPageTests : BunitContext
         public (int TargetUserId, bool CanAutoApprove, short ReasonId, string Reason)? LastAutoApprove { get; private set; }
         public (int TargetUserId, string Reason)? LastReinstate { get; private set; }
 
+        public Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes) => throw new NotImplementedException();
+
         public Task ReinstateUserAsync(int targetUserId, string reason)
         {
             LastReinstate = (targetUserId, reason);

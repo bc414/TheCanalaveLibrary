@@ -154,6 +154,18 @@ public static class ModerationEndpoints
                     }))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
+        // Group rescue (owner ruling D13 edge (b), WU-UserDeletion) — a moderator makes a member the admin
+        // of an admin-less group; files its own audit Report row (Group target). The notes ride a JSON
+        // body, not the query (tracker D9's shape is not extended to a new endpoint).
+        group.MapPost("/groups/{groupId:int}/assign-admin",
+                (IModerationWriteService moderation, int groupId, AssignGroupAdminRequest request) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                    {
+                        await moderation.AssignGroupAdminAsync(groupId, request.TargetUserId, request.Notes);
+                        return Results.NoContent();
+                    }))
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
+
         // Story-approval trust revoke/restore (WU-StoryLifecycle, D1) — moderator-initiated, files
         // its own audit Report row like the account action above. `enabled` is non-nullable with no
         // lambda default: the client impl always sends it explicitly.

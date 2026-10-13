@@ -29,7 +29,15 @@ public enum ReportedEntityType : short
     Comment = 2,
     BlogPost = 3,
     Recommendation = 4,
-    Message = 5
+    Message = 5,
+
+    /// <summary>
+    /// A group — <b>ledger-only</b> (owner ruling D13, with D47's floor; WU-UserDeletion 2026-10-13). Only
+    /// the moderator assign-admin action writes it, as an opened-and-resolved audit row. It is not in
+    /// report submission's allow-set, and no "report this group" control exists until D47(b) decides
+    /// what a moderator can do with one (<c>layer2-services.md</c> §"Account actions" — the Group shape).
+    /// </summary>
+    Group = 6,
 }
 
 // NOTE: The vestigial ReadStatus and FavoriteStatus enums were removed. They predated the
@@ -156,6 +164,7 @@ public enum NotificationTypeEnum : short
     //Groups
     NewGroupStory = 60,
     NewGroupBlogPost = 61,
+    GroupAdminAssigned = 62, // A moderator made you an admin of an admin-less group (D13 edge (b); null-sourced — D5)
     
     //Moderation
     //Notifications for the user *receiving* a moderation action

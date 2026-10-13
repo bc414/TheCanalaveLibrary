@@ -50,7 +50,10 @@ public interface IGroupWriteService : IGroupReadService
     Task JoinAsync(int groupId);
 
     /// <summary>
-    /// Removes the current user from the group. Idempotent — no-op when not a member.
+    /// Removes the current user from the group. Idempotent — no-op when not a member. The last admin may
+    /// leave: the group then waits admin-less until a site moderator assigns one (owner ruling D13 edge
+    /// (b) — <c>IModerationWriteService.AssignGroupAdminAsync</c>); nothing here auto-promotes. The group
+    /// page warns the sole admin first.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Group not found.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>

@@ -88,6 +88,9 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId) =>
         throw NotExposedOverHttp();
 
+    public Task NotifyGroupAdminAssignedAsync(int recipientUserId, int groupId) =>
+        throw NotExposedOverHttp();
+
     public Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId) =>
         throw NotExposedOverHttp();
 

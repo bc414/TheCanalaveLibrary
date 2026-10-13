@@ -194,6 +194,9 @@ L1/L2/L4 stay 5.**
   conversation delete, or the message-report closure, fails the both-participants test.
 - **L4.5 5→1.** The page's copy changed and no browser was available, so tracker **H29** carries the
   pass.
+- **Part B (the WU's second commit, same day).** The copy gained its sole-admin sentence ("it will have
+  no admin until a site moderator assigns one") once the moderator's assign-admin action existed to make
+  it true (`audit/Moderation.md` F47, `audit/Groups.md` F40). The same Integration copy test asserts it.
 
 **WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.**
 - **L1.** A deleted user's polls now survive anonymized: `base_polls.owner_id` is nullable `ON DELETE

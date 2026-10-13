@@ -160,6 +160,7 @@ public class ModSubmissionsPageStoriesTests : BunitContext
         public Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) => throw new NotImplementedException();
         public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason) => throw new NotImplementedException();
         public Task ReinstateUserAsync(int targetUserId, string reason) => throw new NotImplementedException();
+        public Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes) => throw new NotImplementedException();
     }
 
     private sealed class EmptyExternalVerificationWriteService : IExternalVerificationWriteService

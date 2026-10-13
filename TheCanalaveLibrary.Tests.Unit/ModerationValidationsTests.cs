@@ -33,10 +33,15 @@ public class ModerationValidationsTests
             ReportedEntityType.BlogPost,
             ReportedEntityType.Recommendation,
             ReportedEntityType.Message,
+            // Ledger-only (owner ruling D13, D47's floor): written only by the moderator assign-admin
+            // action, and deliberately ABSENT from ServerModerationWriteService.AllowedReportTargets until
+            // D47(b) decides what a moderator can do with a member-filed Group report.
+            ReportedEntityType.Group,
         ];
 
         defined.Should().BeEquivalentTo(expected,
-            "if a new ReportedEntityType is added, also add it to ServerModerationWriteService.AllowedReportTargets");
+            "a new ReportedEntityType must be placed deliberately: added to " +
+            "ServerModerationWriteService.AllowedReportTargets, or recorded as ledger-only like Group");
     }
 
     // ── AccountStatusEnum — shadowban axiom ───────────────────────────────────────

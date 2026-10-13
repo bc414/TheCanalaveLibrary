@@ -1869,6 +1869,16 @@ namespace TheCanalaveLibrary.Server.Migrations
                         },
                         new
                         {
+                            NotificationTypeId = (short)62,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "A site moderator made you an admin of a group that had none.",
+                            DisplayName = "Group Admin Assigned",
+                            NotificationCategory = (short)6,
+                            NotificationKey = "GroupAdminAssigned"
+                        },
+                        new
+                        {
                             NotificationTypeId = (short)75,
                             DefaultCollapsed = false,
                             DefaultEmailEnabled = true,

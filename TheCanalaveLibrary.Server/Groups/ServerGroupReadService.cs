@@ -83,6 +83,7 @@ public class ServerGroupReadService(
                 g.CreatorId,
                 CreatorDisplayName = g.Creator != null ? g.Creator.UserName : null,
                 MemberCount = g.GroupMembers.Count,
+                AdminCount = g.GroupMembers.Count(m => m.Role == GroupRole.Admin),
                 g.DateCreated,
                 CurrentUserRole = currentUserId != null
                     ? g.GroupMembers
@@ -113,7 +114,8 @@ public class ServerGroupReadService(
             row.DateCreated,
             row.CurrentUserRole,
             folderTree,
-            row.Stories);
+            row.Stories,
+            row.AdminCount);
     }
 
     public async Task<GatedMetadataDto?> GetGroupGateAsync(int groupId)

@@ -37,7 +37,7 @@ public class GroupFolderManagementPageTests : BunitContext
         TestGroupId, "Test Group", "A description.", GroupAudienceType.Standard, Rating.M,
         CreatorId: 1, CreatorDisplayName: "Creator", MemberCount: 3,
         DateCreated: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        CurrentUserRole: GroupRole.Admin, FolderTree: folderTree, Stories: []);
+        CurrentUserRole: GroupRole.Admin, FolderTree: folderTree, Stories: [], AdminCount: 1);
 
     private static GroupFolderDto NewFolder(int id, string name, int sortOrder, Rating rating = Rating.M,
         int? parentId = null, IReadOnlyList<GroupFolderDto>? children = null) =>
@@ -402,6 +402,12 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public Exception? ReorderFolderException { get; set; }
     public int GetByIdCalls { get; private set; }
 
+    // Group-page leave and the admin-less rescue panel (WU-UserDeletion, D13 edge (b)).
+    public GroupMemberDto[] Members { get; set; } = [];
+    public int? MembersTotal { get; set; }
+    public int GetMembersCalls { get; private set; }
+    public int LeaveCalls { get; private set; }
+
     public List<CreateFolderDto> CreateFolderCalls { get; } = [];
     public List<(int FolderId, string NewName)> RenameFolderCalls { get; } = [];
     public List<int> DeleteFolderCalls { get; } = [];
@@ -425,15 +431,22 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
 
     public Task<GroupRole?> GetCurrentUserRoleAsync(int groupId) => Task.FromResult(Role);
 
-    public Task<(GroupMemberDto[] Members, int TotalCount)> GetMembersAsync(int groupId, int page, int pageSize) =>
-        Task.FromResult((Array.Empty<GroupMemberDto>(), 0));
+    public Task<(GroupMemberDto[] Members, int TotalCount)> GetMembersAsync(int groupId, int page, int pageSize)
+    {
+        GetMembersCalls++;
+        return Task.FromResult((Members, MembersTotal ?? Members.Length));
+    }
 
     // ── Writes not exercised by this page ─────────────────────────────────────────
 
     public Task<int> CreateGroupAsync(CreateGroupDto dto) => Task.FromResult(0);
     public Task UpdateGroupAsync(UpdateGroupDto dto) => Task.CompletedTask;
     public Task JoinAsync(int groupId) => Task.CompletedTask;
-    public Task LeaveAsync(int groupId) => Task.CompletedTask;
+    public Task LeaveAsync(int groupId)
+    {
+        LeaveCalls++;
+        return Task.CompletedTask;
+    }
     public Task AddStoryAsync(AddGroupStoryDto dto) => Task.CompletedTask;
 
     public Task RemoveStoryAsync(int groupStoryId)

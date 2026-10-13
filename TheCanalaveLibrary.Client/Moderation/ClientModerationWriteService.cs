@@ -78,6 +78,14 @@ public sealed class ClientModerationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
+    public async Task AssignGroupAdminAsync(int groupId, int targetUserId, string notes)
+    {
+        // A JSON body, unlike the query-string reasons above (tracker D9): the notes are free text.
+        HttpResponseMessage response = await Http.PostAsJsonAsync(
+            $"api/moderation/groups/{groupId}/assign-admin", new AssignGroupAdminRequest(targetUserId, notes));
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     public async Task ApproveStoryAsync(int storyId)
     {
         HttpResponseMessage response = await Http.PostAsync(

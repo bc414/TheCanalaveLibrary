@@ -96,6 +96,15 @@ WU-UserDeletion 2026-10-13). Do not revisit:**
 
 Rule: `layer2-services.md` §"Group Membership and Role Model".
 
+**WU-UserDeletion Stage note (2026-10-13) — no F38 flip.** The Settled note above is built, but none
+of it lives in F38's own surfaces: `ServerGroupWriteService` is unchanged (`LeaveAsync` too, as D13
+requires), and `GroupCreateEditPage` is untouched. The action is `IModerationWriteService`'s
+(`audit/Moderation.md` F47's WU-UserDeletion note), the page changes are F40's (its Stage note), and
+the deletion route is F52's (`audit/Identity.md`). Tier coverage of the role-model rule itself:
+Integration `GroupAdminRescueTests` (the role flips to Admin on an existing row; `GroupsJoined` does not
+move — D24) and `UserDeletionServiceTests` (a sole admin's account deletion leaves the group with no
+admin). Tracker H6's "last-admin-leave unhandled" bullet is closed.
+
 **Settled — owner rulings D24 and D23 (answered 2026-08-08; built WU-CounterSymmetry 2026-09-30).
 Do not revisit:**
 - **Creating a group counts as joining it.** `CreateGroupAsync` moves the creator's `GroupsJoined`
@@ -105,7 +114,7 @@ Do not revisit:**
 - **`JoinAsync` is an upsert.** One `INSERT … ON CONFLICT (user_id, group_id) DO NOTHING`, and the
   `+1` runs only when that insert landed a row, so a concurrent double join neither 500s nor
   double-counts. It ships with D24's increment because the two touch the same method pair.
-- **A moderator's assign-admin action (WU-GroupAdminRescue, D13 edge (b)) has no counter effect.** It
+- **A moderator's assign-admin action (WU-GroupAdminRescue, D13 edge (b); built as WU-UserDeletion's Part B, 2026-10-13) has no counter effect.** It
   changes `Role` on an existing row; it is not a membership change.
 - **Conditional falling case.** If a group-delete path is ever built (D47(b), pending), every member's
   `GroupsJoined` falls through the `group_members` cascade. That is correct and needs no counter code.
@@ -537,8 +546,32 @@ WU's code.**
   refused by its named constraint; the catalog guard; a group post's author deletes it with no base
   rows left) and `BlogPostWriteServiceTests` (group-post gates, the author who left the group). No
   group-delete path was added (D47(b) pending), so there is no group-scope `TptDelete` method.
+- **WU-UserDeletion Stage note (2026-10-13; owner ruling D13 edge (b)) — F40 L4.5 5→1; L2/L3/L3.5 stay
+  5.** The admin-less group on the group page (F38's Settled note "the admin-less group").
+  - **L2.** `GroupDetailDto` gains trailing `int AdminCount`, projected in `GetByIdAsync` as
+    `g.GroupMembers.Count(m => m.Role == Admin)`. Tier: Integration — `UserDeletionServiceTests` (0 after
+    a sole admin's account deletion) and `GroupAdminRescueTests` (0 → 1 after the assignment).
+  - **L3/L3.5.** `GroupPage` resolves `_viewerIsModerator` from the `AuthState` cascade (never
+    persisted; `AdminCount` rides the persisted `Group` DTO). A Moderator/Admin viewer of a group with
+    `AdminCount == 0` sees the new `GroupAdminRescuePanel` (`SharedUI/Groups/`, explicit `@namespace`):
+    the first 100 members in a labelled `<select>` (a note when there are more), a required notes
+    `<textarea maxlength="1024">`, and "Assign as admin" (Container + `action` Control + `ErrorAlert`).
+    It calls `IModerationWriteService.AssignGroupAdminAsync` (the server service on the circuit, the
+    client over WASM), toasts, and raises `OnAssigned` so the page reloads and the panel hides. A
+    refusal keeps its message and reloads the member list (`error-handling.md`). The sole admin's Leave
+    (`_currentUserRole == Admin && AdminCount == 1`) opens a `ConfirmDialog` saying the group will have
+    no admin until a site moderator assigns one; every other Leave is unchanged, and `LeaveAsync` is
+    untouched. Tier: RazorComponents — `GroupPageTests` +9 (the panel only for a moderator of an
+    admin-less group; the sole admin's warning, confirm and cancel; a non-sole admin and a member leave
+    directly) and the new `GroupAdminRescuePanelTests` (5: labelled controls, submit disabled until a
+    member and non-blank notes, the call carries exactly the pick and notes and raises `OnAssigned`, a
+    refusal keeps the message and reloads, the more-members note). Mutation-checked: dropping the
+    `AdminCount` condition or the leave check fails its tests. `check-design-tokens.ps1` and
+    `check-a11y.ps1` pass.
+  - **L4.5 5→1.** No browser was available; tracker **H29** carries the moderator panel and the
+    leave warning.
 - **L1 — Stage 5** (group comment and group post FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above).
-- **L2 — Stage 5 (2026-06-24, WU32; group-post update/delete since WU-TptHardDelete, 2026-09-30 — Stage note above).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
+- **L2 — Stage 5 (2026-06-24, WU32; `GroupDetailDto.AdminCount` since WU-UserDeletion, 2026-10-13, Integration-tested; group-post update/delete since WU-TptHardDelete, 2026-09-30 — Stage notes above).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
   `GetByIdAsync` (builds folder tree in-memory from flat DB load), `GetCurrentUserRoleAsync`,
   `GetMembersAsync`. `ICommentReadService.GetGroupCommentsAsync` / `ICommentWriteService.PostGroupCommentAsync`
   — per-context method pattern mirroring blog-post. `IBlogPostReadService.GetByGroupAsync` (reads
@@ -550,11 +583,11 @@ WU's code.**
   fan-out is best-effort post-commit (try/catch).
   Test tier: Integration (`GroupServiceTests`) — group comments post/read, blog-post create + read,
   notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule).
-- **L3-Logic — Stage 5 (2026-06-24, WU32).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
+- **L3-Logic — Stage 5 (2026-06-24, WU32; `GroupPage`'s moderator flag, leave warning and the panel's submit/refusal handling since WU-UserDeletion, 2026-10-13, RazorComponents-tested — Stage note above).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
   `CommentSection.GroupId` param + `CommentTarget.Group` branch (exactly-one-set guard, Load/Post/Reply).
   Test tier: Unit (`GroupAudienceTypeMapperTests`) — all three presets, round-trip, unknown value throws.
   RazorComponents (`CommentSectionGroupTests`) — initial load, post dispatch, no-spoiler-toggle, guard.
-- **L3.5-Structure — Stage 5 (2026-06-24, WU32).** `GroupCard.razor` (leaf, no inject, audience badge).
+- **L3.5-Structure — Stage 5 (2026-06-24, WU32; the admin-less rescue panel and the sole admin's leave warning since WU-UserDeletion, 2026-10-13, RazorComponents-tested — Stage note above).** `GroupCard.razor` (leaf, no inject, audience badge).
   `GroupsPage.razor` (`/groups` listing, `IGroupWriteService`, `PaginationControls`, auth-gated Create link).
   `GroupPage.razor` (dispatcher: resolves `CurrentUserId` from auth cascade, batch-loads group detail +
   stories + blog posts + interaction states in parallel, surfaces `ContentRatingExceededException`).
@@ -571,6 +604,9 @@ WU's code.**
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
+- **L4.5 — Stage 1 (5→1, WU-UserDeletion 2026-10-13).** The rescue panel and the sole admin's leave warning
+  are undriven in a browser; tracker **H29** owes the pass. It was 5 from the 2026-07-01/02 pass (the
+  "L4.5-Browser verification" section below) through the later browser-verified WUs.
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: group comments, blog-post create +
   read, and notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost,

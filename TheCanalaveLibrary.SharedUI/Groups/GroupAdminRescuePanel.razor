@@ -1,0 +1,156 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
+@inject IModerationWriteService ModerationService
+@inject IGroupReadService GroupReadService
+@inject IToastService Toasts
+@inject ILogger<GroupAdminRescuePanel> Logger
+
+@* The moderator's remedy for an admin-less group (owner ruling D13 edge (b), WU-UserDeletion
+   2026-10-13): pick a member, write why, and make them the admin. GroupPage renders this only for a
+   Moderator/Admin viewer and only while the group has no admin — affordance only; the service's three
+   guards (moderator, zero admins, target already a member) are the control. Container + Control +
+   ErrorAlert (layer4-style.md roles). Works on both render phases: the server write service on the
+   circuit, ClientModerationWriteService over WASM. *@
+
+<section class="flex flex-col gap-3 rounded-lg border border-(--color-border) bg-(--color-surface) p-4"
+         aria-labelledby="@($"group-rescue-heading-{_uid}")">
+    <h2 id="@($"group-rescue-heading-{_uid}")" class="text-base font-semibold text-(--color-text)">This group has no admin</h2>
+    <p class="text-sm text-(--color-text-muted)">
+        As a site moderator you can make one of its members the admin, on request. The member is notified,
+        and the assignment is recorded in the moderation log.
+    </p>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading members…</em></p>
+    }
+    else if (_members.Length == 0)
+    {
+        <p class="text-sm text-(--color-text-muted)">This group has no members to choose from.</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-1">
+            <label for="@($"group-rescue-member-{_uid}")" class="text-sm font-medium text-(--color-text)">Member</label>
+            <select id="@($"group-rescue-member-{_uid}")"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text)"
+                    @bind="_selectedUserId">
+                <option value="">Choose a member…</option>
+                @foreach (GroupMemberDto member in _members)
+                {
+                    <option value="@member.UserId">@(member.DisplayName ?? $"User #{member.UserId}")</option>
+                }
+            </select>
+            @if (_totalMembers > _members.Length)
+            {
+                <p class="text-xs text-(--color-text-muted)">
+                    Showing the first @_members.Length of @_totalMembers members, longest-standing first.
+                </p>
+            }
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <label for="@($"group-rescue-notes-{_uid}")" class="text-sm font-medium text-(--color-text)">Notes (required)</label>
+            <textarea id="@($"group-rescue-notes-{_uid}")" rows="2" maxlength="@NotesMaxLength"
+                      class="w-full rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text)"
+                      placeholder="Who asked, and why this member"
+                      @bind="_notes" @bind:event="oninput"></textarea>
+        </div>
+
+        @if (_error is not null)
+        {
+            <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
+        }
+
+        <div>
+            <button type="button"
+                    disabled="@(!CanSubmit)"
+                    @onclick="AssignAsync"
+                    class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                Assign as admin
+            </button>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>The admin-less group.</summary>
+    [Parameter, EditorRequired] public int GroupId { get; set; }
+
+    /// <summary>Raised after a successful assignment so the host page reloads (the panel then hides).</summary>
+    [Parameter] public EventCallback OnAssigned { get; set; }
+
+    /// <summary>The first page only: a rescue picks among the longest-standing members, and the note
+    /// below the select says when there are more.</summary>
+    internal const int MemberPageSize = 100;
+
+    /// <summary><c>Report.ActionTaken</c>'s cap, which the service also enforces.</summary>
+    private const int NotesMaxLength = 1024;
+
+    // for=/id= pairs agree across the InteractiveAuto handoff (emitted in the same render — WU-A11y).
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
+
+    private GroupMemberDto[] _members = [];
+    private int _totalMembers;
+    private bool _loading = true;
+    private int? _selectedUserId;
+    private string _notes = "";
+    private bool _busy;
+    private string? _error;
+    private bool _errorIsSessionExpired;
+
+    private bool CanSubmit => !_busy && _selectedUserId is not null && !string.IsNullOrWhiteSpace(_notes);
+
+    protected override async Task OnInitializedAsync() => await LoadMembersAsync();
+
+    private async Task LoadMembersAsync()
+    {
+        _loading = true;
+        (_members, _totalMembers) = await GroupReadService.GetMembersAsync(GroupId, page: 1, pageSize: MemberPageSize);
+        if (_selectedUserId is int selected && _members.All(m => m.UserId != selected))
+            _selectedUserId = null;
+        _loading = false;
+    }
+
+    private async Task AssignAsync()
+    {
+        if (_selectedUserId is not int targetUserId || string.IsNullOrWhiteSpace(_notes)) return;
+
+        _busy = true;
+        _error = null;
+        _errorIsSessionExpired = false;
+        try
+        {
+            await ModerationService.AssignGroupAdminAsync(GroupId, targetUserId, _notes);
+            string name = _members.FirstOrDefault(m => m.UserId == targetUserId)?.DisplayName ?? "The member";
+            Toasts.Show($"{name} is now this group's admin.", ToastLevel.Success);
+            await OnAssigned.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ModerationValidationException or KeyNotFoundException)
+        {
+            // The group moved under the panel (another moderator assigned an admin, or the member left):
+            // keep the refusal and reload the member list so the stale choice stops being offered
+            // (error-handling.md — a failed reload is appended, never shown instead).
+            _error = ExceptionPresenter.GetUserMessage(ex);
+            try { await LoadMembersAsync(); }
+            catch (Exception reloadEx)
+            {
+                Logger.LogError(reloadEx, "Reloading group {GroupId}'s members after a refused assignment failed", GroupId);
+                _error += " " + ExceptionPresenter.GetUserMessage(reloadEx);
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Assigning an admin to group {GroupId} failed unexpectedly", GroupId);
+            _error = ExceptionPresenter.GetUserMessage(ex);
+            _errorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

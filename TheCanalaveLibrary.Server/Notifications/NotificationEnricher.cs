@@ -128,6 +128,10 @@ public static class NotificationEnricher
         NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.GroupStory,
         NotificationTypeEnum.NewGroupBlogPost        => RelatedEntityKind.BlogPost,
 
+        // ── Implemented WU-UserDeletion (D13 edge (b)): RelatedEntityId = the group the recipient was
+        // made an admin of — title = group name, link = the group (the audience-bypassing Group kind). ──
+        NotificationTypeEnum.GroupAdminAssigned      => RelatedEntityKind.Group,
+
         // ── Implemented WU-Spotlight: RelatedEntityId = spotlighted story id ─────
         // (SpotlightSlotGranted carries no entity — falls to None below; the redemption
         // page is a fixed route, not an entity link.)

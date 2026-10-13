@@ -173,6 +173,83 @@ public class ModerationEndpointsTests(PostgresFixture postgres) : IntegrationTes
         (await response.Content.ReadAsStringAsync()).Should().Contain("already active");
     }
 
+    // ── Group rescue (owner ruling D13 edge (b), WU-UserDeletion) ─────────────────
+
+    [Fact]
+    public async Task AssignGroupAdmin_NonModerator_Returns403_AtTheEdge()
+    {
+        int userId = await SeedUserAsync("member");
+        SetActiveUser(userId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/moderation/groups/1/assign-admin",
+            new AssignGroupAdminRequest(userId, "x"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, "the route carries the edge RequireModerator policy");
+    }
+
+    [Fact]
+    public async Task AssignGroupAdmin_Moderator_Returns204_AndBindsTheBody()
+    {
+        // L5: routing, the JSON body (target and notes) and the handler reaching AssignGroupAdminAsync.
+        int modId = await SeedUserAsync("mod");
+        int creator = await SeedUserAsync("creator");
+        int member = await SeedUserAsync("member");
+        int groupId = await SeedAdminlessGroupAsync(creator, member);
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/moderation/groups/{groupId}/assign-admin",
+            new AssignGroupAdminRequest(member, "Requested in the group's comments."));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.GroupMembers.Where(m => m.GroupId == groupId && m.UserId == member).Select(m => m.Role).SingleAsync())
+            .Should().Be(GroupRole.Admin);
+        (await db.Reports.Where(r => r.ReportedEntityType == ReportedEntityType.Group && r.ReportedEntityId == groupId)
+                .Select(r => r.ActionTaken).SingleAsync())
+            .Should().Be("Requested in the group's comments.", "the notes bind from the JSON body");
+    }
+
+    [Fact]
+    public async Task AssignGroupAdmin_GroupWithAnAdmin_Returns400_WithTheMessage()
+    {
+        int modId = await SeedUserAsync("mod");
+        int creator = await SeedUserAsync("creator");
+        SetActiveUser(creator);
+        int groupId;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            groupId = await scope.ServiceProvider.GetRequiredService<IGroupWriteService>()
+                .CreateGroupAsync(new CreateGroupDto { GroupName = $"G {Guid.NewGuid():N}" });
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/moderation/groups/{groupId}/assign-admin",
+            new AssignGroupAdminRequest(creator, "x"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("still has an admin");
+    }
+
+    /// <summary>A group whose founder <paramref name="creator"/> left after <paramref name="member"/>
+    /// joined: one member, no admin.</summary>
+    private async Task<int> SeedAdminlessGroupAsync(int creator, int member)
+    {
+        int groupId;
+        SetActiveUser(creator);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            groupId = await scope.ServiceProvider.GetRequiredService<IGroupWriteService>()
+                .CreateGroupAsync(new CreateGroupDto { GroupName = $"G {Guid.NewGuid():N}" });
+        SetActiveUser(member);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().JoinAsync(groupId);
+        SetActiveUser(creator);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().LeaveAsync(groupId);
+        return groupId;
+    }
+
     [Fact]
     public async Task UserHistory_UnknownUser_StillReturns404_InsideTheWrapper()
     {

@@ -224,12 +224,13 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   load-bearing and no `deleted_user → old_user_id` mapping may ever be kept; the deletion page's copy is
   the compliance surface and now enumerates the whole policy. **Edge (a):** a conversation with one
   participant left survives intact; one with none left is deleted at the source, in the deletion's own
-  transaction. **Edge (b)** (the WU's second commit): an admin-less group is a waiting state that a
+  transaction. **Edge (b):** an admin-less group is a waiting state that a
   moderator ends with `AssignGroupAdminAsync` (three guards; a ledger-only `Group` report row; type 62
   to the promoted user); the sole admin's Leave warns first. Rule: `cross-cutting.md` §"Delete Policy Summary" →
   "Account deletion"; `layer2-services.md` §"Group Membership and Role Model" and §"Account actions"
   (the Group shape). Narrative: `audit/Identity.md` F52, `audit/BlogPosts.md` F37,
-  `audit/Messaging.md` F49, `audit/Groups.md` F38, `audit/Moderation.md` F46/F47. Still open: an exact
+  `audit/Messaging.md` F49, `audit/Groups.md` F38/F40, `audit/Moderation.md` F46/F47,
+  `audit/Notifications.md` (type 62). Still open: an exact
   multi-choice voter count after a deletion (tracker **F17**), a sender-side message delete (**F18**),
   log retention and bare ids in polymorphic columns (**F19**), and D47(b).
 
@@ -290,7 +291,7 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   reparent mechanism, outside D10's RESTRICT set. The account-deletion page no longer promises the
   placeholder (the one code change). Rule: `cross-cutting.md` §"Delete Policy Summary";
   `content-safety.md` §"Author-Controlled Content Actions". Narrative: `audit/Comments.md` §Shared
-  Context. Still open elsewhere: D13's full survival-set copy on that page (WU-UserDeletion) and the
+  Context. D13's full survival-set copy on that page was built by WU-UserDeletion (2026-10-13). Still open: the
   reply-depth defect D12 left open (service §2.12, WU-ParityAndRemaining).
 
 - **TPT FK posture (worksheet D10) — answered 2026-08-06, built WU-TptHardDelete 2026-09-30.** No
@@ -331,7 +332,7 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   - D8: `Report.ReportedUserId` — the answerable account at filing time, every target type, snapshot,
     SET NULL; the per-user history reads it (tracker B18 closed, caveat deleted). D8(b): the entity
     carries current state, the report carries history; no takedown-history table; reversal (not yet
-    built) nulls the metadata and reopens nothing. The `Group` arm is WU-UserDeletion's (D13).
+    built) nulls the metadata and reopens nothing. The `Group` arm was built by WU-UserDeletion (2026-10-13; D13).
   - D9: every mod-only read gates in the service with the shared `RequireModerator()` extension (all
     private guard copies removed); `IReportSubmissionService` split from the mod interfaces. **Delegated
     pick:** the 401-instead-of-404/400 class is fixed at the throw sites (`KeyNotFoundException`,

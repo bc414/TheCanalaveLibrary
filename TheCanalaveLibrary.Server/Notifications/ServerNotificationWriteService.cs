@@ -187,6 +187,13 @@ public class ServerNotificationWriteService(
     }
 
     /// <inheritdoc/>
+    public Task NotifyGroupAdminAssignedAsync(int recipientUserId, int groupId) =>
+        // Null source (D5's principle, D13): the assigning moderator is never named. Cross-existing dedup
+        // applies — a second unread "made admin of this group" for the same group would say nothing new.
+        CreateCoreAsync(NotificationTypeEnum.GroupAdminAssigned, sourceUserId: null,
+            [(recipientUserId, groupId)]);
+
+    /// <inheritdoc/>
     public async Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId)
     {
         // Fan-out to every user on the site (type SiteAnnouncement = 0). Mirrors

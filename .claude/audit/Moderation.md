@@ -48,7 +48,9 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
+**Stages (updated 2026-10-13, WU-UserDeletion — `ReportedEntityType.Group` added as a ledger-only type, the
+submission allow-set unchanged, no flip; F47's WU-UserDeletion Stage note; before that 2026-09-30,
+WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
 L4.5 = 5, L5 = 5, L6 = 5. L1 stays 5 with the WU_ModerationIntegrity migration applied. L4.5 went 5→1
 at the review fixes (the duplicate refusal and the WASM rate-limit message changed undriven) and back
 to 5 at the browser pass the same day (tracker **H19** closed; note below).
@@ -180,6 +182,38 @@ seventh-type amendment and D47's floor; settled for WU-UserDeletion 2026-10-13).
   "Show resolved" would silently drop the row.
 - **Open:** D47(b), what a moderator can do about a group that still has an admin.
 Rule: `layer2-services.md` §"Account actions" (the Group shape) and §"Group Membership and Role Model".
+
+**WU-UserDeletion Stage note (2026-10-13; owner ruling D13 edge (b), Part B) — F47 L4.5 5→1;
+F46/F47 L1/L2/L5 stay 5.** The Settled note above, built.
+- **L1/L2 (F46).** `ReportedEntityType.Group = 6` (no lookup table, so no migration; enum doc says
+  ledger-only). The submission allow-set is unchanged, so a member-filed Group report is still a
+  `ModerationValidationException` (400). The class doc says why Group is absent.
+- **L2 (F47).** `AssignGroupAdminAsync(groupId, targetUserId, notes)` on `IModerationWriteService`:
+  `RequireModerator()`; unknown group → `KeyNotFoundException`; notes required and within 1,024; the
+  admin-less guard; the member guard (both `ModerationValidationException`); then `Role = Admin` and the
+  opened-and-resolved Group row in one save, `ReportedUserId` from the resolver's new Group arm
+  (`groups.creator_id`); then type 62 best-effort after commit, skipped for a moderator assigning
+  themselves. No counter call. The read side's `BatchLoadTargetsAsync` gains the Group arm ("Group:
+  {name}", `/group/{id}`, count 0, `GroupAudience` lifted). D47(a)'s floor holds by construction:
+  `/mod/reports` offers actions only on Open/UnderReview rows, and every Group row is born resolved.
+  Not enrolled in `ParentVisibilityContractTests` (a moderator work-surface write). A member leaving
+  between the guard and the save turns the save into a concurrency error (a 500): the update-vs-delete
+  class tracker **D11** already holds, recorded there.
+- **L5.** `POST /api/moderation/groups/{groupId:int}/assign-admin`, `RequireModerator` at the edge,
+  wrapped in `EndpointHelpers.ExecuteAsync`. The target and notes travel in a JSON body
+  (`AssignGroupAdminRequest`), not the query string the older moderator actions use (tracker **D9**);
+  `ClientModerationWriteService.AssignGroupAdminAsync` posts it.
+- **Tests.** Integration `GroupAdminRescueTests` (12): both routes to an admin-less group (the founder's
+  deletion → `ReportedUserId` NULL; the last admin leaving → the founder as the snapshot); the row's
+  shape, the null-sourced type 62 on the group, `GroupsJoined` unmoved, `AdminCount` 0 → 1; each guard
+  and input check refused with nothing written; a moderator's self-assignment allowed and not
+  notified; a member's Group report refused; the row labelled in "Show resolved" and the founder's
+  history but absent from the open queue. `ModerationEndpointsTests` +3 (403 at the edge for a
+  non-moderator; 204 with the body bound; 400 with the message). Unit `ModerationValidationsTests`: the
+  exact-set test now lists Group, with the ledger-only reason. Mutation-checked: dropping the
+  admin-less guard, the self-skip or the queue arm each fails its test.
+- **L4.5 5→1.** `/mod/reports`' "Show resolved" now lists Group rows, undriven in a browser (tracker
+  **H29**).
 
 **WU-SchemaHardening Stage note (2026-10-13; schema audit §2.6) — no flip; L1 stays 5.** Migration
 `WU_SchemaHardening` adds `ck_users_suspension` on `AspNetUsers`:
@@ -395,12 +429,14 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-10-13, WU-SchemaHardening — `ck_users_suspension` beneath L1, no flip, Stage note
-at the top of this section; 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
+**Stages (updated 2026-10-13, WU-UserDeletion — `AssignGroupAdminAsync`, its endpoint and the queue's
+Group arm beneath L2/L5, no flip there, and **L4.5 5→1** because "Show resolved" lists Group rows no browser
+has seen, tracker H29 — Stage note at the top of this section; the same day, WU-SchemaHardening —
+`ck_users_suspension` beneath L1, no flip, Stage note at the top of this section; 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
-L4.5 = 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
+L4.5 = **1** since WU-UserDeletion (2026-10-13; tracker H29). Before that it was 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
 standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
 to 5, tracker H19 closed — the browser-verification note at the top of this section; the earlier 1→5
 by the WU-StoryLifecycle browser pass is recorded in F48's browser-verification Stage note), L5 = 5,

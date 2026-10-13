@@ -122,6 +122,7 @@ public sealed class StaticSsrPageRenderTests(PostgresFixture postgres) : Integra
         html.Should().Contain("Delete it first");
         html.Should().Contain("Private messages you sent can't be deleted");
         html.Should().Contain("Removing your name does not remove what you wrote");
+        html.Should().Contain("no admin until a site moderator assigns one", "D13 edge (b), the sole-admin consequence");
         html.Should().Contain($"href=\"/user/{userId}/series\"");
     }
 
