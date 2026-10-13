@@ -208,10 +208,13 @@
     private bool _showDeleteConfirm;
 
     private bool _initialized;
-    // Sentinel distinguishes "not loaded yet" from "create mode" (both look like null SeriesId) —
-    // use a bool rather than overloading SeriesId itself.
-    private bool _loadedForCreate;
-    private int? _loadedSeriesId;
+    // The route this instance last loaded: null = /series/new, an id = its edit route. ONE key for
+    // both routes, seeded with a sentinel no route equals (layer3-logic.md §"Route-Parameter
+    // Dispatchers"). It replaced a per-route pair (a create flag plus an edit id) that nothing ever
+    // cleared, so returning to a route already visited was skipped: edit → Write → New Series kept
+    // the edited series' name in the create form (found by the WU-ThrottleCoverage browser pass,
+    // 2026-10-13).
+    private int? _loadedSeriesId = int.MinValue;
 
     protected override async Task OnInitializedAsync()
     {
@@ -237,23 +240,24 @@
         // create-then-redirect-into-edit (HandleSubmitAsync's post-create NavigateTo) picks up the
         // new series' data instead of leaving the create-mode blank state on screen.
         if (!_initialized) return;
-        bool alreadyLoadedThisRoute = SeriesId.HasValue
-            ? SeriesId == _loadedSeriesId
-            : _loadedForCreate;
-        if (alreadyLoadedThisRoute) return;
+        if (SeriesId == _loadedSeriesId) return; // the route this instance already shows
 
         _isLoading = true;
         _forbidden = false;
         _errors.Clear();
+        _addStoryId = null;
+        _memberError = null;
+        _memberErrorIsSessionExpired = false;
+        _showDeleteConfirm = false;
         await LoadForRouteAsync(initialLoad: false);
     }
 
     private async Task LoadForRouteAsync(bool initialLoad)
     {
+        _loadedSeriesId = SeriesId; // record the route at the start of the load (either mode)
+
         if (SeriesId.HasValue)
         {
-            _loadedSeriesId = SeriesId;
-
             // Initial (possibly prerendered) load: ??= restore-or-fetch. Dispatcher reload for a
             // different route: plain fetch — the previous route's [PersistentState] values must not
             // short-circuit (layer3-logic.md §"Route-Parameter Dispatchers").
@@ -286,7 +290,6 @@
         }
         else
         {
-            _loadedForCreate = true;
             LoadedSeries = null;
             _name = string.Empty;
             _description = null;

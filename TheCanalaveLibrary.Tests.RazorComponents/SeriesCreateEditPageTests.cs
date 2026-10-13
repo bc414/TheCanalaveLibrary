@@ -69,6 +69,43 @@ public class SeriesCreateEditPageTests : BunitContext
             "OnParametersSetAsync must reload the series data for the new SeriesId");
     }
 
+    /// <summary>
+    /// WU-ThrottleCoverage browser pass (2026-10-13): the dispatcher kept a create flag and an edit id
+    /// that nothing cleared, so a route this instance had already visited was skipped on return. In
+    /// the browser, Write → New Series from an edit page showed "Create a New Series" with the edited
+    /// series' name still in the field (create → edit → create on one instance).
+    /// </summary>
+    [Fact]
+    public void CreateEditCreate_OnSameInstance_ShowsABlankCreateForm()
+    {
+        IRenderedComponent<SeriesCreateEditPage> cut = Render<SeriesCreateEditPage>(p => p
+            .Add(c => c.SeriesId, (int?)null));
+        cut.Render(p => p.Add(c => c.SeriesId, ExistingSeriesId));
+        cut.Find("#series-name").GetAttribute("value").Should().Be(ExistingSeriesName);
+
+        cut.Render(p => p.Add(c => c.SeriesId, (int?)null));
+
+        cut.Find("h1").TextContent.Should().Contain("Create a New Series");
+        cut.Find("#series-name").GetAttribute("value").Should().BeNullOrEmpty(
+            "returning to /series/new must load the blank create state, not keep the edited series' name");
+    }
+
+    /// <summary>The same defect's other direction: edit A → new → edit A skipped the reload of A and
+    /// left the blank create state under an "Edit Series" heading.</summary>
+    [Fact]
+    public void EditCreateEdit_SameSeries_OnSameInstance_ReloadsTheSeries()
+    {
+        IRenderedComponent<SeriesCreateEditPage> cut = Render<SeriesCreateEditPage>(p => p
+            .Add(c => c.SeriesId, ExistingSeriesId));
+        cut.Render(p => p.Add(c => c.SeriesId, (int?)null));
+        cut.Find("#series-name").GetAttribute("value").Should().BeNullOrEmpty();
+
+        cut.Render(p => p.Add(c => c.SeriesId, ExistingSeriesId));
+
+        cut.Find("#series-name").GetAttribute("value").Should().Be(ExistingSeriesName,
+            "returning to a series' edit route must reload that series");
+    }
+
     [Fact]
     public void AllFields_HaveAccessibleNames()
     {

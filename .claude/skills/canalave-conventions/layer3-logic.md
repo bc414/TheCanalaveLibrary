@@ -452,6 +452,12 @@ private async Task LoadDataAsync()
   etc.) so it is callable from both lifecycle points without duplication.
 - When a single page has **two independently-keyed parameters** (e.g. `UserId` and `Tab`), cache them
   separately and only reload the portion that actually changed.
+- A component with a **create route and an edit route** (`/series/new` + `/series/{SeriesId:int}/edit`)
+  keys on the one nullable route value (`null` = create), seeded with a sentinel and recorded at the
+  start of *every* load, either mode. Never a flag per route: nothing clears it, so the return to a
+  route already visited is skipped. `SeriesCreateEditPage` had that pair, and edit → Write → New
+  Series kept the edited series' name in the create form (WU-ThrottleCoverage browser pass,
+  2026-10-13). Four create/edit pages have no dispatcher at all — tracker **D18**.
 
 **One-time work that MUST stay in `OnInitializedAsync` only (never repeated on param change):**
 - Auth state → `_currentUserId` extraction (auth doesn't change mid-session).
