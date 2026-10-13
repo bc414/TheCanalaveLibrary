@@ -146,10 +146,6 @@ public static class NotificationEmailEndpoints
             .FirstOrDefaultAsync(cancellationToken) ?? "these";
 
     /// <summary>
-    /// Minimal self-contained HTML shell. Inline styles only — this page must render identically
-    /// whether or not the app's stylesheet loads, and it is never composed with site layout.
-    /// </summary>
-    /// <summary>
     /// The one "link no longer valid" answer (400): a tampered, expired or rotated-key token, or a
     /// valid token whose account has since been deleted — deliberately indistinguishable.
     /// </summary>
@@ -160,6 +156,10 @@ public static class NotificationEmailEndpoints
             "<p>You can still manage every notification setting from your account.</p>",
             settingsLink: true), "text/html", Encoding.UTF8, StatusCodes.Status400BadRequest);
 
+    /// <summary>
+    /// Minimal self-contained HTML shell. Inline styles only — this page must render identically
+    /// whether or not the app's stylesheet loads, and it is never composed with site layout.
+    /// </summary>
     private static string Page(string title, string bodyHtml, bool settingsLink) =>
         $"""
          <!doctype html>

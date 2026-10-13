@@ -1661,11 +1661,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     every save of a draft lands the author on the not-found page; the save itself succeeds.
     - Fix shape: return to the editor (or the story page) when the chapter is unpublished. Showing
       authors their own drafts on the reading page would be a different, owner-level call.
-- [ ] **H26 — WU-NotificationCorrectness browser pass: the new notification copy, the settings page on the per-field DTO, the subject cap** `[test-hygiene · low · beta]` — *Filed 2026-10-12 by WU-NotificationCorrectness, which ran with no browser available.*
-  - Grid: **F42, F43 and F49 L4.5 = 1** (5→1 at the WU's review fixes, 2026-10-13). Running this pass
-    returns them to 5. The build had kept F42 at 5 as a "copy-only change", citing the WU-InertFeatures
-    presenter slice, but that slice had a browser pass behind it.
-  - **Steps** (both render phases; `psql` as ground truth; the Aspire path for the mail steps):
+- [x] **H26 — WU-NotificationCorrectness browser pass: the new notification copy, the settings page on the per-field DTO, the subject cap: browser-verified 2026-10-13 (CLOSED)** `[test-hygiene · low · beta]` — *Filed 2026-10-12 by WU-NotificationCorrectness, which ran with no browser available. Closed 2026-10-13 by its browser pass.*
+  - Grid: **F42, F43 and F49 L4.5 are back at 5.** The WU's review fixes (2026-10-13) had flipped them
+    5→1. The build had kept F42 at 5 as a "copy-only change", citing the WU-InertFeatures presenter
+    slice, but that slice had a browser pass behind it.
+  - **Closed:** all four steps below were driven on the Aspire path, with `psql` after every write.
+    Steps 1, 2 and 4 ran on the circuit and on WASM. Step 3 is an anonymous page with no render mode.
+    No runtime bug was found. The one change was a misplaced XML doc comment in
+    `NotificationEmailEndpoints.cs`. Two checks went beyond the listed steps:
+    - unsubscribing from a default-off type the user had turned on deletes the override row;
+    - a 2,048-character subject that has trailing spaces is accepted and stored trimmed.
+
+    The stale-bundle case in step 2 did not arise. Narrative: `audit/Notifications.md`, the
+    WU-NotificationCorrectness browser verification Stage note.
+  - **Steps as filed** (both render phases; `psql` as ground truth; the Aspire path for the mail steps):
     1. **Presenter copy, 90–92 and 100** (all four read "You have a new notification" before).
        - Grant a slot on `/mod/spotlight`. The awardee's bell reads "You were granted a Community
          Spotlight slot", with no moderator name: decision row 19 is unruled.

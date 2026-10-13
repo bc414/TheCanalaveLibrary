@@ -127,10 +127,11 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness review fixes, 2026-10-13).** The compose modal
-  now gets a 400 ("Subject must be 2048 characters or fewer.") where it got a 500. Nobody has driven
-  it in a browser. Back to 5 when tracker **H26** step 4 runs. The browser verification of 2026-07-02
-  below covers everything else.
+- **L4.5 — Stage 5.** It went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13): the
+  compose modal now gets a 400 ("Subject must be 2048 characters or fewer.") where it got a 500. It
+  went 1→5 at that WU's browser pass the same day, which drove the refusal on both render phases
+  (tracker **H26** step 4; the WU-NotificationCorrectness note below). The browser verification of
+  2026-07-02 below covers everything else.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A).** The flip makes every
   injected service need a client impl, so the old "no REST endpoints to wasm-enable" N/A no longer
   holds: endpoints + client impl live (WU-L5Sweep), and messaging read+send verified in a real WASM
@@ -400,7 +401,7 @@ re-save (or `reset-dev-db.ps1`).
 starting a conversation was refused with "This user does not accept private messages." on WASM (a
 403 on `POST /api/messaging/conversations`) and on the circuit. No `conversations` row was written.
 
-### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes (2026-10-13)
+### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 
 **No cell flips at the build** (the review fixes flipped L4.5; last bullet). The WU35 settled decisions are untouched; the `AllowPrivateMessages` gate stays on
 `StartConversationAsync`.
@@ -425,6 +426,17 @@ starting a conversation was refused with "This user does not accept private mess
   tracker H26. The review fixes (2026-10-13) flipped **F49 L4.5 5→1** until that step runs. The
   campaign flips L4.5 when a visible refusal ships without a browser pass (WU-ModerationIntegrity's
   F46 duplicate-report refusal); this note had first left it at 5.
+- **Browser verification (2026-10-13): F49 L4.5 1→5.** Aspire path, as TestUser, on
+  `/messages?ComposeForUsername=AuthorAlpha`.
+  - A 2,049-character subject was set by script, because the input's `maxlength` stops typing past
+    2,048. On both render phases the modal showed "Subject must be 2048 characters or fewer."
+  - On WASM, `POST /api/messaging/conversations` answered 400. The circuit made no `/api` call.
+    `conversations` still had one row.
+  - A 2,048-character subject with two trailing spaces went through on the circuit (conversation 2).
+    It is stored trimmed, at 2,048 characters. `date_created` equals the first message's `date_sent`,
+    which is the one-save timestamp.
+  - No bug was found. The full pass is in `audit/Notifications.md`, in the
+    WU-NotificationCorrectness browser verification Stage note.
 
 ### Tests (WU35, 2026-06-24)
 

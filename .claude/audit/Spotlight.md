@@ -200,3 +200,13 @@ The presenter's new 91/92 arms read "Someone put … in the Community Spotlight"
 (`audit/Notifications.md`, WU-NotificationCorrectness Stage note). Covered by Integration
 `SpotlightServiceTests.Sweep_SponsorDeletedBeforeGoLive_StillNotifies_WithANullSource`, which fails
 with the stand-in restored. No browser step of its own; the 91/92 copy is in tracker H26.
+
+**Browser verification (2026-10-13), tracker H26 step 1. F55 cells unchanged (L4.5 was already 5).**
+On the Aspire path, AdminUser granted TestUser a slot on `/mod/spotlight` (`spotlight_slots` 2).
+TestUser then booked AuthorAlpha's "Seed Story: Completed One-Shot (E)" for the open Oct 12–19 block
+on `/spotlight`, with ReaderGamma's recommendation attached (`community_spotlights` 2). With a live
+sponsor, the go-live sweep stamped `go_live_notified_utc` within a minute and wrote the type 91 and 92
+notifications (source TestUser). Their copy read correctly on both render phases and in Mailpit. The
+deleted-sponsor path stays Integration-only: driving it would mean deleting a seeded account. The full
+pass is in `audit/Notifications.md`, in the WU-NotificationCorrectness browser verification Stage
+note. The placement stays live through its block (dev-DB state: the workplan entry).

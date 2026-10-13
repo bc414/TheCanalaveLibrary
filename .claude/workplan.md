@@ -17,16 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-NotificationCorrectness (2026-10-12; review fixes 2026-10-13) — worksheet D19
-  plus service audit §2.8's remainder. **F42/F43/F49 L4.5 5→1** at the review fixes, until tracker
-  **H26** runs. Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB.
+- **Last landed:** WU-NotificationCorrectness (2026-10-12; review fixes and browser pass 2026-10-13)
+  — worksheet D19 plus service audit §2.8's remainder. **F42/F43/F49 L4.5** went 5→1 at the review
+  fixes and back to 5 at the browser pass, which closed tracker **H26** and found no bug. Migration
+  `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB and to the Aspire DB.
   - **D19:** `UserNotificationSetting` is sparse per field; unsubscribe writes only its own column.
     The settings upsert is race-free under D23.
   - **Mail:** a mid-batch SMTP death restores only the unsent mail; shutdown drains to empty within
     15 s; a 4xx to one recipient is a capped deferral, never a batch abort (review fixes).
   - **Smaller fixes:** feed tiebreak, one-save `StartConversationAsync`, subject cap, 90–92/100
     presenter arms (90 and 100 kept name-free pending row 19 and D8), deleted-sponsor null source.
-  - **Tracker:** **D13** and **H26** filed; **D8** routed to WU-TrackerFixes.
+  - **Tracker:** **D13** filed; **H26** filed and closed; **D8** routed to WU-TrackerFixes.
   - `dotnet test`: Unit 1,169, RazorComponents 770, Integration 1,408. **Pointer:** its DONE entry.
   Before that, 2026-10-12: WU-DependencyCVEs — the NuGet advisory sweep (Crypto.Xml, SSH.NET and AngleSharp patched, E2 closed, ImageSharp held as accepted risk pending decision row 21); see its DONE entry.
   Before that, 2026-09-30: WU-CounterSymmetry — owner rulings D21–D24 (every counter derived and reconciled, post-commit counters, check-then-act per family, creating a group counts as joining); see its DONE entry.
@@ -265,7 +266,7 @@ references it, does not restate it.
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
-  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes)),
+  WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day)),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -445,10 +446,12 @@ is pending except where a bullet says so.
 
 - **Cells:** the build flipped none. F41/F42/F43 L1/L2, F49 L2 and F55 L2 stay 5: defects beneath
   sound cells. The review fixes (2026-10-13) flipped **F42, F43 and F49 L4.5 5→1** (UI behaviour
-  changed, no browser, tracker H26); the build had kept F42 at 5 as a "copy-only change".
-  Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB. Dated
-  2026-10-12 (the session's `currentDate`, per CLAUDE.md and WU-DependencyCVEs' precedent), not the
-  template's 2026-09-30; the review fixes ran on 2026-10-13.
+  changed, no browser, tracker H26); the build had kept F42 at 5 as a "copy-only change". The
+  browser pass (2026-10-13) set all three back to 5 and closed H26.
+  Migration `WU_NotificationCorrectness_SparseSettingFields` is applied to the dev DB, and to the
+  Aspire DB on the browser pass's startup. Dated 2026-10-12 (the session's `currentDate`, per
+  CLAUDE.md and WU-DependencyCVEs' precedent), not the template's 2026-09-30; the review fixes and
+  the browser pass ran on 2026-10-13.
 - **Trigger:** worksheet D19 (answered 2026-08-07); service audit §2.8's items not owned by
   WU-InertFeatures; amendment U8. It also took the 90–92 presenter arms WU-InertFeatures routed here.
 - **What landed:**
@@ -533,9 +536,36 @@ is pending except where a bullet says so.
     770**, **Integration 1,408** (+7), all green; the four gates pass. Each fix was reverted in turn
     and its tests failed: the flusher's success-path and abort-path requeues, the drain's settle
     check, the deferral-count reset, `IsDeferral`, the conditional insert and the feed coalesce.
-  - **Browser: not run, none available** → tracker **H26**.
-- **Pointers:** `audit/Notifications.md` §"WU-NotificationCorrectness Stage note" and its
-  review-fixes note; `audit/Identity.md` F1 L2 transport note;
+  - **Browser:** the build and the review fixes ran with no browser available (tracker **H26**).
+    **The browser pass (2026-10-13) closed H26. F42/F43/F49 L4.5 went 1→5 and no runtime bug was
+    found.**
+    - Path and evidence: the Aspire path, with mail in Mailpit; the circuit and WASM phases (proved
+      from the network log); `psql` after every write; the server log clean of `fail:`/`crit:`
+      except the documented stale-antiforgery line; no console errors.
+    - Users: AdminUser granted the slot. TestUser booked it, voted, ran the settings page and the
+      compose modal, and unsubscribed from Poll Updated. AuthorAlpha (story author, poll owner) and
+      ReaderGamma (recommender) checked their copy. AuthorAlpha used the Mailpit unsubscribe. A
+      tampered token was posted anonymously.
+    - Flows: the 90/91/92/100 copy in the bell, the inbox and the mail lead lines, with each subject
+      the type's display name; per-field rows for Collapsed-only and Email-only toggles; the
+      unsubscribe writing `email_enabled` alone; a default-off type's override deleted; the
+      2,049-character subject refused (WASM 400, no row); a trimmed 2,048-character subject stored.
+    - The one change was a misplaced XML doc comment in `NotificationEmailEndpoints.cs`. After it:
+      build 0 errors, 32 warnings; Unit 1,169, RazorComponents 770, Integration 1,408, all green;
+      the four gates pass.
+    - **Aspire dev-DB state left (`canalavedb`, port 5433):**
+      - slot 2 (TestUser, redeemed) and placement 2 (story 3, sponsor TestUser, ReaderGamma's
+        recommendation 2, live Oct 12–19; 10 grants left this month);
+      - unread notifications 18–21;
+      - poll 1 "Seed poll: favourite region" on blog post 2 (options Sinnoh / "Johto (Gen II)", one
+        TestUser vote), its `last_edited_at` moved back 31 minutes through `psql` to skip the quiet
+        period;
+      - AuthorAlpha's Story Spotlighted override `(email off, collapsed on)`;
+      - conversation 2 (TestUser → AuthorAlpha, a 2,048-character subject, message 4).
+
+      Mailpit's mail went with the container stop. The server-only dev DB was not touched.
+- **Pointers:** `audit/Notifications.md` §"WU-NotificationCorrectness Stage note", its review-fixes
+  note and its browser verification note; `audit/Identity.md` F1 L2 transport note;
   `audit/Messaging.md` F49; `audit/Spotlight.md` F55; `layer2-services.md` §"Notification
   Generation" / §"Email fan-out".
 

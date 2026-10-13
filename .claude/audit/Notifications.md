@@ -294,7 +294,74 @@ name.
 - **Browser: not run, none available.** The bell and inbox copy changed (F42), the settings page
   reads the per-field DTO on WASM (F43) and the compose modal has a new 400 (F49). By the campaign's
   precedent (WU-InertFeatures F41, WU-ModerationIntegrity F46/F53), **F42, F43 and F49 L4.5 go 5→1**
-  until tracker **H26** runs.
+  until tracker **H26** runs. (It ran the same day: the browser verification note below.)
+
+## WU-NotificationCorrectness browser verification Stage note (2026-10-13) — F42/F43/F49 L4.5 1→5; tracker H26 closed
+
+Tracker H26's four steps, on the Aspire path (Postgres on 5433, mail to Mailpit) and on both render
+phases. The circuit pass shows `_blazor/negotiate` and no `/api` call for the action. The WASM pass
+shows no negotiate and the action's `/api` request. `psql` was checked after every write. The server
+log has no `fail:`/`crit:` line except the documented stale-antiforgery-cookie line on the first
+request. The browser console showed no errors. **No runtime bug was found.**
+
+- **Step 1: presenter copy (F42).**
+  - AdminUser granted TestUser a slot on `/mod/spotlight` (`spotlight_slots` 2). It wrote notification
+    18: type 90, with the moderator kept as the row's source. TestUser's bell and inbox read "You were
+    granted a Community Spotlight slot", with no name, on both phases.
+  - TestUser booked AuthorAlpha's "Seed Story: Completed One-Shot (E)" for the open Oct 12–19 block,
+    with ReaderGamma's recommendation attached (`community_spotlights` 2). The go-live sweep stamped
+    it within a minute and wrote 19 (AuthorAlpha, type 91, source TestUser) and 20 (ReaderGamma,
+    type 92). AuthorAlpha read "TestUser put Seed Story: Completed One-Shot (E) in the Community
+    Spotlight", and ReaderGamma read the same with "… with your recommendation". Both were checked on
+    both phases.
+  - AuthorAlpha added a poll to blog post 2, TestUser voted, and AuthorAlpha renamed an option, which
+    stamped `last_edited_at`. That stamp was moved back 31 minutes through `psql` to skip the 30-minute
+    quiet period. The sweep then wrote 21 (TestUser, type 100). The bell and inbox read "A poll you
+    voted on was changed", with no title, on both phases.
+  - Mailpit received four mails. Each subject is the type's display name (Spotlight Slot Granted,
+    Story Spotlighted, Recommendation Spotlighted, Poll Updated), and each lead line is the bell's
+    text. The poll mail links to `/blog/2`.
+  - The seeded 90/91 rows from before the WU render with the new arms too.
+  - The awardee's `/api/notifications` payload still carries the moderator as `sourceUserName`. That
+    is decision row 19's documented status quo, not a defect.
+- **Step 2: settings page (F43).**
+  - TestUser turned on only Collapsed for New Chapter. The row is `(1, 10, NULL, true)`. After a
+    reload on either phase, Email is still checked. Turning Collapsed off again deleted the row. On
+    WASM the write is `PUT /api/notifications/settings/10` (204).
+  - Turning Email on for Poll Updated (default off) wrote `(1, 100, true, NULL)`. The poll mail in
+    step 1 reached TestUser through that row, which exercises the flusher's per-field eligibility.
+  - AuthorAlpha's Collapsed on Story Spotlighted wrote `(4, 91, NULL, true)`. `/api/notifications`
+    then returned `collapsed: true` for notification 19 and for no other row, which exercises the
+    feed's per-field read.
+- **Step 3: one-click unsubscribe (F43).**
+  - Opening AuthorAlpha's Story Spotlighted link (the GET page) wrote nothing.
+  - Its button's POST showed "You're unsubscribed", and the row became `(4, 91, false, true)`, with
+    Collapsed unchanged.
+  - Two more anonymous POSTs (curl) answered 200 and left the row unchanged. A tampered token
+    answered 400.
+  - Unsubscribing from TestUser's Poll Updated mail (a default-off type) deleted the
+    `(1, 100, true, NULL)` row.
+- **Step 4: subject cap (F49).**
+  - On `/messages?ComposeForUsername=AuthorAlpha`, a 2,049-character subject was set by script,
+    because the input's `maxlength` stops typing past 2,048. On both phases the modal showed "Subject
+    must be 2048 characters or fewer."
+  - On WASM, `POST /api/messaging/conversations` answered 400. The circuit made no `/api` call.
+    `conversations` still had one row.
+  - A 2,048-character subject with two trailing spaces went through on the circuit (conversation 2).
+    The subject is stored trimmed, at 2,048 characters. `date_created` equals the first message's
+    `date_sent`, so one save wrote both.
+- **Not browser-observable** (still covered only by the Integration and Unit tests named in the two
+  notes above):
+  - the mid-batch restore, the shutdown drain and the deferral of a 4xx recipient;
+  - the feed tiebreak (the WASM "Oldest unread first" list renders: `order=1`, 200);
+  - the deleted-sponsor null source and the deleted-account unsubscribe 400.
+- **Comment fix, no behaviour change.** The review fixes had left the summary of the unsubscribe
+  pages' HTML shell (`Page`) above `InvalidLinkPage`'s own summary, in
+  `NotificationEmailEndpoints.cs`. It is back on `Page`.
+- **Tests:** none added, because no runtime defect was found. After the comment fix: Unit 1,169,
+  RazorComponents 770 and Integration 1,408, all green, and the four gates pass.
+- **Cells:** F42, F43 and F49 L4.5 go 1→5. Tracker H26 is closed. The dev-DB state this pass left is
+  listed in the workplan entry.
 
 ## Feature 41 — Notification Generation
 
@@ -305,8 +372,9 @@ notification, the report receipt and the re-anchored group notifications in the 
 closed). L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed. **L2 stays 5 under WU-NotificationCorrectness
 (2026-10-12):** the email flusher restores only unsent mail and drains to empty on shutdown, dedup is documented as
 an advisory policy, and a deleted Spotlight sponsor is a null source. **Its review fixes (2026-10-13)** made a 4xx
-to one recipient a deferral (requeued, dropped at the 10th) instead of a batch abort that stalled every later batch
-(Stage notes above Feature 41).
+to one recipient a deferral (requeued, dropped at the 10th) instead of a batch abort that stalled every later batch.
+Its browser pass (2026-10-13) saw the 90–92 and 100 notifications generated end to end and their mail reach
+Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
 
 - **L1 — Stage 5 (`related_entity_id` widened to `bigint`, WU-InertFeatures 2026-09-30).** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
   (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
@@ -568,9 +636,9 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; Stage notes above Feature 41).** **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness
-  review fixes, 2026-10-13):** the bell and inbox copy for 90–92/100 has not been driven in a browser.
-  Back to 5 when tracker **H26** runs.
+  unchanged; Stage notes above Feature 41).** **L4.5 — Stage 5.** It went 5→1 at the
+  WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
+  **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes
   `(type, long)` pairs and narrows each kind's id set to `int` before querying (out-of-range ids miss);
   results are a `NotificationTarget(Title, Url, ContextTitle)` record consumed by the read service and
@@ -748,9 +816,11 @@ write class in place of `CurrentUserId` (CS9107 shape).
   - **L3/L3.5 — Stage 5** (built WU33, 2026-06-24 — see its Stage-5 note below). Settings page driven
     by DB data. **L4 — Stage 1.** (Corrected WU-NotificationCorrectness, 2026-10-12: this line still
     read "Stage 2 … deferred to WU33" against the grid's 5/5.)
-  - **L4.5 — Stage 1 (5→1, WU-NotificationCorrectness review fixes, 2026-10-13).** The page now reads
-    the per-field `NotificationSettingDto` on WASM, and the one-click unsubscribe writes one column.
-    Neither has been driven in a browser. Back to 5 when tracker **H26** runs.
+  - **L4.5 — Stage 5.** It went 5→1 at the WU-NotificationCorrectness review fixes (2026-10-13),
+    because the page now reads the per-field `NotificationSettingDto` on WASM and the one-click
+    unsubscribe writes one column. It went 1→5 at the browser pass the same day. That pass drove
+    the per-field toggles on both render phases and the Mailpit unsubscribe, with `psql` as ground
+    truth (tracker **H26** closed; browser verification note above Feature 41).
   - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
     site now runs global InteractiveAuto; the notification settings page loads in a real WASM
     runtime during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed:
