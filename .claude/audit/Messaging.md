@@ -117,7 +117,7 @@ shared one.
   gate on `StartConversationAsync` only. DI: paired `AddScoped` in `Program.cs`.
   **Verified:** `dotnet build` green; integration tests all pass (see Tests below). Three legacy
   entity files moved from `Core/Models/` to `Core/Messaging/`.
-- **L3-Logic — Stage 5 (WU35, 2026-06-24).** `MessagesPage.razor` (`@page "/messages/{ConversationId:int?}"`,
+- **L3-Logic — Stage 5 (WU35, 2026-06-24; the reply box empties after a sent reply — WU-UserDeletion browser-pass fix, 2026-10-13, RazorComponents-tested, stage unchanged, see that WU's note below).** `MessagesPage.razor` (`@page "/messages/{ConversationId:int?}"`,
   `[Authorize]`). Injects `IMessagingWriteService` and `IDeviceDetectionService`. Manages: conversation
   list, thread state (`_allMessages` in newest-first order for `flex-col-reverse` rendering), compose
   modal, busy/error flags. Handles: `HandleSendReplyAsync` (appends to `_allMessages`; refreshes
@@ -442,6 +442,18 @@ starting a conversation was refused with "This user does not accept private mess
   the emptied conversation (each saw the other's uncommitted participant row). `UserDeletionService`
   now locks the user's conversations before the delete; the race and its Integration test are in
   `audit/Identity.md` F52's review-fix note.
+- **Browser-pass fix (2026-10-13), F49 L3-Logic stays 5: the reply box empties after a send.** Driving
+  H29's messaging steps showed the reply composer kept the sent text, so a second click sent it again.
+  It never cleared: a WU-GlobalFlip browser wave noted it in July as pre-existing, and no ledger
+  carried it. Quill stays mounted and ignores later changes to `EditorView.Html`, so only
+  `EditorView.SetHtmlAsync` can empty it (the `CommentEditor.ClearAsync` precedent).
+  `MessageComposer.ClearAsync`, `MessageThread.ClearComposerAsync` and an `@ref` on the page now do it.
+  `HandleSendReplyAsync` clears the box right after `SendMessageAsync` succeeds, before the sidebar
+  refresh, which can fail on its own. A refused send keeps the text. **Tier: RazorComponents.**
+  `MessagesPageTests` +2: a sent reply loads "" into Quill once, and a refused one does not. The first
+  fails with the clear removed. Seen in the browser on both render phases: the circuit makes no
+  `/api` call, and WASM makes `POST /api/messaging/conversations/2/messages`. Each time the box went
+  back to its placeholder, and a second reply after a clear sent normally (`private_messages` 9–11).
 
 ### WU-NotificationCorrectness note (2026-10-12) — F49 L2 stays 5: one unit of work, the subject cap enforced; L4.5 5→1 at its review fixes and 1→5 at its browser pass (both 2026-10-13)
 

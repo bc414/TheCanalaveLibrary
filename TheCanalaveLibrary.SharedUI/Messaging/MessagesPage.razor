@@ -91,7 +91,8 @@ else
 
         @* ── Thread pane ── *@
         <section class="flex flex-1 flex-col overflow-hidden">
-            <MessageThread Thread="EffectiveThread"
+            <MessageThread @ref="_thread"
+                           Thread="EffectiveThread"
                            OnSendReply="HandleSendReplyAsync"
                            OnLoadOlderMessages="HandleLoadOlderAsync"
                            OnToggleArchive="HandleToggleArchiveAsync"
@@ -150,6 +151,9 @@ else
     // ── Thread state ──────────────────────────────────────────────────────────
 
     private ConversationThreadDto? _threadHeader;
+
+    // The thread pane, for emptying its reply composer after a successful send.
+    private MessageThread? _thread;
 
     /// <summary>
     /// Accumulated messages in newest-first order ([newest,...,oldest]).
@@ -286,6 +290,12 @@ else
             // Prepend newest message at index 0 — appears at bottom in flex-col-reverse.
             _allMessages.Insert(0, sent);
             _totalMessageCount++;
+            // Empty the reply box now that the message is sent, before the sidebar refresh, which can
+            // fail on its own. Quill keeps its content across renders, so without this the sent text
+            // stayed in the box and a second click sent it again (WU-UserDeletion browser pass,
+            // 2026-10-13). A refused send skips this and keeps the text.
+            if (_thread is not null)
+                await _thread.ClearComposerAsync();
             // Refresh sidebar preview — both lists, since a reply to an archived thread must
             // update the archived list's preview/timestamp too (same reasoning as LoadThreadAsync).
             Conversations = await WriteService.GetConversationsAsync();

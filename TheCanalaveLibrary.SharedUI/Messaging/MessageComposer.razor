@@ -63,4 +63,17 @@
         string html = await _editor.GetHtmlAsync();
         await OnSend.InvokeAsync(html);
     }
+
+    /// <summary>
+    /// Empties the editor. The owner calls this via @ref after a successful send on the persistent
+    /// reply composer: Quill stays mounted and ignores later changes to <see cref="Html"/>, so without
+    /// it the sent text lingers and a second click sends it again (<c>EditorView.SetHtmlAsync</c>;
+    /// <c>CommentEditor.ClearAsync</c> is the precedent). Never called after a failed send, so a
+    /// refused message keeps its text. Found by the WU-UserDeletion browser pass (2026-10-13).
+    /// </summary>
+    public async Task ClearAsync()
+    {
+        if (_editor is not null)
+            await _editor.SetHtmlAsync(string.Empty);
+    }
 }

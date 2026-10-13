@@ -11,7 +11,8 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <summary>
 /// Render tests for <see cref="MessagesPage"/> (F49 L3-Logic/L3.5, WU-MsgArchive, 2026-07-26) —
 /// the first page-level coverage for the messaging cluster. Pins the Inbox|Archived tab split,
-/// the on-demand archived fetch, and the thread-header archive round trip.
+/// the on-demand archived fetch, the thread-header archive round trip, and the reply composer
+/// emptying after a sent reply but not a refused one (WU-UserDeletion browser pass, 2026-10-13).
 /// Semantic output and service-call correctness only — no CSS class assertions
 /// (testing.md §"What belongs in RazorComponents").
 /// <para>
@@ -198,5 +199,51 @@ public class MessagesPageTests : BunitContext
 
         cut.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Archive",
             "the archive control belongs to an open thread, not the empty pane");
+    }
+
+    // ── Reply composer reset (WU-UserDeletion browser pass, 2026-10-13) ───────────────
+
+    // Quill keeps its content across renders, so the only way the reply box empties is an explicit
+    // load of "" through EditorView.SetHtmlAsync (Blazored's loadQuillHTMLContent).
+    private int ComposerClears() => JSInterop.Invocations
+        .Count(i => i.Identifier == "QuillFunctions.loadQuillHTMLContent"
+                    && i.Arguments.Count > 1 && Equals(i.Arguments[1], string.Empty));
+
+    [Fact]
+    public void SendReply_WhenSent_EmptiesTheReplyComposer()
+    {
+        _fakeService.SetConversations(NewConversation(1, "Ash"));
+        _fakeService.SetThread(NewThread(1, isArchived: false));
+        JSInterop.Setup<string>("QuillFunctions.getQuillHTML", _ => true).SetResult("<p>See you there.</p>");
+
+        IRenderedComponent<MessagesPage> cut = Render<MessagesPage>(p => p
+            .Add(c => c.ConversationId, 1));
+        int before = ComposerClears();
+
+        FindButton(cut, "Send Reply").Click();
+
+        _fakeService.SendMessageCalls.Should().ContainSingle()
+            .Which.Should().Be((1, "<p>See you there.</p>"));
+        ComposerClears().Should().Be(before + 1,
+            "a sent reply must leave the box empty: the text used to stay and a second click sent it again");
+    }
+
+    [Fact]
+    public void SendReply_WhenRefused_KeepsTheText()
+    {
+        _fakeService.SetConversations(NewConversation(1, "Ash"));
+        _fakeService.SetThread(NewThread(1, isArchived: false));
+        _fakeService.SendMessageException = new MessagingValidationException(["Message is too long."]);
+        JSInterop.Setup<string>("QuillFunctions.getQuillHTML", _ => true).SetResult("<p>Too long.</p>");
+
+        IRenderedComponent<MessagesPage> cut = Render<MessagesPage>(p => p
+            .Add(c => c.ConversationId, 1));
+        int before = ComposerClears();
+
+        FindButton(cut, "Send Reply").Click();
+
+        cut.Markup.Should().Contain("Message is too long.");
+        ComposerClears().Should().Be(before,
+            "a refused message keeps its text so the sender can fix it and send again");
     }
 }

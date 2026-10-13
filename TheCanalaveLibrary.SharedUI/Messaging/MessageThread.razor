@@ -82,7 +82,8 @@ else
             {
                 <div class="mb-2"><InlineAlert Message="@ErrorMessage" /></div>
             }
-            <MessageComposer OnSend="OnSendReply"
+            <MessageComposer @ref="_composer"
+                             OnSend="OnSendReply"
                              SendLabel="Send Reply"
                              Busy="@BusySending" />
         </div>
@@ -126,4 +127,17 @@ else
 
     /// <summary>Disables the archive button while the toggle write is in flight.</summary>
     [Parameter] public bool BusyArchiving { get; set; }
+
+    private MessageComposer? _composer;
+
+    /// <summary>
+    /// Empties the reply composer. The owning page calls this via @ref once its send has succeeded
+    /// (<see cref="MessageComposer.ClearAsync"/>); a failed send never calls it, so the text stays.
+    /// A no-op while no conversation is open (no composer is rendered).
+    /// </summary>
+    public async Task ClearComposerAsync()
+    {
+        if (_composer is not null)
+            await _composer.ClearAsync();
+    }
 }

@@ -95,9 +95,14 @@ public class FakeMessagingWriteService : IMessagingWriteService
         return Task.FromResult(99);
     }
 
+    /// <summary>When set, <see cref="SendMessageAsync"/> records the call and then throws this (a refused send).</summary>
+    public Exception? SendMessageException { get; set; }
+
     public Task<MessageDto> SendMessageAsync(int conversationId, string messageHtml)
     {
         SendMessageCalls.Add((conversationId, messageHtml));
+        if (SendMessageException is not null)
+            return Task.FromException<MessageDto>(SendMessageException);
         return Task.FromResult(new MessageDto(
             MessageId: 1,
             ConversationId: conversationId,
