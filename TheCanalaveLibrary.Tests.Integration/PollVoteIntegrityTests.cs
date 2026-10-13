@@ -176,6 +176,65 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
         (await LiveVotesAsync(pollId, _voterId)).Should().BeEquivalentTo([options[0], options[1]]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Vote_TheSameVotersIdenticalVoteLandsFirst_CountsAsCast_AndTheContextIsClean(bool allowMultiple)
+    {
+        // A double submit (two tabs, a client retry): this call loaded no vote, then the voter's other request
+        // cast the same vote before this call's INSERT. The INSERT collides on the (option, user) index: the
+        // only index a multi-choice row reaches, and on single choice the older of the two, so Postgres checks
+        // it first. The vote stands exactly as asked, so the call succeeds (D23's create-create rows count a
+        // racing duplicate as done).
+        (int pollId, int[] options) = await CreateSitePollAsync(allowMultiple);
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "INSERT INTO poll_votes",
+            interleavedSql: VoteSql(pollId, options[0], _voterId, allowMultiple), interceptReaders: true);
+
+        SetActiveUser(_voterId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerPollWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerPollWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            PollDto? cast = await svc.VoteAsync(pollId, [options[0]], false);
+            interceptor.Fired.Should().BeTrue();
+            cast!.ViewerVotedOptionIds.Should().Equal([options[0]]);
+            (await LiveVotesAsync(pollId, _voterId)).Should().Equal([options[0]], "the vote was cast once");
+
+            // The refused INSERT was detached, so the circuit's next vote does not replay it.
+            PollDto? changed = await svc.VoteAsync(pollId, [options[1]], false);
+            changed!.ViewerVotedOptionIds.Should().Equal([options[1]]);
+        }
+        (await LiveVotesAsync(pollId, _voterId)).Should().Equal([options[1]]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Vote_TheSameVotersOtherTabVotesTheSameOptionWithTheOtherVisibility_IsRefused(bool allowMultiple)
+    {
+        // VoterChoice: the other tab voted for the same option anonymously, and this call asks for a public vote
+        // on it. The INSERT collides on the (option, user) index, and the row that stands is not the one asked for.
+        (int pollId, int[] options) = await CreateSitePollAsync(allowMultiple, PollAnonymityMode.VoterChoice);
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "INSERT INTO poll_votes",
+            interleavedSql: VoteSql(pollId, options[0], _voterId, allowMultiple, isAnonymous: true),
+            interceptReaders: true);
+
+        SetActiveUser(_voterId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerPollWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerPollWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            (await FluentActions.Awaiting(() => svc.VoteAsync(pollId, [options[0]], false))
+                    .Should().ThrowAsync<PollValidationException>())
+                .WithMessage(ServerPollWriteService.VoteRaceMessage);
+        }
+        interceptor.Fired.Should().BeTrue();
+        (await LiveVotesAsync(pollId, _voterId)).Should().Equal([options[0]]);
+        (await VoteAnonymityAsync(pollId, _voterId)).Should().Equal([true], "the other tab's anonymous vote stands");
+    }
+
     [Fact]
     public async Task Vote_TheOwnerChangesTheModeBeforeTheInsert_IsRefused_AndNoRowLands()
     {
@@ -246,6 +305,30 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
         (await LiveVotesAsync(pollId, _voterId)).Should().BeEmpty("the save rolled back as a whole");
     }
 
+    [Fact]
+    public async Task Vote_TheSameVotersOtherTabRetractsFirst_TheRetractionCountsAsDone()
+    {
+        // Both tabs retract: this call loaded the vote on A, the other tab's retraction committed first, and this
+        // call's DELETE affects no row (DbUpdateConcurrencyException). The voter holds no vote, as asked.
+        (int pollId, int[] options) = await CreateSitePollAsync(allowMultiple: false);
+        await VoteAsync(pollId, _voterId, [options[0]]);
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "DELETE FROM poll_votes",
+            interleavedSql: $"DELETE FROM poll_votes WHERE poll_id = {pollId} AND user_id = {_voterId}",
+            interceptReaders: true);
+
+        SetActiveUser(_voterId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerPollWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerPollWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            PollDto? retracted = await svc.VoteAsync(pollId, [], false);
+            retracted!.ViewerVotedOptionIds.Should().BeEmpty();
+        }
+        interceptor.Fired.Should().BeTrue();
+        (await LiveVotesAsync(pollId, _voterId)).Should().BeEmpty();
+    }
+
     // ── Service: the ConfigLocked rider (a first vote racing a mode edit) ────────
 
     [Fact]
@@ -266,14 +349,21 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
             (await FluentActions.Awaiting(() => svc.UpdatePollAsync(pollId, EditDto("Renamed", allowMultiple: true, options)))
                     .Should().ThrowAsync<PollValidationException>())
                 .WithMessage(ServerPollWriteService.VoteModeLockedMessage);
+
+            // The scope models the circuit. The refused edit's pending rename went with the detached poll, so
+            // the circuit's next save (the moderator voting) cannot write it.
+            writeDb.ChangeTracker.Entries().Should().BeEmpty("a refused edit leaves nothing pending on the context");
+            await svc.VoteAsync(pollId, [options[1]], false);
         }
         interceptor.Fired.Should().BeTrue();
         (await PollModeAsync(pollId)).Should().BeFalse("the vote was cast under single choice");
         (await LiveVotesAsync(pollId, _voterId)).Should().Equal([options[0]]);
+        (await LiveVotesAsync(pollId, _modId)).Should().Equal([options[1]]);
         using IServiceScope verify = Factory.Services.CreateScope();
         (await verify.ServiceProvider.GetRequiredService<ApplicationDbContext>().Polls
                 .Where(p => p.PollId == pollId).Select(p => p.PollName).SingleAsync())
-            .Should().Be("Favorite starter?", "the rename rolled back with the refused mode change");
+            .Should().Be("Favorite starter?",
+                "the rename rolled back with the refused mode change, and the circuit's next save did not replay it");
     }
 
     [Fact]
@@ -298,7 +388,8 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
-    private async Task<(int PollId, int[] OptionIds)> CreateSitePollAsync(bool allowMultiple)
+    private async Task<(int PollId, int[] OptionIds)> CreateSitePollAsync(
+        bool allowMultiple, PollAnonymityMode anonymity = PollAnonymityMode.Public)
     {
         SetActiveUser(FakeActiveUserContext.Moderator(_modId));
         using IServiceScope scope = Factory.Services.CreateScope();
@@ -307,7 +398,7 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
             PollName = "Favorite starter?",
             AllowMultiple = allowMultiple,
             ResultsVisibility = PollResultsVisibility.Always,
-            AnonymityMode = PollAnonymityMode.Public,
+            AnonymityMode = anonymity,
             Options = [new PollOptionEditDto(null, "Turtwig"), new PollOptionEditDto(null, "Chimchar")],
         });
         int[] options = await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PollOptions
@@ -332,9 +423,10 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
         await scope.ServiceProvider.GetRequiredService<IPollWriteService>().VoteAsync(pollId, optionIds, false);
     }
 
-    private static string VoteSql(int pollId, int optionId, int? userId, bool allowMultiple) =>
+    private static string VoteSql(int pollId, int optionId, int? userId, bool allowMultiple, bool isAnonymous = false) =>
         "INSERT INTO poll_votes (poll_id, poll_option_id, user_id, allow_multiple, is_anonymous) " +
-        $"VALUES ({pollId}, {optionId}, {(userId is int u ? u.ToString() : "NULL")}, {(allowMultiple ? "true" : "false")}, false)";
+        $"VALUES ({pollId}, {optionId}, {(userId is int u ? u.ToString() : "NULL")}, " +
+        $"{(allowMultiple ? "true" : "false")}, {(isAnonymous ? "true" : "false")})";
 
     private Task InsertVoteAsync(int pollId, int optionId, int? userId, bool allowMultiple) =>
         ExecuteAsync(VoteSql(pollId, optionId, userId, allowMultiple));
@@ -352,6 +444,14 @@ public class PollVoteIntegrityTests(PostgresFixture postgres) : IntegrationTestB
         return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PollVotes
             .Where(v => v.PollId == pollId && v.UserId == userId)
             .OrderBy(v => v.PollOptionId).Select(v => v.PollOptionId).ToListAsync();
+    }
+
+    private async Task<List<bool>> VoteAnonymityAsync(int pollId, int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PollVotes
+            .Where(v => v.PollId == pollId && v.UserId == userId)
+            .OrderBy(v => v.PollOptionId).Select(v => v.IsAnonymous).ToListAsync();
     }
 
     private async Task<bool> PollModeAsync(int pollId)

@@ -17,15 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-PollVoteIntegrity (2026-10-13) — worksheet D23's poll paragraph and its
-  `ConfigLocked` rider. Migration `WU_PollVoteIntegrity` is on the server-only dev DB (not yet the
-  Aspire DB). **Single-choice is a database constraint:** `poll_votes` carries `poll_id` behind a
-  composite FK and a generated guard unique with `user_id`. **`AllowMultiple` cannot change under a
-  vote:** the vote row's FK `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action. A lost
-  vote or edit race is a 400, never a 500 (`layer2-services.md` §"Check-then-act posture"). No cell
-  flipped. Filed: tracker **F21**, promoted to **decision row 24** (`AnonymityMode`'s lock), and **H30**
-  (a browser smoke; no browser was available). `dotnet test`: Unit 1,190, RazorComponents 795,
-  Integration 1,498. **Pointer:** its DONE entry.
+- **Last landed:** WU-PollVoteIntegrity (2026-10-13, plus review fixes) — worksheet D23's poll
+  paragraph and its `ConfigLocked` rider. Migration `WU_PollVoteIntegrity` is on the server-only dev DB
+  (not yet the Aspire DB). **Single-choice is a database constraint:** `poll_votes` carries `poll_id`
+  behind a composite FK and a generated guard unique with `user_id`. **`AllowMultiple` cannot change
+  under a vote:** the vote row's FK `(poll_id, allow_multiple)` → `base_polls` has no ON UPDATE action.
+  A lost vote or edit race is never a 500. It is a 400, except that the voter's own identical double
+  submit counts as cast (`layer2-services.md` §"Check-then-act posture"). No cell flipped. Filed:
+  tracker **F21**, promoted to **decision row 24** (`AnonymityMode`'s lock), and **H30** (a browser
+  smoke; no browser was available). `dotnet test`: Unit 1,190, RazorComponents 795, Integration 1,503.
+  **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-UserDeletion — worksheet D13 (poll votes survive anonymized, empty conversations deleted at the source, the deletion page as the compliance surface, the admin-less group rescue; F17–F20/E11/row 23 filed, H29 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-SchemaHardening — folder integrity, `group_stories` as a set, ten model-declared CHECKs (decision row 22, trackers D14/D15/E10/H27 filed; H28 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-12: WU-NotificationCorrectness — worksheet D19 plus service audit §2.8's remainder (per-field settings, mail restores only the unsent, feed tiebreak, subject cap); see its DONE entry.
@@ -464,7 +465,8 @@ is pending except where a bullet says so.
      the server-only dev DB.
   2. **`ServerPollWriteService`:** `VoteAsync` writes `PollId` and the read's mode, and answers a lost
      race (23505 on either vote index, 23503 on either composite FK, a 0-row delete) with
-     `VoteRaceMessage` (a 400; touched entries detached), never a 500 or a second live row.
+     `VoteRaceMessage` (a 400; touched entries detached), never a 500 or a second live row. (Since the
+     review fixes, a lost race whose rows already stand as asked succeeds.)
      `UpdatePollAsync` writes a pre-vote mode change set-based, because EF refuses a mutable key
      property (probed), answers the mode FK's 23503 as the lock message, and detaches the poll after
      every call.
@@ -488,6 +490,29 @@ is pending except where a bullet says so.
   classes were refused by the new FKs (the rule working) and now name the poll. check-doc-hygiene,
   check-design-tokens, check-render-modes and check-a11y pass. No browser was available: tracker **H30**
   holds a regression smoke of the vote and edit flows.
+- **Review fixes (2026-10-13).** Three reviews raised 6 findings, 4 distinct after merging duplicates.
+  All 4 were real. One needs an owner ruling and was routed, not built.
+  1. **A double submit was refused (L2).** Two identical votes from one voter (two tabs, a client retry)
+     made the loser answer `VoteRaceMessage` ("This poll changed…") although the vote stood as
+     submitted. Now a lost race re-reads the voter's rows and succeeds when they already stand exactly
+     as asked, per D23's create-create posture (`layer2-services.md` §"Check-then-act posture"). The
+     message now reads "This poll or your vote on it changed…".
+  2. **Untested branches.** No service test reached the (option, user) index branch, and the refused
+     edit's detach was never exercised on the same context. **Integration** +5: identical vote counts as
+     cast ×2, same option with the other visibility refused ×2, double retraction counts as done. The
+     refused-edit test now checks an empty tracker and a further save through the same context.
+  3. **Docs.** `layer2-services.md` narrowed `UpdatePollAsync`'s detach to "after the `AllowMultiple`
+     write" and to "the poll and its options". It is a `finally` after every call, and it covers votes.
+  4. **`AnonymityMode` (owner-open).** Decision row 24 and tracker **F21** now quote the lock's stated
+     purpose ("prevents retroactive anonymity exposure") and the rider's "first-vote-vs-config-edit
+     boundary". The owner can see that the status-quo default leaves that purpose open for one
+     request's window. Not built.
+
+  Mutation-checked: dropping the option-user branch, refusing every lost race, no vote detach, no
+  edit detach, and ignoring `IsAnonymous` each fail a test. **Unit 1,190**, **RazorComponents 795**,
+  **Integration 1,503** (+5), all green; build 0 errors, no new warnings in touched files; the four gates
+  pass. No browser: the new success path and the reworded refusal show only on a race (tracker **H30**
+  unchanged).
 - **Pointers:** `audit/BlogPosts.md` F37 (Stage note and Settled bullets); `layer2-services.md`
   §"Check-then-act posture"; tracker F21/H30; roadmap decision row 24.
 

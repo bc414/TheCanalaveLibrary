@@ -226,9 +226,10 @@ Mechanics:
   through **one** service instance (one scope models the circuit). Sites not yet swept: tracker **D15**.
   The same staleness hits a tracked row whose **column** a set-based write changed: a later tracking
   query hands back the tracked instance with the old value, because identity resolution never
-  refreshes it. Detach what the set-based write touched (`ServerPollWriteService.UpdatePollAsync`
-  detaches the poll and its options after its `AllowMultiple` write — WU-PollVoteIntegrity,
-  2026-10-13).
+  refreshes it. Detach what the set-based write touched. `ServerPollWriteService.UpdatePollAsync`
+  detaches the poll, its options and any tracked votes of it in a `finally`, after every call: its
+  set-based `AllowMultiple` write leaves the tracked poll stale, and a refused save leaves the edit's
+  changes pending for the circuit's next `SaveChanges` to write (WU-PollVoteIntegrity, 2026-10-13).
 - **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
   (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
   `AddDbContextFactory` also registers the context type itself as a scoped service.
@@ -2926,20 +2927,31 @@ sees it and refuses; if the edit commits first, the vote's FK check finds no `(p
 and refuses. Two same-voter single-choice inserts collide on the guard index. No interleaving commits
 a second live row on a single-choice poll or a vote under a mode the poll no longer has.
 
-**What the service does with a refusal.** Each is a 400 (`PollValidationException`), never a 500, and
-the rejected entries are detached, since the write context is circuit-scoped:
+**What the service does with a refusal.** Never a 500. The rejected entries are detached, since the
+write context is circuit-scoped:
 - `VoteAsync`: a 23505 on either vote index, a 23503 on either composite FK, or a 0-row delete or update
   (`DbUpdateConcurrencyException`) means the poll or the voter's own votes changed between the load and
-  the save (another tab, the owner's edit, a removed option). It answers
-  `ServerPollWriteService.VoteRaceMessage` and asks for a reload. It does not retry: a retry would
-  silently cast the vote under settings the voter never saw.
+  the save (another tab, the owner's edit, a removed option). It then re-reads the voter's rows on the
+  poll. **If they are already exactly what the call asked for** (the same options, each with the
+  requested `IsAnonymous`), the vote stands as cast and the call succeeds. That is the voter's own
+  double submit (two tabs, a client retry), and D23's create-create rows count a racing duplicate as
+  already done (the `group_stories` row: "a racing add counts as already added"). A vote moves no
+  counter and sends nothing, so success is judged by the rows that stand, not by the rows this call
+  wrote. Contrast §"Hard deletes of content parents", where a counter hangs on the delete and a 0-row
+  base delete is a lost race. **Otherwise** the result differs from the request, and the call answers
+  `ServerPollWriteService.VoteRaceMessage` (a 400 `PollValidationException`) and asks for a reload. It does not retry: a retry would silently cast the
+  vote under settings the voter never saw. *(The success-on-match half: WU-PollVoteIntegrity review
+  fixes, 2026-10-13.)*
 - `UpdatePollAsync`: a 23503 on the mode FK means a first vote landed after the `hasVotes` read. It
-  answers the existing "Vote mode is locked once votes exist." message.
+  answers the existing "Vote mode is locked once votes exist." message (a 400).
 
 **`AllowMultiple` is a key column, so the one legal change is set-based.** EF holds every key property
 read-only once saved and refuses to configure it otherwise (`layer1-data-model.md` §"Column
 Conventions"). `UpdatePollAsync` therefore writes a pre-vote mode change with `ExecuteUpdateAsync`
-inside its transaction, and afterwards detaches the tracked poll and its options (§"Read-Context
+inside its transaction. After **every** call, success or failure and with or without a mode change, it
+detaches the tracked poll, its options and any tracked votes of it, in a `finally`. After the set-based
+write the tracked poll still holds the old mode. After a refused or failed save the edit's changes are
+still pending, and the circuit's next `SaveChanges` (the owner voting, say) would write them (§"Read-Context
 Concurrency: Factory Per Method" → "Set-based writes leave the circuit's tracked copies stale"). A
 future writer that assigns `AllowMultiple` on a tracked
 poll fails loudly in EF, which is the intended tripwire.

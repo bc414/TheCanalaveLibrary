@@ -57,8 +57,9 @@ public interface IPollWriteService : IPollReadService
     /// <exception cref="KeyNotFoundException">Poll not found, or (anything but a withdrawal) its parent post is not visible to the caller.</exception>
     /// <exception cref="PollValidationException">Poll not open; option not on this poll; several options on a
     /// single-choice poll; or the poll or the caller's own votes changed between the load and the save
-    /// (another tab, the owner's edit) — the database holds single-choice and the vote mode (owner ruling
-    /// D23), and a lost race is answered as this refusal, never a 500.</exception>
+    /// (another tab, the owner's edit). The database holds single-choice and the vote mode (owner ruling
+    /// D23), and a lost race is never a 500: when the caller's votes already stand exactly as asked (their
+    /// own double submit) the call succeeds, and otherwise it is this refusal.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<PollDto?> VoteAsync(int pollId, int[] optionIds, bool voteAnonymously);
 }

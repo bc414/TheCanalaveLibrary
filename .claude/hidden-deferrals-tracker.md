@@ -864,8 +864,10 @@ unless noted. All sit under Stage-5 cells.
     does not retry them. Not built: D23 did not route the site, and the window is a moderator's click
     against a member's leave.
   - **Handled elsewhere, not in this list:** `VoteAsync`'s create-create races (both `poll_votes`
-    unique indexes) and its delete-delete race answer a 400 since WU-PollVoteIntegrity (2026-10-13),
-    which made single-choice a database constraint (D23's poll row).
+    unique indexes) and its delete-delete race are never a 500 since WU-PollVoteIntegrity (2026-10-13),
+    which made single-choice a database constraint (D23's poll row). Each answers a 400, except that
+    since its review fixes a race whose rows already stand as asked (the voter's own double submit)
+    succeeds.
   - Fix shape:
     - Inserts: `INSERT … ON CONFLICT DO NOTHING`, with the counter or notification gated on
       rows-affected (the `JoinAsync` shape).
@@ -1451,6 +1453,16 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     something only under `VoterChoice`), so if the mode flips to `Public` in that window the voter list
     names someone who voted under a promise of anonymity. That reads as a reader being wrong (a
     constraint), but it can also be read as the voter's intent being disappointed (a policy).
+  - Two texts that bear on the answer (added by the WU's review fixes, 2026-10-13):
+    - F37's Settled bullet gives the lock's purpose as "prevents retroactive anonymity exposure", and
+      the status-quo default leaves exactly that open, for a window one request wide.
+    - The rider's sentence ("the first-vote-vs-config-edit boundary is itself an unguarded
+      check-then-act and needs the same treatment in the same WU") is about the restructure's
+      dependence on `AllowMultiple`, which is how the WU and the campaign amendment read it. Its
+      phrase "the first-vote-vs-config-edit boundary" can also be read as the whole boundary, all four
+      locked fields.
+
+    Either reading is the owner's to confirm.
   - The question: does `AnonymityMode` get the same treatment? Built shape if yes: carry
     `anonymity_mode` on the vote row and widen the FK and `base_polls`' alternate key to
     `(poll_id, allow_multiple, anonymity_mode)`; the edit's mode write goes set-based like

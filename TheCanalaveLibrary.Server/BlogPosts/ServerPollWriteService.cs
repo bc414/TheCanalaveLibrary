@@ -29,8 +29,10 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// <b>Single-choice is a constraint</b> (D23): the vote row's generated guard
 /// <c>single_choice_poll_id</c> is unique with <c>user_id</c>. <see cref="VoteAsync"/>'s diff is the
-/// friendly path; a vote that loses a race to the schema is a <see cref="PollValidationException"/>
-/// (<see cref="VoteRaceMessage"/>), never a 500 (<c>layer2-services.md</c> §"Check-then-act posture").
+/// friendly path. A vote that loses a race to the schema is never a 500: it succeeds when the voter's rows
+/// already stand exactly as asked (their own double submit), and is otherwise a
+/// <see cref="PollValidationException"/> (<see cref="VoteRaceMessage"/>) (<c>layer2-services.md</c>
+/// §"Check-then-act posture").
 /// </para>
 /// <para>
 /// <b>Edit notification:</b> a material edit (name/description/option change) to a voted-on poll
@@ -46,13 +48,13 @@ public class ServerPollWriteService(
     : ServerPollReadService(readDbFactory, activeUser), IPollWriteService
 {
     /// <summary>
-    /// <see cref="VoteAsync"/>'s answer when its save loses a race: the voter's own other tab, the
-    /// owner's edit (an option removed, or the vote mode changed before the first vote), or the poll's
-    /// deletion changed what the call had loaded. Not retried: a retry would cast the vote under
-    /// settings the voter never saw.
+    /// <see cref="VoteAsync"/>'s answer when its save loses a race and the voter's rows do not end up as
+    /// the call asked: the voter's own other tab voting differently, the owner's edit (an option removed,
+    /// or the vote mode changed before the first vote), or the poll's deletion changed what the call had
+    /// loaded. Not retried: a retry would cast the vote under settings the voter never saw.
     /// </summary>
     public const string VoteRaceMessage =
-        "This poll changed while your vote was being saved. Reload the page and vote again.";
+        "This poll or your vote on it changed while your vote was being saved. Reload the page and vote again.";
 
     /// <summary>The config-lock error for a vote-mode change, from the service check or the database.</summary>
     public const string VoteModeLockedMessage = "Vote mode is locked once votes exist.";
@@ -369,7 +371,12 @@ public class ServerPollWriteService(
             // save and the next call reloads the voter's rows as they now stand.
             foreach (PollVote vote in existing.Concat(added))
                 writeDb.Entry(vote).State = EntityState.Detached;
-            throw new PollValidationException(VoteRaceMessage);
+
+            // Lost to a request that left exactly what this one asked for (the voter's own double submit:
+            // two tabs, a client retry): the vote stands as cast, so this is a success, as D23's
+            // create-create rows count a racing duplicate as already done. Any other result is a refusal.
+            if (!await VotesStandAsRequestedAsync(pollId, userId, picked, isAnonymous))
+                throw new PollValidationException(VoteRaceMessage);
         }
 
         // The response is a read and applies the same kind-(g) guard. After a withdrawal from a poll
@@ -387,8 +394,9 @@ public class ServerPollWriteService(
 
     /// <summary>
     /// Whether a vote save failed because the poll or the voter's own rows changed between
-    /// <see cref="VoteAsync"/>'s load and its save. Each constraint is matched by name, so any other
-    /// failure stays a genuine fault:
+    /// <see cref="VoteAsync"/>'s load and its save (the caller then decides, by
+    /// <see cref="VotesStandAsRequestedAsync"/>, between success and <see cref="VoteRaceMessage"/>). Each
+    /// constraint is matched by name, so any other failure stays a genuine fault:
     /// <list type="bullet">
     ///   <item>a 0-row delete or update (<see cref="DbUpdateConcurrencyException"/>): another request
     ///   removed the row first;</item>
@@ -404,6 +412,22 @@ public class ServerPollWriteService(
         || IsViolationOf(ex, PostgresErrorCodes.UniqueViolation, PollVoteConfiguration.OptionUserIndex)
         || IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation, PollVoteConfiguration.PollModeForeignKey)
         || IsViolationOf(ex, PostgresErrorCodes.ForeignKeyViolation, OptionForeignKey);
+
+    /// <summary>
+    /// After a lost race: whether the caller's rows on the poll are now exactly what
+    /// <see cref="VoteAsync"/> asked for, namely the options in <paramref name="picked"/> and no others, each
+    /// with <paramref name="isAnonymous"/>. The (option, user) index makes the rows distinct by option, so
+    /// the count and containment checks together amount to set equality. Untracked: the rows are only compared.
+    /// </summary>
+    private async Task<bool> VotesStandAsRequestedAsync(int pollId, int userId, int[] picked, bool isAnonymous)
+    {
+        var rows = await writeDb.PollVotes.AsNoTracking()
+            .Where(v => v.PollId == pollId && v.UserId == userId)
+            .Select(v => new { v.PollOptionId, v.IsAnonymous })
+            .ToListAsync();
+        return rows.Count == picked.Length
+            && rows.All(r => picked.Contains(r.PollOptionId) && r.IsAnonymous == isAnonymous);
+    }
 
     /// <summary>
     /// True when <paramref name="ex"/> (a <c>DbUpdateException</c> from <c>SaveChanges</c>, or the
