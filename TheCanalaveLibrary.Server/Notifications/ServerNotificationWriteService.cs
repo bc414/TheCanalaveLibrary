@@ -163,7 +163,9 @@ public class ServerNotificationWriteService(
             .ToListAsync();
 
         // D16: both types anchor on the GroupStory junction row — the single most specific entity
-        // of the event; the enricher's GroupStory kind resolves group name + story title from it.
+        // of the event; the enricher resolves group name + story title from it, by recipient
+        // (tracker D21): 60 through GroupStory, which drops the story title while the story is
+        // unpublished or taken down; 25 through OwnGroupStory, as stored.
         if (memberIds.Count > 0)
             await CreateCoreAsync(NotificationTypeEnum.NewGroupStory, sourceUserId,
                 memberIds.Select(id => (id, (long)groupStoryId)).ToArray());

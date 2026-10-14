@@ -1096,7 +1096,10 @@ unless noted. All sit under Stage-5 cells.
     Tests: Integration `StoryNotificationConfidentialityTests` (17; with the fix removed, 13 fail, all
     but the three visible-story controls and the classification check) and a `GroupServiceTests` guard
     theory; Unit `NotificationPresenterTests`. **F28**
-    (row 31) stays open. Found while scoping: **D22** (the credit and lineage manage lists). Browser
+    (row 31) stays open. Found while scoping: **D22** (the credit and lineage manage lists; split by
+    the WU's review fixes into D22, the outgoing lineage list, and **F29**, decision row 32, the
+    requests on an unpublished story). The review fixes also stopped the `Own*` kinds linking a page
+    that 404s for the author too (a taken-down story, an unpublished chapter): the title stays. Browser
     pass: **H43**. Narrative: `audit/Notifications.md` F42 and `audit/Groups.md` F39 Stage notes.
   - Grid: no cell moves at filing (F39 L2, F41 L2 read 5). At closure: F42 L4.5 5→1 until **H43**.
   - **Confirmed** by a throwaway Integration probe (not committed): the creator of a group added their
@@ -1127,27 +1130,20 @@ unless noted. All sit under Stage-5 cells.
     into a group; a second member's 60 has no story title), plus one for a story unpublished after the
     fan-out.
 
-- [ ] **D22 — The credit and lineage manage lists name another author's unpublished or taken-down story** `[latent-risk · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, found while enumerating D21's story-family kinds. Not a notification, so outside that WU's scope.*
-  - Grid: no cell moves (F10 L2, F50 L2 read 5).
-  - **What, by reading (not probed):** both manage reads lift `StoryStatus` and `IsTakenDown` (and
-    `ContentRating`) for every list they build, with a comment that justifies it for the caller's *own*
-    stories only.
-    - `ServerStoryAcknowledgmentReadService.GetManageDataForUserAsync`, the **incoming** list: a user
-      credited on another author's Draft (crediting a beta reader before publishing is the obvious use)
-      sees that draft's title, and keeps seeing it after a takedown.
-    - `ServerStoryLineageReadService`'s manage read, the **incoming** list: the target's author sees the
-      requester's source story, which is only ownership-gated, so it can be a draft. The **outgoing**
-      list shows the target's title to the requester after the target is unpublished or taken down
-      (the request itself required a visible target).
-  - **Why it is not simply D21's rule applied:** the notifications now drop these titles (D21), so the
-    lists are the only place they show. But a credited user or a lineage target has to decide on a
-    request, and may need to know which story it is about. Whether a credit or a lineage link may be
-    requested on an unpublished story at all, and what its counterpart sees while it is pending, is a
-    product question of the same shape as **F28**.
-  - **Fix shape, once decided:** either refuse the request while the story is unpublished (a status
-    guard at `RequestAcknowledgmentAsync`/`RequestLineageAsync`, like the target's kind (g) check), or
-    keep it and show the counterpart a title-free row until the story is public. The outgoing lineage
-    list's taken-down/unpublished target follows D21's rule either way (title-free for a non-author).
+- [ ] **D22 — The requester's outgoing lineage list names a target story after it is unpublished or taken down** `[latent-risk · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, found while enumerating D21's story-family kinds. Not a notification, so outside that WU's scope. Split by its review fixes the same day, the way D21 was: the product question (may a credit or lineage request exist on an unpublished story, and what does its counterpart see while it is pending) moved to **F29**, decision row 32. What stays here is decided.*
+  - Grid: no cell moves (F10 L2 reads 5).
+  - **What, by reading (not probed):** `ServerStoryLineageReadService.GetManageDataForUserAsync` lifts
+    `StoryStatus` and `IsTakenDown` (and `ContentRating`) for both sides of every link it lists, with a
+    comment that justifies it for the caller's *own* stories only. Its **outgoing** list shows the
+    requester the target's title, another author's story, after that target is unpublished or taken
+    down. The request itself required a visible target, so this is a story the requester may no longer
+    see, at any status of the link.
+  - **Decided, not open.** The settled Class-A rule (D21's: the `StoryStatus` filter, "confidentiality,
+    not consent", plus the removal filter) binds every non-author, however F29 is answered.
+  - **Fix shape:** the outgoing list shows such a target title-free, the way D21's notifications render
+    (the row stays, so the requester can still withdraw it). The requester's own source story keeps its
+    title.
+  - The two **incoming** lists (credits and lineage requests) are F29's, not this item's.
 
 ---
 
@@ -1870,8 +1866,41 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
   - If no: `AddStoryAsync` requires a public status for every caller (a guard without the author
     exemption), with a refusal message and an Integration test. If yes: when do members hear about it,
     at add time (the fan-out fires there today, title-less since D21's fix) or at publish time (a new
-    trigger)? Either way, `StoryNotificationConfidentialityTests`' probe test files an author's own
-    draft and needs its setup moved if the answer is no.
+    trigger)?
+  - **Tests that lean on the status quo** (WU-D21Confidentiality review fixes, 2026-10-14):
+    `StoryNotificationConfidentialityTests`' probe test
+    (`NewGroupStory_AnAuthorsOwnDraftFiledIntoTheirGroup_IsNotNamedToAMember`) and its email test
+    (`NewGroupStoryEmail_ForAnAuthorsOwnDraft_CarriesTheGroupButNotTheStoryTitle`) both file an author's
+    own draft and expect a type-60 at add time. Under "no" (the add is refused) and under "yes, at
+    publish time" (no 60 at add time), both need new setup: a story hidden after the fan-out, which
+    the same class already covers for the bell. Only "yes, at add time" leaves them as they are.
+
+- [ ] **F29 — May a credit or a lineage link be requested on an unpublished story, and what does its counterpart see while it is pending?** `[decision · low · beta]` — *Filed 2026-10-14 by the WU-D21Confidentiality review fixes, split out of **D22** the way F28 was split out of D21. Promoted the same day to `roadmap.md` decision row 32.*
+  - Grid: no cell moves on its account (F10 L2 and F50 L2 read 5, as D22 filed them).
+  - Source: found while enumerating D21's story-family kinds. Two requests can be made on a story the
+    counterpart cannot open: `IStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync` credits a
+    user on the author's own story at any status (crediting a beta reader before publishing is the
+    obvious use), and `IStoryLineageWriteService.RequestLineageAsync` gates its *source* only by
+    ownership, so a draft can be the source (the *target* must be visible to the requester).
+  - As built (the status quo, not a ruling): both requests are accepted on an unpublished story. Their
+    notifications (52, 50) no longer name it (D21's fix, WU-D21Confidentiality 2026-10-14: "{actor} acknowledged
+    your help on a story", no link, until the story is public). The counterpart's
+    **incoming** list still shows the title: `ServerStoryAcknowledgmentReadService.GetManageDataForUserAsync`
+    (pending credits) and `ServerStoryLineageReadService.GetManageDataForUserAsync` (pending lineage
+    requests) lift `StoryStatus` and `IsTakenDown` for every row, and a pending row keeps its title
+    after its story is taken down too.
+  - The question: a credited user or a lineage target has to accept or decline, and may need to know
+    which story it is about, while the Class-A rule says only the author may see an unpublished story.
+    If no: a status guard at both request methods (like the lineage target's kind (g) check), a refusal
+    message and an Integration test. If yes: does the counterpart see the title while the request is
+    pending (an exception to the Class-A rule that this row would make), or a title-free row until the
+    story is public? And does a pending row keep its title once the story is taken down?
+  - **Tests that lean on the status quo:** `StoryNotificationConfidentialityTests`'
+    `StoryLineageRequested_FromADraftSource_DoesNotNameTheDraftToTheTargetsAuthor` and
+    `NewStoryAcknowledgement_OnADraft_NamesTheStoryOnlyOnceItIsPublished` make their request on a
+    draft. Under "no" both requests are refused, so both need new setup; the class's Story-kind theory
+    keeps covering 50 and 52 over every hidden state either way.
+  - The outgoing lineage list's hidden target is decided and stays on **D22**.
 
 ---
 
@@ -2822,7 +2851,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        acknowledged your help on a story", no link. Publish it: the row names the story and links it.
     4. **Follower of a story taken down (10).** Optional if a moderator takedown is easy to drive: a
        follower's "New chapter of {story}: {chapter}" becomes "A story you follow has a new chapter",
-       with no link; the author's own "commented on {chapter}" is unchanged.
+       with no link. The author's own "commented on {chapter}" keeps its text but no longer navigates
+       (added by the review fixes, 2026-10-14: the chapter page is a 404 for a taken-down story's
+       author too); so does any of the author's story notifications for that story.
   - **Dev DB:** restore every status, takedown, credit and group-story row the pass changes, through
     `psql` or `reset-dev-db.ps1`.
 

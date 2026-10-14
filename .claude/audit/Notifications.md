@@ -131,6 +131,11 @@ settled Class-A rule (`StoryStatus` + `IsTakenDown`), not by an owner row:
   enricher stays recipient-agnostic.
 - **Rendering follows D8:** a hidden story is a lookup miss, so the type's existing title-free arm
   renders, with no link. `GroupStory` keeps the group's name and link and drops only the story title.
+- **The `Own*` kinds never link a page that 404s for the author** (added by the WU's review fixes,
+  2026-10-14): a taken-down story keeps its title but loses its link in `OwnStory` and `OwnChapter`,
+  and an unpublished chapter loses it in `OwnChapter`, because the story page and the chapter page
+  refuse those to their author too. Whether such a notification should link the editor instead is
+  decision row 27 (e).
 - **Not decided here:** whether an author may file their own unpublished story into a group at all
   (decision row 31, tracker F28). Whichever way it goes, the members' 60 no longer names the story.
 
@@ -540,7 +545,7 @@ path, as ReaderGamma, with `psql` after every write; the mail half and the metho
 
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; its review fixes Unit-test the per-group after-send indices and the landing page's link, no flip; its browser pass saw notification and private-message mail leave through the one worker and the shutdown drain finish, no flip; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
+**Stages (updated 2026-10-14, WU-D21Confidentiality — story-family targets split by recipient in the shared enricher, so the notification mail drops a hidden story's title too and the 50/52 draft leaks close at enrichment, beneath L2, no flip — Stage note at Feature 42's top; 2026-10-13, WU-PrivateMessageEmail — the email pipeline generalized to `(kind, id)` and moved to `Server/Email/`, the flusher split into the shared `OutboundEmailFlusher` and this cluster's `NotificationEmailComposer`, beneath L2, no flip — Stage note above Feature 41; its review fixes Unit-test the per-group after-send indices and the landing page's link, no flip; its browser pass saw notification and private-message mail leave through the one worker and the shutdown drain finish, no flip; WU-UserDeletion — type 62 seeded and produced, beneath L1/L2, no flip; its review fixes Integration-test the type's enrichment and route its attribution to decision row 23 — Stage notes above this feature; 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-NotificationCorrectness):** L1, L2, L4.5, L6 = 5 (the
 D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
 went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
 notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
@@ -565,7 +570,10 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
   source, de-identified moderation band, report-id anchors, `GroupStory` anchor, hidden favoriters in
   15 and the new-chapter fan-out, WU-InertFeatures 2026-09-30 — stage unchanged, Stage note at the end
   of this feature; convention sample and fan-out list re-synced to the code, WU-DocCorrections
-  2026-10-13 — docs only, stage unchanged, note directly below).**
+  2026-10-13 — docs only, stage unchanged, note directly below; the notification mail shares the
+  enricher's story-family split (a hidden story's title leaves members' and followers' mail, and a
+  lineage request from a draft source (50) or a credit on a draft (52) no longer names it), WU-D21Confidentiality
+  2026-10-14, tracker D21 — stage unchanged, Integration-tested, Stage note at Feature 42's top).**
   *WU-DocCorrections note (2026-10-13; service audit §4 rows 3/4):* `layer2-services.md`
   §"Notification Generation"'s sample passed `NotifyNewFollowerAsync(ActorId, targetUserId)`, the
   reverse of the real `(recipientUserId, followerUserId)`, so code copied from it would notify the
@@ -619,7 +627,10 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
       `RelatedEntityKind.GroupStory`); a second id column is never added; the re-point backlog is
       recorded as a conformance list (tracker B23), not built. Riders: the story's author is excluded
       from the 60 fan-out (gets 25 only); the notify block moves inside `if (!alreadyAdded)`; an
-      authorless story still notifies members.
+      authorless story still notifies members. *(Split by recipient, tracker D21 /
+      WU-D21Confidentiality 2026-10-14: both still carry the `GroupStory` row's id, but 25 resolves
+      through `OwnGroupStory`, as stored, and 60's story title drops while the story is unpublished or
+      taken down; Settled note "story-family targets by recipient" in the Shared Context.)*
     - **D17 — hidden favorites are favoriters on the personal plane.** Type 15 recipients are
       `IsFavorite || IsHiddenFavorite`; the type-20 mirror (author-plane — a hidden favorite must not
       fire it) is recorded before that producer exists.
@@ -827,12 +838,13 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
 "story-family targets by recipient" in the Shared Context above; rule and type table:
 `layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by recipient"):
 - **Enumerated first.** Every `KindFor` arm that reads a story title was traced to its producer's
-  recipient. Three kinds, 31 types: `Story` (19 types, 4 of them B24 stubs), `Chapter` (10, 24),
+  recipient. Three kinds, 23 types: `Story` (19 types, 6 of them B24 stubs), `Chapter` (10, 24),
   `GroupStory` (60, 25). Nine `Story` types, 24 and 25 tell the story's author; the rest tell a
   follower, a recommender (self-recommendation is refused), a group member (60 excludes the author), a
   lineage counterpart or a credited user.
 - **`OwnStory`, `OwnChapter`, `OwnGroupStory`** serve the author-recipient types and resolve the story
-  as stored, as every story kind did before (the unfiltered `StoryListings` read), taken down included.
+  as stored, as every story kind did before (the unfiltered `StoryListings` read), taken down included
+  (the link to a taken-down story or an unpublished chapter dropped by the review fixes below).
 - **`Story`, `Chapter`, `GroupStory`** now read `Stories` through the public window (not Draft,
   PendingApproval or Rejected) with `IsTakenDown` active and `ContentRating` lifted (Personal plane).
   The window is restated without the `StoryStatus` filter's viewer clause, so the answer never depends
@@ -863,6 +875,22 @@ clause removed, `IsTakenDown` lifted, and an unlisted type mapped to `Story` eac
 and the inbox render the title-free copy for hidden stories, and 52's copy changed, undriven (no browser
 in this pass); tracker **H43**. Found while scoping, not a notification: tracker **D22** (the credit
 and lineage manage lists show a counterpart's unpublished story title).
+**Review fixes (2026-10-14; three reviewers, twelve findings: eleven real, eight of them distinct).** One behavior change: the
+`Own*` kinds linked a page their author cannot open. The story page and the chapter page keep the
+`IsTakenDown` filter for the author too, and the chapter page serves only a published chapter, so
+`OwnStory` and `OwnChapter` now keep the title and drop the link for a taken-down story, and
+`OwnChapter` also for an unpublished chapter (the pre-split kinds linked these too). Whether the link
+should go to the editor instead is decision row 27 (e). Covered by the same Integration class: the
+Story-kind theory's taken-down case and the chapter theory's takedown and unpublished-chapter cases now
+expect no link for the author, and fail with the link restored. The rest is docs and comments: the
+enumeration count above (23 types, 6 stubs; it said 31 and 4), the F41 headline pointers, the D16
+settled notes here and in `audit/Groups.md` annotated with the split, the producer comments in
+`ServerNotificationWriteService`/`INotificationWriteService`, `layer2-services.md`'s Group Rating
+Waterfall clause re-tensed, and D22's product question split out as **F29** (decision row 32), with
+the tests that lean on rows 31 and 32's status quo named in F28 and F29. Rejected: type 52's
+title-free copy was said to be false for the "Inspiration" role, but that role was deleted by the
+`WU_StatBadgeProducers` migration; the four live roles are all help. **L4.5** stays 1: H43 step 4
+gains the author's takedown case.
 
 **WU-TrackerFixes Stage note (2026-10-13) — tracker D8 closed; F42 L2 stays 5, L4.5 5→1.**
 `NotificationEnricher` split its post-linked blog kind by recipient (the tracker's recommended type
@@ -901,7 +929,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top; story-family targets split by recipient, WU-D21Confidentiality 2026-10-14, tracker D21 — stage unchanged, Integration- and Unit-tested, Stage note at this feature's top).** **L4.5 — Stage 1 (5→1 at WU-D21Confidentiality, 2026-10-14: hidden stories' notifications render title-free and type 52's copy changed, undriven — tracker H43; Stage note at this feature's top. Before that Stage 5: 1→5 at the WU-TrackerFixes browser pass, 2026-10-13: `PollUpdated` names its post again, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top; story-family targets split by recipient, WU-D21Confidentiality 2026-10-14, tracker D21 — stage unchanged, Integration- and Unit-tested, Stage note at this feature's top; its review fixes the same day keep the author's title but drop the link to a taken-down story or an unpublished chapter — stage unchanged, Integration-tested, same note).** **L4.5 — Stage 1 (5→1 at WU-D21Confidentiality, 2026-10-14: hidden stories' notifications render title-free and type 52's copy changed, and (its review fixes) an author's notifications for their taken-down story stop navigating, undriven — tracker H43; Stage note at this feature's top. Before that Stage 5: 1→5 at the WU-TrackerFixes browser pass, 2026-10-13: `PollUpdated` names its post again, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

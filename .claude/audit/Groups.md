@@ -275,7 +275,10 @@ one id; a removed `GroupStory` row leaves the notification title-less (accepted)
 `AddStoryAsync`: the notify block runs only when the story was actually added (a re-add re-fired the
 whole fan-out); an authorless story still notifies members; the story's author is excluded from the
 60 fan-out and gets 25 only (one event, one notification). Rule: `layer2-services.md`
-§"Polymorphic RelatedEntityId".
+§"Polymorphic RelatedEntityId". *(Split by recipient, tracker D21 / WU-D21Confidentiality 2026-10-14:
+the anchor is unchanged, but 25 resolves through `OwnGroupStory`, as stored, and 60's story title
+drops while the story is unpublished or taken down; see `audit/Notifications.md`'s Settled note
+"story-family targets by recipient".)*
 
 **Settled — folder integrity (schema §2.4, service §2.10, worksheet D23's `group_stories` row; settled
 for WU-SchemaHardening 2026-10-13; do not revisit without the owner).** Sibling folder names are unique

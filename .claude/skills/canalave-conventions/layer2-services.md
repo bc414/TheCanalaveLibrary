@@ -920,8 +920,9 @@ context carries none (§"Content-Rating Filtering Lives on the Read DbContext").
 the story from the write context and, at add time, applies only the kind-(g) **confidentiality** guard
 `StoryVisibilityGuard.IsStoryPublishedAsync` (rating axis lifted on purpose; like the `StoryStatus`
 filter it reads, it lets a story's own author through, so an author can file their own unpublished
-story — whether they may is decision row 31, tracker **F28**; the members' notifications naming it are
-tracker **D21**, a defect either way) plus tiers 2/3. That is
+story — whether they may is decision row 31, tracker **F28**; the members' notifications no longer
+name it: tracker **D21**, fixed by WU-D21Confidentiality 2026-10-14, §"Polymorphic RelatedEntityId" →
+"Story-family kinds by recipient") plus tiers 2/3. That is
 deliberate: the rating axis at add time belongs to tier 2, which reports its own
 `ContentRatingExceededException`, and a viewer-ceiling guard would pre-empt it with a not-found (the
 rationale comment in `AddStoryAsync`; WU-ParentVisibility, `audit/Groups.md` F38–F40). Tiers 2/3 are
@@ -1674,6 +1675,13 @@ who the recipient is, so the enricher stays recipient-agnostic for the email com
   target, and the notification renders its type's title-free arm, with no link. A `GroupStory` target's
   title and link are the *group*, which the member can still open, so only `TargetContextTitle` drops
   ("A new story was added to {group}"). The notification row is never deleted.
+- **The `Own*` kinds keep the title, never a dead link** (the WU-D21Confidentiality review fixes,
+  2026-10-14). The author keeps their story's title in every status, taken down included. But the
+  story page and the chapter page keep the `IsTakenDown` filter for the author too, and the chapter
+  page serves only a published chapter. So `OwnStory` and `OwnChapter` drop the *link* (not the title)
+  for a taken-down story, and `OwnChapter` also drops it for an unpublished chapter: the notification
+  names the story and does not navigate. `OwnGroupStory` links the group and is unaffected. Linking
+  such a notification to the story's editor instead is decision row 27 (e)'s question, tracker F24.
 - **Classifying a new type:** a type goes in an `Own*` kind only when its recipient is always the
   referenced story's author. Anything else, or any doubt, takes the filtered kind: a wrong `Own*` arm
   is a leak, and a wrong filtered arm only costs an author their own title.

@@ -121,7 +121,8 @@ public interface INotificationWriteService : INotificationReadService
     /// <c>YourStoryAddedToGroup = 25</c> to the author when there is one — one event, one
     /// notification per person. Both carry <paramref name="groupStoryId"/>, the junction row's id
     /// (owner ruling D16: the single most specific entity of the event — the enricher resolves the
-    /// group name and the story title from it). The adder is the source, so drop-self keeps the
+    /// group name and the story title from it; the members' 60 drops the story title while the story
+    /// is unpublished or taken down, tracker D21). The adder is the source, so drop-self keeps the
     /// adder out of both. Called by <c>ServerGroupWriteService.AddStoryAsync</c> only when the story
     /// was actually added (never on the idempotent re-add path), best-effort post-commit.
     /// </summary>

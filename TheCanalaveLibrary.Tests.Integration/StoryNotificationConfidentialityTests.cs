@@ -11,8 +11,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// the public window (Draft, PendingApproval, Rejected) or taken down, unless its recipient is the
 /// story's author. Rule: <c>layer2-services.md</c> §"Polymorphic RelatedEntityId" → "Story-family kinds
 /// by recipient". <see cref="NotificationEnricher"/>'s <c>Story</c>, <c>Chapter</c> and
-/// <c>GroupStory</c> kinds each split into an author-recipient <c>Own*</c> kind (resolved as stored) and
-/// a filtered kind for everyone else.
+/// <c>GroupStory</c> kinds each split into an author-recipient <c>Own*</c> kind (resolved as stored, but
+/// never linking a page that 404s for the author: a taken-down story, an unpublished chapter) and a
+/// filtered kind for everyone else.
 ///
 /// <para><b>Per-test seeding:</b> <see cref="InitializeAsync"/> seeds the story's author and one other
 /// user (every non-author recipient). Stories come from <c>SeedStoryAsync</c>; groups, joins, adds,
@@ -65,9 +66,10 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
     [Fact]
     public async Task NewGroupStory_AnAuthorsOwnDraftFiledIntoTheirGroup_IsNotNamedToAMember()
     {
-        // The tracker's probe. As built, AddStoryAsync accepts an author's own draft (decision row 31 /
-        // tracker F28 is open). If the owner rules "no", this add is refused, and the unpublished-after-
-        // the-fan-out test below keeps covering the same lookup.
+        // The tracker's probe. As built, AddStoryAsync accepts an author's own draft and the 60 fans out
+        // at add time; decision row 31 / tracker F28 is open on both. Its setup changes if the owner
+        // rules "no" (the add is refused) or "yes, tell members at publish time" (no 60 at add time);
+        // the unpublished-after-the-fan-out test below keeps covering the same lookup either way.
         SetActiveUser(_authorId);
         int groupId = await CreateGroupAsync("D21 Probe Group");
         int draftId = await SeedStoryAsync(authorId: _authorId, status: StoryStatusEnum.Draft);
@@ -116,7 +118,10 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
     [Fact]
     public async Task NewGroupStoryEmail_ForAnAuthorsOwnDraft_CarriesTheGroupButNotTheStoryTitle()
     {
-        // The email composer shares the enricher, so the mail drops the title the bell drops.
+        // The email composer shares the enricher, so the mail drops the title the bell drops. Same
+        // setup as the probe above, so the same dependency: an author's own draft is accepted and the
+        // 60 fires at add time, both open under decision row 31 / tracker F28. A "no" or a "yes, at
+        // publish time" moves this test onto a story hidden after the fan-out, before the flush.
         SetActiveUser(_authorId);
         int groupId = await CreateGroupAsync("D21 Mail Group");
         int draftId = await SeedStoryAsync(authorId: _authorId, status: StoryStatusEnum.Draft);
@@ -160,7 +165,9 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
         foreach (NotificationDto dto in toAuthor)
         {
             dto.TargetTitle.Should().Be(title, $"{dto.NotificationTypeId}'s recipient is the story's author");
-            dto.TargetUrl.Should().Be($"/story/{storyId}");
+            // The story page keeps the removal filter for its author too, so a takedown drops only the link.
+            dto.TargetUrl.Should().Be(hiding == Hiding.TakenDown ? null : $"/story/{storyId}",
+                "a taken-down story's page is a 404 for its author as well");
         }
 
         NotificationDto[] toReader = await NotificationsOfAsync(_readerId);
@@ -192,7 +199,9 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
     [Fact]
     public async Task StoryLineageRequested_FromADraftSource_DoesNotNameTheDraftToTheTargetsAuthor()
     {
-        // The source is only ownership-gated, so a draft can be the requester's source story.
+        // The source is only ownership-gated, so a draft can be the requester's source story. Whether
+        // such a request may exist at all is decision row 32 / tracker F29; if the owner refuses it,
+        // this setup changes (the request is rejected) and the Story-kind theory keeps covering 50.
         int draftId = await SeedStoryAsync(authorId: _authorId, status: StoryStatusEnum.Draft);
         int targetId = await SeedStoryAsync(authorId: _readerId);
         SetActiveUser(_authorId);
@@ -209,6 +218,8 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
     [Fact]
     public async Task NewStoryAcknowledgement_OnADraft_NamesTheStoryOnlyOnceItIsPublished()
     {
+        // As built, a credit on a draft is accepted. Whether it may be is decision row 32 / tracker
+        // F29; if the owner refuses it, this setup changes and the Story-kind theory keeps covering 52.
         int draftId = await SeedStoryAsync(authorId: _authorId, status: StoryStatusEnum.Draft);
         string title = await TitleOfAsync(draftId);
         SetActiveUser(_authorId);
@@ -256,8 +267,12 @@ public class StoryNotificationConfidentialityTests(PostgresFixture postgres) : I
 
         NotificationDto toAuthor = await SingleAsync(_authorId, NotificationTypeEnum.NewStoryComment);
         toAuthor.TargetTitle.Should().Be("D21 Chapter", "24's recipient is the story's author");
-        toAuthor.TargetUrl.Should().Be($"/story/{storyId}/1");
         toAuthor.TargetContextTitle.Should().Be(storyTitle);
+        // The reading page serves a published chapter of a story that is not taken down, to its
+        // author too, so those two hidings drop only the link.
+        bool readable = hiding is ChapterHiding.None or ChapterHiding.StoryDraft;
+        toAuthor.TargetUrl.Should().Be(readable ? $"/story/{storyId}/1" : null,
+            "the author's link must not lead to a page that 404s for them");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

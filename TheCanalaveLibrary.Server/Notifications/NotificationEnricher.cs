@@ -36,11 +36,13 @@ public readonly record struct NotificationTarget(string? Title, string? Url, str
 /// (<c>content-safety.md</c> §"The Three-Plane Access Model"). Class-A confidentiality is different:
 /// it binds every recipient who is not the content's author. So the blog-post kinds (tracker D8) and
 /// the story-family kinds (tracker D21) split by recipient: an <c>Own*</c> kind's recipient is always
-/// the author and resolves the content as stored, and its sibling drops content its recipients can no
-/// longer open (an unpublished post or story, a Private author's profile post, a taken-down post or
-/// story, an unpublished chapter). A dropped target is a miss, so the notification degrades to its
-/// title-less, non-navigating copy. The split is by notification type, never by viewer, which is what
-/// keeps this class recipient-agnostic (<c>layer2-services.md</c> §"Polymorphic RelatedEntityId").</para>
+/// the author and resolves the content as stored (a story-family one keeps a taken-down story's title
+/// but not its link, which would 404 for the author too), and its sibling drops content its
+/// recipients can no longer open (an unpublished post or story, a Private author's profile post, a
+/// taken-down post or story, an unpublished chapter). A dropped target is a miss, so the
+/// notification degrades to its title-less, non-navigating copy. The split is by notification type,
+/// never by viewer, which is what keeps this class recipient-agnostic (<c>layer2-services.md</c>
+/// §"Polymorphic RelatedEntityId").</para>
 /// </summary>
 public static class NotificationEnricher
 {
@@ -406,27 +408,37 @@ public static class NotificationEnricher
 
     /// <summary>
     /// Every story as stored, for the <c>Own*</c> kinds: their recipient is always the story's
-    /// author, who sees their own story in any status, taken down included. This is what these kinds
-    /// read before the split (the unfiltered <c>StoryListings</c> table); unlike <c>OwnBlogPost</c>,
-    /// which has always kept the removal filter, a taken-down story keeps its title for its author.
+    /// author, who keeps their own story's title in any status, taken down included. This is what
+    /// these kinds read before the split (the unfiltered <c>StoryListings</c> table); unlike
+    /// <c>OwnBlogPost</c>, which has always kept the removal filter, a taken-down story keeps its title
+    /// for its author. Its <em>link</em> does not survive a takedown: the story page and the chapter
+    /// page keep the <c>IsTakenDown</c> filter for the author too (only the editor lifts it), so the
+    /// loaders below drop the URL of a taken-down story rather than link a 404.
     /// </summary>
     private static IQueryable<Story> StoriesAsStored(ReadOnlyApplicationDbContext readDb) =>
         readDb.Stories.IgnoreQueryFilters(); // elevated read: the recipient is the story's author
 
+    /// <summary>
+    /// Story targets. A taken-down story keeps its title but loses its link (only
+    /// <see cref="StoriesAsStored"/> can return one; <see cref="PublicWindowStories"/> has already
+    /// dropped it): <c>/story/{id}</c> is a 404 for its author too.
+    /// </summary>
     private static async Task<Dictionary<int, NotificationTarget>> LoadStoriesAsync(
         IQueryable<Story> stories, HashSet<int> storyIds) =>
         (await stories
                 .Where(s => storyIds.Contains(s.StoryId))
-                .Select(s => new { s.StoryId, StoryTitle = (string?)s.StoryListing.StoryTitle })
+                .Select(s => new { s.StoryId, StoryTitle = (string?)s.StoryListing.StoryTitle, s.IsTakenDown })
                 .ToListAsync())
             .ToDictionary(
                 s => s.StoryId,
-                s => new NotificationTarget(s.StoryTitle, $"/story/{s.StoryId}", null));
+                s => new NotificationTarget(s.StoryTitle, s.IsTakenDown ? null : $"/story/{s.StoryId}", null));
 
     /// <summary>
     /// Chapter targets. The story title rides along as context (type 10: "New chapter of {story}:
     /// {chapter}"). The inner join on <paramref name="stories"/> is the confidentiality step: a chapter
-    /// whose story is outside the source drops whole, chapter title and link included.
+    /// whose story is outside the source drops whole, chapter title and link included. A chapter the
+    /// reading page would not serve (its story taken down, or the chapter unpublished, for its author
+    /// too) keeps its titles and loses its link; only the author's source can return one.
     /// </summary>
     private static async Task<Dictionary<int, NotificationTarget>> LoadChaptersAsync(
         ReadOnlyApplicationDbContext readDb, IQueryable<Story> stories, HashSet<int> chapterIds,
@@ -438,12 +450,14 @@ public static class NotificationEnricher
                 select new
                 {
                     c.ChapterId, c.Title, c.StoryId, c.ChapterNumber,
-                    StoryTitle = (string?)s.StoryListing.StoryTitle
+                    StoryTitle = (string?)s.StoryListing.StoryTitle,
+                    Readable = c.IsPublished && !s.IsTakenDown
                 })
                 .ToListAsync())
             .ToDictionary(
                 c => c.ChapterId,
-                c => new NotificationTarget(c.Title, $"/story/{c.StoryId}/{c.ChapterNumber}", c.StoryTitle));
+                c => new NotificationTarget(
+                    c.Title, c.Readable ? $"/story/{c.StoryId}/{c.ChapterNumber}" : null, c.StoryTitle));
 
     /// <summary>
     /// Group-story targets (owner ruling D16: one id names the pairing). Explicit joins (not
