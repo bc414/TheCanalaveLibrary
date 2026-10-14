@@ -248,6 +248,27 @@ for a WASM tab whose cookie expired after prerender. The read is best-effort now
 defaults), as is the saved-selection flyout's sort read inside `TagFilter` (F15). `SearchPageTests` +2:
 a restored snapshot loads its sorted page at the viewer's 35; an expired-session read still renders the
 random batch. Each fails with its fix reverted.
+*Browser pass (2026-10-13), L4.5 1→5; two runtime bugs fixed* (commit "browser-pass fixes"):
+- **Seen.** TestUser's default sort is Date published. The seed lists about ten stories, so
+  `DefaultPaginationSize` was set to 50 through the Reader settings form, then to 3 through `psql`
+  (restored to 20 through the form afterwards). `/discover` showed three cards and "Showing 1–3 of 10",
+  pages 2 and 4 held three and one, and Apply kept 3, on the circuit and on WASM. Signed out: the random
+  batch of 20 (six stories here), both phases. With the session expired on WASM, a link to `/discover`
+  rendered with Warnings only (the settings read and the interaction-mark read).
+- **Fixed: on WASM the sorted listing came back empty.** `POST /api/stories/query` binds an absent
+  `restrictToStoryIds` as an empty array, and the service has read an empty set as "narrow to nothing"
+  since WU-RecLifecycle's empty-set fix (2026-07-25, Stories F5). Every unrestricted WASM listing was
+  empty: `/discover`'s Date-published sort showed "No stories found". The endpoint maps an empty array to
+  null, and `ClientStoryReadService` answers an empty restrict set itself, so empty shelves stay empty.
+  **Integration** `StoryEndpointsTests` +3, through the real client; `layer5-wasm.md` (the absent-array
+  gotcha).
+- **Fixed: a restored sorted first page had no pager.** `SearchPage` persisted its items but recomputed
+  the total from them, so the first load showed three cards and no pager until Apply. `TotalCount` is
+  persisted beside `Items` (`layer3-logic.md` §"State Persistence"). **RazorComponents**
+  `SearchPageTests` +1 (`RestoreDeclarativeStateAsync`).
+- **Fixed with Moderation F46:** the cards' Report for signed-in viewers only (`SearchPageTests` +2); and
+  the interaction-mark read is best-effort, as the settings read already was (`SearchPageTests` +1).
+- Tracker **H38** closed.
 
 - **L1 — N/A** (queries Story/USI/StoryListing; the per-user override table's key change, WU-SchemaHardening
   2026-10-13, is a Shared Context entity change with no L1 cell — Stage note at the end of this feature).
@@ -260,8 +281,8 @@ random batch. Each fails with its fix reverted.
   **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
   **L4 — Stage 1.**
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the sorted page size follows the reader
-  setting, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day,
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the sorted page size follows the reader
+  setting, driven on both render phases after two fixes (the empty WASM listing, the restored page's pager) — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes the same day,
   no flip).** It was 5 from the
   2026-07-02 browser pass (the L4.5-Browser verification note at the end of this file).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the

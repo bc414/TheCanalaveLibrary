@@ -40,6 +40,10 @@ tracker **H38** step 6. *Review fixes (2026-10-13), no flip:* new `ChapterEditor
 Publish through a failure and then a success that clears it (the four handlers clear the same way), and
 `ChapterPropertiesFormTests` checks the form's Sign in binding (+2 cases); each fails with its line
 reverted.
+*Browser pass (2026-10-13), L4.5 1→5:* on WASM, with TestUser's session expired, Save Changes and then
+Publish on `/story/13/chapter/1/edit` each showed one session-expired message with Sign in
+(`ReturnUrl=%2Fstory%2F13%2Fchapter%2F1%2Fedit`); Publish's replaced the save's rather than adding a
+second. No error boundary, no toast; `psql`: chapter 27 still unpublished. Tracker **H38** closed.
 
 **WU-ErrorHandling note (2026-07-06) — editor draft safety live.** `ChapterEditorPage` embeds
 `DraftAutosave` (`draft:chapter:{contentId}` / `draft:chapter:new:{storyId}`): 10s change-only
@@ -274,7 +278,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
   per-version controls. `ChapterEditorPage` orchestrates all.
 - **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
-- **L4.5-Browser — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the editor's errors render through `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top, with its review fixes' tests the same day, no flip. Before that Stage 5: WU-ChapterArcBrowserPass, 2026-07-24; the chapter delete re-driven on both
+- **L4.5-Browser — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the editor's errors render through `ErrorAlert`, driven on WASM, the only phase where a session can expire under the page — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' tests the same day, no flip. Before that Stage 5: WU-ChapterArcBrowserPass, 2026-07-24; the chapter delete re-driven on both
   render phases by the WU-TptHardDelete browser pass, 2026-09-30 — its note under L2 above).** Real-circuit pass closes the
   WU45 deferral. See the WU-ChapterArcBrowserPass Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the

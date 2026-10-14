@@ -48,13 +48,15 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-10-13, the WU-TrackerFixes review fixes — each Report host's test now asserts
+**Stages (updated 2026-10-13, the WU-TrackerFixes browser pass — every report entry point driven on both
+render phases, two Report defects fixed, **L4.5 1→5**, tracker H38 closed, note below; earlier the same day,
+the WU-TrackerFixes review fixes — each Report host's test now asserts
 the filed type and id, no flip; earlier the same day, WU-TrackerFixes — every allow-set type has a
 report entry point, a Message report needs a participant, and `ReportDialog`'s refusal renders through
 `ErrorAlert` (tracker B17), L2 changed beneath the cell, **L4.5 5→1**, Stage note below; before that the same day,
 WU-UserDeletion — `ReportedEntityType.Group` added as a ledger-only type, the submission allow-set
 unchanged, no flip; F47's WU-UserDeletion Stage note; before that 2026-09-30, WU-ModerationIntegrity
-browser verification):** L1–L3.5 = 5, L4 = 3, L4.5 = **1** (tracker **H38**), L5 = 5, L6 = 5. L1 stays 5
+browser verification):** L1–L3.5 = 5, L4 = 3, L4.5 = **5** (1→5 at the WU-TrackerFixes browser pass; tracker **H38** closed), L5 = 5, L6 = 5. L1 stays 5
 with the WU_ModerationIntegrity migration applied. Before WU-TrackerFixes, L4.5 went 5→1 at the
 WU-ModerationIntegrity review fixes (the duplicate refusal and the WASM rate-limit message changed
 undriven) and back to 5 at the browser pass the same day (tracker **H19** closed; note below).
@@ -84,6 +86,28 @@ undriven) and back to 5 at the browser pass the same day (tracker **H19** closed
   each request, and the five hosts' tests submit and assert the type and id: `MessagesPageTests`
   (Message), `RecommendationSectionTests` (Recommendation), `ProfilePageTests`, `BlogPostPageTests` and
   `GroupPageTests` +1 (BlogPost). Each fails with its host's type changed.
+- **Browser pass (2026-10-13), L4.5 1→5; two fixes** (commit "browser-pass fixes"). Both render phases,
+  `psql` after every submit; TestUser, ReaderGamma and AuthorAlpha filed, AdminUser read the queue.
+  - **Filed:** reports 14–17 (circuit) and 19–23 (WASM) on a profile blog card, a group blog card,
+    "Report post", a recommendation and a message, each with its type and `reported_user_id`
+    (narratives in F21, F28, F36, F40, F49). All nine listed in `/mod/reports`.
+  - **Refused, readably:** a second open report on the same post (the duplicate message, circuit and
+    WASM); a non-participant's hand-built message report (404, the same as an absent id).
+  - **Fixed: Report was offered to anonymous viewers.** `CommentSection` and the `StoryDeck`s of
+    `SearchPage`, `GroupPage` and `ProfilePage` wired it for everyone, against this WU's rule. On WASM an
+    anonymous click took the comment section down (the reasons read answered 401); on the circuit it
+    filed report 18 with no reporter (closed No action through `/mod/reports` afterwards). The four hosts
+    gate on the viewer, and `StoryDeck` stops forwarding `EventCallback.Empty` (Stories F5).
+    **RazorComponents** `CommentSectionTests`, `SearchPageTests`, `GroupPageTests`, `ProfilePageTests`
+    (+2 each), `StoryDeckTests` +1. Seen after the fix: no Report anywhere for an anonymous viewer, both
+    phases. The anonymous path in `SubmitReportAsync` stays as designed.
+  - **Fixed: the dialog's first open crashed on an expired WASM session.** The reasons read was a bare
+    `GetFromJsonAsync` and `OpenAsync` had no catch, so the hosting page's error boundary showed. The
+    client translates it (`SessionExpiredException`) and the dialog shows the message with Sign in and
+    Close; the next open, signed in, loads the reasons. **Unit** `ModerationIntegrityClientTests` +1,
+    **RazorComponents** `ReportDialogTests` +1. A dialog opened before the session expired already showed
+    the submit's refusal with Sign in.
+  - **Seen, filed:** a viewer's own story card offers Report (tracker **H39**).
 
 **WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46 L4.5 1→5.** `ReportDialog`
 on both render phases, `psql` after every submit:
@@ -228,6 +252,15 @@ other cells unchanged.**
   beside its own local validation string. Both fixed; **RazorComponents** `ModReportsPageTests` +1 and
   `AccountActionPanelTests` +1, each failing with the fix reverted.
 - **L4.5 5→1:** no browser was available; tracker **H38** steps 7–8.
+- **Browser pass (2026-10-13), L4.5 1→5.** AdminUser, both render phases:
+  - **Links.** The queue's User target (ReaderGamma) and `/mod/users/6`'s View profile both point at
+    `/user/6`, which serves the profile (200; `/user/ReaderGamma` answers 404).
+  - **The flag travels with the message** (WASM, the session expired with a `fetch` logout): after
+    claiming report 18, Hide content with a reason showed the session message with Sign in; clearing
+    the reason and pressing it again showed "A removal reason is required." with no Sign in. The same on
+    `/mod/users/6`'s Warn: the session message with Sign in, then "A reason is required." without it.
+    `psql`: ReaderGamma still Active, report 18 unchanged until its real resolve.
+  - Tracker **H38** closed.
 
 **Settled — `Group` targets and the assign-admin action, F46/F47 (owner ruling D13 edge (b), D8's
 seventh-type amendment and D47's floor; settled for WU-UserDeletion 2026-10-13). Do not revisit:**
@@ -606,7 +639,9 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-10-13, WU-TrackerFixes — the queue's User-target link and View profile use the
+**Stages (updated 2026-10-13, the WU-TrackerFixes browser pass — the links and the flags driven on both
+render phases, **L4.5 1→5**, tracker H38 closed, Stage note at the top of this section; earlier the same
+day, WU-TrackerFixes — the queue's User-target link and View profile use the
 id route, and the removal and account-action refusals carry an honest Sign-in flag, **L4.5 5→1**
 (tracker H38), Stage note at the top of this section; earlier the same day, the WU-PrivateMessageEmail review fixes — the moderator-initiated account
 paths load their target fresh, so a circuit that tracked it no longer decides on or writes back stale
@@ -622,7 +657,8 @@ has seen, tracker H29 — Stage note at the top of this section; its review fixe
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
-L4.5 = **1**: WU-TrackerFixes lowered it, 2026-10-13 (the queue's User-target link and View profile
+L4.5 = **5**: the WU-TrackerFixes browser pass returned it, 2026-10-13 (tracker **H38** closed; its note at
+the top of this section), after WU-TrackerFixes lowered it the same day (the queue's User-target link and View profile
 now use the id route, and the removal and account-action refusals carry an honest Sign-in flag, all
 undriven — tracker **H38** steps 7–8; its Stage note at the top of this section). Before that it was
 **5**: WU-UserDeletion lowered it to 1 and its browser pass returned it to 5, both 2026-10-13
@@ -889,11 +925,21 @@ Tests: **RazorComponents** `ModSubmissionsPageStoriesTests` +1 (the story reject
 the reset removed). **L4.5 5→1:** no browser was available; tracker **H38** step 7. *Review fixes
 (2026-10-13), no flip:* the account and link resets had no test; `ModSubmissionsPageImportsTests` +2 run
 the same sequence on each tier, and each fails with its reset removed.
+*Browser pass (2026-10-13), L4.5 1→5:* AdminUser on WASM with the session expired. Rejecting
+"Seed Story: Pending Approval A (E)" with a reason showed the session message with Sign in; with the
+reason cleared, "A rejection reason is required." without it. The external-account tier was driven the
+same way on a fixture (TestUser's AO3 verification request through the API), then rejected for real
+signed in (`user_external_identities` row 1: Rejected, reviewed by AdminUser). `psql`: story 8 still
+Pending. The link tier was not driven: no pending link verification exists, and one needs a verified
+account and a story link (`ModSubmissionsPageImportsTests` covers its reset). Tracker **H38** closed.
 
-**Stages (updated 2026-10-13, WU-TrackerFixes — the three reject reasons reset the Sign-in flag,
+**Stages (updated 2026-10-13, the WU-TrackerFixes browser pass — the story and account rejects driven on
+WASM, **L4.5 1→5**, tracker H38 closed, Stage note at the top of this section; earlier the same day,
+WU-TrackerFixes — the three reject reasons reset the Sign-in flag,
 **L4.5 5→1** (tracker H38), and its review fixes test the account and link tiers, no flip; Stage note at
 the top of this section; before that 2026-09-30, WU-ModerationIntegrity — L2 changes beneath the cell,
-no flip; the WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (5→1 at
+no flip; the WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 5** (1→5 at the
+WU-TrackerFixes browser pass, 2026-10-13, tracker **H38** closed; 5→1 at
 WU-TrackerFixes, 2026-10-13: `/mod/submissions`' three reject reasons no longer inherit a stale Sign-in
 flag, undriven — tracker **H38** step 7; its Stage note at the top of this section. Before that 5:
 the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed

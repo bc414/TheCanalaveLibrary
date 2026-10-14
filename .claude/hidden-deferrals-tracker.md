@@ -251,7 +251,7 @@ decision work that has no row at all.
     - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
     - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
-- [x] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.* Every allow-set type now has an entry point: `BlogPostCard` (profile Blog tab, group page — `BlogPostListingDto.AuthorId` hides it on the viewer's own post), `BlogPostPage`'s "Report post" (not on a site announcement — decision row 30 / F27), `RecommendationCard` via `RecommendationSection`'s own dialog, and `MessageItem` via `MessageThread` to `MessagesPage`. Signed-in viewers only; hidden on own content. **Behavior change:** a `Message` report now requires the reporter to be a participant of the conversation (kind (g)). Rule: `layer2-services.md` §"Moderation Services" → "Report entry points". Narrative: `audit/Moderation.md` F46. RazorComponents + Integration tested; browser pass owed (H38).
+- [x] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.* Every allow-set type now has an entry point: `BlogPostCard` (profile Blog tab, group page — `BlogPostListingDto.AuthorId` hides it on the viewer's own post), `BlogPostPage`'s "Report post" (not on a site announcement — decision row 30 / F27), `RecommendationCard` via `RecommendationSection`'s own dialog, and `MessageItem` via `MessageThread` to `MessagesPage`. Signed-in viewers only; hidden on own content. **Behavior change:** a `Message` report now requires the reporter to be a participant of the conversation (kind (g)). Rule: `layer2-services.md` §"Moderation Services" → "Report entry points". Narrative: `audit/Moderation.md` F46. RazorComponents + Integration tested; browser-verified 2026-10-13 (H38 closed).
   - Grid: F46 L1–L3.5=5 — invisible there, same shape as the User half this item's sibling closed.
   - Source: `ServerModerationWriteService.AllowedReportTargets` (all six types); repo-wide the only
     `ReportDialog.OpenAsync` call sites pass `Story` (5) or `Comment` (2).
@@ -416,7 +416,7 @@ decision work that has no row at all.
   - Next: once a call is made on what "collapsed" should mean for a thread, wire the setting's
     initial state and build the toggle affordance in the same pass.
 
-- [x] **B16 — `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for every sorted-mode Apply — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · low · anytime]` The panel echoes `InitialFilter.PageSize`, copied ahead of its interaction guard; `SearchPage`, `BookshelvesPage` and `ProfilePage`'s story tabs seed it from the signed-in viewer's `DefaultPaginationSize` before the first load (anonymous viewers keep 20); `TreeSearchPage` needed nothing. The entry's "seed pattern" option, with no new parameter (`StoryFilterDto` already carries `PageSize`). Rule: `layer3.5-structure.md` §"Seed state vs. live fetch in filter components". Narrative: `audit/Discovery.md` F31. RazorComponents tested; browser pass owed (H38). — *Found building WU-DiscoveryOverrideUI's random-batch-size fix, 2026-07-31.*
+- [x] **B16 — `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for every sorted-mode Apply — DONE (WU-TrackerFixes, 2026-10-13)** `[inert · low · anytime]` The panel echoes `InitialFilter.PageSize`, copied ahead of its interaction guard; `SearchPage`, `BookshelvesPage` and `ProfilePage`'s story tabs seed it from the signed-in viewer's `DefaultPaginationSize` before the first load (anonymous viewers keep 20); `TreeSearchPage` needed nothing. The entry's "seed pattern" option, with no new parameter (`StoryFilterDto` already carries `PageSize`). Rule: `layer3.5-structure.md` §"Seed state vs. live fetch in filter components". Narrative: `audit/Discovery.md` F31. RazorComponents tested; browser-verified 2026-10-13 (H38 closed). — *Found building WU-DiscoveryOverrideUI's random-batch-size fix, 2026-07-31.*
   - Grid: F31/F14/F17/F21 (the panel's consumers — `/discover`, Bookshelves, Profile story tabs)
     cells unaffected — invisible there, same shape as B0/B14/B15.
   - Source: `SharedUI/Discovery/ResultsFilterPanel.razor` `ApplyAsync` (`PageSize = 20` literal);
@@ -810,8 +810,10 @@ unless noted. All sit under Stage-5 cells.
     subtype and a profile post whose author is `Private`. `PollUpdated`'s arm names the post again.
     Integration `CommentAndBlogNotificationTests` (the author's 33 keeps its title, a follower's 13 loses
     it, under both triggers; a UsersOnly control; a group post's 100 by publish state). Rule:
-    `layer2-services.md` §"Polymorphic RelatedEntityId" → "Three blog-post kinds". Browser pass for the
-    100 copy owed (H38).
+    `layer2-services.md` §"Polymorphic RelatedEntityId" → "Three blog-post kinds". Browser-verified by the
+    WU-TrackerFixes browser pass (2026-10-13): types 13 and 100 lose title and link when the author goes
+    Private, 33 keeps both, in the bell and the inbox on both render phases (H38 closed;
+    `audit/Notifications.md` F42).
 
 - [ ] **D9 — Moderator free-text reasons travel in the query string** `[latent-risk · low · launch]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass; not decided there.*
   - Grid: F47/F48 L5=5 (unchanged).
@@ -2589,7 +2591,16 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     8. **Legacy encoding.** Import a `.txt` saved as Windows-1252 with curly quotes: they read correctly
        and the review panel shows the "wasn't saved as UTF-8" warning.
 
-- [ ] **H38 — WU-TrackerFixes browser pass: page size, the new Report controls, the blog-post notification titles, the inline refusals** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-TrackerFixes, which ran with no browser available.*
+- [x] **H38 — WU-TrackerFixes browser pass: page size, the new Report controls, the blog-post notification titles, the inline refusals — DONE (the WU-TrackerFixes browser pass, 2026-10-13)** `[test-gap · low · beta]` — *Filed 2026-10-13 by WU-TrackerFixes, which ran with no browser available.*
+  - **Closed 2026-10-13.** All eight steps driven on the server-only path, `psql` after every write; the
+    fifteen cells are back at 5. Six runtime bugs were fixed in the commit "browser-pass fixes": the
+    WASM sorted listing came back empty (an absent array key binds empty), a restored sorted `/discover`
+    page had no pager, Report was offered to anonymous viewers (four hosts) and dead on unwired decks
+    (`StoryDeck` forwarded `EventCallback.Empty`), the Report dialog's first open crashed on an expired
+    WASM session, and a stale session still took down the profile's story tabs. Not driven: the link
+    tier of step 7 (no pending link verification; bUnit covers its reset). Filed from the pass: **E13**,
+    **H39**, **H40**. Narratives in the audit Stage notes; the steps' results in `workplan.md`
+    WU-TrackerFixes ("Browser pass"). The original steps follow.
   - Grid: **F4, F6, F17, F21, F28, F31, F35, F36, F37, F40, F42, F46, F47, F48 and F49 L4.5 went 5→1**
     (`status.md`). Closing this returns them to 5. Every behavior below is covered by the RazorComponents
     or Integration tier; what is owed is the rendering and the interaction on both render phases.

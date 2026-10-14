@@ -19,16 +19,14 @@ references it, does not restate it.
 
 - **Last landed:** WU-TrackerFixes (2026-10-13) — the campaign's tracker sweep. Closed **B16** (page size
   follows the reader setting on `/discover`, Bookshelves and the profile story tabs), **B17** (every report
-  target has an entry point; a message is reportable only by a participant — the one behavior change),
-  **D8** (a blog-post notification stops naming a post its recipient can no longer open) and **H7** (test
-  hygiene). Built amendment U11 (`ErrorAlert` on the eight SOLO surfaces, the stale Sign-in flag) and fixed
-  the last dead `/user/{name}` links; U10 not taken (F6b). Flipped **F4, F6, F17, F21, F28, F31, F35, F36,
-  F37, F40, F42, F46, F47, F48, F49 L4.5 5→1** (no browser; tracker **H38**). Filed row 30 / **F27**. Its
-  review fixes (same day): the settings reads behind page size and the saved-selection sort are
-  best-effort (a stale WASM cookie took the public profile down), `layer4-style.md`'s toast sentence
-  corrected, the five remaining refusal toasts filed as **E12**, the group blog card's empty footer
-  fixed, 18 tests added. `dotnet test`: Unit 1,375, RazorComponents 916, Integration 1,660. **Pointer:**
-  its DONE entry.
+  target has an entry point; a message is reportable only by a participant), **D8** (blog-post
+  notifications stop naming a post the recipient can no longer open) and **H7** (test hygiene); built U11
+  (`ErrorAlert` on the SOLO surfaces) and fixed the last dead `/user/{name}` links. Filed row 30 / **F27**;
+  its review fixes filed **E12**. Its browser pass (same day) returned **F4, F6, F17, F21, F28, F31,
+  F35–F37, F40, F42, F46–F49 L4.5** to 5 and closed **H38**, fixing six runtime bugs (the empty WASM
+  sorted listing, a restored page's pager, Report for anonymous viewers and on unwired decks, the
+  dialog's expired-session crash, a stale session on the profile's story tabs); filed **E13**, **H39**,
+  **H40**. `dotnet test`: Unit 1,376, RazorComponents 929, Integration 1,663. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-ParityAndRemaining — service audit §2.7 and §2.12 (WASM parity, the remaining service defects; row 29/F26 filed, H37/H12 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-AuthorStoryDelete — worksheet D15 (an author's hard delete of their own story under any moderation state, an unstarted Spotlight slot returned, a typed-title dialog; row 27/F24, D19 filed, H34 closed by its browser pass); see its DONE entry.
@@ -304,7 +302,8 @@ references it, does not restate it.
   WU-PrivateMessageEmail, (e) by its review fixes; 29 — whether an author may edit content a moderator
   took down (freeze or remediate) — added the same day by WU-ParityAndRemaining, tracker **F26**; 30 —
   whether site announcements are reportable — added the same day by WU-TrackerFixes, tracker **F27**).
-  Tracker **H38**, WU-TrackerFixes' browser pass (fifteen L4.5 cells at 1), is owed.
+  Tracker **H38**, WU-TrackerFixes' browser pass, ran 2026-10-13, returned its fifteen L4.5 cells to 5
+  and closed — see WU-TrackerFixes' DONE entry.
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -476,7 +475,8 @@ is pending except where a bullet says so.
 ## WU-TrackerFixes — the tracker sweep: page size follows the reader setting (B16), a report entry point for every target and a participant-only message report (B17), blog-post notifications by recipient (D8), the test-hygiene backlog (H7), `ErrorAlert` on the SOLO surfaces (amendment U11), the last dead profile links (extends `Discovery/`, `Bookshelves/`, `Profiles/`, `Moderation/`, `BlogPosts/`, `Recommendations/`, `Messaging/`, `Groups/`, `Notifications/`, `Errors/`, `Stories/`, `Chapters/`, the Integration and RazorComponents suites) — DONE ✓ (2026-10-13)
 
 - **Cells:** **F4, F6, F17, F21, F28, F31, F35, F36, F37, F40, F42, F46, F47, F48, F49 L4.5 5→1** (visible
-  behavior changed with no browser available; tracker **H38**). Built beneath Stage-5 cells: F31/F17/F21
+  behavior changed with no browser available; tracker **H38**), **and 1→5 at the browser pass the same
+  day** (below). Built beneath Stage-5 cells: F31/F17/F21
   L3-Logic, F46 L2 (the participant rule), F35/F36 L2 (`AuthorId`), F42 L2 (D8), F47 L2 (the link). No
   migration. Dated 2026-10-13, the session's `currentDate`, as the WUs before it.
 - **Trigger:** spec `wu-specs/WU-TrackerFixes.md` and amendments U10/U11. §1 C / E2 was done by
@@ -520,7 +520,9 @@ is pending except where a bullet says so.
   presenter test rewritten), **RazorComponents 898** (874 → 863 by the merges, +35), **Integration
   1,660** (+8). Every new test was mutation-checked against a targeted revert (listed in the commit
   bodies). check-doc-hygiene, check-design-tokens, check-render-modes and check-a11y pass. No browser
-  was available: tracker **H38** holds eight steps.
+  was available: tracker **H38** holds eight steps. **Browser pass (2026-10-13):** all eight driven, the
+  fifteen cells back to 5, six runtime bugs fixed (below); after its fixes Unit 1,376, RazorComponents
+  929, Integration 1,663.
 - **Review fixes (2026-10-13).** Three reviews raised 13 findings, 9 distinct after merging duplicates;
   all were real, and none needed an owner ruling.
   1. **`layer4-style.md` contradicted the WU's own rule.** It still sent action failures to a toast, with
@@ -549,10 +551,55 @@ is pending except where a bullet says so.
   Recommendations F28, Discovery F31, BlogPosts F35/F36/F37, Groups F40, Moderation F46/F48, Messaging
   F49) with its headline, a new Stage note at Tags F15; annotations at Groups F39, Moderation F47's
   headline and Notifications' type-100 line.
+- **Browser pass (2026-10-13). F4, F6, F17, F21, F28, F31, F35, F36, F37, F40, F42, F46, F47, F48, F49
+  L4.5 1→5; H38 closed; six runtime bugs fixed.**
+  - **Setup.** Server-only path on the standing workbench (no migration in this WU, so not reset), `psql`
+    after every write. Circuit proven by `_blazor/negotiate` and no `/api` call (Auto hash cleared before
+    each full load), WASM by the action's `/api` request. Actors: TestUser, AuthorAlpha, ReaderGamma,
+    AdminUser, anonymous. An expired session was made with a `fetch` logout under the running WASM app
+    (it exists only on WASM). Page size used a `psql` fixture of 3, the seed being about ten stories.
+  - **GIF:** `e2e-WU-TrackerFixes.gif` (WASM: ReaderGamma's "Report post" on `/blog/4`, filed).
+  - **Bugs fixed** (commit "browser-pass fixes"): (1) `POST /api/stories/query` bound an absent
+    restrict set as an empty array, which the service reads as "narrow to nothing", so every unrestricted
+    WASM listing was empty (`/discover`'s Date-published sort showed no stories): the endpoint maps empty
+    to null and the client answers an empty set itself; (2) a restored sorted `/discover` page lost its
+    pager (`TotalCount` now persisted beside `Items`); (3) `CommentSection` and three `StoryDeck` hosts
+    offered Report to anonymous viewers (a WASM crash, an anonymous circuit filing); (4) `StoryDeck`
+    forwarded `EventCallback.Empty`, whose delegate made every unwired card offer a dead Report; (5)
+    `ReportDialog`'s first open crashed on an expired WASM session (the reasons read); (6) a stale WASM
+    session still took the profile's Stories tab down through the interaction-mark read (and would
+    have `/discover`). Tests +17: Unit +1, RazorComponents +13, Integration +3; 12 mutants in four
+    batches, each failing its test (the fix commit's body says 13: a miscount). Conventions:
+    `layer5-wasm.md` (an absent array key binds empty), `layer3.5-structure.md`, `layer2-services.md`,
+    `error-handling.md`, `layer3-logic.md`, `testing.md` (the HTTP-binding blind spot; restore mutants with
+    a fresh timestamp), `run-server/SKILL.md`.
+  - **What it saw:** the steps' results are in the audit Stage notes (F4, F5, F6, F17, F21, F24, F28,
+    F31, F35–F37, F40, F42, F46–F49, and Tags F15). Also driven: the duplicate-report refusal on both
+    phases, a non-participant's message report (404, like an absent id), a refused group file and
+    unfile, the external-account reject on a fixture.
+  - **Not covered:** the link tier of step 7 (no pending link verification; bUnit covers it); keyboard
+    and screen-reader use (**F6b**). Filed: **E13** (the interaction-mark read on twelve other listing
+    call sites), **H39** (Report on the viewer's own story and user card), **H40** (a refused file keeps
+    its folder choice; the Sign in line sits flush against the editor forms).
+  - **Logs.** No `fail:`/`crit:` in the server log; the browser console showed Warnings only (the
+    best-effort reads in a stale session) once the fixes were in.
+  - **Dev-DB state left (server-only).**
+    - TestUser's `DefaultPaginationSize`: 50 and 3 during the pass, 20 again (as before).
+    - AuthorAlpha's profile went Private through the form and back to Public through `psql`.
+    - New: blog post 4 "E2E D8: followers see this title" (AuthorAlpha, published) and its type-13
+      notifications 40052–40054; poll 2's description "E2E D8: edited by AuthorAlpha", its
+      `last_edited_at` aged 31 minutes through `psql`, `edit_notified_at` stamped, notification 40055;
+      site announcement 5 (AdminUser), published and then unpublished.
+    - Reports 14–17 and 19–23 open (receipts 40048–40051, 40057–40061; `active_report_count` up on posts
+      1, 2 and 4); report 18 (anonymous, filed by bug 3) closed No action by AdminUser.
+    - TestUser's verification code and `user_external_identities` row 1 (AO3, Rejected by AdminUser;
+      notification 40056).
+    - Notifications 40047 and 40052 read by their clicks.
 - **Pointers:** Stage notes at the top of Stories F4, Chapters F6, UserStoryInteractions F17,
   Profiles F21, Recommendations F28, Discovery F31, BlogPosts F35/F36/F37, Groups F40, Notifications F42,
-  Moderation F46/F47/F48, Messaging F49, Tags F15 (review fixes); tracker B16, B17, D8, H7, F27, H38, F6b,
-  E12; roadmap row 30.
+  Moderation F46/F47/F48, Messaging F49, Tags F15 (review fixes); the browser-pass notes in those and in
+  Stories F5 and Comments F24; tracker B16, B17, D8, H7, F27, H38, F6b, E12, and from the browser pass
+  E13, H39, H40; roadmap row 30.
 
 ## WU-ParityAndRemaining — the InteractiveAuto/WASM parity breaks (validation error lists over the wire, the client's sprite root, the re-split's camelCase read, the anonymous reader's durable marks, the Explore pivot's message) and the remaining confirmed service defects (reply depth, atomic group and chapter creates, tag trust, the edited marker, archive and encoding imports, three filter/fabrication fixes) (service audit §2.7 and §2.12; worksheet D12's "Left open"; extends `Client/Http/`, `Comments/`, `Groups/`, `Chapters/`, `Stories/`, `Tags/`, `Import/`, `Recommendations/`, `Messaging/`, `Sprites/`, `Discovery/`, `Data/`) — DONE ✓ (2026-10-13)
 

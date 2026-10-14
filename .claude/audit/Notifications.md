@@ -812,6 +812,16 @@ title and link while the author's 33 keeps them; a UsersOnly control keeps the t
 by publish state). Mutation-checked: 33 back on `BlogPostDirect`, and the profile filter removed, each
 fail. **Unit** `NotificationPresenterTests` (the 100 arm with and without a title). **L4.5 5→1:** the
 100 copy changed undriven; tracker **H38** step 5.
+*Browser pass (2026-10-13), L4.5 1→5.* Bell and inbox on both render phases, `psql` for each row:
+AuthorAlpha published post 4 ("E2E D8: followers see this title"), and her followers got type 13
+(notifications 40052–40054). Then she edited poll 2 on post 2 (its `last_edited_at` was aged past the
+30-minute quiet period through `psql`, and the sweep wrote type 100 for TestUser, notification 40055).
+TestUser read "AuthorAlpha posted a blog entry: E2E D8: followers see this title" (click: `/blog/4`) and
+"A poll you voted on in Seed Blog Post: Published, Linked Story was changed". AuthorAlpha then set her
+profile Private through the privacy form: TestUser's two became "AuthorAlpha posted a new blog entry" and
+"A poll you voted on was changed", with no link (a click stays on `/notifications`), while AuthorAlpha's
+own 33 ("TestUser commented on Seed Blog Post: Published, Linked Story", 40047) kept its title and opened
+`/blog/2`. Her visibility was restored to Public through `psql` afterwards. Tracker **H38** closed.
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
@@ -825,7 +835,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top).** **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: `PollUpdated` names its post again, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top).** **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: `PollUpdated` names its post again, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

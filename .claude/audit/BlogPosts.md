@@ -29,6 +29,13 @@ Tests: **RazorComponents** (the shared view-model behavior through `StoryPropert
 tracker **H38** step 6. *Review fixes (2026-10-13), no flip:* `BlogPostPropertiesFormTests` and
 `SiteAnnouncementPropertiesFormTests` now check each form's Sign in binding (+2 cases each; each fails
 with `ShowSignIn` dropped).
+*Browser pass (2026-10-13), L4.5 1→5:* on WASM with the session expired, Create Post on `/blog/new`
+(TestUser), Publish Post on `/group/1/blog/new` (TestUser) and Create Announcement on `/news/new`
+(AdminUser) each showed the session-expired message with Sign in carrying its own path, no error
+boundary and no toast; `psql`: no post was written. The successful paths ran on the circuit: AuthorAlpha
+created post 4 as a draft and published it through `/blog/4/edit` (the D8 fixture, Notifications F42),
+and AdminUser published announcement 5 (Feature 36's check), unpublished again afterwards. Tracker
+**H38** closed.
 
 **WU-TptHardDelete browser verification Stage note (2026-09-30) — no flip.** The blog-post lifecycle
 has no UI (tracker B25), so the pass drove it over HTTP from a signed-in browser, with `psql` after
@@ -112,8 +119,8 @@ answers an anonymous caller 401 (it was 403). `GetSiteAnnouncementsAsync`'s unpu
 suites.
 
 - **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30, a lost delete race 404s since its review fixes, all three subtypes HTTP-driven by its browser pass the same day — see the Stage notes above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36; an emptied editor's content refused on all six create/edit DTOs since the WU-ParityAndRemaining browser pass, 2026-10-13, Unit-tested — the note just below). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the three editors' errors render through
-  `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top, with its review fixes' tests
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the three editors' errors render through
+  `ErrorAlert`, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' tests
   the same day, no flip).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; group-post `PUT`/`DELETE` routes + client twins since WU-TptHardDelete, 2026-09-30, Unit-tested since its review fixes, the routes HTTP-driven by its browser pass the same day).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
@@ -239,6 +246,17 @@ suites.
   records requests); before, a mis-copied `ReportedEntityType` passed every tier. Tests:
   **RazorComponents** `GroupPageTests` (the own card has no footer row; +1 for the filed type) and the
   extended `BlogPostPageTests`/`ProfilePageTests` cases. H38 step 2 gains the footer check.
+- **Browser pass (2026-10-13), L4.5 1→5.** Both render phases, `psql` after every submit:
+  - **Filed.** "Report post" on `/blog/4` (ReaderGamma, WASM, the GIF `e2e-WU-TrackerFixes.gif`;
+    report 19), the group page's card for post 1 (TestUser on the circuit, report 15; ReaderGamma on
+    WASM, report 20) and the profile card (Profiles F21): `reported_entity_type` 3, `reported_user_id` 4.
+  - **Refused, readably.** TestUser's "Report post" on post 2, already reported from its card, read
+    "You've already reported this — a moderator will review your open report." in the dialog (circuit).
+    With the session expired before the dialog's first open (WASM), the page's error boundary showed;
+    fixed (Moderation F46), it now reads the session message with Sign in and Close.
+  - **Hidden.** No "Report post" for the author (AuthorAlpha on `/blog/2`), for anonymous viewers, or on
+    site announcement 5 (TestUser, both phases). AuthorAlpha's own card on the group page has no
+    footer row at all.
 
 **WU-TptHardDelete browser verification Stage note (2026-09-30) — F36 L4.5 1→5; tracker H21 closed.**
 - **Setup:** server-only path. The workbench DB took `WU_TptHardDelete_FkPosture` in place on startup:
@@ -274,7 +292,7 @@ WU-TptHardDelete (2026-09-30) ran with no browser available, and the page's beha
 browser-verification note above).
 
 - **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below; `BlogPostDto.Kind` since WU-TptHardDelete, 2026-09-30, all three kinds Integration-tested since its review fixes).
-  **L3/L3.5 — Stage 5** (Edit link profile-only since WU-TptHardDelete, 2026-09-30 — see its Stage note above). **L4 — Stage 1** (visual sign-off pending). **L4.5 — Stage 1** (5→1 at WU-TrackerFixes, 2026-10-13: the card and page Report controls, undriven — tracker **H38**; Stage note at this feature's top, with its review fixes' footer fix the same day, no flip. Before that Stage 5: lowered 5→1 by WU-TptHardDelete, 2026-09-30, no browser available; its browser pass the same day drove the Edit link on both render phases and returned it to 5 — tracker H21 closed, browser-verification note above).
+  **L3/L3.5 — Stage 5** (Edit link profile-only since WU-TptHardDelete, 2026-09-30 — see its Stage note above). **L4 — Stage 1** (visual sign-off pending). **L4.5 — Stage 5** (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the card and page Report controls, driven on both render phases — tracker **H38** closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' footer fix the same day, no flip. Before that Stage 5: lowered 5→1 by WU-TptHardDelete, 2026-09-30, no browser available; its browser pass the same day drove the Edit link on both render phases and returned it to 5 — tracker H21 closed, browser-verification note above).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
   the F37 poll blocks that render on it were). Full wave narrative + the 7 bugs found/fixed:
@@ -584,6 +602,10 @@ no browser was available; tracker **H38** step 6. *Review fixes (2026-10-13), no
 flag assignments had no test; new `PollsPageTests` and `BlogPostEditorPagePollTests` save into an expired
 session (Sign in shows) and then into a validation refusal (it goes), and each fails with its page's
 assignment removed.
+*Browser pass (2026-10-13), L4.5 1→5:* on WASM with the session expired, Save Changes in `/polls`' editor
+(AdminUser, editing a site poll) and in `/blog/2/edit`'s poll panel (AuthorAlpha, poll 2) each showed the
+session-expired message with Sign in; `psql`: neither poll changed. The successful edit ran on the
+circuit (poll 2's description, the D8 fixture in Notifications F42). Tracker **H38** closed.
 
 **WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's `Vote` kind) — L4.5 5→1 at its review fixes and 1→5 at its browser pass the same day; L2 stays 5.**
 `ServerPollWriteService.VoteAsync` calls `EnsureAllowed(WriteActionKind.Vote)` right after its auth
@@ -957,7 +979,7 @@ bullet below, 2026-07-13.)
   destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
   Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
   design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the poll editors' errors render through `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top, with its review fixes' tests the same day, no flip. Before that Stage 5: 1→5 at WU-ThrottleCoverage's browser pass, 2026-10-13: the eleventh vote, change or retraction in a burst reads "please wait 6 seconds" in `PollView` on both render phases — tracker H33 closed; 5→1 at that WU's review fixes the same day; its Stage note at this feature's top. Before that: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed. WU-PollVoteIntegrity's browser pass, 2026-10-13, drove the restructured vote and edit flows and both race refusals on both phases, with no flip — its Stage note's browser bullet; tracker H30 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the poll editors' errors render through `ErrorAlert`, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' tests the same day, no flip. Before that Stage 5: 1→5 at WU-ThrottleCoverage's browser pass, 2026-10-13: the eleventh vote, change or retraction in a burst reads "please wait 6 seconds" in `PollView` on both render phases — tracker H33 closed; 5→1 at that WU's review fixes the same day; its Stage note at this feature's top. Before that: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13: the anonymized voter read "[deleted user]" on both render phases — Stage note at this feature's top; tracker H29 closed. WU-PollVoteIntegrity's browser pass, 2026-10-13, drove the restructured vote and edit flows and both race refusals on both phases, with no flip — its Stage note's browser bullet; tracker H30 closed).** Stage 5 before that, from the browser band below (2026-07-12, server-only path, standing dev DB kept):
   As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
   New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
   names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while

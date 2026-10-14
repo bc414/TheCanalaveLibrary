@@ -146,6 +146,26 @@ F66.
   test now submits and asserts a `BlogPost` report for the post (the page's dialog also serves "Report
   user"). Tests: **RazorComponents** `ProfilePageTests` +1 (the expired-session read still renders the
   profile at 20; fails with the catch removed). H38 step 1 gains the expired-session check.
+- **Browser pass (2026-10-13), L4.5 1→5; two fixes** (commit "browser-pass fixes"). Both render phases,
+  `psql` after every write:
+  - **Page size.** TestUser at `DefaultPaginationSize` 3 (Discovery F31's fixture) on AuthorAlpha's
+    Stories tab (four stories): three cards and "Showing 1–3 of 4", page 2 one card, Apply three, and
+    the Favorites tab and back kept the size. Signed out: all four, no pager.
+  - **Blog-tab Report.** TestUser filed a `BlogPost` report on post 2 from its card (report 14,
+    circuit) and ReaderGamma did on WASM (report 22): `reported_entity_type` 3, `reported_user_id` 4.
+    ReaderGamma's second report on post 4 read "You've already reported this — a moderator will review
+    your open report." in the dialog. AuthorAlpha on her own tab sees Edit and no Report; signed out,
+    no Report.
+  - **Fixed: a stale WASM session still took the Stories tab down.** With TestUser's session expired, a
+    username link opened the profile (fine), and the Stories tab hit the page's error boundary: the
+    settings read degraded as intended, but the cards' interaction-mark read
+    (`GetStatesByStoryIdsAsync`) answered 401 into it. That read is best-effort now (Warning, unmarked
+    cards); after the fix the tab rendered at 20 (four cards, no pager) with Warnings only.
+    **RazorComponents** `ProfilePageTests` +1. The other listing pages keep the exposure (tracker
+    **E13**).
+  - **Fixed: the story cards offered Report to anonymous viewers** (Moderation F46): the deck's Report
+    is wired for signed-in viewers only. `ProfilePageTests` +2 (a theory).
+  - Tracker **H38** closed.
 
 - **L1 — Stage 5.**
 - **L2 — Stage 5** (WU30, 2026-06-24). `IUserProfileReadService` built in `Server/Profiles/`:
@@ -176,8 +196,8 @@ F66.
 - **L4-Style — Stage 5** (WU30). Tailwind v4 token-based styling; banner avatar initials placeholder;
   stats strip with bold counter values; badge row; action buttons (follow/vouch/edit). Visual sign-off
   pending human run at `/user/{id}`. Stage-6 gate = human visual approval.
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the story tabs' page size and the blog
-  tab's Report, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the story tabs' page size and the blog
+  tab's Report, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes the same
   day, no flip).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; profile page verified in a real WASM runtime during the

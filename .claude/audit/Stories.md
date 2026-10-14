@@ -60,6 +60,12 @@ follow-up); L4.5 5→1, other cells unchanged.** `StoryPropertiesViewModel` deri
 `StoryPropertiesFormTests` +1 (an expired session offers Sign in, a later refusal replaces it, Clear
 removes it; fails with append semantics) and `StoryEditorPageTests` +1 (a session-expired save). **L4.5
 5→1:** no browser was available; tracker **H38** step 6.
+*Browser pass (2026-10-13), L4.5 1→5:* on WASM (no `_blazor/negotiate`; the save's `/api` request),
+TestUser's session was expired with a `fetch` logout under the running app, and Save on
+`/story/13/edit` then showed "Your session has expired — sign in again to continue." with a Sign in link
+carrying `ReturnUrl=%2Fstory%2F13%2Fedit`, no error boundary and no toast; `psql` showed story 13
+unchanged. The state exists only on WASM: a circuit keeps the identity it started with. The Sign in
+line sits flush against the form's first label (tracker **H40**). Tracker **H38** closed.
 
 **WU-ErrorHandling note (2026-07-06).** `StoryEditorPage` embeds `DraftAutosave`
 (`draft:story:{id|new}`; prose fields only — Title/ShortDescription/LongDescription; structured
@@ -186,7 +192,7 @@ Rule of record: `layer2-services.md` §"Author story deletion".
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L4.5-Browser — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the editor's server error renders through `ErrorAlert`, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5, re-verified by WU-ParityAndRemaining's browser pass, 2026-10-13: a
+- **L4.5-Browser — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the editor's server error renders through `ErrorAlert`, driven on WASM, the only phase where a session can expire under the page — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top. Before that Stage 5, re-verified by WU-ParityAndRemaining's browser pass, 2026-10-13: a
   refused save and a refused submit list the server's sentences on WASM as on the circuit, a re-typed
   tag is refused on save and accepted again on the same circuit, and an emptied summary is refused —
   the WU-ParityAndRemaining Stage note under Feature 4; before that 1→5, WU-AuthorStoryDelete browser pass, 2026-10-13: the Delete story
@@ -822,6 +828,17 @@ the dialog asking for the saved title, the delete, the Authored tab).
 
 ## Feature 5 — Story Browsing & Display
 
+### WU-TrackerFixes browser-pass Stage note (2026-10-13) — `StoryDeck`'s unwired Report; no flip
+
+`StoryDeck` forwarded `EventCallback.Empty` to each card when its host wired no Report. `Empty` carries
+a no-op delegate, so `HasDelegate` read `true`: every card's caret offered a Report that did nothing,
+and a host's signed-in-only gate (Moderation F46) could not hide it. The deck forwards `default` now
+(`layer3.5-structure.md` §"StoryCard and StoryDeck"). Seen on both render phases after the fix: an
+anonymous viewer's caret on `/discover`, `/group/1` and `/user/4/authored` offers no Report, and a
+signed-in viewer's does. Test: **RazorComponents** `StoryDeckTests` +1 (unwired: no Report; wired: it
+raises the id), which fails with `Empty` restored. An author's own card still offers Report (tracker
+**H39**). Cells stay Stage 5.
+
 ### WU-RecLifecycle Stage note (2026-07-25) — empty candidate set no longer means "no narrowing"
 
 **Browser-caught during WU-RecLifecycle's L4.5 pass; cells stay Stage 5 (correctness fix under an
@@ -954,7 +971,7 @@ only rec is hidden → "No recommendations given yet."
   directions, null-story); `GetChapterListAsync` (empty list, ordering, single-version empty alternates,
   non-primary alternate present/absent by rating ceiling, mature viewer vs. non-mature, unpublished chapter
   `IsPublished=false`). All 15 pass.
-- **L3.5-Structure — Stage 5 (WU25, 2026-06-24).** `StoryDesktop`/`StoryMobile` rebuilt: params
+- **L3.5-Structure — Stage 5 (WU25, 2026-06-24; `StoryDeck` forwards `default` for an unwired Report since the WU-TrackerFixes browser pass, 2026-10-13 — stage unchanged, RazorComponents-tested, its Stage note at this feature's top).** `StoryDesktop`/`StoryMobile` rebuilt: params
   `StoryDetailsDTO Story`, `IReadOnlyList<ChapterListEntryDto> Chapters`, `int? CurrentUserId`,
   `bool IsAuthor`. §5.28 layout: title → metadata row (author link, rating, status, word count,
   publish/updated dates, tag chips, author-only "Edit Story" link) → cover art (with `@onerror`

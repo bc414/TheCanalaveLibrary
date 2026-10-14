@@ -174,8 +174,20 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
 - Narrative: `audit/AccessGate.md` F66.
 
 ## Feature 24 — Comment Display & Pagination
+
+**WU-TrackerFixes browser-pass Stage note (2026-10-13) — Report for signed-in viewers only; no flip.**
+`CommentSection` wired each `CommentItem`'s Report for every viewer, against the report entry-point rule
+(`layer2-services.md` §"Moderation Services" → "Report entry points"). On WASM an anonymous click took
+the comment section down ("This section hit an error"; the reasons read answered 401). On the circuit it
+filed a report with no reporter (report 18, closed No action afterwards). The section wires Report only
+when `CurrentUserId` is set; `CommentItem` still hides it on the viewer's own comment. Seen after the
+fix on `/blog/2`: no Report for an anonymous viewer on either render phase; a signed-in viewer keeps it.
+Test: **RazorComponents** `CommentSectionTests` +2 (a theory: none anonymous, two signed in; fails with
+the gate removed). Every cell stays 5.
+
 - **L4.5 — Stage 5 (browser-verified 2026-10-13, WU-ParityAndRemaining's browser pass; it had gone
-  5→1 at the WU for the new "(edited)" marker).** Seen on chapter, blog-post, group and profile
+  5→1 at the WU for the new "(edited)" marker; Report hidden from anonymous viewers by the WU-TrackerFixes
+  browser pass the same day, seen on both phases, no flip — Stage note above).** Seen on chapter, blog-post, group and profile
   comments on both render phases; Stage note below Feature 26. Every other layer below stays 5.
 - **L1 — Stage 5** (`base_comments.date_edited` since WU-ParityAndRemaining, 2026-10-13 — Stage note
   below Feature 26). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live

@@ -583,6 +583,19 @@ WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
   card files a `BlogPost` report for its post, not a `Story` one (the page's one dialog serves both);
   a filing refusal shows above the stories; an unfile refusal shows inside the tree with Sign in. The
   stale "inline error strip" comment above `@code` is gone. H38 step 2 gains the footer check.
+- **Browser pass (2026-10-13), L4.5 1→5.** `psql` after every write:
+  - **Blog-section Report** (Feature 36's note): filed from a member's view on both phases; the
+    author's own card shows no Report and no footer row; signed out, none.
+  - **Inline refusals, on WASM with the session expired** (AuthorAlpha as admin of group 1; TestUser for
+    Join on group 2): Join showed the session message with Sign in under the header; filing a story
+    into a folder and Remove from group showed it above the stories; unfiling from the folder tree showed
+    it inside the tree, and the stories' message stayed, each beside its own controls. No toast, no error
+    boundary; `group_members`, `group_stories` and the folder assignment unchanged. Signed in again, a
+    real file and unfile of story 3 went through, leaving no assignment.
+  - **Fixed:** the story cards offered Report to anonymous viewers (Moderation F46); `GroupPageTests` +2.
+  - **Seen, filed:** after a refused file the story's folder select still shows the folder it was not
+    filed into (tracker **H40**).
+  - Tracker **H38** closed.
 
 - **Settled — group content FKs are RESTRICT (owner ruling D10, 2026-08-06; built WU-TptHardDelete
   2026-09-30).** `group_comments.group_id` and `group_blog_posts.group_id` refuse a group delete while
@@ -702,7 +715,7 @@ WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the blog section's Report and the inline refusals, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day, no flip. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the blog section's Report and the inline refusals, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes the same day, no flip. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
   panel, its stale-tab refusal and the sole admin's leave warning were driven on both render phases
   (browser verification Stage note above; tracker **H29** closed). It was 5 from the 2026-07-01/02 pass
   (the "L4.5-Browser verification" section below) through the later browser-verified WUs.

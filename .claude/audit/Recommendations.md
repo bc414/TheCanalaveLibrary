@@ -169,6 +169,10 @@ for anonymous viewers); `StoryPageTests` and `StoryExternalLinksRowTests` regist
 **L4.5 5→1:** no browser was available; tracker **H38** step 3. *Review fixes (2026-10-13), no flip:*
 the `RecommendationSectionTests` case now submits the dialog and asserts a `Recommendation` report for
 the rec (it fails with the section's type changed; Moderation F46's note).
+*Browser pass (2026-10-13), L4.5 1→5:* TestUser reported ReaderGamma's rec from its card on `/story/3`
+(circuit; report 16, `reported_entity_type` 4, `reported_user_id` 6) and ReaderGamma reported TestUser's
+on `/story/1` (WASM, `POST /api/moderation/reports` 204; report 21). TestUser's own rec shows Edit and
+Delete and no Report; signed out, no Report. Tracker **H38** closed.
 
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
@@ -208,8 +212,8 @@ the rec (it fails with the section's type changed; Moderation F46's note).
   like with rollback (`CommentSection.HandleLike` pattern), Hidden-Gem toggle, `ConfirmDialog` delete.
   This is the surface WU25 embeds. Covering tier: RazorComponents.
 - **L4 — Stage 5 (WU29, visual sign-off 2026-06-23).**
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the card's Report and the section's dialog,
-  undriven — tracker H38; Stage note at this feature's top, with its review fixes' test the same day, no
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the card's Report and the section's dialog,
+  driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' test the same day, no
   flip).** It was 5 before.
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F27's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: `RecommendationReadServiceTests`

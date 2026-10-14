@@ -638,6 +638,9 @@ best-effort now: a failure logs at Warning and keeps the default sort (`layer3.5
 page-size seed). Tests: **RazorComponents** — the expired-session cases in `SearchPageTests`,
 `BookshelvesPageTests` and `ProfilePageTests` render the flyout, and each fails with the old catch
 restored.
+*Seen in the WU-TrackerFixes browser pass (2026-10-13), no flip:* with TestUser's session expired on
+WASM, the profile's Stories tab and `/discover` logged the flyout's "Saved-selection sort preference read
+failed" Warning and rendered; no error boundary. L4.5 stays 1 for this feature's own undriven surfaces.
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private

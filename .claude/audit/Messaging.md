@@ -136,6 +136,11 @@ participant of its conversation (F46's note). Tests: **RazorComponents** `Messag
 **Integration** in F46. **L4.5 5→1:** no browser was available; tracker **H38** step 4. *Review fixes
 (2026-10-13), no flip:* the `MessagesPageTests` case now submits the dialog and asserts a `Message`
 report for message 41 (it fails with the page's type changed; F46's note).
+*Browser pass (2026-10-13), L4.5 1→5:* in `/messages/1`, Report sits beside AuthorAlpha's two messages and
+not beside TestUser's own, and the reverse for AuthorAlpha. TestUser filed one on message 3 (circuit,
+report 17) and AuthorAlpha on message 1 (WASM, report 23): `reported_entity_type` 5, `reported_user_id`
+the sender. ReaderGamma, no participant, got 404 for a hand-built `POST /api/moderation/reports` on
+message 2, the same body as for an absent id (999999). Tracker **H38** closed.
 
 **Settled — a deleted participant (owner ruling D13 edge (a), answered 2026-08-06; settled for
 WU-UserDeletion 2026-10-13). Do not revisit:**
@@ -207,7 +212,7 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: Report on the other party's messages, undriven — tracker H38; Stage note at this feature's top, with its review fixes' test the same day, no flip). Before that, Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: Report on the other party's messages, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes' test the same day, no flip). Before that, Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
   deleted participant is a null `OtherParticipant`, rendered by `ConversationListItem` and
   `MessageThread` themselves (default avatar, a muted "[deleted user]", no link), seen on both render
   phases; tracker **H37** closed (the WU-ParityAndRemaining note below). Before that:

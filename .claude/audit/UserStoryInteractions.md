@@ -538,6 +538,13 @@ read; fails with the size dropped from the tab filter). **L4.5 5→1:** no brows
 tracker **H38** step 1. *Review fixes (2026-10-13), no flip:* the read is best-effort, as on the
 profile page (a failure logs at Warning and keeps 20); `BookshelvesPageTests` +1 (an expired-session
 read still loads the shelf at 20; fails with the catch removed).
+*Browser pass (2026-10-13), L4.5 1→5:* TestUser with `DefaultPaginationSize` 3 (set to 50 through the
+Reader settings form, then 3 through `psql` so the small seed shows a second page; restored to 20
+through the form). `/bookshelves/my-stories` (four stories) showed three cards and "Showing 1–3 of 4" on
+the first load, page 2 one card, Apply three again, and a tab switch (Favorites and back) kept the size,
+on the circuit (`_blazor/negotiate`, no `/api`) and on WASM (the `/api/stories/query` requests). An
+empty tab (Hidden Gems) stays empty on WASM with no listing request (the client's empty-set answer,
+Discovery F31's note). Tracker **H38** closed.
 
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;
   derived tabs "Actively Reading" (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned"
@@ -572,8 +579,8 @@ read still loads the shelf at 20; fails with the catch removed).
   active tab). Mobile: `<details>` tab dropdown + filter overlay (`fixed inset-0 z-50 bg-black/50`,
   `@onclick:stopPropagation`, renders nothing when closed). Human visual sign-off pending (browser walk-through
   of all 11 tabs + teal Following + mobile overlay) — no automated style check; visual → Stage 6.
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the shelf's page size follows the reader
-  setting, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day,
+- **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the shelf's page size follows the reader
+  setting, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes the same day,
   no flip).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; the bookshelves page verified in a real WASM runtime during
