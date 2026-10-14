@@ -654,8 +654,11 @@ Contract: `[EditorRequired] IReadOnlyList<StoryListingDto>? Stories` (nullable �
 `IReadOnlyDictionary<int, UserStoryInteractionStateDto>? UserStoryInteractionStates` (batch-loaded by
 parent, keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per card), `string EmptyMessage`
 (defaults to "No stories found."), plus pagination forwards (`CurrentPage`, `PageSize`, `TotalCount`,
-`EventCallback<int> OnPageChanged`). No service injection. Caret callbacks deferred — additive when
-the first consumer (Discovery/Report/Export) needs them.
+`EventCallback<int> OnPageChanged`). No service injection. `EventCallback<int> OnReport` (WU34) is
+forwarded to each card only when the host wires it; unwired, the deck passes `default`, never
+`EventCallback.Empty`. `Empty` carries a no-op delegate, so `HasDelegate` reads `true`: until the
+WU-TrackerFixes browser pass (2026-10-13) every card offered a Report that did nothing, and a host's
+signed-in-only gate could not hide it.
 
 ## `@key` on `@foreach` Over Stateful Children
 
@@ -980,7 +983,11 @@ and `TagFilter`:
   (a WASM tab whose cookie expired after prerender answers 401 → `SessionExpiredException`) logs at
   Warning and keeps 20, because a page-size preference must never take down the page around it.
   The same holds for `SavedTagSelectionLoadFlyoutInner`'s sort read, which renders inside these
-  pages' `TagFilter` (WU-TrackerFixes review fixes, 2026-10-13).
+  pages' `TagFilter` (WU-TrackerFixes review fixes, 2026-10-13), and for the cards' interaction-mark
+  read (`GetStatesByStoryIdsAsync`) on `SearchPage` and `ProfilePage`'s story tabs: a failure logs at
+  Warning and the cards render unmarked (WU-TrackerFixes browser pass, 2026-10-13). The other listing
+  pages that make that read still let a stale session's 401 reach their error boundary (tracker
+  **E13**).
   The panel copies it in `OnParametersSet` **before** the
   `_userHasInteracted` early return, because no panel control edits it, and echoes it on Apply; it
   never writes a literal. A device-local restore keeps the viewer's size, since the snapshot stores ids

@@ -420,6 +420,18 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
   - Quill fields: typing into a `ql-editor` after a coordinate click works; setting `innerHTML` and
     dispatching `input` also works for the edit and compose editors. Check `.innerHTML` before acting,
     since an editor that missed the input sends its empty `<p><br></p>` (refused since 2026-10-13).
+- **An expired session on WASM, and small pages** (verified 2026-10-13, WU-TrackerFixes browser pass).
+  - **Expiring the session.** The auth cookie is HttpOnly, so script cannot delete it. Open the user
+    menu, which renders the logout form with its antiforgery token, then `fetch('/Account/Logout',
+    {method: 'POST', body: new URLSearchParams(new FormData(form)), redirect: 'manual'})`. The WASM app
+    keeps its cached identity, so its next gated call answers 401. `fetch('/dev/wu12/login-as/{user}')`
+    signs back in without a reload. On the circuit the identity is fixed for the circuit's life, so
+    this state exists only on WASM.
+  - **Seeing page size with a small seed.** The Full seed lists about ten stories, and the reader
+    settings form offers only 10, 20 and 50. Set `reader_settings`' `DefaultPaginationSize` to 3 through
+    `psql` (it is read from the database on every load), then restore it through the form.
+  - **Restore-or-fetch pages:** with the Auto hash cleared, the first load's pager and cards come from
+    the prerender snapshot; Apply or a page click is the live fetch. Check both.
 - **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
   progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
   one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.

@@ -44,6 +44,11 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
         StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false)
     {
+        // An empty restrict set narrows to nothing (the server service's contract), and the wire cannot
+        // say it: the repeated-key form has no spelling for an empty set, and the endpoint reads an absent
+        // key as "unrestricted". So it is answered here (WU-TrackerFixes browser pass, 2026-10-13).
+        if (restrictToStoryIds is { Count: 0 }) return ([], 0);
+
         string url = "api/stories/query";
         List<string> queryParts = [];
         if (restrictToStoryIds is { Count: > 0 })

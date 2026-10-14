@@ -45,7 +45,7 @@ else
                          OnEditSave="HandleEditSaveAsync"
                          OnEditCancel="HandleEditCancel"
                          OnDelete="HandleDeleteClick"
-                         OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Comment, id))" />
+                         OnReport="@ReportCallback" />
 
             @* Replies — indented; no OnReply (one level only) *@
             @foreach (var rep in RepliesOf(root.CommentId))
@@ -63,7 +63,7 @@ else
                                  OnEditSave="HandleEditSaveAsync"
                                  OnEditCancel="HandleEditCancel"
                                  OnDelete="HandleDeleteClick"
-                                 OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Comment, id))" />
+                                 OnReport="@ReportCallback" />
                 </div>
             }
 
@@ -168,6 +168,14 @@ else
 
     // ── Load state ────────────────────────────────────────────────────────────────
     private ReportDialog _reportDialog = default!;
+
+    // Report, for signed-in viewers only (layer2-services.md "Report entry points": the report
+    // endpoint requires auth); CommentItem hides it on the viewer's own comment. Wired for everyone,
+    // an anonymous click took the section down on WASM (the reasons read 401'd) and filed an
+    // anonymous report on the circuit (WU-TrackerFixes browser pass, 2026-10-13).
+    private EventCallback<long> ReportCallback => CurrentUserId is null
+        ? default
+        : EventCallback.Factory.Create<long>(this, id => _reportDialog.OpenAsync(ReportedEntityType.Comment, id));
     private List<CommentDto> _comments = [];
     private int _totalRootCount;
     private int _currentPage = 1;

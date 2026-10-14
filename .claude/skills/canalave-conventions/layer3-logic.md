@@ -71,6 +71,10 @@ Legitimate non-page injection:
 - **Security:** persisted state is exposed to the browser under `InteractiveAuto`. **Never persist
   sensitive/private data** this way.
 - For multiple instances of the same component, pair with `@key`.
+- **A persisted page persists its total.** A paged listing that persists its items persists its
+  `TotalCount` beside them (`BookshelvesPage`, `ProfilePage`, `SearchPage`). `SearchPage` recomputed it
+  from the restored items, so a sorted first page lost its pager after the prerender handoff
+  (WU-TrackerFixes browser pass, 2026-10-13).
 - **The restored snapshot comes back once more (.NET 10 framework defect).** After a full load restores
   a property, the framework hands the same snapshot back on the component's *next* parameter set, and
   it overwrites whatever the component assigned in between. (The supplier leaves its "restored value

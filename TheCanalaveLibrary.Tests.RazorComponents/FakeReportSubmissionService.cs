@@ -20,7 +20,12 @@ public class FakeReportSubmissionService : IReportSubmissionService
     /// <summary>Every request <see cref="SubmitReportAsync"/> received, refused ones included.</summary>
     public List<SubmitReportRequest> Submitted { get; } = [];
 
-    public Task<ReportReasonDto[]> GetReportReasonsAsync() => Task.FromResult(Reasons);
+    /// <summary>When set, <see cref="GetReportReasonsAsync"/> throws it: a WASM tab whose cookie expired
+    /// before the dialog's first open (WU-TrackerFixes browser pass, 2026-10-13).</summary>
+    public Exception? ReasonsException { get; set; }
+
+    public Task<ReportReasonDto[]> GetReportReasonsAsync() =>
+        ReasonsException is null ? Task.FromResult(Reasons) : throw ReasonsException;
 
     public Task SubmitReportAsync(SubmitReportRequest request)
     {

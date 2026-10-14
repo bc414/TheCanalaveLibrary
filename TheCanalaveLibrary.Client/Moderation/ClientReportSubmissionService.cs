@@ -17,8 +17,16 @@ namespace TheCanalaveLibrary.Client;
 /// </summary>
 public sealed class ClientReportSubmissionService(HttpClient http) : IReportSubmissionService
 {
-    public async Task<ReportReasonDto[]> GetReportReasonsAsync() =>
-        await http.GetFromJsonAsync<ReportReasonDto[]>("api/moderation/report-reasons") ?? [];
+    // Translated like every gated read (layer5-wasm.md, the Error-Translation Contract): a WASM tab whose
+    // cookie expired gets SessionExpiredException, which ReportDialog shows with Sign in. The bare
+    // GetFromJsonAsync threw HttpRequestException into the page's error boundary on the first Report
+    // click of such a tab (WU-TrackerFixes browser pass, 2026-10-13).
+    public async Task<ReportReasonDto[]> GetReportReasonsAsync()
+    {
+        using HttpResponseMessage response = await http.GetAsync("api/moderation/report-reasons");
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
+        return await response.Content.ReadFromJsonAsync<ReportReasonDto[]>() ?? [];
+    }
 
     public async Task SubmitReportAsync(SubmitReportRequest request)
     {

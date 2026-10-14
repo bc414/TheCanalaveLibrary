@@ -110,8 +110,11 @@ else
     private bool IsOwn(StoryListingDto story) =>
         CurrentUserId is not null && story.AuthorId == CurrentUserId;
 
+    // `default`, never EventCallback.Empty: Empty carries a no-op delegate, so its HasDelegate is true and
+    // every card showed a Report that did nothing (or, for an anonymous viewer, whatever the host
+    // wired). Found in the WU-TrackerFixes browser pass, 2026-10-13.
     private EventCallback ReportCallbackFor(StoryListingDto story) =>
         OnReport.HasDelegate
             ? EventCallback.Factory.Create(this, () => OnReport.InvokeAsync(story.StoryId))
-            : EventCallback.Empty;
+            : default;
 }

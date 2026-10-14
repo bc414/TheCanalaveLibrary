@@ -29,6 +29,11 @@ public class StoryDeckTests : BunitContext
     {
         // StoryDeck nests StoryCard → UserStoryInteractionPanel, which injects the write service.
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeService);
+        // The caret menu (the Report tests open it): StoryViewStats reads views, AddToCustomListMenu sits
+        // in an AuthorizeView (anonymous by default, so it renders nothing).
+        Services.AddSingleton<IStoryReadService>(new FakeStoryReadService());
+        Services.AddScoped<ICustomListWriteService>(_ => new FakeCustomListWriteService());
+        this.AddAuthorization();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
@@ -261,5 +266,26 @@ public class StoryDeckTests : BunitContext
         cut.FindAll("span[aria-label='Favorite']").Should().BeEmpty(
             "story B has IsFavorite=false — @key must have created a fresh panel; " +
             "if Favorite span appears, the panel is bleeding story A's _localState into story B's slot");
+    }
+    // ── Report (the caret's optional item) ──────────────────────────────────────
+
+    [Fact]
+    public void Report_IsInTheCaretMenu_OnlyWhenTheHostWiresIt()
+    {
+        // The deck forwarded EventCallback.Empty when the host wired nothing, and Empty's no-op delegate
+        // reads HasDelegate == true: every card offered a Report that did nothing, and a host's
+        // signed-in-only gate could not hide it (WU-TrackerFixes browser pass, 2026-10-13).
+        IRenderedComponent<StoryDeck> unwired = Render<StoryDeck>(p => p
+            .Add(c => c.Stories, [MakeStory(1)]));
+        unwired.Find("button[aria-label='Story options']").Click();
+        unwired.FindAll("button").Should().NotContain(b => b.TextContent.Trim() == "Report");
+
+        int? reported = null;
+        IRenderedComponent<StoryDeck> wired = Render<StoryDeck>(p => p
+            .Add(c => c.Stories, [MakeStory(7)])
+            .Add(c => c.OnReport, (int id) => reported = id));
+        wired.Find("button[aria-label='Story options']").Click();
+        wired.FindAll("button").Single(b => b.TextContent.Trim() == "Report").Click();
+        reported.Should().Be(7);
     }
 }

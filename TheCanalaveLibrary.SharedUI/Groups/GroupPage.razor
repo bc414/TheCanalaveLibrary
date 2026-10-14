@@ -193,7 +193,9 @@ else
                                UserStoryInteractionStates="_interactionStates"
                                CurrentUserId="_currentUserId"
                                EmptyMessage="No stories in this group yet."
-                               OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))"
+                               OnReport="@(_currentUserId is not null
+                                   ? EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))
+                                   : default)"
                                CardOverlay="@AdminStoryOverlay" />
                     <ConfirmDialog @bind-IsOpen="_confirmRemoveOpen" Title="Remove story?" IsDestructive="true"
                                    ConfirmText="Remove" CancelText="Cancel" OnConfirm="HandleRemoveConfirmedAsync">

@@ -1287,6 +1287,25 @@ unless noted. All sit under Stage-5 cells.
     catch `Exception` and log nothing). Then drop the "five older surfaces" sentence from
     `error-handling.md`. A bUnit test per site, and a browser step for both render phases.
 
+- [ ] **E13 — A stale WASM session still takes down most listing pages through the interaction-mark read** `[latent-risk · med · beta]` — *Filed 2026-10-13 by the WU-TrackerFixes browser pass.*
+  - Grid: no cell moves at filing. The surfaces sit under F5, F9, F17, F33, F40, F51, F55, F59 and F61.
+  - **What happens.** A signed-in viewer whose cookie expired after prerender still reads as signed in
+    on WASM. The cards' `GetStatesByStoryIdsAsync` (and `StoryPage`'s single `GetStateAsync`) then
+    answers 401, and `ClientUserStoryInteractionReadService` throws a bare `HttpRequestException` that
+    reaches the page's or section's error boundary. Seen live on `ProfilePage`'s Stories tab before
+    the fix.
+  - **Done (WU-TrackerFixes browser pass):** `SearchPage` and `ProfilePage`'s story tabs make the read
+    best-effort (Warning, unmarked cards), the posture `layer3.5-structure.md` states for the page-size
+    read.
+  - **Open, the same read on:** `GroupPage` (two sites), `BookshelvesPage`, `CustomListPage`,
+    `SeriesPage`, `TreeSearchPage`, `DeepDiveTab` (two), `ExploreTab` (two), `RelatedStoriesSection`,
+    `CommunitySpotlightDisplay` (two) and `StoryPage`. Enumerated by
+    `grep GetStatesByStoryIdsAsync|GetStateAsync( SharedUI`.
+  - **Build, one pass (the class is cross-cutting):** either the same page-level catch at every site, or
+    one decision in the client service (translate the 401 through `ThrowIfReadFailedAsync`, and let the
+    pages degrade). The second changes a shared contract, so it is worth a line in
+    `layer5-wasm.md` first. A bUnit test per surface; a WASM browser step with the session expired.
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -2604,6 +2623,29 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        account-action panel.
     8. **Links.** `/mod/reports`' User-target link and `/mod/users/{id}`'s View profile open
        `/user/{id}` (they 404'd before).
+
+- [ ] **H39 — Report is still offered on the viewer's own story card and own user card** `[polish · low · beta]` — *Filed 2026-10-13 by the WU-TrackerFixes browser pass.*
+  - Grid: no cell moves at filing (F5, F19, F21, F33).
+  - Rule: `layer2-services.md` §"Moderation Services" → "Report entry points" ("the leaf hides the
+    control on the viewer's own content"). `CommentItem`, `BlogPostCard`, `RecommendationCard` and
+    `MessageItem` conform.
+  - **Seen:** on `/bookshelves/my-stories` the caret menu of TestUser's own story offers Report (both
+    render phases), and `SubmitReportAsync` accepts a self-report. **By reading:** `VouchList`, the
+    tree-search tabs and `ProfileBanner` pass a user Report callback for every `UserCard`, and
+    `UserCard` knows no viewer, so a viewer's own card in a vouch list offers it too.
+  - **Build:** `StoryDeck` already computes `IsOwn(story)`: forward `default` for an own story. For
+    `UserCard`, the hosts compare the card's user with the viewer. A bUnit test each.
+
+- [ ] **H40 — Two cosmetic leftovers of the inline-refusal adoption** `[polish · low · beta]` — *Filed 2026-10-13 by the WU-TrackerFixes browser pass.*
+  - Grid: no cell moves at filing (F4, F6, F35, F40).
+  - **The folder select keeps the refused choice.** On `GroupPage`, a refused file (seen with the session
+    expired) shows its `ErrorAlert`, but the story's folder select still shows the folder it was not filed
+    into until the page reloads: the handler reloads the group only on success. Pre-existing (the toast
+    version did the same).
+  - **The Sign in link sits flush against the form.** The four editor forms render `ErrorAlert` as a
+    sibling above their `EditForm` with no space between, so with a session-expired refusal the
+    "Sign in" link touches the form's first label ("Title"). The old `InlineAlert` had the same slot;
+    the link made the crowding visible. The parent spaces it (Outer Margin Rule).
 
 ---
 

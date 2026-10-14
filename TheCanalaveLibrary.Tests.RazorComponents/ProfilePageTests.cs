@@ -42,6 +42,7 @@ public class ProfilePageTests : BunitContext
     private readonly FakeBlogPostReadService _blogService;
     private readonly FakeStoryReadService _storyReadService = new();
     private readonly FakeUserSettingsService _settingsService = new();
+    private readonly FakeInteractionReadService _interactionReadService = new();
     private readonly FakeReportSubmissionService _reports = new() { Reasons = [new ReportReasonDto(1, "Spam", null)] };
 
     // The viewer: anonymous unless a test calls SignInAs before rendering. AddAuthorization (not a
@@ -84,7 +85,11 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<IFollowingReadService>(_ => new FakeFollowingWriteService());
         Services.AddScoped<IFollowingWriteService>(_ => new FakeFollowingWriteService());
         Services.AddScoped<IStoryReadService>(_ => _storyReadService);
-        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => _interactionReadService);
+        // A listed story's card nests UserStoryInteractionPanel (write service) and, for a signed-in
+        // viewer, AddToCustomListMenu's inner half (the story-tab Report tests).
+        Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
+        Services.AddScoped<ICustomListWriteService>(_ => new FakeCustomListWriteService());
         Services.AddScoped<IRecommendationReadService>(_ => new FakeRecommendationReadService());
         Services.AddScoped<IBlogPostReadService>(_ => _blogService);
         Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
@@ -236,5 +241,45 @@ public class ProfilePageTests : BunitContext
 
         cut.Markup.Should().Contain(BlogPostTitle, "the post card itself still renders");
         cut.FindAll("button").Where(IsReportButton).Should().BeEmpty();
+    }
+    // ── Story tabs: Report and the interaction marks (WU-TrackerFixes browser pass, 2026-10-13) ────
+
+    private IRenderedComponent<ProfilePage> RenderAuthoredTabWithOneStory()
+    {
+        _storyReadService.ListingsResult = ([new StoryListingDto(
+            42, "Listed Story", "A description.", null, AuthorId: TestUserId, AuthorName: "TestUser",
+            WordCount: 1000, StoryStatusId: StoryStatusEnum.InProgress, Rating: Rating.T,
+            LastUpdatedDate: DateTime.UtcNow, Tags: [])], 1);
+        return Render<ProfilePage>(p => p
+            .Add(c => c.UserId, TestUserId)
+            .Add(c => c.Tab, ProfileTabSlug.For(ProfileTab.Authored)));
+    }
+
+    [Theory]
+    [InlineData(false, 0)] // anonymous: the report endpoint requires auth (layer2-services.md "Report entry points")
+    [InlineData(true, 1)]  // a signed-in visitor
+    public void StoryTab_CardReport_IsOfferedToSignedInViewersOnly(bool signedIn, int expected)
+    {
+        // Wired for everyone, an anonymous Report crashed the page on WASM (the reasons read 401'd) and
+        // filed an anonymous report on the circuit.
+        if (signedIn) SignInAs(99);
+
+        IRenderedComponent<ProfilePage> cut = RenderAuthoredTabWithOneStory();
+        cut.Find("button[aria-label='Story options']").Click();
+
+        cut.FindAll("button").Count(IsReportButton).Should().Be(expected);
+    }
+
+    [Fact]
+    public void StoryTab_InteractionMarksReadFails_TheStoriesStillRender()
+    {
+        // A WASM tab whose cookie expired after prerender: the marks read answers 401. It took the story
+        // tab down through the page's error boundary; the cards now render unmarked.
+        SignInAs(99);
+        _interactionReadService.StatesException = new SessionExpiredException();
+
+        IRenderedComponent<ProfilePage> cut = RenderAuthoredTabWithOneStory();
+
+        cut.Markup.Should().Contain("Listed Story");
     }
 }

@@ -89,8 +89,16 @@ public static class StoryEndpoints
                 // personalScope: Personal-plane hydration for the WASM bookshelf/owner-list pass —
                 // see IStoryReadService doc (only effective with a restrict set; a forged flag is a
                 // deliberate API call per the Intentionality Doctrine, not a browse leak).
+                //
+                // An absent restrictToStoryIds binds as an EMPTY array, never null, and the service reads
+                // an empty set as "narrow to nothing". So "no restriction" is the empty array here, and
+                // ClientStoryReadService answers an empty restrict set itself, without a request (the
+                // repeated-key form has no spelling for an empty set). Before this, every unrestricted
+                // WASM listing came back empty: /discover's Date-published sort showed no stories
+                // (WU-TrackerFixes browser pass, 2026-10-13).
+                IReadOnlyCollection<int>? restrictTo = restrictToStoryIds is { Length: > 0 } ? restrictToStoryIds : null;
                 (StoryListingDto[] Items, int TotalCount) result =
-                    await stories.GetListingsAsync(filter, restrictToStoryIds, personalScope);
+                    await stories.GetListingsAsync(filter, restrictTo, personalScope);
                 return Results.Ok(new PagedResult<StoryListingDto>(result.Items, result.TotalCount));
             }));
 

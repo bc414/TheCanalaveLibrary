@@ -407,6 +407,24 @@ public class CommentSectionTests : BunitContext
             "the new-comment composer must not render for anonymous viewers");
     }
 
+    [Theory]
+    [InlineData(null, 0)] // anonymous: the report endpoint requires auth (layer2-services.md "Report entry points")
+    [InlineData(99, 2)]   // a signed-in viewer: on the root and on the reply
+    public void Report_IsOfferedToSignedInViewersOnly(int? viewerId, int expected)
+    {
+        // Wired for everyone, an anonymous Report took the section down on WASM (the reasons read
+        // 401'd) and filed an anonymous report on the circuit (WU-TrackerFixes browser pass, 2026-10-13).
+        _fakeService.SetGetResult(new CommentPageDto(
+            [MakeComment(1, authorId: 5), MakeComment(2, parentId: 1, authorId: 6)], 1));
+
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
+            .Add(c => c.ChapterId, 1)
+            .Add(c => c.CurrentUserId, viewerId));
+
+        cut.Markup.Should().Contain("Test comment.", "the comments themselves render for every viewer");
+        cut.FindAll("button[aria-label='Report comment']").Should().HaveCount(expected);
+    }
+
     // ── F3 mutation-sanity — @key forces a fresh CommentItem on page change ──────
     //
     // Root cause: CommentItem holds `private bool _isRevealed` as ephemeral private state.

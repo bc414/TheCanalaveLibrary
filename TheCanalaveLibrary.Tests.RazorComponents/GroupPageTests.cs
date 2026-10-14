@@ -404,6 +404,20 @@ public class GroupPageTests : BunitContext
             "the report endpoint requires auth");
     }
 
+    [Theory]
+    [InlineData(null, 0)]              // anonymous: the report endpoint requires auth
+    [InlineData(GroupRole.Member, 1)]
+    public void StoryCards_Report_IsOfferedToSignedInViewersOnly(GroupRole? role, int expected)
+    {
+        // Wired for everyone, an anonymous Report crashed the page on WASM (the reasons read 401'd) and
+        // filed an anonymous report on the circuit (WU-TrackerFixes browser pass, 2026-10-13).
+        IRenderedComponent<GroupPage> cut = RenderGroup(role);
+
+        cut.FindAll("button[aria-label='Story options']").First().Click();
+
+        cut.FindAll("button").Count(b => b.TextContent.Trim() == "Report").Should().Be(expected);
+    }
+
     // ── Inline refusals, never toasts (the WU-ErrorHandling2 follow-up, WU-TrackerFixes) ───────
 
     private static int SignInLinks(IRenderedComponent<GroupPage> cut) =>

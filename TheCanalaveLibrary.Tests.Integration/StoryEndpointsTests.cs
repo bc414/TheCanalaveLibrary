@@ -5,6 +5,7 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using TheCanalaveLibrary.Client;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -341,5 +342,51 @@ public class StoryEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
         HttpResponseMessage response = await Factory.CreateClient().DeleteAsync($"/api/stories/{int.MaxValue}");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+    // ── POST /api/stories/query — the WASM listing read, through the real client ──────────────
+    // An absent restrictToStoryIds binds as an empty array, which the service reads as "narrow to
+    // nothing": every unrestricted WASM listing came back empty, so /discover's Date-published sort
+    // showed no stories on WASM (WU-TrackerFixes browser pass, 2026-10-13). The endpoint now reads an
+    // absent key as unrestricted, and the client answers an empty restrict set itself.
+
+    [Fact]
+    public async Task Query_WithNoRestrictSet_IsUnrestricted()
+    {
+        int storyId = await SeedStoryAsync(await SeedUserAsync("author"));
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        (StoryListingDto[] items, int total) = await new ClientStoryReadService(Factory.CreateClient())
+            .GetListingsAsync(new StoryFilterDto { Sort = DefaultSortOrder.DatePublished });
+
+        items.Should().ContainSingle(i => i.StoryId == storyId, "no restrict set means the whole visible library");
+        total.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Query_WithAnEmptyRestrictSet_NarrowsToNothing()
+    {
+        await SeedStoryAsync(await SeedUserAsync("author"));
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        (StoryListingDto[] items, int total) = await new ClientStoryReadService(Factory.CreateClient())
+            .GetListingsAsync(new StoryFilterDto { Sort = DefaultSortOrder.DatePublished }, restrictToStoryIds: []);
+
+        items.Should().BeEmpty("an empty candidate set is an empty shelf, never the whole library");
+        total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Query_WithARestrictSet_ListsOnlyItsMembers()
+    {
+        int authorId = await SeedUserAsync("author");
+        int kept = await SeedStoryAsync(authorId);
+        await SeedStoryAsync(authorId);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        (StoryListingDto[] items, int total) = await new ClientStoryReadService(Factory.CreateClient())
+            .GetListingsAsync(new StoryFilterDto { Sort = DefaultSortOrder.DatePublished }, restrictToStoryIds: [kept]);
+
+        items.Select(i => i.StoryId).Should().Equal(kept);
+        total.Should().Be(1);
     }
 }

@@ -104,7 +104,15 @@ internal sealed class FakeStoryReadService : IStoryReadService
 internal sealed class FakeInteractionReadService : IUserStoryInteractionReadService
 {
     public Task<UserStoryInteractionStateDto> GetStateAsync(int storyId) => Task.FromResult(UserStoryInteractionStateDto.AllFalse(storyId));
-    public Task<IReadOnlyDictionary<int, UserStoryInteractionStateDto>> GetStatesByStoryIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult<IReadOnlyDictionary<int, UserStoryInteractionStateDto>>(new Dictionary<int, UserStoryInteractionStateDto>());
+    /// <summary>When set, <see cref="GetStatesByStoryIdsAsync"/> throws it: a WASM tab whose cookie expired
+    /// after prerender (the listing pages' interaction-mark read is best-effort — WU-TrackerFixes browser
+    /// pass, 2026-10-13).</summary>
+    public Exception? StatesException { get; set; }
+
+    public Task<IReadOnlyDictionary<int, UserStoryInteractionStateDto>> GetStatesByStoryIdsAsync(IReadOnlyList<int> storyIds) =>
+        StatesException is null
+            ? Task.FromResult<IReadOnlyDictionary<int, UserStoryInteractionStateDto>>(new Dictionary<int, UserStoryInteractionStateDto>())
+            : throw StatesException;
     public Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab) => Task.FromResult<IReadOnlyList<int>>([]);
     public Task<IReadOnlyList<int>> GetFavoriteStoryIdsAsync(int userId, bool includePrivate) => Task.FromResult<IReadOnlyList<int>>([]);
 }

@@ -69,6 +69,18 @@ public class ModerationIntegrityClientTests
     }
 
     [Fact]
+    public async Task GetReportReasonsAsync_ExpiredSession_IsSessionExpired()
+    {
+        // ReportDialog shows a SessionExpiredException with Sign in. The bare GetFromJsonAsync threw
+        // HttpRequestException, which no catch site presents (WU-TrackerFixes browser pass, 2026-10-13).
+        ClientReportSubmissionService svc = new(NewClient(new CannedHandler(HttpStatusCode.Unauthorized, "")));
+
+        Func<Task> act = () => svc.GetReportReasonsAsync();
+
+        await act.Should().ThrowAsync<SessionExpiredException>();
+    }
+
+    [Fact]
     public async Task SubmitReportAsync_PostsTheReportsRouteWithABody()
     {
         var handler = new CannedHandler(HttpStatusCode.NoContent, "");

@@ -20,7 +20,12 @@
 
 <Modal IsOpen="_isOpen" IsOpenChanged="(bool _) => Cancel()" Title="Report Content" PanelClass="w-full max-w-sm">
     <ChildContent>
-        @if (_reasons is null)
+        @if (_reasons is null && _errorMessage is not null)
+        {
+            @* The reasons could not load (an expired session on WASM): the refusal, and Close. *@
+            <ErrorAlert Message="@_errorMessage" ShowSignIn="@_errorIsSessionExpired" />
+        }
+        else if (_reasons is null)
         {
             <p class="text-sm text-(--color-text-muted)">Loading…</p>
         }
@@ -60,7 +65,15 @@
         }
     </ChildContent>
     <Footer>
-        @if (_reasons is not null)
+        @if (_reasons is null && _errorMessage is not null)
+        {
+            <button type="button"
+                    class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
+                    @onclick="Cancel">
+                Close
+            </button>
+        }
+        else if (_reasons is not null)
         {
             <button type="button"
                     class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
@@ -106,7 +119,23 @@
         _isOpen = true;
 
         if (_reasons is null)
-            _reasons = await ReportSubmission.GetReportReasonsAsync();
+        {
+            // The reasons load fails like a submit can (an expired session answers 401 on WASM), and is
+            // shown the same way, in the dialog. Uncaught, it took down the page hosting the dialog
+            // (WU-TrackerFixes browser pass, 2026-10-13). _reasons stays null, so the next open retries.
+            try
+            {
+                _reasons = await ReportSubmission.GetReportReasonsAsync();
+            }
+            catch (Exception ex)
+            {
+                if (!ExceptionPresenter.IsUserFacing(ex))
+                    Logger.LogError(ex, "Loading report reasons failed unexpectedly for {EntityType} {EntityId}",
+                        _entityType, _entityId);
+                _errorMessage = ExceptionPresenter.GetUserMessage(ex);
+                _errorIsSessionExpired = ex is SessionExpiredException;
+            }
+        }
 
         StateHasChanged();
     }

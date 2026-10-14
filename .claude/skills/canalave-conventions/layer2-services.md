@@ -2769,8 +2769,16 @@ throttle → kind (g) target existence and visibility (`KeyNotFoundException`; `
 
 The rules for every wiring:
 - A host passes `OnReport` only when the viewer is signed in, because
-  `POST /api/moderation/reports` requires authorization.
-- The leaf hides the control on the viewer's own content.
+  `POST /api/moderation/reports` requires authorization. The older hosts conform since the
+  WU-TrackerFixes browser pass (2026-10-13): `CommentSection` and the `StoryDeck`s of `SearchPage`,
+  `GroupPage` and `ProfilePage` wired Report for anonymous viewers too. On WASM the click took the
+  page or section down (the reasons read answered 401); on the circuit it filed a report with no
+  reporter, which `SubmitReportAsync` accepts as designed.
+- The leaf hides the control on the viewer's own content. `CommentItem`, `BlogPostCard`,
+  `RecommendationCard` and `MessageItem` do; a `StoryCard` on the author's own story and a `UserCard`
+  for the viewer still offer it (tracker **H39**).
+- `ReportDialog`'s reasons load is a catch site like its submit: a refusal (an expired session on
+  WASM) shows in the dialog with Close, and the next open retries (`error-handling.md`).
 - Not wired, as a scope boundary: site announcements, on `NewsPage`'s cards and on `BlogPostPage`
   (moderator-authored; whether they are reportable is an open owner call, decision row 30 / tracker
   F27 — the API still accepts a `BlogPost` report on one, as it always has), and the rec cards on

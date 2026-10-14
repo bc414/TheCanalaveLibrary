@@ -65,4 +65,27 @@ public class ReportDialogTests : BunitContext
         cut.FindAll("[role='alert']").Should().BeEmpty();
         SignInLinks(cut).Should().Be(0);
     }
+    [Fact]
+    public async Task AReasonsLoadRefusal_ShowsInTheDialog_AndTheNextOpenRetries()
+    {
+        // A WASM tab whose cookie expired before the first open: the reasons read answers 401. It used
+        // to escape OpenAsync and take down the hosting page (WU-TrackerFixes browser pass, 2026-10-13).
+        _reports.ReasonsException = new SessionExpiredException();
+        IRenderedComponent<ReportDialog> cut = Render<ReportDialog>();
+
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync(ReportedEntityType.Story, 5));
+
+        cut.Find("[role='alert']").TextContent.Should().Contain("session has expired");
+        SignInLinks(cut).Should().Be(1);
+        cut.FindAll("#report-reason").Should().BeEmpty("there are no reasons to choose from");
+        cut.FindAll("button").Select(b => b.TextContent.Trim()).Should().Contain("Close")
+            .And.NotContain("Submit Report");
+
+        // Signed in again: the next open loads the reasons, and the refusal is gone.
+        _reports.ReasonsException = null;
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync(ReportedEntityType.Story, 5));
+
+        cut.FindAll("[role='alert']").Should().BeEmpty();
+        cut.Find("#report-reason").QuerySelectorAll("option").Should().HaveCount(2, "the placeholder and Spam");
+    }
 }

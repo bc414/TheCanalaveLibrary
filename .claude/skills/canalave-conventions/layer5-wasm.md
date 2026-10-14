@@ -252,6 +252,19 @@ Rule: on `MapPost`/`MapPut`/`MapDelete`, every query-bound array/collection para
 `[FromQuery]` explicitly. On `MapGet` a single bare array is safe
 (`ITagReadService.GetTagChipsByIdsAsync`'s `int[] ids` — the pilot's proven shape).
 
+**Gotcha: an absent array key binds as an EMPTY array, never null — even declared `int[]?`.** So a
+service that gives `null` and empty different meanings cannot receive both over the wire, and the
+repeated-key form has no spelling for an empty set anyway. `IStoryReadService.GetListingsAsync` reads
+a null restrict set as "unrestricted" and an empty one as "narrow to nothing": the `/query` endpoint
+bound every absent key as empty, so every unrestricted WASM listing came back empty (`/discover`'s
+Date-published sort showed no stories on WASM until the WU-TrackerFixes browser pass, 2026-10-13).
+The split, for any such parameter:
+- the endpoint maps an empty array to `null` (absent means unrestricted);
+- the client answers the empty case itself, without a request (`ClientStoryReadService` returns
+  `([], 0)` for an empty restrict set, the server service's own answer).
+
+Integration `StoryEndpointsTests` drives both through the real client.
+
 ### Paged results: `PagedResult<T>`
 
 Value-tuple returns (`Task<(T[] Items, int TotalCount)>` — Story/BlogPost/Group listings, 6 total)

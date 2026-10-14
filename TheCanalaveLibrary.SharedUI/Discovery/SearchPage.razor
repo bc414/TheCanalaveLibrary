@@ -106,7 +106,7 @@ else if (_selectionUnavailable)
                        CurrentPage="1"
                        PageSize="@(Items?.Length ?? 0)"
                        TotalCount="@(Items?.Length ?? 0)"
-                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                       OnReport="@StoryReportCallback" />
 
             <button type="button"
                     class="self-center rounded-md bg-(--color-mission) px-5 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors disabled:opacity-50"
@@ -124,9 +124,9 @@ else if (_selectionUnavailable)
                        EmptyMessage="No stories found for these filters. Try broadening your search."
                        CurrentPage="@_filter.Page"
                        PageSize="@_filter.PageSize"
-                       TotalCount="@_totalCount"
+                       TotalCount="@TotalCount"
                        OnPageChanged="@HandlePageChangedAsync"
-                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                       OnReport="@StoryReportCallback" />
         }
 
         <ReportDialog @ref="_reportDialog" />
@@ -167,9 +167,13 @@ else if (_selectionUnavailable)
     [PersistentState]
     public StoryListingDto[]? Items { get; set; }
 
-    // In random mode TotalCount is Items.Length (deterministic proxy — see LoadRandomBatchAsync),
-    // so it is recomputed on restore rather than persisted.
-    private int _totalCount;
+    // Persisted beside Items: a sorted first page needs the real total to size its pager. In random
+    // mode it is Items.Length (deterministic proxy — see LoadRandomBatchAsync). It was recomputed
+    // from Items on restore, so a sorted first load lost its pager after the prerender handoff
+    // (WU-TrackerFixes browser pass, 2026-10-13). It travels with Items, including through the
+    // .NET 10 snapshot re-supply that Items is exposed to (layer3-logic.md §"State Persistence").
+    [PersistentState]
+    public int TotalCount { get; set; }
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
         new Dictionary<int, UserStoryInteractionStateDto>();
 
@@ -192,6 +196,14 @@ else if (_selectionUnavailable)
 
     // ── Presentation state (from the former SearchDesktop composite) ──────────────
     private ReportDialog _reportDialog = default!;
+
+    // The cards' Report, for signed-in viewers only (layer2-services.md "Report entry points": the
+    // report endpoint requires auth). Wired for everyone, an anonymous click crashed the page on WASM
+    // (the reasons read 401'd) and filed an anonymous report on the circuit (WU-TrackerFixes browser
+    // pass, 2026-10-13).
+    private EventCallback<int> StoryReportCallback => _currentUserId is null
+        ? default
+        : EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.Story, id));
 
     private bool IsRandomMode => _filter.Sort == DefaultSortOrder.Random;
 
@@ -274,11 +286,10 @@ else if (_selectionUnavailable)
         }
         else
         {
-            // Restored from the prerender payload: no listing refetch. Recompute the random-mode
-            // TotalCount proxy and reload only the per-viewer interaction states — ephemeral
-            // supplementary state, deterministic per viewer, so the re-fetch is flicker-free
-            // (same treatment as StoryPage's _usiState).
-            _totalCount = Items.Length;
+            // Restored from the prerender payload: no listing refetch. TotalCount was restored with
+            // Items (a sorted page's real total; the proxy in random mode). Reload only the
+            // per-viewer interaction states — ephemeral supplementary state, deterministic per
+            // viewer, so the re-fetch is flicker-free (same treatment as StoryPage's _usiState).
             await LoadInteractionStatesAsync();
         }
     }
@@ -347,7 +358,7 @@ else if (_selectionUnavailable)
         await ResolveSeedDisplayAsync();
 
         Items = [];
-        _totalCount = 0;
+        TotalCount = 0;
         if (IsRandomMode)
             await LoadRandomBatchAsync(append: false);
         else
@@ -389,7 +400,7 @@ else if (_selectionUnavailable)
 
         // Reset accumulation on any filter/mode change.
         Items = [];
-        _totalCount = 0;
+        TotalCount = 0;
 
         if (_filter.Sort == DefaultSortOrder.Random)
             await LoadRandomBatchAsync(append: false);
@@ -407,7 +418,7 @@ else if (_selectionUnavailable)
 
     private async Task LoadSortedPageAsync()
     {
-        (Items, _totalCount) = await StoryReadService.GetListingsAsync(_filter);
+        (Items, TotalCount) = await StoryReadService.GetListingsAsync(_filter);
         await LoadInteractionStatesAsync();
     }
 
@@ -428,7 +439,7 @@ else if (_selectionUnavailable)
         Items = items;
         // In random mode TotalCount is not meaningful (stateless draw); use item count as a proxy
         // so StoryDeck's PaginationControls self-hides (TotalCount == PageSize == Items.Count → TotalPages=1).
-        _totalCount = items.Length;
+        TotalCount = items.Length;
 
         await LoadInteractionStatesAsync();
     }
@@ -439,8 +450,21 @@ else if (_selectionUnavailable)
     {
         if (_currentUserId.HasValue && Items is { Length: > 0 })
         {
-            _states = await InteractionReadService.GetStatesByStoryIdsAsync(
-                [.. Items.Select(i => i.StoryId)]);
+            // Best-effort, like the page-size read above (layer3.5-structure.md, the page-size seed):
+            // the cards' interaction marks are decoration. A WASM tab whose cookie expired after
+            // prerender still reads as signed in, and this read's 401 took the whole page down
+            // (WU-TrackerFixes browser pass, 2026-10-13). The cards render unmarked instead.
+            try
+            {
+                _states = await InteractionReadService.GetStatesByStoryIdsAsync(
+                    [.. Items.Select(i => i.StoryId)]);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Interaction-state read failed for viewer {UserId} — cards render unmarked",
+                    _currentUserId);
+                _states = new Dictionary<int, UserStoryInteractionStateDto>();
+            }
         }
         else
         {

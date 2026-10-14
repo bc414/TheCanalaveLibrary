@@ -561,6 +561,13 @@ every HTTP-implemented interface method is async (`layer5-wasm.md` §"Client Ser
 Implementations"), and a new client method gets a WASM browser pass. Browser JavaScript is outside
 every tier too: `sprite-fallback.js` looped on a missing sprite forever while every tier stayed green.
 
+Nor do they see **the HTTP binding** unless a test goes through it. Integration pinned
+`GetListingsAsync`'s null-versus-empty restrict set at the service, while the `/query` endpoint bound
+an absent array key as an empty one: every unrestricted WASM listing came back empty, with every tier
+green, until the WU-TrackerFixes browser pass (2026-10-13; `layer5-wasm.md`, the absent-array gotcha).
+A read whose parameters mean different things null and empty is tested through the real client
+service over `Factory.CreateClient()` (`StoryEndpointsTests`' `Query_*`).
+
 A restored `[PersistentState]` value is different: bUnit *can* see it, but only when the test asks.
 By default bUnit restores nothing, so components take their fetch path.
 `PersistentStateTestSupport.RestoreDeclarativeStateAsync<T>` performs a full load's restore through
@@ -579,6 +586,15 @@ pin it there. Precedent: the circuit-concurrency crash (2026-07-01) reproduced a
 services from one scope, `Task.WhenAll` their reads" — `ConcurrentReadAccessTests` now guards that
 shape without a browser (see `layer2-services.md` §"Read-Context Concurrency: Factory Per Method").
 The browser finds the bug class; the tier keeps it fixed.
+
+## Mutation-checking a fix: restore with a fresh timestamp
+
+A new test is checked by reverting its fix and watching it fail. Restore the source with a fresh
+modification time. A copy that keeps the backup's old timestamp (`cp -p`, Python's `shutil.copy2`)
+looks older than the mutant's build output, so MSBuild skips that project and the next build still
+carries the mutant: a later batch then fails, or passes, for the wrong reason (seen in the
+WU-TrackerFixes browser pass, 2026-10-13). Touch the restored files, or build with `--no-incremental`,
+before the next run, and always before the final green run.
 
 ## Dev-diagnostics endpoints are probes, not the regression net
 

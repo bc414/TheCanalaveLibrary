@@ -149,7 +149,7 @@ system events only — never any of the above. `ErrorAlert` is the presentation 
 catch site sets from `ex is SessionExpiredException`. It holds no exception itself.
 
 **Every inline error surface that can show a caught exception is an `ErrorAlert`** (the
-WU-ErrorHandling2 follow-up, built by WU-TrackerFixes 2026-10-13). Three rules keep its Sign-in link
+WU-ErrorHandling2 follow-up, built by WU-TrackerFixes 2026-10-13). Four rules keep its Sign-in link
 honest:
 - **The flag travels with the message.** Whatever sets the message sets the flag in the same
   statement block. That includes a fixed early-return string such as "A reason is required.", which
@@ -163,6 +163,10 @@ honest:
   `ClearServerErrors()`; they never write the list and the flag separately. The form renders
   `<ErrorAlert Messages="@ViewModel.ServerValidationErrors" ShowSignIn="@ViewModel.ServerErrorIsSessionExpired" />`.
   A handler's failure replaces the previous one's messages; it never appends to them.
+- **A dialog's own load is a catch site too.** `ReportDialog` loads its reasons when first opened;
+  that read's refusal (an expired session on WASM) shows in the dialog through the same `ErrorAlert`,
+  with a Close button, and the next open retries. Uncaught, it reached the hosting page's error
+  boundary (WU-TrackerFixes browser pass, 2026-10-13).
 - **A refusal is never a toast.** A page's own operations (join, leave, add or remove a story)
   show their refusal in an `ErrorAlert` beside the controls that caused it, and log an unexpected
   failure at `Error` like any other catch site (`GroupPage`). Five older surfaces still toast a

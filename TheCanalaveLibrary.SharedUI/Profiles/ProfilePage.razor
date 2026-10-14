@@ -328,7 +328,9 @@ else
                                    PageSize="@_storyFilter.PageSize"
                                    TotalCount="@StoryTotalCount"
                                    OnPageChanged="@HandleStoryPageChanged"
-                                   OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                                   OnReport="@(_currentUserId is not null
+                                       ? EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))
+                                       : default)" />
                     </div>
                     <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
                         <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Filters</h2>
@@ -660,9 +662,23 @@ else
 
     private async Task LoadInteractionStatesAsync()
     {
-        _interactionStates = StoryItems is { Length: > 0 } && _currentUserId.HasValue
-            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. StoryItems.Select(i => i.StoryId)])
-            : new Dictionary<int, UserStoryInteractionStateDto>();
+        _interactionStates = new Dictionary<int, UserStoryInteractionStateDto>();
+        if (StoryItems is not { Length: > 0 } || !_currentUserId.HasValue) return;
+
+        // Best-effort, like the page-size read (layer3.5-structure.md, the page-size seed): the cards'
+        // interaction marks are decoration on a public page. A WASM tab whose cookie expired after
+        // prerender still reads as signed in, and this read's 401 took the story tabs down
+        // (WU-TrackerFixes browser pass, 2026-10-13). The cards render unmarked instead.
+        try
+        {
+            _interactionStates = await InteractionReadService.GetStatesByStoryIdsAsync(
+                [.. StoryItems.Select(i => i.StoryId)]);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Interaction-state read failed for viewer {UserId} — cards render unmarked",
+                _currentUserId);
+        }
     }
 
     private async Task LoadBlogAsync()

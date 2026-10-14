@@ -27,6 +27,7 @@ public class SearchPageTests : BunitContext
     private readonly FakeStoryReadService _storyReadService = new();
     private readonly FakeSavedTagSelectionReadService _selectionReadService = new();
     private readonly FakeUserSettingsService _settingsService = new();
+    private readonly FakeInteractionReadService _interactionReadService = new();
     private readonly BunitAuthorizationContext _auth;
 
     public SearchPageTests()
@@ -38,7 +39,9 @@ public class SearchPageTests : BunitContext
         // it, even though it's only called on the authenticated path).
         Services.AddScoped<IStoryReadService>(_ => _storyReadService);
         Services.AddScoped<IUserSettingsService>(_ => _settingsService);
-        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => _interactionReadService);
+        // A signed-in viewer's caret menu renders AddToCustomListMenu's inner half (Report tests).
+        Services.AddScoped<ICustomListWriteService>(_ => new FakeCustomListWriteService());
         Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiService);
         // TagSelector inside ResultsFilterPanel injects ITagReadService.
@@ -352,5 +355,58 @@ public class SearchPageTests : BunitContext
 
         cut.FindAll("button").Select(b => b.TextContent.Trim())
             .Should().Contain("Give me more", "the page falls back to random mode and renders");
+    }
+    // ── WU-TrackerFixes browser pass (2026-10-13) ────────────────────────────────
+
+    [Fact]
+    public async Task RestoredSortedFirstPage_KeepsItsPager()
+    {
+        // The pager's total travels with the restored page. It was recomputed from Items on restore, so a
+        // sorted first load showed three cards and no pager after the prerender handoff.
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.DatePublished;
+        _settingsService.DefaultPaginationSize = 3;
+        await this.RestoreDeclarativeStateAsync<SearchPage>(
+            ("Items", new[] { MakeStory(1), MakeStory(2), MakeStory(3) }),
+            ("TotalCount", 10));
+
+        IRenderedComponent<SearchPage> cut = Render<SearchPage>();
+
+        _storyReadService.LastListingsFilter.Should().BeNull("a restored page is not fetched again");
+        cut.Find("button[aria-label='Next page']").Should().NotBeNull("ten stories at three a page is four pages");
+        cut.FindAll("span").Select(e => e.TextContent.Trim()).Should().Contain("Showing 1–3 of 10");
+    }
+
+    [Theory]
+    [InlineData(false, 0)] // anonymous: the report endpoint requires auth (layer2-services.md "Report entry points")
+    [InlineData(true, 1)]
+    public void CardReport_IsOfferedToSignedInViewersOnly(bool signedIn, int expected)
+    {
+        // Wired for everyone, an anonymous Report crashed the page on WASM (the reasons read 401'd) and
+        // filed an anonymous report on the circuit.
+        if (signedIn)
+        {
+            AuthenticateAs(7);
+            _settingsService.DefaultSearchSort = DefaultSortOrder.Random;
+        }
+        IRenderedComponent<SearchPage> cut = RenderPage(items: [MakeStory(1)]);
+
+        cut.Find("button[aria-label='Story options']").Click();
+
+        cut.FindAll("button").Count(b => b.TextContent.Trim() == "Report").Should().Be(expected);
+    }
+
+    [Fact]
+    public void InteractionMarksReadFails_TheCardsStillRender()
+    {
+        // A WASM tab whose cookie expired after prerender: the marks read answers 401. It took the page
+        // down; the cards now render unmarked.
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.Random;
+        _interactionReadService.StatesException = new SessionExpiredException();
+
+        IRenderedComponent<SearchPage> cut = RenderPage(items: [MakeStory(1)]);
+
+        cut.Markup.Should().Contain("Story 1");
     }
 }
