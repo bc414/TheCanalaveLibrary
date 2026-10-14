@@ -327,7 +327,8 @@ public class ServerBlogPostReadService(
             return ([], 0);
 
         // Filter by group and apply content-rating ceiling (explicit .Where — same pattern as profile
-        // blog posts; named filter not available on TPT derived DbSets, see cross-cutting.md).
+        // blog posts; named filter not available on TPT derived DbSets, see content-safety.md
+        // §"TPT blog-post exception").
         IQueryable<GroupBlogPost> query = readDb.GroupBlogPosts
             .Where(p => p.GroupId == groupId && p.IsPublished && p.Rating <= maxRating);
 

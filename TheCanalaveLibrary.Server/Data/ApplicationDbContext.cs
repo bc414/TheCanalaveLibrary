@@ -18,9 +18,9 @@ namespace TheCanalaveLibrary.Server;
 public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int>, IDataProtectionKeyContext
 {
     // protected so ReadOnlyApplicationDbContext can close over it in its own OnModelCreating to
-    // register the display/visibility query filters (ContentRating, GroupAudience, IsTakenDown).
-    // The write context (this class) carries no filters — it sees ground truth. See
-    // cross-cutting.md "Content Rating Filtering" for the principle.
+    // register the display/visibility query filters (ContentRating, GroupAudience, StoryStatus,
+    // IsTakenDown). The write context (this class) carries no filters — it sees ground truth. See
+    // content-safety.md "Content Rating Filtering" for the principle.
     protected readonly IActiveUserContext _activeUser;
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IActiveUserContext activeUser)
@@ -203,8 +203,9 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
 
         // No display/visibility query filters here. The write context sees ground truth — it must load
         // entities by id regardless of rating, takedown state, or audience gating. All named filters
-        // (ContentRating, GroupAudience, IsTakenDown) live on ReadOnlyApplicationDbContext.OnModelCreating,
-        // which closes over _activeUser (exposed as protected above). See cross-cutting.md
-        // "Content Rating Filtering" for the principle and rationale.
+        // (ContentRating, GroupAudience, StoryStatus, IsTakenDown) live on
+        // ReadOnlyApplicationDbContext.OnModelCreating, which closes over _activeUser (exposed as
+        // protected above). See content-safety.md "Content Rating Filtering" for the principle and
+        // rationale.
     }
 }

@@ -23,10 +23,11 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
             .UseSnakeCaseNamingConvention();
 
         // Design-time only — this runs outside the DI/auth pipeline for `dotnet ef` tooling, so there's
-        // no real viewer. The content-rating query filter (settled WU12, cross-cutting.md "Content
-        // Rating Filtering") gets the same safe anonymous/Teen-ceiling default ServerActiveUserContext
-        // falls back to at runtime — irrelevant here, since migration generation only inspects model
-        // shape, never query results.
+        // no real viewer. The ctor still requires an IActiveUserContext, so this passes the same safe
+        // anonymous/Teen-ceiling default ServerActiveUserContext falls back to at runtime. Nothing
+        // reads it: ApplicationDbContext declares no query filters (they live on
+        // ReadOnlyApplicationDbContext since WU38; content-safety.md "Content Rating Filtering"), and
+        // migration generation only inspects model shape, never query results.
         return new ApplicationDbContext(optionsBuilder.Options, new DesignTimeActiveUserContext());
     }
 

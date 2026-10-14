@@ -14,7 +14,7 @@ namespace TheCanalaveLibrary.Server;
 ///
 /// <b>Notification seam (WU22):</b> <see cref="FollowAsync"/> and <see cref="VouchAsync"/> call
 /// <see cref="INotificationWriteService"/> after their primary <c>SaveChangesAsync</c> (best-effort
-/// post-commit — see <c>cross-cutting.md</c> "Notification Creation"). Any notification failure is
+/// post-commit — see <c>layer2-services.md</c> §"Notification Generation"). Any notification failure is
 /// logged and swallowed; it never rolls back the primary action.
 /// </summary>
 public class ServerFollowingWriteService(
@@ -77,7 +77,7 @@ public class ServerFollowingWriteService(
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.AuthorsFollowed, us => us.AuthorsFollowed + 1));
 
         // Best-effort post-commit notification (WU22). Primary save already committed above;
-        // a notification failure must not roll back the follow. See cross-cutting.md.
+        // a notification failure must not roll back the follow. See layer2-services.md §"Notification Generation".
         try { await notifications.NotifyNewFollowerAsync(targetUserId, actorId); }
         catch (Exception ex)
         {
@@ -170,7 +170,7 @@ public class ServerFollowingWriteService(
         if (inserted == 0) return;
 
         // Best-effort post-commit notification (WU22). Primary save already committed above;
-        // a notification failure must not roll back the vouch. See cross-cutting.md.
+        // a notification failure must not roll back the vouch. See layer2-services.md §"Notification Generation".
         try { await notifications.NotifyNewVouchAsync(targetUserId, actorId); }
         catch (Exception ex)
         {

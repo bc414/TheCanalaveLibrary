@@ -18,8 +18,9 @@
    Does NOT inject IActiveUserContext — the service is self-scoped (uses its own
    IActiveUserContext via DI) so we avoid double-injection.
 
-   No live push (post-MVP L7). Count and preview refresh on mount / navigation — genuinely true as
-   of WU-AccountEnforcement (2026-07-30): this component previously claimed the "/ navigation"
+   No live push, by design: no app-defined SignalR hub exists or is planned (cross-cutting.md
+   §"Stateless, permanently"; Layer 7 was dissolved 2026-07-06). Count and preview refresh on
+   mount / navigation — genuinely true as of WU-AccountEnforcement (2026-07-30): this component previously claimed the "/ navigation"
    half but never subscribed to LocationChanged, so a notification landing mid-session (e.g. the
    account-status moderator notifications AccountStatusBanner now surfaces alongside) stayed
    invisible until the next full page load. Fixed with the same NavigationManager.LocationChanged

@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="UnauthorizedAccessException"/> on mismatch or on an authorless post (owned by nobody); an
 /// id of another subtype is <see cref="KeyNotFoundException"/> (owner ruling D10). Site announcements
 /// are moderator-gated instead (see their section). The UI <c>@if (isOwner)</c> affordance is
-/// convenience only; the service gate is the actual control (settled WU24, <c>cross-cutting.md</c>
+/// convenience only; the service gate is the actual control (settled WU24, <c>identity-and-authorization.md</c>
 /// §"Active-User-Conditional Handling").
 /// </para>
 /// <para>

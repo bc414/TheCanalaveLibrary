@@ -18,10 +18,19 @@ namespace TheCanalaveLibrary.Server;
 /// because EF cannot translate a shared method call inside a projection expression.</para>
 ///
 /// <para><b>Story visibility:</b> every story-valued row is constrained by a subquery against the
-/// filtered <c>Stories</c> DbSet (global ContentRating/IsTakenDown query filters apply to the
-/// DbSet root, NOT to navigations) plus the published-status window (2..7 — drafts/pending/
-/// rejected are not globally filtered, so the window is explicit). Counts and pages share one
-/// predicate so <c>TotalCount</c> is never a lie.</para>
+/// filtered <c>Stories</c> DbSet (see <see cref="VisibleStories"/>) plus the explicit
+/// published-status window (2..7). Counts and pages share one predicate so <c>TotalCount</c> is never
+/// a lie.</para>
+///
+/// <para>CORRECTION (WU-DocCorrections): this paragraph used to say the named filters apply "to the
+/// DbSet root, NOT to navigations" and that drafts/pending/rejected "are not globally filtered". Both
+/// were false. EF Core applies a <c>Story</c> filter wherever a query reaches <c>Story</c>, through a
+/// navigation too (it joins a filtered subquery; <c>ServerFanonReadService</c> relies on that); what
+/// it never filters is a bare FK column such as <c>Recommendation.StoryId</c>, which is why these
+/// rows go through the subquery. And story status IS globally filtered: the <c>StoryStatus</c> named
+/// filter (<c>ReadOnlyApplicationDbContext</c>) hides Draft/PendingApproval/Rejected, but with an
+/// <b>author exception</b>. The explicit 2..7 window is what keeps the viewer's own unpublished
+/// stories off these published-only panes, so it must not be "simplified" away as redundant.</para>
 ///
 /// <para><b>Candidate-pane filtering (WU-ExploreFilterAxes):</b> a user pivot may carry a
 /// <see cref="StoryFilterDto"/>, applied by composing <see cref="StoryFilterPredicates"/> onto that
@@ -260,11 +269,13 @@ public class ServerManualTreeSearchReadService(
 
     // ── Shared query fragments ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Published, viewer-visible stories: the filtered DbSet (ContentRating/IsTakenDown
-    /// global filters) plus the explicit published-status window (2..7 — status is not globally
-    /// filtered, so drafts/pending/rejected must be excluded here). Returned as an IQueryable and
-    /// captured OUTSIDE lambdas — EF translates a captured queryable subquery, not a method call
-    /// inside an expression tree.</summary>
+    /// <summary>Published, viewer-visible stories: the filtered DbSet (the ContentRating, IsTakenDown
+    /// and StoryStatus named filters) plus the explicit published-status window (2..7). The window is
+    /// load-bearing: the StoryStatus filter lets an author see their own Draft/PendingApproval/Rejected
+    /// stories, and only this window keeps them off a published-only pane (CORRECTION
+    /// (WU-DocCorrections): this used to say status "is not globally filtered"). Returned as an
+    /// IQueryable and captured OUTSIDE lambdas — EF translates a captured queryable subquery, not a
+    /// method call inside an expression tree.</summary>
     private static IQueryable<Story> VisibleStories(ReadOnlyApplicationDbContext readDb) =>
         readDb.Stories.Where(s =>
             s.StoryStatusId >= StoryStatusEnum.InProgress && s.StoryStatusId <= StoryStatusEnum.OpenBeta);

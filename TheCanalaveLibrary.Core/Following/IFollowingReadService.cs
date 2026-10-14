@@ -2,8 +2,9 @@ namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Read side of the Following/Vouches feature cluster. Implemented server-side by
-/// <c>ServerFollowingReadService</c> (uses <c>ReadOnlyApplicationDbContext</c>).
-/// MVP is InteractiveServer-only; a client HTTP impl lives in the Post-MVP L5 batch.
+/// <c>ServerFollowingReadService</c> (uses <c>ReadOnlyApplicationDbContext</c>) and, on WASM, by
+/// <c>ClientFollowingReadService</c> over HTTP (the site has been global InteractiveAuto since the
+/// Global Flip, 2026-07-13).
 /// </summary>
 public interface IFollowingReadService
 {

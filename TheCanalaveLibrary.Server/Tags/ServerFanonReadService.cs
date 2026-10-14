@@ -12,9 +12,14 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Access-gating:</b> reach counts are COMPLETE for every viewer (an OC name and a
 /// count are not mature content) — group queries bypass the ContentRating filter; the expanded
 /// story list keeps it active and pairs the visible rows with the complete count for the
-/// count-line disclosure. <c>IsTakenDown</c> stays active everywhere. Public reach counts draw
-/// on published stories only (drafts never leak); the author-facing adoption pages include the
-/// author's own drafts (personal plane).</para>
+/// count-line disclosure. <c>IsTakenDown</c> stays active everywhere: these queries reach
+/// <c>Story</c> through the <c>sc.Story</c>/<c>st.Story</c> navigations, and EF applies a named
+/// filter on navigation access too. Public reach counts draw on published stories only (drafts never
+/// leak), through an explicit 2..7 status window. That window is load-bearing: the
+/// <c>StoryStatus</c> named filter already hides other users' Draft/PendingApproval/Rejected
+/// stories, but it lets an author see their own, so without the window a viewing author's own
+/// drafts would feed the public dashboard. The author-facing adoption pages include the author's
+/// own drafts on purpose (personal plane).</para>
 /// </summary>
 public class ServerFanonReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -353,8 +358,9 @@ public class ServerFanonReadService(
 
     /// <summary>
     /// The grouped, thresholdable dashboard query. Published stories only (drafts never feed
-    /// public reach), IsTakenDown active, ContentRating bypassed (counts are complete for every
-    /// viewer — 6.5).
+    /// public reach: the explicit 2..7 window, which the StoryStatus filter's author exception
+    /// makes necessary — see the class doc), IsTakenDown active, ContentRating bypassed (counts are
+    /// complete for every viewer — 6.5).
     /// </summary>
     private static IQueryable<GroupRow> GroupQuery(ReadOnlyApplicationDbContext readDb, TagTypeEnum axis, string? search)
     {

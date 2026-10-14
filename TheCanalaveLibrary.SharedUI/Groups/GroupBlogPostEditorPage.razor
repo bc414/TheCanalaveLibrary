@@ -14,7 +14,7 @@
    Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately; no story
    picker — group posts are not story-linkable, WU-B2, so AuthorStories stays null and the form
    suppresses the picker).
-   Pattern 1 edit side (cross-cutting.md "Two content-editing patterns"); view is BlogPostPage.
+   Pattern 1 edit side (identity-and-authorization.md "Two content-editing patterns, by content weight"); view is BlogPostPage.
    [PersistentState] on GroupName (the page's only non-per-viewer fetched content) skips the group
    re-fetch on hydration; the member-role gate is per-viewer state and always loads fresh. Live
    form/draft state is never persisted.
@@ -48,7 +48,7 @@
                     </p>
                 </div>
 
-                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                @* ── Draft safety (error-handling.md §"Editor draft safety") ── *@
                 <div class="mb-4">
                     <DraftAutosave @ref="_autosave"
                                    DraftKey="@($"draft:groupblogpost:new:{GroupId}")"

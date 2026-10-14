@@ -212,7 +212,7 @@ public enum SiteRoles : int
 //Part 3: Enums for User Settings
 
 // AccountStatus mirrors the User.AccountStatus column (WU34).
-// No Shadowbanned — see cross-cutting.md "Moderation Model."
+// No Shadowbanned — see content-safety.md "Moderation Model."
 public enum AccountStatusEnum : short
 {
     Active = 0,

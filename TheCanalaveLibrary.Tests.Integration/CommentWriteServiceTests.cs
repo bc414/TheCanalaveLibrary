@@ -231,6 +231,12 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         c.Should().BeNull("hard delete must remove the row");
     }
 
+    /// <summary>
+    /// Ratified behavior, not an undecided default: owner ruling D12 (2026-08-06) chose hard delete
+    /// plus reparent-to-root and declined a placeholder (<c>cross-cutting.md</c> §"Delete Policy
+    /// Summary"). It also guards the FK: <c>base_comments.parent_comment_id</c> must stay
+    /// <c>ON DELETE SET NULL</c>, outside D10's RESTRICT set, or this delete fails with 23503.
+    /// </summary>
     [Fact]
     public async Task DeleteComment_ReparentsReplies_ToTopLevel()
     {

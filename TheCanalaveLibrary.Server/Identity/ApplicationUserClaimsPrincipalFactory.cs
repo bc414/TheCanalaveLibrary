@@ -10,9 +10,9 @@ namespace TheCanalaveLibrary.Server;
 /// Bakes the hot <see cref="User"/> columns <see cref="IActiveUserContext"/> needs
 /// (<see cref="User.ShowMatureContent"/>, theme slug, <see cref="User.PrefersAnimatedSprites"/>) into the
 /// auth cookie's claims at sign-in — settled WU12. This is what lets <c>ServerActiveUserContext</c> read
-/// purely from claims with zero DbContext dependency, avoiding a circular dependency with
-/// <c>ApplicationDbContext</c>'s content-rating query filter (which itself depends on
-/// <see cref="IActiveUserContext"/>). Role claims (<c>IsModerator</c>/<c>IsAdmin</c>) need no custom
+/// purely from claims with zero DbContext dependency, avoiding a circular dependency with the
+/// DbContexts: both take <see cref="IActiveUserContext"/> in their constructor, and
+/// <c>ReadOnlyApplicationDbContext</c>'s content-rating query filter closes over it. Role claims (<c>IsModerator</c>/<c>IsAdmin</c>) need no custom
 /// work — they already come for free from the base <see cref="UserClaimsPrincipalFactory{TUser,TRole}"/>
 /// once roles are configured (<c>.AddRoles&lt;ApplicationRole&gt;()</c> in Program.cs).
 /// </summary>

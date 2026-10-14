@@ -5,7 +5,7 @@
 @inject IToastService Toasts
 @inject ILogger<DraftAutosave> Logger
 
-@* Editor draft-safety component (cross-cutting.md §"Error Handling Strategy"). Embed once inside
+@* Editor draft-safety component (error-handling.md §"Editor draft safety"). Embed once inside
    a long-form edit page's form branch; it (1) offers to restore a device-local backup left by a
    previous session/teardown, and (2) autosaves the in-progress draft every IntervalSeconds while
    the user edits. The hosting editor supplies Capture (pull current field values — same

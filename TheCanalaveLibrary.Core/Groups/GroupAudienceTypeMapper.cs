@@ -3,7 +3,7 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Pure static mapper between the UI/write-boundary <see cref="GroupAudienceType"/> preset and
 /// the persisted <c>(AudienceRating, MaxContentRating)</c> pair on <see cref="Group"/>.
-/// Settled WU32 — see <c>cross-cutting.md</c> §"Group Audience-Visibility Filter".
+/// Settled WU32 — see <c>content-safety.md</c> §"Group Audience-Visibility Filter".
 /// </summary>
 /// <remarks>
 /// The preset is NOT stored in the database. The DB stores only the two <see cref="Rating"/>

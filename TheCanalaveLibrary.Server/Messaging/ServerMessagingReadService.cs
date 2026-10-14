@@ -253,10 +253,9 @@ public partial class ServerMessagingReadService(
     {
         if (string.IsNullOrWhiteSpace(username)) return null;
 
-        // Case-insensitive match via Npgsql's ILike (EF Core string.Contains(StringComparison)
-        // overload is untranslatable — use EF.Functions.ILike for case-insensitive LIKE,
-        // or equality after normalisation).
-        // Identity stores normalised usernames in NormalizedUserName (upper-case).
+        // Case-insensitive exact match: plain equality on Identity's NormalizedUserName (stored
+        // upper-case by Identity's default normalizer) against the trimmed input upper-cased
+        // invariantly. No ILike/LIKE is involved (this comment used to narrate one).
         string normalised = username.Trim().ToUpperInvariant();
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();

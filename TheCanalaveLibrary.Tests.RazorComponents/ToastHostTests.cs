@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
 /// Tests for the transient toast channel (<see cref="ToastService"/> + <see cref="ToastHost"/>,
-/// cross-cutting.md §"Error Handling Strategy" — feedback channels): a Show renders a toast in
+/// error-handling.md §"Feedback channels"): a Show renders a toast in
 /// the aria-live region, manual dismiss removes it, and the per-toast duration auto-dismisses.
 /// </summary>
 public class ToastHostTests : BunitContext

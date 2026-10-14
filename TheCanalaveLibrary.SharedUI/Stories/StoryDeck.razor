@@ -29,7 +29,7 @@ else
             @foreach (var story in Stories)
             {
                 @* Card island — one broken card degrades to a compact tile; the rest of the
-                   deck renders (cross-cutting.md §"Error Handling Strategy" placement map). *@
+                   deck renders (error-handling.md §"Layered error boundaries" placement). *@
                 <CanalaveErrorBoundary @key="story.StoryId" Label="story-card" Compact="true">
                     <div class="relative">
                         <StoryCard Story="story"

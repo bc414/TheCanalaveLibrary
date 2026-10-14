@@ -2618,9 +2618,10 @@ the no-`userId` `IUserSettingsService` and the `includePrivate` predicate above.
 `IBadgeReadService.GetMyBadgesForCurationAsync(int userId)` and
 `IBadgeWriteService.SetDisplayOrderAsync(int userId, …)` are "My" operations that take a `userId`,
 and the badge services **trust it**. That breaks rule 1 above on purpose: the same write service's
-`AwardAsync` legitimately targets *another* user server-internally (the recommendation and
-acknowledgment producers award the other party), so a blanket caller == target check inside the
-service would break it. Self-scope is enforced where the caller is known instead:
+`AwardAsync` legitimately targets *another* user server-internally (`RecordSuccessAsync` awards the
+recommender when a reader records a success; `ServerStoryAcknowledgmentWriteService` awards the
+caller), so a blanket caller == target check inside the service would break it. Self-scope is
+enforced where the caller is known instead:
 - **HTTP:** `BadgeEndpoints` derives `userId` from `IActiveUserContext` and never accepts it from the
   client (MA-601, 2026-07-17); `AwardAsync` is deliberately unmapped.
 - **Circuit:** the only UI caller, `SettingsPage` (an `[Authorize]` page), passes

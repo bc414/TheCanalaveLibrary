@@ -8,8 +8,8 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Containment tests for <see cref="CanalaveErrorBoundary"/> (cross-cutting.md §"Error Handling
-/// Strategy"): a child fault renders the fallback instead of propagating (the circuit-survival
+/// Containment tests for <see cref="CanalaveErrorBoundary"/> (error-handling.md §"Layered error
+/// boundaries"): a child fault renders the fallback instead of propagating (the circuit-survival
 /// guarantee at component scope), the fault is logged at Error with the island label, Try again
 /// re-renders the child, and navigation auto-recovers a faulted island.
 /// </summary>

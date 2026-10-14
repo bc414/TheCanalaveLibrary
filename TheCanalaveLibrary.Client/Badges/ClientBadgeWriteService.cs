@@ -20,7 +20,8 @@ public sealed class ClientBadgeWriteService(HttpClient http) : ClientBadgeReadSe
 {
     /// <summary>
     /// Server-internal generation — no HTTP surface exists (see <c>BadgeEndpoints</c>: awards are
-    /// earned, only <c>ServerRecommendationWriteService</c> calls this, in-process; mapping a route
+    /// earned, only the server-side producers (<c>ServerRecommendationWriteService</c>,
+    /// <c>ServerStoryAcknowledgmentWriteService</c>) call this, in-process; mapping a route
     /// would let a WASM caller mint any catalogue badge). Implemented only to satisfy the interface;
     /// reaching it over WASM is a bug — same pattern as <c>ClientNotificationWriteService</c>.
     /// </summary>

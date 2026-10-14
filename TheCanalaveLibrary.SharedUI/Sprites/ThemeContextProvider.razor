@@ -12,7 +12,7 @@
    supplies its own provider around its content (see TagDirectoryPage), while Routes.razor keeps
    the app-level one for the server-interactive tree. Zero server-only dependencies — it reads
    only the cascaded AuthenticationState, supplied by AddCascadingAuthenticationState on both
-   sides. See cross-cutting.md "ThemeContext Cascading Provider." *@
+   sides. See render-and-layout.md "ThemeContext Cascading Provider." *@
 
 <CascadingValue Value="@_context">
     @ChildContent

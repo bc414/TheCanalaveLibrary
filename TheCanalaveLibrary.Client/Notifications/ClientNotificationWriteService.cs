@@ -20,7 +20,7 @@ namespace TheCanalaveLibrary.Client;
 /// <c>Notify{Story,Report,Account,Spotlight,Poll}*Async</c> semantic generation method. These are
 /// called server-to-server only (comment posting, follows, group fan-out, moderation actions,
 /// spotlight go-live, poll-edit sweeps — see <c>ServerNotificationWriteService</c>'s doc comment and
-/// <c>cross-cutting.md</c> "Notification Creation"); no <c>.razor</c> file injects them, and
+/// <c>layer2-services.md</c> §"Notification Generation"); no <c>.razor</c> file injects them, and
 /// <c>NotificationEndpoints.cs</c> deliberately maps no HTTP surface for them (mapping one would let
 /// a WASM client mint arbitrary notifications naming any source/moderator id — a privilege-escalation
 /// surface, not just dead code). Implemented here only so the class satisfies the full interface;

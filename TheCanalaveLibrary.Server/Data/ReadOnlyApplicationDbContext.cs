@@ -9,9 +9,10 @@ namespace TheCanalaveLibrary.Server;
 /// that public reads are automatically scoped to the active user's content ceiling.
 ///
 /// <para>All named visibility filters (<c>"ContentRating"</c>, <c>"GroupAudience"</c>,
-/// <c>"IsTakenDown"</c>) live here — NOT on the base <see cref="ApplicationDbContext"/>. The write
-/// context sees ground truth; only the read context filters. See <c>cross-cutting.md</c> "Content
-/// Rating Filtering" for the architectural principle.</para>
+/// <c>"StoryStatus"</c>, <c>"IsTakenDown"</c>) live here — NOT on the base
+/// <see cref="ApplicationDbContext"/>. The write context sees ground truth; only the read context
+/// filters. See <c>content-safety.md</c> "Content Rating Filtering" for the architectural
+/// principle.</para>
 ///
 /// <para>This context owns no migration history — schema is managed entirely by
 /// <see cref="ApplicationDbContext"/>. Query filters don't touch schema.</para>

@@ -356,7 +356,7 @@ public class ServerChapterReadService(
         //
         // Author gate (MA-301): this feeds the author-only editor form, so the story's author is
         // checked here — not just by the client (ChapterEditorPage's own AuthorId comparison is
-        // affordance only, not a control; cross-cutting.md "Security vs affordance"). Checked
+        // affordance only, not a control; identity-and-authorization.md "Security vs affordance"). Checked
         // against Story.AuthorId (the story's owner), not ChapterContent.AuthorId (whoever authored
         // that specific version) — the same authority MoveChapterAsync/DeleteChapterAsync use.
         // That ownership gate is what makes the elevated read safe: non-authors get null either way.

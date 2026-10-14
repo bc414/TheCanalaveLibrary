@@ -12,7 +12,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
 
-@* Blog-post create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+@* Blog-post create/edit page — Pattern 1 edit side (identity-and-authorization.md "Two content-editing patterns, by content weight").
    View side is BlogPostPage. This page owns routing, auth, data-load, and DTO-mapping.
    BlogPostPropertiesForm is a presentational child (no inject, bUnit-testable). *@
 
@@ -35,7 +35,7 @@
                     @(BlogPostId.HasValue ? "Edit Post" : "New Post")
                 </h1>
 
-                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                @* ── Draft safety (error-handling.md §"Editor draft safety") ── *@
                 <div class="mb-4">
                     <DraftAutosave @ref="_autosave" @key="@DraftKey"
                                    DraftKey="@DraftKey"

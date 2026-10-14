@@ -1,7 +1,7 @@
 namespace TheCanalaveLibrary.SharedUI;
 
 /// <summary>
-/// The transient non-blocking feedback channel (cross-cutting.md §"Error Handling Strategy" —
+/// The transient non-blocking feedback channel (error-handling.md §"Feedback channels" —
 /// feedback channels). Deliberately minimal: for system events with no inline home ("draft
 /// restored", "reconnected"). NEVER for validation errors (InlineAlert, next to the field) and
 /// never for anything requiring a decision (ConfirmDialog). Scoped per circuit/user; ToastHost

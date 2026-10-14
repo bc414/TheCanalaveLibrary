@@ -11,7 +11,7 @@ namespace TheCanalaveLibrary.Server;
 /// declares ~20 semantic <c>NotifyNew*Async</c>/<c>Notify{Story,Report,Account,Spotlight,Poll}*Async</c>
 /// generation methods (comment posting, follows, group fan-out, moderation, spotlight go-live, poll
 /// edits, etc.). Those are called internally, server-to-server, by other write services after their
-/// own commit (<c>cross-cutting.md</c> "Notification Creation") — no <c>.razor</c> file injects them,
+/// own commit (<c>layer2-services.md</c> §"Notification Generation") — no <c>.razor</c> file injects them,
 /// so they get no endpoint here. Mapping them would also be a privilege-escalation surface (e.g. a
 /// WASM client could otherwise mint arbitrary <c>AccountBanned</c>/<c>StoryApproved</c> notifications
 /// for any user). <see cref="TheCanalaveLibrary.Client.ClientNotificationWriteService"/>

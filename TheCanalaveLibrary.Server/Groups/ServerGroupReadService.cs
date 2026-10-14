@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Server-side read implementation for Groups (Features 38/39/40, WU32). All list queries rely on
 /// the <c>GroupAudience</c> named query filter — Mature groups are invisible to mature-disabled
-/// users without any per-method guard needed. See <c>cross-cutting.md</c>
+/// users without any per-method guard needed. See <c>content-safety.md</c>
 /// §"Group Audience-Visibility Filter."
 /// </summary>
 public class ServerGroupReadService(

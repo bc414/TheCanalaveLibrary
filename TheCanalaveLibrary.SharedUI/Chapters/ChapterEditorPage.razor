@@ -12,7 +12,7 @@
 @inject ILogger<ChapterEditorPage> Logger
 @using Microsoft.Extensions.Logging
 
-@* Chapter create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+@* Chapter create/edit page — Pattern 1 edit side (identity-and-authorization.md "Two content-editing patterns, by content weight").
    Reading side is ChapterReadingPage (WU26). Three route patterns:
      new:          /story/{id}/chapter/new
      edit primary: /story/{id}/chapter/{ch}/edit
@@ -108,7 +108,7 @@ else
             </div>
         }
 
-        @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ─────────── *@
+        @* ── Draft safety (error-handling.md §"Editor draft safety") ─────────── *@
         <div class="mb-4">
             <DraftAutosave @ref="_autosave" @key="@DraftKey"
                            DraftKey="@DraftKey"

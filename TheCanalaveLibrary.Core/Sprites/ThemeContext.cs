@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Core;
 ///
 /// <para>Values are read from auth claims present in both the prerender and the interactive pass,
 /// so the resolved sprite URL is byte-identical across the SSR → InteractiveServer handoff (no
-/// flicker). See <c>cross-cutting.md</c> "ThemeContext Cascading Provider."</para>
+/// flicker). See <c>render-and-layout.md</c> "ThemeContext Cascading Provider."</para>
 /// </summary>
 /// <param name="Slug">URL-safe theme slug (e.g. <c>"pokemon"</c>) — used as a path segment.</param>
 /// <param name="PrefersAnimated">Whether the user prefers animated <c>.webp</c> sprites.</param>

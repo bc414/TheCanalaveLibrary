@@ -1,7 +1,7 @@
 @namespace TheCanalaveLibrary.SharedUI
 
 @* Cross-cutting layout element — injected into MainLayout before
-   <LoginDisplay/>. Spec §cross-cutting.md "Notification Bell".
+   <LoginDisplay/>. See render-and-layout.md "Notification bell".
 
    Injection-free wrapper: the real content + @inject services live in NotificationBellInner,
    instantiated only when AuthorizeView renders Authorized — deferring DI resolution and the

@@ -3,8 +3,8 @@ using System.Diagnostics;
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// The single exception → user-facing-message mapper (cross-cutting.md §"Error Handling
-/// Strategy" — exception-message discipline). Only typed user-facing exceptions surface their
+/// The single exception → user-facing-message mapper (error-handling.md
+/// §"Exception-message discipline"). Only typed user-facing exceptions surface their
 /// own message; the whole per-feature validation family is matched via its shared
 /// <see cref="CanalaveValidationException"/> base (MA-008) rather than one arm per type;
 /// BCL exception messages are developer text and are never shown. Everything

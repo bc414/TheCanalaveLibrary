@@ -6,9 +6,11 @@ namespace TheCanalaveLibrary.Client;
 /// <summary>
 /// WASM-side <see cref="ISavedTagSelectionReadService"/>: HttpClient wrapper over
 /// SavedTagSelectionEndpoints (Server/Tags/SavedTagSelectionEndpoints.cs). Same DTOs, same method
-/// contracts — only the transport differs (the Layer-5 body-swap). All three reads require the
-/// same-origin Identity cookie server-side (RequireAuthorization()); WASM's fetch-backed HttpClient
-/// sends it automatically.
+/// contracts — only the transport differs (the Layer-5 body-swap). Of the four reads, the two
+/// owner reads (<see cref="GetMySelectionsAsync"/>, <see cref="GetSelectionDetailAsync"/>) require the
+/// same-origin Identity cookie server-side (RequireAuthorization()), which WASM's fetch-backed
+/// HttpClient sends automatically. The two public reads (<c>/public/{userId}</c> and
+/// <c>/permalink/{id}</c>) are anonymous-callable; the service enforces their visibility gates.
 /// </summary>
 public class ClientSavedTagSelectionReadService(HttpClient http) : ISavedTagSelectionReadService
 {

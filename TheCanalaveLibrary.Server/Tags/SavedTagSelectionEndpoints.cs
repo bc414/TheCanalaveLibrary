@@ -18,7 +18,9 @@ namespace TheCanalaveLibrary.Server;
 /// Exception: <see cref="ISavedTagSelectionReadService.GetPublicSelectionsByUserAsync"/> feeds the
 /// PUBLIC profile Tag Selections tab (an <c>[AllowAnonymous]</c> page), so it is anonymous-callable
 /// (WU-AccessGate Phase 1 — the gate made the tab 401-crash on the anonymous WASM pass); the
-/// owner's <c>ProfileVisibility</c> gates the read in the service.
+/// owner's <c>ProfileVisibility</c> gates the read in the service. Second exception:
+/// <see cref="ISavedTagSelectionReadService.GetPublicSelectionByIdAsync"/> feeds the selection
+/// permalink (decision row 13), also anonymous-callable and gated in the service.
 /// </para>
 /// </summary>
 public static class SavedTagSelectionEndpoints
@@ -27,7 +29,8 @@ public static class SavedTagSelectionEndpoints
     {
         RouteGroupBuilder group = app.MapGroup("/api/saved-tag-selections");
 
-        // ── Reads (all require an authenticated user — this is a per-user feature) ──
+        // ── Reads: the two owner reads require an authenticated user; /public and /permalink below are
+        //    anonymous-callable, gated in the service ──
 
         group.MapGet("/", async (ISavedTagSelectionReadService selections, SavedTagSelectionSortEnum sort) =>
                 Results.Ok(await selections.GetMySelectionsAsync(sort)))

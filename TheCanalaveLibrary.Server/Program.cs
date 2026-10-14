@@ -10,9 +10,11 @@ using TheCanalaveLibrary.SharedUI;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-// Redis (write-behind cache, Layer 7) is post-MVP — no feature reads/writes IDistributedCache yet.
-// Re-add builder.AddRedisDistributedCache("cache") when the first Redis-backed feature is built
-// (re-add the Aspire.StackExchange.Redis.DistributedCaching package alongside it).
+// No distributed cache is wired. The Aspire AppHost provisions a "cache" container that nothing
+// consumes at N=1; the in-process signal buffers would swap their bodies to Valkey only at N>=2 (see
+// horizontal-scaling.md §3). Layer 7 ("Redis integration") was dissolved 2026-07-06. When something
+// first needs it, add builder.AddRedisDistributedCache("cache") here, with the
+// Aspire.StackExchange.Redis.DistributedCaching package.
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -49,7 +51,7 @@ builder.Services.AddScoped<IActiveUserContext, ServerActiveUserContext>();
 // See canalave-conventions/logging.md §"Context Scopes".
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TelemetryCircuitHandler>();
 
-// Error-handling UX seams (WU-ErrorHandling — cross-cutting.md §"Error Handling Strategy"):
+// Error-handling UX seams (WU-ErrorHandling — error-handling.md §"Feedback channels"):
 // the transient toast channel (ToastHost in MainLayout is the single subscriber) and the
 // localStorage draft store behind DraftAutosave. Both scoped per circuit; both also registered
 // in the Client host so the components survive the L5 WASM flip unchanged.
@@ -180,7 +182,7 @@ builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationUserCla
 // confirmation link, gated on `EmailSender is IdentityNoOpEmailSender`) or "Smtp" (real send via
 // MailKit against whatever Email:Smtp points at — Mailpit under the Aspire AppHost's env
 // injection, the chosen provider's SMTP endpoint in production). Same shape as the
-// ImageStorage:Provider switch above. See cross-cutting.md "Identity & Auth".
+// ImageStorage:Provider switch above. See identity-and-authorization.md "Identity & Auth".
 //
 // Two registrations per branch since WU-NotifEmail (2026-07-31): IMailTransport is the general
 // outbound-mail seam (Server/Email/) that notification and private-message email use, and IEmailSender<User> is
@@ -543,7 +545,8 @@ builder.Services.AddScoped<INotificationReadService>(sp => sp.GetRequiredService
 // TestAppFactory removes the worker (tests drive NotificationCleanupSweeper directly).
 builder.Services.AddScoped<NotificationCleanupSweeper>();
 builder.Services.AddHostedService<NotificationCleanupWorker>();
-// Messaging (WU35) — L2 read/write services (Feature 49). Stateless MVP; SignalR post-MVP.
+// Messaging (WU35) — L2 read/write services (Feature 49). Stateless permanently: SignalR push is
+// ruled out, not deferred (cross-cutting.md §"Stateless, permanently").
 // No Notification rows for PMs — messaging has its own LastReadTimestamp watermark bookkeeping.
 // See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
 builder.Services.AddScoped<IMessagingReadService, ServerMessagingReadService>();

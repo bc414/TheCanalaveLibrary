@@ -7,8 +7,8 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Tests for <see cref="DraftAutosave"/> restore behaviour (cross-cutting.md §"Error Handling
-/// Strategy" — editor draft safety) over bUnit's JSInterop stand-in for draft-autosave.js:
+/// Tests for <see cref="DraftAutosave"/> restore behaviour (error-handling.md §"Editor draft
+/// safety") over bUnit's JSInterop stand-in for draft-autosave.js:
 /// a leftover localStorage draft that differs from the loaded content offers a restore banner;
 /// Restore hands the fields back to the editor; Discard clears the device copy; a backup
 /// identical to the loaded content is silently cleared (nothing unsaved to offer). The 10s

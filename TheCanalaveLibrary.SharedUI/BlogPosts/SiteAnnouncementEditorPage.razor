@@ -10,7 +10,7 @@
 @using Microsoft.Extensions.Logging
 
 @* Site-announcement create/edit page (WU-SiteNews) — the SiteBlogPost counterpart to
-   BlogPostEditorPage. Pattern 1 edit side (cross-cutting.md "Two content-editing patterns");
+   BlogPostEditorPage. Pattern 1 edit side (identity-and-authorization.md "Two content-editing patterns, by content weight");
    view side is BlogPostPage (unmodified — GetByIdAsync's third branch already serves it).
    No polls section, no story picker, no Rating/HasSpoilers — those aren't meaningful for staff
    announcements. IsModerator||IsAdmin gates every mutation in the write service (any moderator
@@ -36,7 +36,7 @@
                     @(BlogPostId.HasValue ? "Edit Announcement" : "New Announcement")
                 </h1>
 
-                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                @* ── Draft safety (error-handling.md §"Editor draft safety") ── *@
                 <div class="mb-4">
                     <DraftAutosave @ref="_autosave" @key="@DraftKey"
                                    DraftKey="@DraftKey"

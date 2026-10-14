@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Core;
 public interface IThemeReadService
 {
     /// <summary>
-    /// Returns all available themes ordered by display name. The list is small and stable
+    /// Returns all available themes ordered by <c>ThemeId</c> (seed order). The list is small and stable
     /// (seeded, rarely changed) — callers may render it as a <c>&lt;select&gt;</c> directly.
     /// </summary>
     Task<IReadOnlyList<ThemeDto>> GetThemesAsync();

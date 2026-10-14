@@ -17,7 +17,7 @@ public partial class Group
     
     /// <summary>
     /// Controls group visibility. E = visible to all; M = hidden from users with mature content disabled.
-    /// Renamed from Rating (WU32) for semantic clarity vs. MaxContentRating. See cross-cutting.md
+    /// Renamed from Rating (WU32) for semantic clarity vs. MaxContentRating. See content-safety.md
     /// "Group Audience-Visibility Filter".
     /// </summary>
     public Rating AudienceRating { get; set; }

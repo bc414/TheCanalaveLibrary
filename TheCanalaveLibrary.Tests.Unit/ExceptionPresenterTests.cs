@@ -4,7 +4,7 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Tests.Unit;
 
 /// <summary>
-/// The exception-message discipline (cross-cutting.md §"Error Handling Strategy"): only typed
+/// The exception-message discipline (error-handling.md §"Exception-message discipline"): only typed
 /// user-facing exceptions surface their own message; BCL messages map to fixed friendly text;
 /// everything else maps to the generic message. These tests pin the mapping so a new exception
 /// type that should be user-facing fails loudly here when it silently falls to generic.

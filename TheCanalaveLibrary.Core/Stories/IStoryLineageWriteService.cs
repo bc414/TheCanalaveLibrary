@@ -44,8 +44,12 @@ public interface IStoryLineageWriteService : IStoryLineageReadService
     Task ApproveLineageAsync(int sourceStoryId, int targetStoryId, short typeId);
 
     /// <summary>
-    /// Rejects a Pending request (kept as a <see cref="StoryLineageStatus.Rejected"/> row, not
-    /// deleted — an audit trail, and a later re-request reuses the composite key). The row is not a
+    /// Rejects a link (kept as a <see cref="StoryLineageStatus.Rejected"/> row, not deleted — an
+    /// audit trail, and a later re-request reuses the composite key). <b>There is no status
+    /// precondition</b> (unlike <see cref="ApproveLineageAsync"/>): the only UI entry point,
+    /// <c>MyStoryLineagesPage</c>'s incoming-requests list, offers it on Pending rows, but a direct
+    /// call on an Approved link is accepted and unwinds the target author's inspiration counter (the
+    /// transition-delta rule), and on an already-Rejected row it changes nothing. The row is not a
     /// spam guard (the source author can delete it and ask again); re-request notification spam is
     /// bounded by <see cref="RequestLineageAsync"/>'s <see cref="WriteActionKind.RepeatRequest"/>
     /// bucket (owner ruling D20). Caller must own the <b>target</b> story. No notification (silent

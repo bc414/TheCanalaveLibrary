@@ -4,7 +4,7 @@ namespace TheCanalaveLibrary.Server;
 /// Configuration for <see cref="SmtpMailTransport"/>, bound from <c>Email</c>. Selected by
 /// <c>Email:Provider = "Smtp"</c> (Program.cs provider switch; default is <c>NoOp</c>, which
 /// registers <see cref="NoOpMailTransport"/> and <see cref="IdentityNoOpEmailSender"/> instead —
-/// see cross-cutting.md "Identity &amp; Auth"). Under Aspire the AppHost injects the SMTP host/port
+/// see identity-and-authorization.md "Identity &amp; Auth"). Under Aspire the AppHost injects the SMTP host/port
 /// at the Mailpit dev inbox; in production they point at whichever transactional provider's SMTP
 /// endpoint is chosen (decision row 8, `.claude/roadmap.md`) — every candidate provider
 /// (Postmark/SES/Resend/SendGrid/Mailgun) exposes SMTP, so swapping providers is a config change only.

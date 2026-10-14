@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
 /// Render tests for <see cref="InlineAlert"/> — the standard inline feedback atom
-/// (cross-cutting.md §"Error Handling Strategy"). Self-hides when empty; single message renders
+/// (error-handling.md §"Feedback channels"). Self-hides when empty; single message renders
 /// as a paragraph, multiple as a list; variant maps to the palette classes.
 /// </summary>
 public class InlineAlertTests : BunitContext

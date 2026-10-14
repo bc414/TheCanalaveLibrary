@@ -21,8 +21,9 @@ namespace TheCanalaveLibrary.Server;
 /// </para>
 /// <para>
 /// <b><c>AwardAsync</c> is deliberately unmapped.</b> Awards are earned, never user-initiated: the
-/// only production caller is <c>ServerRecommendationWriteService</c>, server-internal, after its own
-/// success-count check. Mapping an award route — even self-only — would let any authenticated WASM
+/// production callers are <c>ServerRecommendationWriteService</c> (Recommender) and
+/// <c>ServerStoryAcknowledgmentWriteService</c> (BetaReader), both server-internal, each after its own
+/// count check. Mapping an award route — even self-only — would let any authenticated WASM
 /// caller mint any catalogue badge for themselves (Patron, Architect, …), a privilege-escalation
 /// surface, not just dead code. Same decision and rationale as <c>NotificationEndpoints</c>'
 /// unmapped generation methods; <c>ClientBadgeWriteService.AwardAsync</c> throws
@@ -72,8 +73,8 @@ public static class BadgeEndpoints
         return app;
     }
 
-    // Auth safety net, same idiom as ServerChapterWriteService.RequireAuthenticatedUser — in
-    // practice RequireAuthorization() above already guarantees this, so the InvalidOperationException
+    // Auth safety net with the shared ActiveUser.RequireUserId() semantics (a private copy, tracker
+    // H41) — in practice RequireAuthorization() above already guarantees this, so the InvalidOperationException
     // path (mapped to 401 by EndpointHelpers.ExecuteAsync) is a defense-in-depth backstop.
     private static int RequireUserId(IActiveUserContext activeUser) =>
         activeUser.UserId ?? throw new InvalidOperationException("This operation requires an authenticated user.");

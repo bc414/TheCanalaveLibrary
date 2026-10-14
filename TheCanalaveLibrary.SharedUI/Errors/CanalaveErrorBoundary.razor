@@ -6,11 +6,11 @@
 @inject ILogger<CanalaveErrorBoundary> Logger
 @inject NavigationManager Nav
 
-@* Layered fault-containment boundary (cross-cutting.md §"Error Handling Strategy"). Subclasses
+@* Layered fault-containment boundary (error-handling.md §"Layered error boundaries"). Subclasses
    the framework ErrorBoundary to (1) log every caught exception at Error with the island label
    and an ErrorId the fallback also shows the user (logging.md §"Unhandled exceptions"), and
    (2) auto-Recover() on navigation so a faulted island never traps the user across pages.
-   Placement map (page / chrome / card / comments) lives in cross-cutting.md — wrap independent
+   Placement map (page / chrome / card / comments) lives in error-handling.md §"Layered error boundaries" — wrap independent
    islands, not every component. Catches render/lifecycle/event exceptions in its subtree only;
    background-Task continuations and out-of-subtree faults still fall through to the
    #blazor-error-ui bar in App.razor (the true last resort). *@

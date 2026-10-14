@@ -10,7 +10,7 @@
 @using Microsoft.Extensions.Logging
 
 @* Read-only blog-post view page. Slug is cosmetic — only BlogPostId (int) is the key.
-   Pattern 1: separate view and edit pages (cross-cutting.md "Two content-editing patterns").
+   Pattern 1: separate view and edit pages (identity-and-authorization.md "Two content-editing patterns, by content weight").
    Injects IBlogPostWriteService (which : IBlogPostReadService) so the authenticated like-toggle
    can call ToggleLikeAsync. Author-only affordances (Edit link, profile posts only) are controlled by @if (isAuthor);
    the server gate is the real authority (layer3.5-structure.md §"Author-Conditional Rendering").

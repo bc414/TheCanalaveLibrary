@@ -19,7 +19,7 @@ public class ServerChapterWriteService(
         int userId = ActiveUser.RequireUserId();
         rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
-        // Load story rating + author for invariant checks and the author gate (cross-cutting.md
+        // Load story rating + author for invariant checks and the author gate (identity-and-authorization.md
         // "Security vs affordance" — only the story's author may add chapters to it; MA-301).
         var story = await writeDb.Stories
             .Where(s => s.StoryId == dto.StoryId)

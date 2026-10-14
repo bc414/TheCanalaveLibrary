@@ -25,8 +25,10 @@ public interface ITagReadService
     /// <summary>
     /// Full tag directory for the <c>/tags</c> browse + mod-edit page. Returns all tags grouped
     /// by <see cref="TagTypeEnum"/> (in enum declaration order), with top-level parents as nodes
-    /// and their direct children nested inside each node. Both parents and children carry fully-
-    /// resolved <see cref="TagChipDto"/>s (sprite URL resolved for the current viewer's theme).
+    /// and their direct children nested inside each node. Both parents and children carry
+    /// <see cref="TagChipDto"/>s with the raw <c>SpriteIdentifier</c>; the rendering component
+    /// resolves the sprite URL for the viewer's theme (<c>layer2-services.md</c> §"Sprite URLs Are
+    /// Resolved At Render Time, In the Component").
     /// Distinct from <see cref="SearchTagChipsAsync"/> (per-keystroke, capped) and
     /// <see cref="GetTagChipsByIdsAsync"/> (prefill by ID).
     /// </summary>

@@ -7,11 +7,11 @@ namespace TheCanalaveLibrary.Core;
 /// receive safe zero/empty responses (no exception).
 ///
 /// <para>The notification bell in the layout injects this interface directly — a legitimate
-/// cross-cutting injection per <c>cross-cutting.md</c> "Notification Creation."</para>
+/// cross-cutting injection per <c>render-and-layout.md</c>'s "Notification bell" paragraph.</para>
 ///
 /// <para>Implemented server-side by <c>ServerNotificationReadService</c> (uses
-/// <c>ReadOnlyApplicationDbContext</c>). MVP is InteractiveServer-only; a client HTTP impl
-/// lives in the Post-MVP L5 batch.</para>
+/// <c>ReadOnlyApplicationDbContext</c>) and, on WASM, by <c>ClientNotificationReadService</c> over
+/// HTTP (global InteractiveAuto since the Global Flip, 2026-07-13).</para>
 /// </summary>
 public interface INotificationReadService
 {

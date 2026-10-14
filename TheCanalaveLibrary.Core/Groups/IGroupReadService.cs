@@ -3,7 +3,7 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Read side of the Groups service contract (Features 38/39/40, WU32).
 /// All queries respect the <c>GroupAudience</c> named query filter — Mature groups are invisible
-/// to users with mature content disabled. See <c>cross-cutting.md</c> "Group Audience-Visibility Filter."
+/// to users with mature content disabled. See <c>content-safety.md</c> "Group Audience-Visibility Filter."
 /// </summary>
 public interface IGroupReadService
 {

@@ -6,7 +6,8 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Server-side read implementation for Comments. Chapter context shipped WU19; blog-post context
 /// added WU31. Both contexts use the same two-step load pattern: paginate root ids (golden-index
-/// order, L6/post-MVP DDL), then fetch roots + their direct replies in one EF query; in-memory
+/// order — <c>ix_chapter_comments_chapter_id_date_posted</c> / <c>ix_blog_post_comments_blog_post_id_date_posted</c>,
+/// built WU-L6 2026-07-07), then fetch roots + their direct replies in one EF query; in-memory
 /// ordering restores roots newest-first and replies oldest-first.
 /// Queries go through the typed TPT DbSet (<c>ChapterComments</c>, <c>BlogPostComments</c>) so
 /// EF Core uses the TPT join automatically and all inherited <c>BaseComment</c> columns are
@@ -41,8 +42,8 @@ public class ServerCommentReadService(
         if (totalRootCount == 0)
             return new CommentPageDto([], 0);
 
-        // Step 1: page the root comment ids (golden index order — post-MVP DDL adds the composite
-        // index; this query works correctly before that index exists, just without index scan).
+        // Step 1: page the root comment ids in golden-index order (the composite
+        // ix_chapter_comments_chapter_id_date_posted, built WU-L6 2026-07-07).
         List<long> rootIds = await readDb.ChapterComments
             .Where(c => c.ChapterId == chapterId && c.ParentCommentId == null)
             .OrderByDescending(c => c.DatePosted)

@@ -18,7 +18,7 @@
 @inject IJSRuntime JS
 @inject IPublicUrlProvider PublicUrlProvider
 
-@* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
+@* Chapter reading page — Pattern 1 read side (identity-and-authorization.md "Two content-editing patterns, by content weight").
    Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC and version list, and
    wires reading-progress scroll JS. Scroll progress → RecordProgressAsync; Ch.1 ≥90% →
    MarkStartedAsync for a signed-in reader (carrying the ?rec= direct-link attribution, owner ruling

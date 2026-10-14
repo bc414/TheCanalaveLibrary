@@ -40,8 +40,10 @@ public interface IMessagingReadService
     /// <summary>
     /// Looks up a user by their exact username (case-insensitive) for the compose flow.
     /// Returns <c>null</c> when no matching user exists.
-    /// Used as a building-block method by the "New Message" standalone compose flow
-    /// (no <c>IUserProfileReadService</c> exists until WU30).
+    /// Used by <c>MessagesPage</c>'s compose flow (the typed recipient and the
+    /// <c>?ComposeForUsername=</c> preset).
+    /// It predates <c>IUserProfileReadService</c> (WU30) and returns the compose flow's own
+    /// <see cref="MessagingParticipantDto"/>.
     /// </summary>
     Task<MessagingParticipantDto?> FindUserByUsernameAsync(string username);
 

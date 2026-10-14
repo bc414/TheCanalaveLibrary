@@ -100,7 +100,7 @@ public class ServerStoryWriteService(
         if (storyToUpdate is null)
             throw new KeyNotFoundException($"Story with ID {dto.StoryId} not found.");
 
-        // Author-only gate (cross-cutting.md "Security vs affordance"). Moderation actions (WU34) use
+        // Author-only gate (identity-and-authorization.md "Security vs affordance"). Moderation actions (WU34) use
         // a separate admin service path — they do NOT OR into this ownership check.
         if (storyToUpdate.AuthorId != ActiveUser.UserId)
             throw new UnauthorizedAccessException("You can only edit your own stories.");

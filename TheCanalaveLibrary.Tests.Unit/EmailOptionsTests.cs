@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Tests.Unit;
 
 /// <summary>
 /// Binding + default-value coverage for <see cref="EmailOptions"/> — the config shape Program.cs
-/// binds from <c>Email</c> when the provider switch selects <c>Smtp</c> (see cross-cutting.md
+/// binds from <c>Email</c> when the provider switch selects <c>Smtp</c> (see identity-and-authorization.md
 /// "Identity & Auth"). No host/DB: a bare <see cref="ConfigurationBuilder"/> exercises the same
 /// binder Program.cs uses via <c>services.Configure&lt;EmailOptions&gt;(...)</c>.
 /// </summary>

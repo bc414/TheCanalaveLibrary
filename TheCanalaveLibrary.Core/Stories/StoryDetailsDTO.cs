@@ -5,8 +5,9 @@ namespace TheCanalaveLibrary.Core;
 /// for search results (use <see cref="StoryListingDto"/> for listing surfaces); good for the full
 /// story detail page.
 ///
-/// <see cref="Tags"/> are sprite-resolved <see cref="TagChipDto"/>s (flat types: Genre, Setting,
-/// ContentWarning, CrossoverFandom) plus character chips merged in from <see cref="Characters"/>.
+/// <see cref="Tags"/> are <see cref="TagChipDto"/>s (flat types: Genre, Setting, ContentWarning,
+/// CrossoverFandom) plus character chips merged in from <see cref="Characters"/>. They carry the raw
+/// <c>SpriteIdentifier</c>; the sprite URL is resolved at render time by the component.
 /// <see cref="CoverArtRelativeUrl"/> is a stored relative URL, used verbatim (never resolved through
 /// a service — same discipline as <see cref="StoryListingDto.CoverArtRelativeUrl"/>).
 /// <see cref="AuthorId"/> is nullable to handle anonymized/deleted-author stories.

@@ -32,7 +32,7 @@
 <Routes @rendermode="PageRenderMode"/>
 <ReconnectModal/>
 
-@* Last-resort circuit-teardown bar (cross-cutting.md §"Error Handling Strategy"). Lives HERE,
+@* Last-resort circuit-teardown bar (error-handling.md §"Layered error boundaries"). Lives HERE,
    not in a layout: a layout-hosted bar (the template default) existed only on Identity Manage
    pages — interactive pages had NO teardown surface at all. blazor.web.js toggles it via inline
    style.display, which overrides the `hidden` class; the .reload/.dismiss classes are its

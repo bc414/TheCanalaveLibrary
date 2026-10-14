@@ -2,13 +2,14 @@ namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Source-agnostic filter criteria emitted by <c>ResultsFilterPanel</c> (WU23, spec §5.27).
-/// Each discovery surface (Search, Profiles, Bookshelves) supplies its own source IQueryable;
-/// <c>GetListingsAsync</c> applies these predicates on top of whatever the caller passes in.
+/// Each discovery surface (Search, Profiles, Bookshelves) supplies its own source as an optional
+/// restrict set of story ids (null = the whole library); <c>GetListingsAsync</c> applies these
+/// predicates on top of it.
 ///
 /// <b>Excluded by design:</b>
 /// <list type="bullet">
-///   <item>Content-rating — handled globally by <c>ApplicationDbContext</c>'s query filter
-///         via <see cref="IActiveUserContext"/>; never belongs here.</item>
+///   <item>Content-rating — handled globally by <c>ReadOnlyApplicationDbContext</c>'s named query
+///         filter via <see cref="IActiveUserContext"/>; never belongs here.</item>
 ///   <item>Per-SearchMode default-settings matrix (§8.7 entities) — seeded externally by
 ///         <c>IDiscoveryDefaultsReadService</c> before the DTO is built; the DTO carries
 ///         explicit viewer intent (already-merged effective exclusions).</item>
@@ -53,7 +54,8 @@ public sealed record StoryFilterDto
     /// <summary>
     /// Result ordering. <see cref="DefaultSortOrder.Relevance"/> is only valid when
     /// <see cref="TextQuery"/> is non-empty; the service falls back to
-    /// <see cref="DefaultSortOrder.LastUpdated"/> otherwise.
+    /// <see cref="DefaultSortOrder.DatePublished"/> otherwise (as <c>IStoryReadService.GetListingsAsync</c>
+    /// documents; this comment used to say <c>LastUpdated</c>).
     /// </summary>
     public DefaultSortOrder Sort { get; init; } = DefaultSortOrder.DatePublished;
 

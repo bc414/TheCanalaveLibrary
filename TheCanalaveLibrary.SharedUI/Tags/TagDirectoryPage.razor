@@ -8,14 +8,13 @@
    folded in 2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
    Public route (no [Authorize]); mod CRUD controls gated by AuthorizeView at every viewport.
 
-   L5 status (WU-L5Pilot, 2026-07-04): this page ran end-to-end as an InteractiveWebAssembly
+   L5 history (WU-L5Pilot, 2026-07-04): this page ran end-to-end as an InteractiveWebAssembly
    island to battle-test layer5-wasm.md, then the island directives were removed by decision —
-   the site converts to global InteractiveAuto in a single flip, not via long-lived mixed mode
-   (see layer5-wasm.md §"The Global Flip"). The Layer-5 assets remain live and tested:
-   Server/Tags/TagEndpoints.cs + Client/Tags/ClientTag{Read,Write}Service (resolved in the WASM
-   runtime once the flip lands; Server impls resolve here meanwhile). [PersistentState] below is
-   kept — it prevents the prerender→interactive double fetch under BOTH InteractiveServer today
-   and WASM after the flip. *@
+   the site converted to global InteractiveAuto in a single flip (the Global Flip, 2026-07-13;
+   layer5-wasm.md §"The Global Flip"), not via long-lived mixed mode. Today the page runs on the
+   circuit on a first visit and on WASM afterwards: Server impls resolve on the circuit,
+   Client/Tags/ClientTag{Read,Write}Service over Server/Tags/TagEndpoints.cs on WASM.
+   [PersistentState] below prevents the prerender→interactive double fetch on both. *@
 
 @if (Directory is null)
 {
