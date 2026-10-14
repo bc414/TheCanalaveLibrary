@@ -1100,8 +1100,10 @@ unless noted. All sit under Stage-5 cells.
     the WU's review fixes into D22, the outgoing lineage list, and **F29**, decision row 32, the
     requests on an unpublished story). The review fixes also stopped the `Own*` kinds linking a page
     that 404s for the author too (a taken-down story, an unpublished chapter): the title stays. Browser
-    pass: **H43**. Narrative: `audit/Notifications.md` F42 and `audit/Groups.md` F39 Stage notes.
-  - Grid: no cell moves at filing (F39 L2, F41 L2 read 5). At closure: F42 L4.5 5→1 until **H43**.
+    pass: **H43** (closed 2026-10-14, no bug found). Narrative: `audit/Notifications.md` F42 and
+    `audit/Groups.md` F39 Stage notes.
+  - Grid: no cell moves at filing (F39 L2, F41 L2 read 5). At closure: F42 L4.5 5→1 until **H43**; back
+    to 5 at its browser pass, 2026-10-14.
   - **Confirmed** by a throwaway Integration probe (not committed): the creator of a group added their
     own `Draft` story through `IGroupWriteService.AddStoryAsync`; no exception, a `GroupStory` row, and a
     second member's bell showed `NewGroupStory` (60) with the draft's title as its context title.
@@ -2835,7 +2837,17 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     (`git diff 1940078..HEAD -- .claude CLAUDE.md`), and Probe 3 over the audit files the campaign
     wrote Stage notes into, each as a fresh subagent. Fix what they confirm, then close this item with a
     dated note and one probe-coverage line in WU-DocCorrections' DONE entry.
-- [ ] **H43 — WU-D21Confidentiality browser pass: hidden stories' titles leave members' and followers' notifications, the author's stay** `[test-gap · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, which ran with no browser available.*
+- [x] **H43 — WU-D21Confidentiality browser pass: hidden stories' titles leave members' and followers' notifications, the author's stay — DONE (the WU-D21Confidentiality browser pass, 2026-10-14)** `[test-gap · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, which ran with no browser available.*
+  - **Closed 2026-10-14.** All four steps driven on the server-only path, the bell and `/notifications`
+    on both render phases, `psql` after every write; F42 L4.5 is back at 5. No bug was found and no code
+    changed. Step 1: the members' 60 for AuthorAlpha's draft read "A new story was added to Seed Group:
+    Standard" and opened a group page that does not list it. Step 2: AuthorBeta unpublished his story 6
+    after it was filed; the members' 60 lost its title, his 25 kept it, and republishing restored it.
+    Step 3: "AuthorAlpha acknowledged your help on a story", no link, then the title and `/story/10` once
+    published. Step 4, with `psql` takedowns: a follower's 10 went title-free with no link, the author's
+    24 kept its text and stopped navigating, and an author's 75 (from a real moderator approval) kept its
+    title and stopped navigating. Detail and the dev-DB restore: `audit/Notifications.md` F42's Stage
+    note.
   - Grid: **F42 L4.5 went 5→1** (`status.md`). Closing this returns it to 5. Every behavior below is
     covered by the Integration tier (`StoryNotificationConfidentialityTests`) and the 52 copy by the
     Unit tier; what is owed is the rendering in the bell and the inbox on both render phases.

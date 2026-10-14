@@ -317,6 +317,12 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   The members' notification is covered by Integration `StoryNotificationConfidentialityTests` (the
   tracker's probe, a story unpublished or taken down after the fan-out, the 60's email). F39 L4.5 is
   untouched: the group page did not change; the bell is F42's (L4.5 5→1, tracker H43).
+  *Browser pass (2026-10-14; F42 L4.5 back to 5, H43 closed).* AuthorAlpha filed her Draft into Seed
+  Group: Standard through the group page's picker, and AuthorBeta's published story 6, which he then
+  unpublished: the members' 60s read "A new story was added to Seed Group: Standard" on both render
+  phases, and the click opened `/group/1` without the hidden story (on the circuit after the draft's
+  filing, on WASM after the unpublish, when neither was listed). Detail: `audit/Notifications.md` F42's
+  Stage note.
   **WU-DocCorrections Stage note (2026-10-13; service audit §4 row 2) — no flip, no code change.** The
   convention text (`layer2-services.md` §"Group Rating Waterfall") and the WU32 settled note #1 above
   said tier 1 (the viewer's `ContentRating` ceiling) is enforced when a story is added, because the

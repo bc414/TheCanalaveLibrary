@@ -373,6 +373,10 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
   - Browsers cache 301s. Once a buggy permanent redirect has been followed, that browser replays it
     from cache after the server is fixed. Prove the fix with `fetch(url, {redirect:'manual',
     cache:'no-store'})` or a URL the browser hasn't redirected before.
+    - Seen 2026-10-14 (WU-D21Confidentiality browser pass): a full load of `/story/10/edit` still landed
+      on the story page, from the slug redirect fixed 2026-09-30. The extension's network log showed the
+      editor's 200; `performance.getEntriesByType('navigation')[0].redirectCount` was 1. Reach the
+      editor with a client-side navigation instead: the story page's Edit Story link.
   - When `document.visibilityState` is `hidden` but screenshots still work (verified 2026-09-30),
     `computer` clicks and typing often no-op. `el.click()` via `javascript_tool` is reliable.
     `CanalaveTypeahead` options select on **mousedown**, so dispatch

@@ -833,7 +833,7 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
 
 ## Feature 42 — Notification Display
 
-**WU-D21Confidentiality Stage note (2026-10-14) — tracker D21 closed; F42 L2 stays 5, L4.5 5→1.**
+**WU-D21Confidentiality Stage note (2026-10-14) — tracker D21 closed; F42 L2 stays 5, L4.5 5→1, and 1→5 at its browser pass the same day (tracker H43 closed).**
 `NotificationEnricher` split its three story-family kinds by recipient, the D8 way (Settled note
 "story-family targets by recipient" in the Shared Context above; rule and type table:
 `layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by recipient"):
@@ -891,6 +891,42 @@ the tests that lean on rows 31 and 32's status quo named in F28 and F29. Rejecte
 title-free copy was said to be false for the "Inspiration" role, but that role was deleted by the
 `WU_StatBadgeProducers` migration; the four live roles are all help. **L4.5** stays 1: H43 step 4
 gains the author's takedown case.
+*Browser pass (2026-10-14), L4.5 1→5.* Server-only path, the bell and `/notifications` on both render
+phases for every recipient below: the circuit proved by `_blazor/negotiate` and no `/api` call, WASM by
+no negotiate and a live `GET /api/notifications` after a sort toggle or page change. `psql` after every
+write. No bug was found and no code changed.
+- **The tracker's leak path.** AuthorAlpha filed her Draft (story 10) into Seed Group: Standard through
+  the group page's picker: `group_stories` 7, a 60 each for TestUser and ReaderGamma (mature off), none
+  for the adder. Both read "A new story was added to Seed Group: Standard". TestUser's click opened
+  `/group/1`, which lists only the two published stories, on both phases.
+- **Unpublished after the fan-out.** She filed AuthorBeta's published story 6 (`group_stories` 8; 60s
+  for both members naming it, a 25 for AuthorBeta). AuthorBeta unpublished it in the editor: the
+  members' 60 lost the title, his 25 kept "Your story Seed Story: With OC Details (T) was added to
+  Seed Group: Standard". The same flip dropped the title from two older rows naming story 6: TestUser's
+  52 read "AuthorBeta acknowledged your help on a story" (click: no navigation), and AuthorAlpha's 50
+  read "AuthorBeta requested a story lineage link". Republishing restored all three.
+- **Credit on a draft (52).** AuthorAlpha credited TestUser on story 10 from `/acknowledgments`
+  (notification 40067): "AuthorAlpha acknowledged your help on a story", no navigation. Once she
+  published story 10 it read "AuthorAlpha acknowledged Seed Story: Draft (E)" and opened `/story/10`; the
+  members' 60 for it regained the title too.
+- **Taken down (`psql` fixture on story 2).** TestUser's 10 ("New chapter of Seed Story: Draft Third
+  Chapter (E): Probe Chapter One") became "A story you follow has a new chapter", no link. AuthorAlpha's
+  24 kept "ReaderGamma commented on Probe Chapter One" and its context title but no longer navigates
+  (`/story/2/5` answers 404 to her). AuthorBeta's 51 became "Your story lineage link was approved".
+- **An `Own*` story row (75).** ModUser approved AuthorBeta's pending story 9 at `/mod/submissions`; his
+  75 named it and linked `/story/9`. With story 9 taken down through `psql` it kept the title and did
+  not navigate (`/story/9` is a 404 for him).
+- **Pre-existing rows agreed:** TestUser's 10 for an unpublished chapter of a published story reads "A
+  story you follow has a new chapter" (the chapter clause).
+- No `fail:`/`crit:` lines, no console errors. One browser quirk, not a bug: this Chrome replays a 301
+  for `/story/10/edit` that the slug middleware sent before its 2026-09-30 fix, so the editor was reached
+  through the story page's Edit Story link (`run-server` skill, the cached-301 note).
+- **Dev DB:** restored. The group stories and the credit were removed through the app; story 6 was
+  republished in the editor, its row unchanged. Through `psql`: stories 2, 9 and 10 returned to their
+  prior status and takedown columns, AuthorBeta's `approved_story_submissions` went back to 4, the seven
+  fixture notifications (40062–40068) and story 10's view row were deleted, and three read flags were
+  reset. Left behind: the advanced `notifications` and `group_stories` identity sequences and the users'
+  last-active stamps.
 
 **WU-TrackerFixes Stage note (2026-10-13) — tracker D8 closed; F42 L2 stays 5, L4.5 5→1.**
 `NotificationEnricher` split its post-linked blog kind by recipient (the tracker's recommended type
@@ -929,7 +965,7 @@ write class in place of `CurrentUserId` (CS9107 shape).
   the `GroupStory` kind, `TargetContextTitle` and the two-nulls presenter rule, WU-InertFeatures
   2026-09-30 — stage unchanged, see the slice below; per-field `Collapsed`, the `OldestUnreadFirst`
   id tiebreak and presenter arms for 90–92/100, WU-NotificationCorrectness 2026-10-12 — stage
-  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top; story-family targets split by recipient, WU-D21Confidentiality 2026-10-14, tracker D21 — stage unchanged, Integration- and Unit-tested, Stage note at this feature's top; its review fixes the same day keep the author's title but drop the link to a taken-down story or an unpublished chapter — stage unchanged, Integration-tested, same note).** **L4.5 — Stage 1 (5→1 at WU-D21Confidentiality, 2026-10-14: hidden stories' notifications render title-free and type 52's copy changed, and (its review fixes) an author's notifications for their taken-down story stop navigating, undriven — tracker H43; Stage note at this feature's top. Before that Stage 5: 1→5 at the WU-TrackerFixes browser pass, 2026-10-13: `PollUpdated` names its post again, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
+  unchanged; the type-62 presenter arm, WU-UserDeletion 2026-10-13 — stage unchanged; Stage notes above Feature 41; blog-post targets split by recipient, WU-TrackerFixes 2026-10-13, tracker D8 — stage unchanged, Integration-tested, Stage note at this feature's top; story-family targets split by recipient, WU-D21Confidentiality 2026-10-14, tracker D21 — stage unchanged, Integration- and Unit-tested, Stage note at this feature's top; its review fixes the same day keep the author's title but drop the link to a taken-down story or an unpublished chapter — stage unchanged, Integration-tested, same note).** **L4.5 — Stage 5 (1→5 at the WU-D21Confidentiality browser pass, 2026-10-14: hidden stories' notifications render title-free, type 52's new copy and an author's non-navigating rows for their taken-down story, driven in the bell and the inbox on both render phases — tracker H43 closed; 5→1 at WU-D21Confidentiality earlier the same day; Stage note at this feature's top. Before that Stage 5: 1→5 at the WU-TrackerFixes browser pass, 2026-10-13: `PollUpdated` names its post again, driven on both render phases — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13:** the type-62 copy was read in the bell and the inbox on both render phases and in its email on the Aspire path — tracker **H29** closed, browser verification note above Feature 41). Before that it went 5→1 at the
   WU-NotificationCorrectness review fixes (2026-10-13) and 1→5 at its browser pass the same day. That pass read the 90–92 and 100 copy in the bell and the inbox on both render phases (tracker
   **H26** closed; browser verification note above Feature 41).
   **WU-InertFeatures slice (2026-09-30):** `NotificationEnricher.ResolveTargetsAsync` takes

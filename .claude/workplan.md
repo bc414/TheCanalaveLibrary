@@ -24,7 +24,8 @@ references it, does not restate it.
   kinds resolve as stored, minus a link that would 404 for the author, the rest read the public window,
   and a followed chapter must be published). Members' 60 keeps the group and drops the story title; the
   lineage-request and credit-on-a-draft leaks close with it; type 52's title-free copy fixed. Rule in
-  `layer2-services.md`. Decision row 31 / **F28** stays open. **F42 L4.5 5→1** (no browser; **H43**).
+  `layer2-services.md`. Decision row 31 / **F28** stays open. **F42 L4.5 5→1**, back to 5 at its
+  browser pass the same day (both render phases, no bug; **H43** closed).
   Filed **D22** (the outgoing lineage list) and, by its review fixes, **F29** / new decision **row 32**
   (may a credit or lineage request name an unpublished story). `dotnet test`: Unit 1,377,
   RazorComponents 929, Integration 1,687. **Pointer:** its DONE entry.
@@ -278,7 +279,7 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42); WU-D21Confidentiality, 2026-10-14, closed **D21** and opened **D22/H43** (its review fixes split D22's product question out as **F29**, decision row 32),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42); WU-D21Confidentiality, 2026-10-14, closed **D21** and opened **D22/H43** (its review fixes split D22's product question out as **F29**, decision row 32; its browser pass closed H43 the same day),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -310,9 +311,8 @@ references it, does not restate it.
   requested on an unpublished story, and what its counterpart sees while it is pending — added the same
   day by the WU-D21Confidentiality review fixes, tracker **F29**).
   Tracker **H38**, WU-TrackerFixes' browser pass, ran 2026-10-13, returned its fifteen L4.5 cells to 5
-  and closed — see WU-TrackerFixes' DONE entry. Tracker **H43**, WU-D21Confidentiality's browser pass
-  (F42 L4.5 is 1 until it runs: the bell and inbox for hidden stories, and type 52's copy), is open — see
-  its DONE entry.
+  and closed — see WU-TrackerFixes' DONE entry. Tracker **H43**, WU-D21Confidentiality's browser pass,
+  ran 2026-10-14, returned F42 L4.5 to 5 and closed — see its DONE entry.
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -483,8 +483,9 @@ is pending except where a bullet says so.
 
 ## WU-D21Confidentiality — a notification never names or links a story outside the public window or taken down unless its recipient is the story's author: the story-family enricher kinds split by recipient, the D8 way (tracker D21; extends `Notifications/`, with a comment and a guard test in `Groups/`) — DONE ✓ (2026-10-14)
 
-- **Cells:** **F42 L4.5 5→1** (no browser in this pass; tracker **H43**). Beneath Stage-5 cells, no flip:
-  F42 L2 (the enricher), F39 L2 (a comment and a guard test). No migration.
+- **Cells:** **F42 L4.5 5→1** (no browser in this pass; tracker **H43**), **1→5** at its browser pass
+  the same day. Beneath Stage-5 cells, no flip: F42 L2 (the enricher), F39 L2 (a comment and a guard
+  test). No migration.
 - **Trigger:** tracker **D21** (decided by the settled Class-A rule; fix shape and the D8 precedent in
   the item) via the wrap-up amendment. No spec file: self-scoped in `wu-specs/WU-D21Confidentiality.md`.
   Not in scope: decision row 31 / tracker **F28** (owner-open); `AddStoryAsync`'s accept/refuse is unchanged.
@@ -519,7 +520,21 @@ is pending except where a bullet says so.
   pass); mutation-checked separately: 25 and 24 moved to their filtered kinds, 75 moved to `Story`, the
   chapter clause removed, `IsTakenDown` lifted, an unlisted type mapped to `Story` — each fails. Unit
   `NotificationPresenterTests` (52 with and without a title). **No browser in this pass:** the bell and
-  inbox rendering on both phases is tracker **H43** (F42 L4.5 is 1 until it runs).
+  inbox rendering on both phases is tracker **H43** (F42 L4.5 is 1 until it runs). **Browser pass
+  (2026-10-14, server-only path, `psql` after every write; no bug found, no code change; H43 closed,
+  F42 L4.5 1→5):** the bell and `/notifications` on the circuit and on WASM (`/api/notifications`) for
+  TestUser, ReaderGamma, AuthorAlpha and AuthorBeta. AuthorAlpha's own draft filed into her group gave
+  the members "A new story was added to Seed Group: Standard", and the click opened a group page without
+  it. AuthorBeta unpublishing a filed story took its title from the members' 60, TestUser's older 52 and
+  AuthorAlpha's 50 while his 25 kept it; republishing restored them. A credit on the draft read
+  "AuthorAlpha acknowledged your help on a story" with no link, then named and linked the story once
+  published. `psql` takedowns: a follower's 10 went title-free, the author's 24 and a real 75 (ModUser's
+  approval at `/mod/submissions`) kept their titles and stopped navigating (both targets 404 for the
+  author). No `fail:`/`crit:` lines, no console errors. Detail: `audit/Notifications.md` F42 note.
+  **Dev DB:** restored (group stories and the credit removed through the app, story 6 republished, and
+  through `psql` stories 2, 9 and 10, AuthorBeta's `approved_story_submissions`, notifications
+  40062–40068, story 10's view row and three read flags); left behind: the advanced `notifications` and
+  `group_stories` identity sequences and the users' last-active stamps.
 - **Review fixes (2026-10-14; three reviewers, twelve findings: eleven real, eight distinct, all
   verified against the code):**
   - *Behavior:* the `Own*` kinds linked a page that 404s for the author too (the story and chapter
@@ -544,7 +559,7 @@ is pending except where a bullet says so.
     "Inspiration" role, but `WU_StatBadgeProducers` deleted that role; the four live roles (Beta
     Reader, Planner, Cover Artist, Editor) are all help.
   - Tests unchanged in count: Unit 1,377, RazorComponents 929, Integration 1,687, all green; the four
-    gates pass. No browser: H43.
+    gates pass. No browser: H43 (run 2026-10-14, see Verification above).
 - **Pointers:** Stage notes in `audit/Notifications.md` F42 and `audit/Groups.md` F39; tracker D21, D22,
   F28, F29, H43; `roadmap.md` decision rows 31 and 32.
 
