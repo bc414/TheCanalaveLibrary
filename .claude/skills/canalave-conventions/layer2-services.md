@@ -1593,7 +1593,9 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
    non-unique order lets offset paging skip or repeat rows across pages.
 2. **Classify** each materialized row's `RelatedEntityId` by a private
    `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
-   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | GroupStory | BlogPost | BlogPostDirect | OwnBlogPost | Tag`.
+   `RelatedEntityKind` is an internal enum: `None | User | Story | OwnStory | Chapter | OwnChapter | Group | GroupStory | OwnGroupStory | BlogPost | BlogPostDirect | OwnBlogPost | Tag`
+   (the `Own*` kinds are the recipient splits described under "Three blog-post kinds" and
+   "Story-family kinds by recipient" below).
 3. **Batch-load** each kind present on the page in one query per kind:
    - Group the materialized row ids by kind; skip empty sets. Every kind's PK is `int`, so each
      `long` id set is narrowed to `int` first (ids above `int.MaxValue` simply miss) — the SQL stays
@@ -1608,14 +1610,15 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
 
 **`TargetContextTitle` — the second name a junction or child anchor yields (WU-InertFeatures,
 2026-09-30).** Resolving the one anchor can name a second object for free; the DTO carries it as an
-optional trailing `TargetContextTitle` (null unless the kind supplies one). `GroupStory` →
-Title = group name, Url = `/group/{GroupId}` (link target unchanged from the group-id era),
-ContextTitle = story title; the group read is the same elevated `IgnoreQueryFilters(["GroupAudience"])`
-as the `Group` kind. `Chapter` → Title = chapter title, ContextTitle = story title (used by type 10).
-A deleted junction row (`RemoveStoryAsync`) is a miss → title-less, non-navigating — the designed
-graceful path, accepted by D16.
+optional trailing `TargetContextTitle` (null unless the kind supplies one). `GroupStory` and
+`OwnGroupStory` → Title = group name, Url = `/group/{GroupId}` (link target unchanged from the
+group-id era), ContextTitle = story title; the group read is the same elevated
+`IgnoreQueryFilters(["GroupAudience"])` as the `Group` kind. `Chapter` and `OwnChapter` → Title =
+chapter title, ContextTitle = story title (used by type 10). A deleted junction row
+(`RemoveStoryAsync`) is a miss → title-less, non-navigating — the designed graceful path, accepted by
+D16. Which recipients may see the story's name at all is "Story-family kinds by recipient" below.
 
-**Extra queries:** at most as many as distinct kinds appearing on the page (max 9 — one per non-`None` kind; typically 1–3). Never N+1.
+**Extra queries:** at most as many as distinct kinds appearing on the page (max 12 — one per non-`None` kind; typically 1–3). Never N+1.
 
 **Forward-compat:** kinds whose triggering feature isn't built yet produce no rows, but their `KindFor` branch
 is coded now — dormant branches compile and need no future edit.
@@ -1640,9 +1643,40 @@ here. Neither lookup applies `IgnoreQueryFilters`: the `IsTakenDown` named filte
 purpose, so a taken-down post drops out to the graceful no-title fallback. Before the split, a
 notification minted while the author was visible kept showing the post's current title, and a
 title edited after the author went Private, beside a link that 404'd; `PollUpdated`'s copy was held
-title-free until it was fixed. `NewStoryComment` maps to `Chapter` (deep-links the comment to its chapter);
-`NewCommentOnYourProfile` maps to `User`; `CommentReply` stays `None` (one cross-context type cannot
-map to one table — non-navigating, known minor UX gap).
+title-free until it was fixed. `NewStoryComment` maps to `OwnChapter` (deep-links the comment to its
+chapter; its recipient is the story's author); `NewCommentOnYourProfile` maps to `User`; `CommentReply`
+stays `None` (one cross-context type cannot map to one table — non-navigating, known minor UX gap).
+
+**Story-family kinds by recipient (tracker D21, WU-D21Confidentiality 2026-10-14).** The rule: **a
+notification never names or links a story outside the public window (`Draft`, `PendingApproval`,
+`Rejected`) or taken down, unless its recipient is the story's author.** It is the settled Class-A rule
+(`ReadOnlyApplicationDbContext`'s `StoryStatus` filter, "confidentiality, not consent", WU-AccessGate2
+2026-07-23, plus the `IsTakenDown` removal filter) applied at enrichment time. Enrichment is the only
+place that can hold it: a notification outlives the state it was minted in (a story unpublished or
+taken down after its fan-out), and some producers mint while the story is still unpublished (an author
+filing their own draft into a group, which decision row 31 leaves open; a lineage request from a draft
+source; a credit on a draft). The mechanism is the blog-post kinds': each story-family kind splits by
+who the recipient is, so the enricher stays recipient-agnostic for the email composer.
+
+| Kind pair | Recipient is the story's author — resolved as stored | Recipient is anyone else — public window, not taken down |
+|---|---|---|
+| `OwnStory` / `Story` | 20, 21, 22, 27, 71, 75, 78, 79, 91 | 11, 12, 40, 41, 42, 43, 50, 51, 52, 92 |
+| `OwnChapter` / `Chapter` | 24 | 10 (the chapter must also be published) |
+| `OwnGroupStory` / `GroupStory` | 25 | 60 (only the story's title drops) |
+
+- **The filtered lookups read `Stories` with `ContentRating` and `StoryStatus` lifted by name** and
+  the window restated without that filter's viewer clause: the filter exempts the *active user* when
+  they are the author, the email composer has no active user, and these recipients are not the author
+  by construction. `IsTakenDown` stays active, as on the blog-post kinds. Rating stays unfiltered
+  (Personal plane). The chapter clause is `StoryVisibilityGuard.IsChapterVisibleAsync`'s rule: an
+  unpublished chapter is its author's alone.
+- **Rendering follows D8: a hidden story is a lookup miss.** `Story` and `Chapter` drop the whole
+  target, and the notification renders its type's title-free arm, with no link. A `GroupStory` target's
+  title and link are the *group*, which the member can still open, so only `TargetContextTitle` drops
+  ("A new story was added to {group}"). The notification row is never deleted.
+- **Classifying a new type:** a type goes in an `Own*` kind only when its recipient is always the
+  referenced story's author. Anything else, or any doubt, takes the filtered kind: a wrong `Own*` arm
+  is a leak, and a wrong filtered arm only costs an author their own title.
 
 ## Service Composition
 

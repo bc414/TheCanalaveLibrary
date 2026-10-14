@@ -119,6 +119,21 @@ Doc-Touch moment 1; do not revisit).** Rule text: `layer2-services.md` §"Polymo
 - **`PollUpdated` (100) names its post again** ("A poll you voted on in {post} was changed"), the copy
   the WU-NotificationCorrectness review fixes held back until this was built.
 
+**Settled — story-family targets by recipient (tracker D21, recorded 2026-10-14 at
+WU-D21Confidentiality's Doc-Touch moment 1; do not revisit).** Rule text and the type table:
+`layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by recipient". Decided by the
+settled Class-A rule (`StoryStatus` + `IsTakenDown`), not by an owner row:
+- **A notification never names or links a story outside the public window (Draft, PendingApproval,
+  Rejected) or taken down, unless its recipient is the story's author.** An unpublished chapter is the
+  author's alone too.
+- **Built the D8 way:** `Story`, `Chapter` and `GroupStory` each split into an `Own*` kind (recipient
+  always the story's author; resolved as stored, unchanged) and a filtered kind (everyone else). The
+  enricher stays recipient-agnostic.
+- **Rendering follows D8:** a hidden story is a lookup miss, so the type's existing title-free arm
+  renders, with no link. `GroupStory` keeps the group's name and link and drops only the story title.
+- **Not decided here:** whether an author may file their own unpublished story into a group at all
+  (decision row 31, tracker F28). Whichever way it goes, the members' 60 no longer names the story.
+
 ## WU-TagFanon slice (2026-07-26) — F41/F42 L2 stay Stage 5
 
 `TagUpdateSuggestion = 26` finally has a sender. The seam was fully provisioned (enum value,
