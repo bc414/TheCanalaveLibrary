@@ -157,6 +157,12 @@ WU-AuthorStoryDelete, promoted out of **F24**: five edges of D15 that its text d
 the same day by WU-PrivateMessageEmail, promoted out of **F25**: four choices its build derived where
 D18's text is silent or contradicts itself; its review fixes added a fifth, (e). Row 29 was added the same day by WU-ParityAndRemaining, promoted out of **F26**: a cross-cutting edit-under-takedown question no D-row covers (its spec proposed a worksheet D48; it is filed here, the campaign's ledger for questions the worksheet did not ask). Row 30 was added 2026-10-13 by WU-TrackerFixes, promoted out of **F27**: the site-announcement half of B17's scope boundary, which its spec called an open owner call.
 
+**More open decisions live outside this table.** The unticked rows of
+`.claude/design/audit-decision-worksheet.md` (D20's bounds/caps half, D25–D47) are open owner
+decisions too. They stay in the worksheet, which carries their evidence and options, and are not
+copied here; this table holds the rest: launch questions, and edges a worksheet answer left
+unruled (WU-DocCorrections, 2026-10-13).
+
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
 | 4 | **Launch-readiness mechanics** — the full Phase 7 checklist above. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Gates Phase 7. |

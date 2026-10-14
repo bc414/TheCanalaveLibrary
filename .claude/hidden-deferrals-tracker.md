@@ -2658,6 +2658,37 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     "Sign in" link touches the form's first label ("Title"). The old `InlineAlert` had the same slot;
     the link made the crowding visible. The parent spaces it (Outer Margin Rule).
 
+- [ ] **H41 — Service-layer pattern-uniformity residue (service audit §4)** `[polish · low · anytime]` — *Filed 2026-10-13 by WU-DocCorrections.*
+  - Grid: no cell moves. These are code-shape items under Stage-5 L2 cells; service audit §4 routed only
+    their doc half to a WU. The list was re-derived from the code on 2026-10-13: WU-ModerationIntegrity
+    had already removed every private role-guard copy, the six private `RequireAuthenticatedUser`
+    methods and `ServerTagWriteService`'s `db` field name.
+  - **Inline authentication checks.** These behave exactly like the shared `ActiveUser.RequireUserId()`
+    (anonymous → `InvalidOperationException` → 401) but repeat it inline:
+    `ServerBlogPostWriteService` (7 sites), `ServerCommentWriteService` (7), `ServerFanonWriteService` (3),
+    `ServerPollWriteService` (2), `ServerUserStoryInteractionWriteService` (2), and one each in
+    `ServerGroupWriteService.CreateGroupAsync`, `ServerStoryWriteService.CreateStoryAsync`,
+    `ServerSpotlightWriteService`, `ServerContentRevealService` and `ContentRevealRecorder`. Two private
+    copies of the guard: `ServerUserSettingsService.RequireCurrentUserId` and `BadgeEndpoints.RequireUserId`.
+    Three protected `RequireAuthenticatedUser()` wrappers delegate to the shared guard
+    (`ServerStoryAcknowledgmentReadService`, `ServerMessagingReadService`, `ServerStoryLineageReadService`);
+    only their name differs. Converting all of these changes no behavior. Rule:
+    `identity-and-authorization.md` §"Active-User Context" → "The two shared guards".
+  - **An anonymous caller answered 403, not 401** (`UnauthorizedAccessException`):
+    `ServerFanonReadService.GetMyAdoptionPageAsync` and `GetMyAdoptionIndexAsync` (anonymous only), and
+    three owner gates that fold "anonymous" into "not the owner": `ServerBlogPostReadService.GetForEditAsync`,
+    `ServerChapterReadService.GetChapterForEditAsync` and `ServerStoryWriteService`'s cover-change loader.
+    Splitting them changes a status code, so each needs a test.
+  - **Read-return collection types are mixed.** 15 `Task<List<T>>` against 47 `Task<IReadOnlyList<T>>`
+    on the Core `I*ReadService` interfaces (count 2026-10-13). `layer2-services.md` §"Id-Batch Parameters
+    Use `IReadOnlyList<T>`" covers parameters only; standardizing returns ripples into every client twin.
+  - **`UserDeletionService` has no Core interface.** It moved into `Server/Identity/` and took a primary
+    ctor (tracker H8); it is still registered as the concrete class and called only server-side. Whether
+    a server-only service needs an interface is the canonical-registration question, so it waits on
+    worksheet **D36**.
+  - **`IContentImportService` lifetime asymmetry** (singleton on the server). Blocked on worksheet
+    **D36/D37** (pending).
+
 ---
 
 ## Already-closed — do NOT re-report (checked during the 2026-07-24 audit)

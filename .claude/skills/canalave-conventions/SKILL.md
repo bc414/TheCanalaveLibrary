@@ -153,6 +153,29 @@ compiler error until some unrelated file's reference happens to break, if ever.
   `@Assets["PhysicalFolderPath/Component.razor.js"]` — the *physical* folder path, not the
   namespace. Folder renames break these silently (404 at runtime, no compile error).
 
+### Comments That Assert a Control (WU-DocCorrections, 2026-10-13)
+
+A comment that says a guard, filter, cascade, throttle or other control exists is a **claim about the
+code**, and later sessions trust it instead of re-reading the code. Service audit §4 (2026-08-03) listed
+about a dozen false ones. Some are load-bearing: WU-ParentVisibility found `JoinAsync` with no audience
+check because a comment said "the audience filter is active on writeDb too". It was not, so a user with
+mature content off could join an M-audience group.
+
+1. **Verify the claim when you write it.** Read the code that provides the control (the query filter's
+   declaration, the FK's `OnDelete`, the guard's call site). Never carry a claim from another comment,
+   a spec section or memory. If the control lives somewhere else, say where.
+2. **Correct a load-bearing false comment with a `CORRECTION (WU-X):` note** in place of the old text.
+   Say what it used to claim and why that was false, then what is true. "Load-bearing" means it
+   described a control that did not exist, so a reader would skip a check or "simplify" a real one away.
+   Precedents: `ServerGroupWriteService.cs` (`JoinAsync`) and `ServerCustomListWriteService.cs`
+   (`AddStoryAsync`), both WU-ParentVisibility. A stale citation or stale tense gets a plain rewrite.
+3. **A comment describes the current code, never a plan.** A rewritten comment must not add a guard,
+   pick a policy or pre-decide a pending owner row. If code and comment disagree in a way that looks like
+   a bug, fix the comment to match the code and file the bug on `hidden-deferrals-tracker.md`.
+4. **Cite convention docs by their current file and section.** `cross-cutting.md` was split on
+   2026-07-07 (its header lists where each section went), so a pre-split `cross-cutting.md` citation
+   usually names the wrong file. Re-point it when you touch the comment.
+
 ## Layer Files — Read Before Working
 
 Each file covers one layer of the architecture plus cross-cutting concerns. (Numbering note:

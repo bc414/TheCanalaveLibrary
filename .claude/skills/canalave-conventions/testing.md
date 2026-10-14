@@ -52,7 +52,8 @@ Unit test classes run in parallel (the Integration tier's assembly-wide
 
 The invariants this project most needs protected are **Postgres-specific EF behaviors**, not
 generic LINQ:
-- The `"ContentRating"` named query filter (`ApplicationDbContext.OnModelCreating`) — whether
+- The `"ContentRating"` named query filter (`ReadOnlyApplicationDbContext.OnModelCreating`; the write
+  context carries no filters since WU38) — whether
   it *translates to SQL* against the real provider, not just evaluates in LINQ.
 - The slug unique-filtered index (`StoryConfigurations.cs`,
   `HasFilter("\"slug\" IS NOT NULL")`).
@@ -70,7 +71,7 @@ with the actual `InitialSchema` migration (`Database.MigrateAsync()`, not `Ensur
 
 ## Driving the content-rating filter: fake `IActiveUserContext`, not real auth
 
-`ApplicationDbContext`'s query filter closes over an injected `IActiveUserContext` (see
+`ReadOnlyApplicationDbContext`'s query filters close over an injected `IActiveUserContext` (see
 `content-safety.md` "Content Rating Filtering" / `identity-and-authorization.md` "Active-User
 Context"). Integration tests need
 to flip `ShowMatureContent`/`UserId`/role flags per-test without a real sign-in flow, cookies,

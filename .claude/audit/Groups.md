@@ -42,7 +42,16 @@ conventions. **Do not revisit these.** Pointers:
    at write time: tier 1 = `ContentRating` named filter (model-level); tiers 2/3 = `ServerGroupWriteService`
    explicit checks. Violations throw `ContentRatingExceededException`.  
    See `content-safety.md` "Group Audience-Visibility Filter" and `layer2-services.md`
-   "Group Rating Waterfall"/"Group Membership and Role Model."
+   "Group Rating Waterfall"/"Group Membership and Role Model."  
+   *Correction 2026-10-13 (WU-DocCorrections, service audit §4 row 2):* tier 1 is not an add-time
+   gate. Since WU38 every named filter lives on `ReadOnlyApplicationDbContext`, and `AddStoryAsync`
+   loads the story from the unfiltered write context, so the adding member's own rating ceiling is
+   never consulted at add time. Tier 1 is a **display-side** property: group listings read
+   through the filtered read context and hide that story from that viewer. At add time the service
+   applies the kind-(g) confidentiality guard (`StoryVisibilityGuard.IsStoryPublishedAsync`, rating
+   axis lifted on purpose, WU-ParentVisibility) and tiers 2/3. The code is correct and deliberate;
+   only this note and the convention text were wrong. Rule: `layer2-services.md` §"Group Rating
+   Waterfall".
 
 2. **Membership — open join, permanent.** No approval, no kicking. Any authenticated user may join
    any visible group. See `layer2-services.md` "Group Membership and Role Model."

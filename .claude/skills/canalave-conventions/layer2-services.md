@@ -903,19 +903,26 @@ query filters resolve normally. Canonical example: `Server/Export/ExportEndpoint
 
 ## Group Rating Waterfall — Enforcement at Write Time
 
-Group content addition (`AddStoryAsync`, folder assignment) enforces a **three-tier waterfall** at
-write time. Tiers are checked in order; a violation at any tier throws `ContentRatingExceededException`:
+Group content is governed by a **three-tier waterfall**. Tier 1 applies when the content is read;
+tiers 2 and 3 are checked when a story is added (`AddStoryAsync`) or filed into a folder, and a
+violation of either throws `ContentRatingExceededException`:
 
 | Tier | Rule | Enforcement location |
 |------|------|---------------------|
-| 1 | User's site-wide filter (mature off → T ceiling) | Existing `ContentRating` named query filter on `Story`; already model-level — free, never bypassed |
+| 1 | Viewer's site-wide filter (mature off → T ceiling) | **Display side:** the `ContentRating` named query filter on `ReadOnlyApplicationDbContext`. Group listings read through it, so a story above the viewer's ceiling is hidden from that viewer. Not an add-time gate |
 | 2 | `story.Rating > group.MaxContentRating` | Checked in `ServerGroupWriteService.AddStoryAsync` before inserting `GroupStory` |
 | 3 | `story.Rating > folder.MaxRating` (when a folder is specified) | Checked in `ServerGroupWriteService` before inserting the story↔folder join |
 
-Tier 1 means a write service call that resolves `story` from the write DbContext will already have
-the content-rating filter applied — the story row simply won't load if it exceeds the user's
-ceiling (anon + mature-off users get `Rating.T` ceiling; authenticated + mature-on users get `Rating.M`).
-Tiers 2/3 are explicit `if` guards in the write service.
+**Tier 1 is not checked at add time** (corrected WU-DocCorrections, 2026-10-13; service audit §4 row
+2). This section used to say a write-side story load "already has the content-rating filter applied".
+That has been false since WU38 moved every named filter to `ReadOnlyApplicationDbContext`: the write
+context carries none (§"Content-Rating Filtering Lives on the Read DbContext"). `AddStoryAsync` loads
+the story from the write context and, at add time, applies only the kind-(g) **confidentiality** guard
+`StoryVisibilityGuard.IsStoryPublishedAsync` (rating axis lifted on purpose) plus tiers 2/3. That is
+deliberate: the rating axis at add time belongs to tier 2, which reports its own
+`ContentRatingExceededException`, and a viewer-ceiling guard would pre-empt it with a not-found (the
+rationale comment in `AddStoryAsync`; WU-ParentVisibility, `audit/Groups.md` F38–F40). Tiers 2/3 are
+explicit `if` guards in the write service.
 
 **Folder `MaxRating` ≤ group `MaxContentRating`:** the folder-create path (admin-only) enforces that
 a folder's ceiling cannot exceed the group ceiling. Attempting to create a folder with a higher
@@ -1087,23 +1094,36 @@ scoped dependency and call a **semantic per-event method** after their primary `
 
 ```csharp
 public class ServerFollowingWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
-    INotificationWriteService notifications)   // ← ordinary scoped dep
-    : ServerFollowingReadService(readDb, activeUser), IFollowingWriteService
+    INotificationWriteService notifications,   // ← ordinary scoped dep
+    ILogger<ServerFollowingWriteService> logger)
+    : ServerFollowingReadService(readDbFactory, activeUser), IFollowingWriteService
 {
     public async Task FollowAsync(int targetUserId)
     {
-        // ... primary work ...
+        int actorId = ActiveUser.RequireUserId();
+        // ... guards and primary work ...
         await writeDb.SaveChangesAsync();   // primary commit first
 
-        try { await notifications.NotifyNewFollowerAsync(ActorId, targetUserId); }
-        catch (Exception ex) { logger.LogError(ex, "Notification failed"); }
+        // (recipient, source): the followed user is notified, the follower is the source.
+        try { await notifications.NotifyNewFollowerAsync(targetUserId, actorId); }
+        catch (Exception ex)
+        {
+            // Best-effort swallow → Warning (logging.md §"Level semantics").
+            logger.LogWarning(ex, "NewFollower notification failed for user {UserId} following {TargetUserId}",
+                actorId, targetUserId);
+        }
     }
 }
 ```
+
+(Sample re-synced to `ServerFollowingWriteService.FollowAsync`, WU-DocCorrections 2026-10-13. The
+earlier sample injected `readDb` directly, logged at Error, and passed `(ActorId, targetUserId)` — the
+reverse of the real `(recipientUserId, followerUserId)` signature, so copying it notified the
+follower about themselves; service audit §4 row 4.)
 
 **Why best-effort post-commit:** the feature service and notification service share the same scoped
 `ApplicationDbContext`. By committing the primary work first, the change tracker is clean when
@@ -1123,7 +1143,21 @@ write, which keeps the DAG acyclic — see "The DAG rule" below. (Corrected WU-I
 2026-09-30: an earlier wording said it "composes read services for recipient resolution"; no
 implementation ever did.)
 
-**Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds its triggering feature; fan-out methods (new chapter, new story, etc.) land with their respective work-units when the triggering feature is Stage 5.
+**Semantic methods are added with their triggering feature.** Each `Notify*Async` method is built
+by the work-unit that builds the feature that fires it; a type seeded in `NotificationTypeEnum` with no
+producer yet is tracker **B24**. The multi-recipient fan-outs, as of 2026-10-13 (WU-DocCorrections,
+re-derived from `ServerNotificationWriteService`):
+- resolved here from `writeDb` — `NotifyNewGroupStoryAsync` and `NotifyNewGroupBlogPostAsync`
+  (`GroupMembers`), `NotifyNewChapterAsync` (`UserStoryInteractions`, WU-InertFeatures),
+  `NotifyNewProfileBlogPostAsync` (`FollowedUsers` plus the story's `UserStoryInteractions`) and
+  `NotifyNewSiteAnnouncementAsync` (`Users`);
+- supplied by the caller — `NotifyPollUpdatedAsync` (the poll's voters, read by
+  `PollEditNotificationSweeper`) and `NotifyTagAdoptionSuggestedAsync` (the authors
+  `ServerFanonWriteService` picked).
+
+Every other method has a single recipient named by its caller. (This paragraph used to say fan-out
+methods for "new chapter, new story, etc." would land later; the new-chapter one landed with
+WU-InertFeatures, 2026-09-30, and `NewStoryByFollowedUser` (11) still has no producer — B24.)
 
 ### Filtering semantics
 
@@ -1612,28 +1646,57 @@ map to one table — non-navigating, known minor UX gap).
 Feature services that span domains inject foundational services, not duplicate query logic:
 
 ```csharp
-public class ServerInteractionReadService(
-    ReadOnlyApplicationDbContext readDb,
-    IStoryReadService storyReadService) : IInteractionReadService
+// Abridged from Server/Spotlight/ServerSpotlightReadService.cs (GetActiveSpotlightsAsync).
+public class ServerSpotlightReadService(
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
+    IActiveUserContext activeUser,
+    IStoryReadService storyReadService,
+    IRecommendationReadService recommendationReadService,
+    ISiteSettingsReadService siteSettings) : ISpotlightReadService
 {
-    public async Task<StoryListingDto[]> GetFavoritesAsync(int userId)
+    public async Task<IReadOnlyList<SpotlightDisplayDto>> GetActiveSpotlightsAsync()
     {
-        var storyIds = await readDb.UserStoryInteractions
-            .Where(i => i.UserId == userId && i.IsFavorite)
-            .Select(i => i.StoryId)
-            .ToArrayAsync();
+        List<PlacementRow> rows;
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        {
+            rows = /* active placements, joined to the filtered Stories DbSet */;
+        }
 
-        return await storyReadService.GetListingsByIdsAsync(storyIds);
+        // The story cards come from the foundational service, not a re-transcribed projection.
+        StoryListingDto[] cards = await storyReadService.GetListingsByIdsAsync(
+            rows.Select(r => r.StoryId).Distinct().ToArray());
+        // ... pair each placement with its card (and its recommendation DTO) ...
     }
 }
 ```
 
+(Sample replaced WU-DocCorrections, 2026-10-13: the earlier one used a fictional
+`ServerInteractionReadService`, injected the read context directly instead of the factory, and passed
+an `int[]` parameter; service audit §4 row 8's adjacent drift.)
+
 **Building-block methods:** Foundational services expose methods designed for consumption by other
-services (`GetListingsByIdsAsync(int[] storyIds)`), not just by components.
+services (`GetListingsByIdsAsync(IReadOnlyList<int> storyIds)`), not just by components. Other
+composers of the same method: `ServerManualTreeSearchReadService`, `ServerTreeSearchReadService`.
 
 **The DAG rule:** Service dependencies form a directed acyclic graph. Composite services inject
-foundational services, never the reverse. `ServerInteractionReadService` → `IStoryReadService`
-is correct. `ServerStoryReadService` → `IInteractionReadService` is a design smell.
+foundational services, never the reverse. `ServerSpotlightReadService` → `IStoryReadService` is
+correct; `ServerStoryReadService` → `ISpotlightReadService` would be a design smell.
+
+**Write → write edges are a closed list.** A write service never injects another feature's write
+service, except these three sanctioned kinds (re-derived from the constructors 2026-10-13,
+WU-DocCorrections; service audit §4 row 8):
+1. **`INotificationWriteService`** — the standard dependency of every write service that fires a
+   notification (§"Notification Generation"). It injects no feature service back.
+2. **`IBadgeWriteService`** — `ServerRecommendationWriteService` and
+   `ServerStoryAcknowledgmentWriteService` award inline (§"Synchronous Inline Badge Awards"). It
+   injects only its two contexts.
+3. **`ServerChapterReadMarkWriteService` → `IUserStoryInteractionWriteService`** — a manual read-mark
+   is the durable producer of `MarkStartedAsync`/`MarkCompletedAsync` (§"`IsCompleted`
+   auto-producer"). There is no back-edge: the interaction service injects only its contexts and
+   `IActiveUserContext`.
+
+To re-check: `grep -rnE "I[A-Za-z]+WriteService [a-z_]+\s*[,)]" TheCanalaveLibrary.Server --include=*.cs`,
+ignoring the `*Endpoints.cs` files. A fourth kind is a design change: record it here first.
 
 **Hot-path escape hatch:** For performance-critical queries, a single optimized JOIN that bypasses
 composition is permitted as a documented exception. Interface and DTO don't change; only the method
@@ -1756,9 +1819,18 @@ OR-across-tags was "never deliberated" (§11); this toggle is a deliberate net-n
 ## `StoryFilterDto` + `GetListingsAsync` (WU23)
 
 **`StoryFilterDto`** (`Core/Discovery/`) is the source-agnostic filter criteria that `ResultsFilterPanel`
-emits and `GetListingsAsync` accepts:
+emits and `GetListingsAsync` accepts.
+
+**Historical WU23 sketch — the record below is not the shipped DTO** (bannered WU-DocCorrections,
+2026-10-13; service audit §4 row 9). The real `StoryFilterDto` is a `sealed record` of `init`
+properties with defaults, and has grown `IncludeMode` (tag AND/OR, §"Tag include-mode boolean
+lattice"), `IncludedShips` and `ExcludedShips` (WU-TagFanon); `Sort` defaults to `DatePublished` and
+`PageSize` to 20. Read
+`Core/Discovery/StoryFilterDto.cs` for the contract. The sketch is kept for the provenance of the
+"excluded by design" list below.
 
 ```csharp
+// Historical WU23 sketch, superseded — see the banner above.
 public record StoryFilterDto(
     string? TextQuery,                                       // FTS — Matches(); enables Relevance sort
     IReadOnlyList<int> IncludedTagIds,                      // must have all (AND join)
@@ -1770,14 +1842,25 @@ public record StoryFilterDto(
 ```
 
 **Excluded by design:**
-- Content rating — applied automatically by `ApplicationDbContext`'s named query filter (`IActiveUserContext`); not a caller concern.
+- Content rating — applied automatically by `ReadOnlyApplicationDbContext`'s named query filter (`IActiveUserContext`); not a caller concern. (The write context has carried no filters since WU38.)
 - The per-`SearchMode` default-settings matrix (§8.7, `DefaultUserStoryInteractionFilterSetting`/`UserStoryInteractionFilterSetting`) — deferred post-WU23 — **built in WU28**, see "Discovery Defaults + Random Batch (WU28)" above.
 - The **Source** axis — `GetListingsAsync` is `Source=All` only. Narrowed sources (bookshelves, profiles, groups) pass pre-selected IDs to `GetListingsByIdsAsync` instead.
 
 **`GetListingsAsync` two-step** (formerly "mirrors `GetRecentListingsAsync`" — that method was
-removed 2026-07-28, WU-Home; see `layer6-indexes.md` §"stories — the two discovery sort spines"):
+removed 2026-07-28, WU-Home; see `layer6-indexes.md` §"stories — the two discovery sort spines").
+
+**Historical WU23 sketch — the block below is not the shipped query** (bannered WU-DocCorrections,
+2026-10-13; service audit §4 row 9). It predates tag hierarchy roll-up, the `StoryCharacters` branch,
+ship filters and the restrict set. The two-step *shape* is still current: filter, count, page on scalar
+ids, then hand the id page to the presentation projection. The live code is
+`ServerStoryReadService.GetListingsAsync`: it opens a read context from the factory, applies the optional
+`restrictToStoryIds` narrowing (empty narrows to nothing) and the Personal-plane rating lift, resolves the
+`TagExpansionMap`, then calls `ApplyFilters(query, filter, expansion, viewerId, hasFts)`, which forwards to
+`StoryFilterPredicates.ApplyFilters` (`Server/Stories/`, shared with the Explore tab since
+WU-ExploreFilterAxes). Relevance and RecentlyRead fall back to `DatePublished` when they cannot apply.
 
 ```csharp
+// Historical WU23 sketch, superseded — see the banner above.
 // Step 1 — build filtered IQueryable<Story>, page on scalar IDs, capture TotalCount.
 IQueryable<Story> q = readDb.Stories.AsQueryable();
 if (filter.IncludedTagIds.Count > 0)
@@ -2529,6 +2612,23 @@ public interface IUserSettingsService
   service or a source switch.
 - Server impl uses `ReadOnlyApplicationDbContext` (`NoTracking`), never the write DbContext.
 
+**Variant: explicit `userId`, self-scope enforced at the edge — badge curation** (recorded as
+sanctioned, WU-DocCorrections 2026-10-13; service audit §4). The third self-referential shape, beside
+the no-`userId` `IUserSettingsService` and the `includePrivate` predicate above.
+`IBadgeReadService.GetMyBadgesForCurationAsync(int userId)` and
+`IBadgeWriteService.SetDisplayOrderAsync(int userId, …)` are "My" operations that take a `userId`,
+and the badge services **trust it**. That breaks rule 1 above on purpose: the same write service's
+`AwardAsync` legitimately targets *another* user server-internally (the recommendation and
+acknowledgment producers award the other party), so a blanket caller == target check inside the
+service would break it. Self-scope is enforced where the caller is known instead:
+- **HTTP:** `BadgeEndpoints` derives `userId` from `IActiveUserContext` and never accepts it from the
+  client (MA-601, 2026-07-17); `AwardAsync` is deliberately unmapped.
+- **Circuit:** the only UI caller, `SettingsPage` (an `[Authorize]` page), passes
+  `ActiveUser.UserId`.
+
+A new method on these interfaces follows the same rule: any `userId` reaching it from a client is
+derived at the edge, never bound from the request.
+
 ## Three-Tiered Validation
 
 **Tier 1 (Client + Server):** `DataAnnotations` on ViewModels. Immediate UX feedback via
@@ -2680,10 +2780,13 @@ shape) is pending and may revisit it. On WASM the twins are `ClientReportSubmiss
 `WriteRateLimitExceededException` from the body's `writeActionKind`, the shared client helper's rule
 since WU-ThrottleCoverage) and `ClientModerationRead/WriteService`.
 
-**DAG position.** `ServerModerationWriteService` injects `INotificationWriteService` (the standard
-cross-feature dep), `IWriteRateLimitService`, `UserManager<User>` (the security-stamp bump) and
-`IActiveUserContext`. It injects **no** feature service, read or write: target and author resolution
-read the unfiltered write context directly (`LoadModeratableAsync`, `ResolveAnswerableUserIdAsync`).
+**DAG position.** Besides its two contexts (the read factory and the write context) and its logger,
+`ServerModerationWriteService` injects `INotificationWriteService` (the standard cross-feature dep),
+`IWriteRateLimitService`, `UserManager<User>` (the security-stamp bump), `IActiveUserContext` and
+`IImageStorageService` (the cross-cutting blob store: a moderator hard delete of a story deletes its
+cover after the commit, owner ruling D14, WU-BlobCleanup). It injects **no** feature service, read or write:
+target and author resolution read the unfiltered write context directly (`LoadModeratableAsync`,
+`ResolveAnswerableUserIdAsync`). (Ctor re-read 2026-10-13, WU-DocCorrections.)
 (Corrected WU-ModerationIntegrity, 2026-09-30: this paragraph used to say it composes feature read
 services such as `IStoryReadService`; no version of the service ever did.)
 

@@ -45,9 +45,10 @@ Every moderator role gate, read or write, calls `RequireModerator()` — WU-Mode
 (2026-09-30) removed every private role-guard copy and the six private `RequireAuthenticatedUser`
 *methods*. **Not yet uniform:** inline authentication checks of the same meaning (`if (ActiveUser.UserId
 is not int id) throw new InvalidOperationException(…)`) remain in several write services (Comments,
-BlogPosts, Polls, Groups, Spotlight, Stories, Fanon); they behave exactly like `RequireUserId()`. New
-code calls the extension; converting the inline sites is service audit §4's pattern-uniformity residue
-(WU-DocCorrections files it on the tracker).
+BlogPosts, Polls, Groups, Spotlight, Stories, Fanon, UserStoryInteractions, ContentGate); they behave exactly like `RequireUserId()`. New
+code calls the extension; converting the inline sites is service audit §4's pattern-uniformity residue,
+filed by WU-DocCorrections (2026-10-13) as tracker **H41** with the full site list. H41 also lists the
+five gates that answer an anonymous caller 403 instead of 401.
 
 **What stays out, deliberately:** display name/avatar URL (presentation — comes via `UserCardDto` per
 view); `ReaderDisplaySettings` (already a separate cascading slim bag, a UI-layer concern — see
