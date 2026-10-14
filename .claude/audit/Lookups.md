@@ -6,14 +6,19 @@ split, no components. Every other folder FK-references these. All layers other t
 
 ## Shared Context
 
-**Artifacts:** `Core/Lookups/ModelEnums.cs` (all enums), `Server/Data/SiteConstants.cs` (string-key
-constants: `SiteBadges`, `SiteSearchModes`, `UserStoryInteractionFilters`), and the lookup/enum-mirror
-entities scattered in `Core/Models/` (`StoryStatus`, `TagType`, `ReportReason`, `ReportStatus`,
-`NotificationCategory`, `NotificationType`, `AcknowledgmentRole`, `RecommendationStatus`,
-`StoryLineageType` (renamed from `StoryRelationshipType` in WU42, 2026-07-12 — moved to
-`Core/Stories/`, not `Core/Models/`), `SearchMode`, `UserInteractionFilter`, `Theme`, `Badge`,
-`DefaultSearchSetting`). All seed data lives inline in `ApplicationDbContext.OnModelCreating` via
-`HasData`.
+**Artifacts (as of 2026-10-14):** `Core/Lookups/ModelEnums.cs` (all enums); string-key constants in
+`Core/Discovery/SiteSearchModes.cs` (`SiteSearchModes`, `UserStoryInteractionFilters`) and
+`Server/Badges/SiteBadges.cs` (the former `Server/Data/SiteConstants.cs` was retired 2026-07-31,
+WU-StatBadgeProducers); and the lookup/enum-mirror entities in their feature folders (the former
+`Core/Models/` folder is gone): `Core/Lookups/StoryStatus.cs`, `Core/Tags/TagType.cs`,
+`Core/Moderation/ReportReason.cs` and `ReportStatus.cs`, `Core/Notifications/NotificationCategory.cs`
+and `NotificationType.cs`, `Core/Collaboration/AcknowledgmentRole.cs`,
+`Core/Recommendations/RecommendationStatus.cs`, `Core/Stories/StoryLineageType.cs` (renamed from
+`StoryRelationshipType` in WU42, 2026-07-12), `Core/Discovery/SearchMode.cs`,
+`Core/Discovery/UserStoryInteractionFilterType.cs` (the former `UserInteractionFilter` catalog),
+`Core/Sprites/Theme.cs`, `Core/Badges/Badge.cs` and `Core/Discovery/DefaultUserStoryInteractionFilterSetting.cs`
+(the former `DefaultSearchSetting`). Seed data lives in the `IEntityTypeConfiguration<T>` classes in
+`Server/Data/Configurations/` via `HasData` (none in `ApplicationDbContext.OnModelCreating`).
 
 ---
 

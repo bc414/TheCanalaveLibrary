@@ -186,9 +186,9 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | Column | Kind | Source |
 |---|---|---|
 | `stat_date` | PK | the completed UTC day |
-| `total_users` | stock | `COUNT(User WHERE created_utc <= end-of-day)` |
-| `total_stories` | stock | `COUNT(Story WHERE published_date <= end-of-day AND published/visible)` |
-| `total_words` | stock | `SUM(Story.WordCount)` over published/visible stories — the same `published_date < end-of-day AND published/visible` predicate as `total_stories` (WU-CounterSymmetry, 2026-09-30; it used to sum every story, drafts and taken-down ones included). `Story.WordCount` itself counts published chapters only (`layer2-services.md` §"Word Count Is Computed Server-Side") |
+| `total_users` | stock | `COUNT(User WHERE created_utc < next-day-start)` |
+| `total_stories` | stock | `COUNT(Story WHERE published_date < next-day-start AND published/visible)` |
+| `total_words` | stock | `SUM(Story.WordCount)` over published/visible stories — the same `published_date < next-day-start AND published/visible` predicate as `total_stories` (WU-CounterSymmetry, 2026-09-30; it used to sum every story, drafts and taken-down ones included). `Story.WordCount` itself counts published chapters only (`layer2-services.md` §"Word Count Is Computed Server-Side") |
 | `new_users` | flow | `User.CreatedUtc`. **NOT NULL** since WU-SchemaHardening (2026-10-13): its one documented NULL case, a day before `created_utc` existed, cannot occur since the column is in `InitialSchema`, and the aggregator always writes a `COUNT(*)` |
 | `new_stories` | flow | `Story.PublishedDate` — the first-publication stamp (NULL = never published, so drafts, pending and rejected stories never count; WU-StoryLifecycle, D2) |
 | `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2). **Known divergence from `new_stories`:** no story predicate, and the anchor is stamped on the chapter's own first publish whatever its story's status — so chapters published inside a not-yet-live story (Draft/Pending, or later Rejected) count here while their story never counts in `new_stories`. Left as built pending `roadmap.md` decision row 16 (when does a chapter "go live" if its story isn't live?) |

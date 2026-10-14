@@ -41,7 +41,8 @@ silently overwrites its filter and database name. **Only the last call survives 
 migration.** The seven `user_story_interactions` filtered indexes were declared unnamed from WU0
 onward; the database contained only the last one (`has_started`) until 2026-07-07, while six
 bookshelf tabs ran unindexed — and the 2026-07-06 R4 audit ("all 7 justified, none dropped")
-audited the *config file*, not the database. Two rules fall out:
+audited the *config file*, not the database. Two rules fall out, and a third EF trap
+(WU-ModerationIntegrity) sits beside them:
 
 1. **Distinct indexes on the same columns need the name argument:**
    ```csharp

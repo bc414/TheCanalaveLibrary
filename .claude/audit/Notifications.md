@@ -5,9 +5,9 @@ pattern defined here (§9.4). Route `/notifications`.
 
 ## Shared Context
 
-**Entities (Core/Models/):** `Notification` (`RecipientUserId` Cascade, `SourceUserId` **SET NULL** — see
+**Entities (Core/Notifications/):** `Notification` (`RecipientUserId` Cascade, `SourceUserId` **SET NULL** — see
 correction note below — polymorphic `RelatedEntityId`, `DateCreated` default), `NotificationCategory` (9,
-seeded), `NotificationType` (~35, seeded with gap-based numbering, `DefaultEmailEnabled`/`DefaultCollapsed`),
+seeded), `NotificationType` (48 seeded rows as of 2026-10-14, gap-based numbering, `DefaultEmailEnabled`/`DefaultCollapsed`),
 `UserNotificationSetting` (sparse override, PK `(UserId,NotificationTypeId)` — stores `EmailEnabled` and
 `Collapsed`). **No services or components built prior to WU22.** The seed data here is one of the most
 complete parts of the model.
@@ -24,18 +24,19 @@ complete parts of the model.
    "toggles for in-app and email." The `UserNotificationSetting` table stores only `EmailEnabled` and
    `Collapsed` — there is no `InAppEnabled` column and no per-type in-app mute. This is a deliberate
    departure: in-app delivery is always-on for eligible recipients; no L1 schema change is planned.
-   The two user-settable fields are `EmailEnabled` (email side-channel, post-MVP) and `Collapsed`
+   The two user-settable fields are `EmailEnabled` (email side-channel, live since WU-NotifEmail 2026-07-31) and `Collapsed`
    (per-user display override of `NotificationType.DefaultCollapsed`, consumed by the notification
    panel). The §5.18 in-app toggle language should be understood as aspirational/stale.
 
 **Notification email fan-out — hook point documented (WU-Email, 2026-07-06); sequenced as
 WU-NotifEmail (2026-07-15); settled constraints revised 2026-07-31 (tracker B1):** `EmailEnabled`
-above is fully plumbed (written/read by the settings page via `SetSettingAsync`/`GetSettingsAsync`)
-but remains genuinely **unconsumed** — the create-core generates only in-app `Notification` rows;
-nothing sends mail off it. WU-Email built the transactional email seam
+drives real mail since WU-NotifEmail (2026-07-31, tracker B1): create-core enqueues `(Notification, id)`
+on the shared outbound pipeline (`Server/Email/`, generalized by WU-PrivateMessageEmail 2026-10-13) and
+`NotificationEmailComposer` resolves eligibility at drain time. *(Until 2026-07-31 it was plumbed but
+unconsumed; the history follows.)* WU-Email built the transactional email seam
 (`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see `audit/Identity.md` WU-Email Stage
 note) but deliberately scoped it to Identity's confirmation/reset/email-change flows only.
-**WU-NotifEmail** is where this gets consumed.
+**WU-NotifEmail** is where this got consumed.
 
 **Settled (do not revisit):**
 

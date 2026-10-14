@@ -11,8 +11,9 @@
 closing MA-108; formerly the top-level `SiteConstants.cs`).
 
 ## Feature 50 — Badge System
-- **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
-  complete (placeholder comment) but the shape is sound. Awaiting migration.
+- **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seeded (five badges —
+  BetaReader/Patron/Recommender/Architect/Artist — via `BadgeConfigurations.HasData`); migration-verified
+  (`InitialSchema`).
 - **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note; acknowledgment requests spend a `RepeatRequest` token, WU-ThrottleCoverage, 2026-10-13 — see its Stage note; curation's explicit-`userId` shape recorded as a sanctioned self-referential variant, WU-DocCorrections, 2026-10-13 — note directly below).**
   - **WU-DocCorrections Stage note (2026-10-13; service audit §4) — no flip, no code change.**
     `GetMyBadgesForCurationAsync(int userId)` and `SetDisplayOrderAsync(int userId, …)` break the

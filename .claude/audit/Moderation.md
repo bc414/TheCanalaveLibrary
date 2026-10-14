@@ -724,8 +724,9 @@ Doc-Touch moment 1, before implementation, because the plan contradicts settled 
   against content they authored (needs author-resolution across four content tables — its own WU)~~
   **closed by WU-ModerationIntegrity (2026-09-30)** — D8's `ReportedUserId` makes the history one
   predicate across every target type and the on-screen caveat is deleted (tracker B18);
-  BlogPost/Recommendation/PrivateMessage still have no report entry point; there is no role
-  grant/revoke capability anywhere.
+  ~~BlogPost/Recommendation/PrivateMessage still have no report entry point~~ *closed 2026-10-13 by
+  WU-TrackerFixes (tracker B17) — every allow-set type now has one; F46's WU-TrackerFixes Stage note*;
+  there is no role grant/revoke capability anywhere.
 
 **Settled — report lifecycle integrity (owner rulings D7/D8/D9 + service §2.1.2/§2.1.3/§2.4.4,
 answered 2026-08-04..06; recorded 2026-09-30 at WU-ModerationIntegrity's Doc-Touch moment 1; do not
@@ -945,8 +946,8 @@ WU-TrackerFixes browser pass, 2026-10-13, tracker **H38** closed; 5→1 at
 WU-TrackerFixes, 2026-10-13: `/mod/submissions`' three reject reasons no longer inherit a stale Sign-in
 flag, undriven — tracker **H38** step 7; its Stage note at the top of this section. Before that 5:
 the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed
-undriven; the browser pass drove them on circuit and WASM and returned it to 5 — browser-verification
-Stage note at the end of this section), L5 = 5, L6/L8 = N/A. WU-ModerationIntegrity's two F48 changes
+undriven; the browser pass drove them on circuit and WASM and returned it to 5 — the WU-StoryLifecycle
+browser-verification Stage note below), L5 = 5, L6/L8 = N/A. WU-ModerationIntegrity's two F48 changes
 (the queue read's service gate, `ReportedUserId` on the trust-waiver audit row) are in its Stage note,
 the last note of this section. The D1 guards, trust
 waiver, `SubmittedDate` and the takedown freeze landed beneath the other cells (Stage notes at the end
@@ -1339,7 +1340,11 @@ L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/
 precedent — functional browser verification is not the same as visual polish). L4.5-Browser —
 Stage 5 (WU39 drove it to 5; the review fixes lowered it to 1 because the business-rule refusals
 changed undriven; the browser pass the same day drove them inline on both render phases — tracker H19
-closed, browser-verification Stage note above). L5/L6/L8 — N/A.
+closed, browser-verification Stage note above). L5/L6/L8 — N/A (L5's N/A is under review: both
+`ClientExternalVerification*` services are built and registered, tracker **G4**, an owner call).
+**WU-TrackerFixes (2026-10-13), recorded under F48 — stage unchanged:** the Imports tab's account and
+link reject reasons reset the Sign-in flag (`ModSubmissionsPageImportsTests` +2); F48's browser pass
+drove the account tier, and the link tier is covered by bUnit only.
 
 **WU38d Stage note (2026-07-11) — author-facing half shipped:**
 - **L1:** migration `WU38d_StoryExternalLinks` (drop `story_imports`, create
@@ -1471,7 +1476,8 @@ review fixes pass one clock reading through, no flip;
 2026-09-30, WU-CounterSymmetry `total_words` predicate beneath L8, no flip;
 WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle review fixes before that):**
 L1–L3.5 = 5, L4 = 3, L4.5 = 5,
-L5/L6 = N/A, L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`
+L5/L6 = N/A (L5's N/A is under review: `SiteDailyStatEndpoints` + `ClientSiteDailyStatReadService`
+exist, tracker **G4**, an owner call), L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`
 (D2), with one known divergence from `new_stories` left for the owner (`roadmap.md` decision row 16) —
 see the two WU-StoryLifecycle Stage notes at the end of this section.
 

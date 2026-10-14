@@ -14,7 +14,7 @@
 > 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
 > narrow rendering deliberately unpolished, no visual pass yet.
 
-**Entities (Core/Models/):** `UserStoryInteraction` (the bit-packed hot table, PK `(UserId,StoryId)`),
+**Entities (Core/UserStoryInteractions/; `UserStoryRecommendationSource` in Core/Recommendations/):** `UserStoryInteraction` (the bit-packed hot table, PK `(UserId,StoryId)`),
 `UserStoryInteractionDate` (warm 1-to-1 partition), `UserStoryRecommendationSource` (sparse 1-to-1).
 **Fluent config:** composite keys, partition 1-to-1 cascades, and **seven filtered/covering indexes** on
 `UserId INCLUDE (StoryId)` filtered by each boolean (NAMED HasIndex calls since WU-L6 2026-07-07 —

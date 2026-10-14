@@ -2,7 +2,8 @@
 
 > **COMPLETE (audit 2026-07-17; fix passes closed 2026-07-18 by WU-AuditFixPass + WU-AuditFixPass-2
 > — see `fix-status.md` and `workplan.md`).** This tree is the audit's durable record, not live
-> work. Still-open remainders live in `deferred-work.md` and `hidden-deferrals-tracker.md` H8.
+> work. Still-open remainders live in `deferred-work.md` and `hidden-deferrals-tracker.md` H44
+> (split out of the ticked H8, which records the keep decision, on 2026-10-14).
 > The State table below is the frozen as-of-2026-07-17 progress log.
 
 Plan of record: [plan-of-record.md](plan-of-record.md) (v3, approved 2026-07-17; copied into the

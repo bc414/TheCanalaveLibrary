@@ -195,7 +195,7 @@ the gate removed). Every cell stays 5.
   in a real WASM runtime during the flip's browser wave. Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip. **L6 — Stage 5 (WU-L6, 2026-07-07** — golden index built +
   measured −98.8% on the roots page; see the Feature 23 L6 note).
-- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):**
+- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23; the muted '(edited)' marker since WU-ParityAndRemaining, 2026-10-13, RazorComponents `CommentItemTests`, browser-driven the same day — Stage note below Feature 26; Report wired for signed-in viewers only since the WU-TrackerFixes browser pass, 2026-10-13 — Stage note at this feature's top):**
   Built `CommentEditor` leaf (shared editing surface), `CommentItem` leaf, and `CommentSection`
   coordination composite, all in `TheCanalaveLibrary.SharedUI/Comments/`. The three components cover all
   four features (23–26) in one integrated work-unit.
@@ -332,7 +332,7 @@ the gate removed). Every cell stays 5.
   (chapter-scoped, not `BaseComment`) — exactly §5.9.1. However the property was **missing from the entity**
   and the DB had no `is_spoiler` column despite L1 being previously marked Stage 5. WU19 added
   `public bool IsSpoiler { get; set; }` to `ChapterComment.cs` and generated migration
-  `20260623222518_AddIsSpoilerToChapterComment` (`is_spoiler boolean NOT NULL DEFAULT false`). The same
+  `20260623222518_AddIsSpoilerToChapterComment` (`is_spoiler boolean NOT NULL DEFAULT false`; squashed into the regenerated InitialSchema, 2026-07-18). The same
   migration also corrected a stale FK name: `fk_base_comments_base_comments_chapter_comment_comment_id` →
   `fk_base_comments_chapter_comments_chapter_comment_comment_id` (was pointing at `base_comments` instead
   of `chapter_comments`). Applied via `DataSeeder.MigrateAsync()` on startup.

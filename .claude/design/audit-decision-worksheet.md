@@ -938,7 +938,9 @@ it).
 the `Group = 6` enum member. It blocks the *report-submission* half — until (b) is answered, allowing
 users to file Group reports creates queue rows nobody can action, which is the zombie-report shape
 D7 exists to eliminate. If WU-GroupAdminRescue lands first, it should add the enum member for its own
-ledger rows without exposing a user-facing "report this group" control.
+ledger rows without exposing a user-facing "report this group" control. *(2026-10-13: the "lands
+first" branch happened. WU-GroupAdminRescue's scope was built as WU-UserDeletion Part B, `Group = 6`
+is ledger-only, and no report-this-group control exists. (a)'s floor holds, and (b) is still open.)*
 
 *Consequence to record wherever (b) lands.* If group removal is ever built, every member's
 `GroupsJoined` falls for a reason they did not cause — see D21's conditional falling-count note and
@@ -2472,7 +2474,10 @@ migration path).
 
 ## Block I — Platform conventions
 
-Gates WU-ParityAndRegistration and the doc-correction pass.
+Gated WU-ParityAndRegistration (built as WU-ParityAndRemaining, 2026-10-13) and the doc-correction
+pass (WU-DocCorrections, 2026-10-13). Both landed with D36–D39 pending, so no registration-shape
+change was made. Answers here now route to service audit §2.7.2's seven-cluster DI sweep and
+tracker **H41**'s D36/D37 residue.
 
 ### D36. Canonical DI registration shape
 

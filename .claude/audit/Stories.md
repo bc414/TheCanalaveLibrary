@@ -34,15 +34,15 @@ in the character-chip projections in `ServerStoryReadService`. The read service 
 
 **Services:** `IStoryReadService` / `IStoryWriteService` (Core) + `ServerStoryReadService` /
 `ServerStoryWriteService` (Server, direct-injection pattern per spec §6.6 — see RESOLVED note below) +
-`HttpStoryReadService` / `HttpStoryWriteService` / `HttpStoryOverviewService` (Client). `StoryEndpoints`
+`ClientStoryReadService` / `ClientStoryWriteService` (Client, WU-L5Sweep; the pre-WU12 `HttpStory*`
+classes were deleted 2026-06-27). `StoryEndpoints`
 (Server) maps the API.
 
 **Components (SharedUI):** `StoryPage` (dispatcher, `/story/{StoryId:int}/{Slug?}`),
-`StoryDesktop`/`StoryMobile` (stubs), `StoryPropertiesForm` + `StoryPropertiesViewModel` (now
+the former `StoryDesktop`/`StoryMobile` stubs (merged into `StoryPage` 2026-07-18), `StoryPropertiesForm` + `StoryPropertiesViewModel` (now
 `SharedUI/Stories/` — moved out of the legacy `Components/StoryProperties/` folder ahead of the
-cluster's actual build; see `canalave-conventions/SKILL.md` "Code Organization"). **The relocation is
-folder-only — content is unchanged and remains the Stage-4 build-to-spec scaffolding described in
-Feature 4 below; do not treat the new location as endorsement of the existing content.**
+cluster's actual build; see `canalave-conventions/SKILL.md` "Code Organization"). (Relocated ahead of the
+cluster's build; rebuilt by WU24 — see Feature 4 L3.5.)
 
 **Fluent config:** inline in `ApplicationDbContext.OnModelCreating` — Story FK fan-out (Cascade to owned
 collections, Restrict to `StoryStatus`, `SetNull` author anonymization), partition 1-to-1s, FTS computed
@@ -120,8 +120,8 @@ WU-AuthorStoryDelete 2026-10-13). Do not revisit:**
 - tracker **F13** site 5: open reports on the deleted story and its comments stay Open, out of the queue.
 Rule of record: `layer2-services.md` §"Author story deletion".
 
-- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note; `ck_stories_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note at the end of this feature).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
-  Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note; `ck_stories_published_date` since WU-SchemaHardening, 2026-10-13 — the WU-SchemaHardening Stage note among Feature 4's Stage notes).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
+  *Settled:* three-table vertical split;
   slug server-generated; explicit-interface edit contract. **Settled by owner ruling D1 (worksheet
   2026-08-04), before the WU-StoryLifecycle build (2026-09-30) — do not revisit: status is off the
   property-edit path.** `StoryStatusId` is not on `IEditableStoryProperties`/`CreateStoryDTO` and the
@@ -1450,7 +1450,7 @@ read from the network log. AuthorBeta requested three Inspired-By links into Aut
     `StoryLineageApproved`, because an unread one for the same target story (7) already existed: the
     notification service's existing dedup. The console was clean.
 
-### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — F8/F9/F10 L4.5 5→1 at its review fixes and 1→5 at its browser pass the same day (tracker H33 closed); every other cell stays 5
+### Features 8, 9, 10 (and 45) — WU-ThrottleCoverage Stage note (2026-10-13; owner ruling D20's throttle half) — F8/F9/F10 L4.5 5→1 at its review fixes and 1→5 at its browser pass the same day (tracker H33 closed); every other cell keeps its stage
 
 D20 (answered 2026-08-07) ruled that every user-reachable write either spends a bucket or is
 enumerated as exempt with its reason (`security.md` §"Write Throttling"). Here:

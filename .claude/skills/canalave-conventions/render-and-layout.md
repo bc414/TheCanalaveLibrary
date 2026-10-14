@@ -245,9 +245,9 @@ Exposes `<CascadingValue Value="@_themeContext">`.
 the resolved sprite URL is byte-identical across the SSR→interactive handoff → **no flicker**.
 This carries into WASM: the server serializes all claims into the persisted auth state
 (`AddAuthenticationStateSerialization(o => o.SerializeAllClaims = true)`), so the same two
-claims are readable client-side. Routes' cascade can't cross into a WASM island, so an island
-page wraps its own content in `<ThemeContextProvider>` (see `TagDirectoryPage`,
-`layer5-wasm.md` §"ThemeContext in WASM").
+claims are readable client-side. Routes' cascade can't cross into a WASM island, so a page run
+as an island (none today: global interactivity) would wrap its own content in
+`<ThemeContextProvider>` (`layer5-wasm.md` §"ThemeContext in WASM").
 
 **Consumer pattern** (`TagChip.razor`, `TagSelector.razor`, `CharacterEntry.razor`):
 
@@ -270,8 +270,12 @@ on both Server and Client. The `IActiveUserContext`-never-in-SharedUI rule is un
 preference (theme slug, `prefers_animated_sprites`, `show_mature_content`) is a point-in-time copy
 made by `ApplicationUserClaimsPrincipalFactory` when the auth cookie is issued. A settings save
 updates the database, not the cookie: an interactive circuit **cannot** reissue the cookie
-(`RefreshSignInAsync` needs an HTTP response to write to — only the static-SSR Identity pages call
-it). Consequence: changes to these preferences take effect at the next sign-in. Do not chase the
+(`RefreshSignInAsync` needs an HTTP response to write to). Only full-document endpoints call it: the
+static-SSR Identity pages and `ContentGateEndpoints`. `show_mature_content` is the exception that
+refreshes at once: the settings save force-loads `/content-gate/refresh-claims`, and the interstitial
+posts to `/content-gate/mature` (WU-AccessGate; `identity-and-authorization.md` §"Responsive
+`ShowMatureContent` (MA-605 closed)"). Consequence: theme slug and `prefers_animated_sprites` changes
+take effect at the next sign-in. Do not chase the
 gap as a bug, and do not attempt a circuit-side refresh hack; if a future requirement demands
 immediacy, the shape of the fix is an SSR round-trip that reissues the cookie. (Flagged in the
 factory's header since WU12; browser-verified end-to-end in `audit/Sprites.md`, 2026-07-02.)

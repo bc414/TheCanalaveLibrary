@@ -52,7 +52,7 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   last item).** Items 2–8 are DONE (Series/Story Lineage/Saved Tag Selections, Manual+Automatic
   Tree Search, Account Deletion UI, External Link Verification, Export/Import, AccessGate) — full
   detail: `middle_plan_v2.md` Phase 2. Item 1, WU-Home, is DONE ✓ (2026-07-28) — decision row 2
-  resolved and built; see §Resolved above and `workplan.md`'s DONE entry.
+  resolved and built; see §Resolved below and `workplan.md`'s DONE entry.
   **WU-AccountEnforcement (residual) — DONE ✓ (2026-07-30).** Core login-blocking + banner shipped
   inside WU38a (2026-07-11); the mid-session-responsiveness residual is closed. `RefreshSignInAsync`
   turned out not to be the tool — it reissues only the *caller's* cookie, and a moderator cannot
@@ -75,7 +75,9 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
 - **Phase 5 — L5 WASM enablement — DONE ✓ (2026-07-13, WU-L5Sweep + WU-GlobalFlip).** One
   Phase-5-adjacent follow-up remains — see "Recommended next work units" below.
 - **Phase 6 — Beta — not started.** Small audience from the existing community. Entry gate:
-  Phases 0–3 done (0/1 already are), every Phase 4 item resolved (is), email live (is).
+  Phases 0–3 done (0–2 already are), every Phase 4 item resolved (is), the email mechanism built and
+  Mailpit-verified (is) — but real-inbox delivery needs decision row 8 and the Phase-7 "Sending-domain
+  DNS" item before beta invitations go out.
   **Blocked on decision row 6** below. *(**WU-NotifEmail** was sequenced at this gate until
   2026-07-31, when it moved to Tier 2 of "Recommended next work units" — see that row for why.)*
 - **Phase 7 — Launch readiness + Launch (DigitalOcean) — not started.** Topology settled: droplet
@@ -126,9 +128,16 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
     the upload pipeline). **Only 4.1.2+ clears the scan:** the GitHub-reviewed ranges, as recorded
     on 2026-10-12, run to `<= 4.1.1`, so 3.2.x carries the fixes but stays listed, and the hard gate
     stays blocked until GitHub amends them. See `security.md` §"Upload Content Pipeline".
+  - **Security Phase-7 Deferred Register** (tracker **E3**, `high`; `security.md` §"Phase-7 Deferred
+    Register") — Cloudflare Full (Strict), the origin firewall restricted to Cloudflare ranges,
+    `ForwardedHeaders` (`CF-Connecting-IP`), user uploads from a separate origin + CSP `img-src`
+    tightening, Turnstile on registration, HSTS tuning, CSP-enforce verification on the real domain,
+    and a patched .NET runtime on the host. *(Added 2026-10-14: the register had no bullet here,
+    though E3 and the verified-crawler item below both pointed at one.)*
   - **TLS/domain** (Cloudflare Registrar).
-  - **Activate verified-crawler serving** — flip `Seo:TrustVerifiedBots` once the origin-lockdown
-    item above lands, and verify the real Cloudflare verified-bot header contract at that time.
+  - **Activate verified-crawler serving** — flip `Seo:TrustVerifiedBots` once the security register's
+    origin firewall and `ForwardedHeaders` work (above) lands, and verify the real Cloudflare
+    verified-bot header contract at that time.
   - **Legal/policy track** — decision row 10 below; non-engineering, runs parallel, gates launch.
 
 ## Decisions that need you
@@ -216,18 +225,18 @@ done.
 | **2** | ~~WU-DiscoveryFilterRestore~~ **DONE 2026-07-28** | B11 | Device-local filter restore + ship seeding parity, shipped same day as decision row 13's resolution — see "Resolved" below |
 | **2** | ~~WU-SelectionPermalink~~ **DONE 2026-07-28** | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half, shipped same day |
 | **2** — continue the debt-paydown burst, clustered by shared surface | ~~WU-ApplyFiltersPurity~~ **DONE 2026-07-30** | B12 | Cached `ITagHierarchyReadService` restored `ApplyFilters` to pure/sync — no numbered decision row; resolutions recorded directly in `hidden-deferrals-tracker.md` B12 and `workplan.md`'s DONE entry |
-| **2** | WU-StatBadgeProducers (in progress, 2026-07-30) | B3 (partial), B4 | Scoped: builds the Story Acknowledgments feature (`AcknowledgedAsBetaReaderCount`) + a producer hook on the already-built `StoryLineage` approval (`AcknowledgedAsInspirationCount`); re-files `SpotlightCount` under B8 rather than building it. Surfaced a site-wide badge-tier retirement along the way — see Resolved below. |
+| **2** | ~~WU-StatBadgeProducers~~ **DONE 2026-07-31** | B3 (partial), B4 | Scoped: builds the Story Acknowledgments feature (`AcknowledgedAsBetaReaderCount`) + a producer hook on the already-built `StoryLineage` approval (`AcknowledgedAsInspirationCount`); re-files `SpotlightCount` under B8 rather than building it. Surfaced a site-wide badge-tier retirement along the way — see Resolved below. |
 | **2** | ~~WU-DataSaver~~ **DONE 2026-07-31** | B0 | Measured, not just decided — "suppress sprites, or cut the setting" turned out to have a wrong premise; see "Resolved" below |
 | **2** | ~~WU-DiscoveryOverrideUI~~ **DONE 2026-07-31** | B7 | Per-user filter-override editing surface (§8.7) — see "Resolved" below |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
-| **2** | WU-A11y (Structure) | F6 (static half) | Decision row 12 resolved 2026-07-31 (sweep by defect class, no fourth test tier, extract `Modal`, Identity in scope). Static/naming pass — labelling, validation association, `Modal` primitive, image `alt`, mechanical gates. Does not need the L4 sweep; sequenced here. See "Resolved" below. |
+| **2** | ~~WU-A11y (Structure)~~ **DONE 2026-07-31** | F6 (static half) | Decision row 12 resolved 2026-07-31 (sweep by defect class, no fourth test tier, extract `Modal`, Identity in scope). Static/naming pass — labelling, validation association, `Modal` primitive, image `alt`, mechanical gates. Does not need the L4 sweep; sequenced here. See "Resolved" below. |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y-Keyboard | F6 (keyboard half, filed 2026-07-31) | Focus trap, Escape, combobox ARIA, manual keyboard script. Needs Brian's browser pass — pairs with the sweep as originally scoped. |
 | **4** | ~~WU-SweepRiders~~ **DONE 2026-07-31** | H1, E4, H8 | Pulled ahead of the Phase 3 sweep rather than ridden alongside it — H8 was a decision that needed settling before the sweep styles ~1,325 LOC of Identity scaffold, not during it; H1 turned out to need no code change (stale tracker context — verified already-resolved) and E4 was small enough to travel with H8. See "Resolved" below. |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
 | **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens. **New dependency (2026-08-01):** tracker **B19** — there is no role grant/revoke capability anywhere, so a second moderator can only be created by editing `DataSeeder` and rebuilding the DB. Needs building if beta involves anyone moderating but Brian. |
 | **2** | ~~WU-UserModeration~~ **DONE 2026-08-01** | B13 (opens B17/B18/B19) | Filed as `polish · low`; was the tip of an **unusable moderation feature** — nothing could report a User, and `/mod/reports`' Warn control threw for every report that could actually exist, so nobody could be warned, suspended or banned. See "Resolved" below. |
-| **2** | WU-NotifEmail (in progress, 2026-07-31) | B1 | **Pulled off the Phase-6 gate 2026-07-31.** The old placement assumed a live audience was the forcing function and that the unchosen email provider was in the way; neither holds. Provider selection is a config switch over plain SMTP (decision row 8's *mechanism* half was resolved at WU-Email) and the whole path is Mailpit-verifiable today, so there is nothing a beta audience teaches that a dev inbox doesn't. Building it before beta also means the settings page stops lying to the first real users. Does **not** close row 8 / F4 — deliverability (provider, sending domain, SPF/DKIM/DMARC) stays at Phase 7. Settled constraints: `audit/Notifications.md` §"Notification email fan-out." |
-| **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
+| **2** | ~~WU-NotifEmail~~ **DONE 2026-07-31** | B1 | **Pulled off the Phase-6 gate 2026-07-31.** The old placement assumed a live audience was the forcing function and that the unchosen email provider was in the way; neither holds. Provider selection is a config switch over plain SMTP (decision row 8's *mechanism* half was resolved at WU-Email) and the whole path is Mailpit-verifiable today, so there is nothing a beta audience teaches that a dev inbox doesn't. Building it before beta also means the settings page stops lying to the first real users. Does **not** close row 8 / F4 — deliverability (provider, sending domain, SPF/DKIM/DMARC) stays at Phase 7. Settled constraints: `audit/Notifications.md` §"Notification email fan-out." |
+| **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, ~~D5~~ (closed 2026-07-30, WU-ErrorHandling2), H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
 | **6** | WU-TestHygieneSweep | ~~H3~~ (closed with H31 by the WU-BlobCleanup browser pass, 2026-10-13), H4 (manual-verify half) | ~~Cover-art browser-verify~~ (done: H31's steps 1–5 drove the `InputFile` on both render phases), paste-from-Word manual check |
 | **6** | ~~*(fold H7 into whichever WU next touches the test suite, or its own pass)*~~ **DONE 2026-10-13 (WU-TrackerFixes)** | H7 | The C-consolidate merges, the last `Task.Delay` ordering hack and the `SeedUserStatAsync` hoist — see `workplan.md` WU-TrackerFixes |
 | **6** | *(standalone, own WU whenever convenient)* | ~~A6~~ **DONE 2026-07-31** (WU-ExploreFilterAxes), A7 | Discovery-adjacent but distinct from Tier 2's cluster (~~Explore filter axes~~; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function. A6 turned out to be a *design* reopen (a settled "not filtered" note) rather than the code task its one-liner implied — see "Resolved" below. A7 unchanged. |
@@ -248,9 +257,11 @@ priority is `high` because the five advisories are high/moderate, but the risk i
 every vector is unreachable through the upload pipeline. Only the owner can choose a license key,
 a library swap or standing risk (decision row 21); it gates the Phase 7 vuln-scan hard gate.
 
-Group G is fully closed (2026-07-30) — G1's genuine residual (mid-session account-status
+Group G was fully closed 2026-07-30 — G1's genuine residual (mid-session account-status
 responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above) shipped
-2026-07-30; nothing left to sequence.
+2026-07-30. It reopened 2026-10-14 with **G4** (F53/F62 L5 read N/A over built client impls) and
+**G5** (L4.5 cells reading 5 over the open runtime bugs H25 and E13), both filed by
+WU-DocCorrections' doc-audit probes; both are grid calls for the owner, so neither is sequenced here.
 
 ## Resolved
 
@@ -740,8 +751,8 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   the *gate* — every badge built under this model requires another person's cooperation per increment.
   Rule now stated in `layer2-services.md` §"Synchronous Inline Badge Awards"; provenance record in
   `audit/Badges.md` §"Tier paradigm — RETIRED site-wide"; `RecommenderSilver` added to
-  `scripts/check-doc-hygiene.ps1`'s retired-name registry. **Build in progress** — this entry records
-  the decision; `workplan.md`'s WU-StatBadgeProducers entry carries build/verification status.
+  `scripts/check-doc-hygiene.ps1`'s retired-name registry. **Built 2026-07-31** —
+  `workplan-archive.md`'s WU-StatBadgeProducers entry carries build/verification status.
 
 - **Decision row 13 — `/discover` URL state round-tripping (2026-07-28).** **`/discover` never
   carries filter state in its URL.** The row's original framing ("follow `TreeSearchPage`'s
@@ -796,7 +807,6 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   by the companion WU-SiteNews (`SiteBlogPost`, extends Features 35/36) on the same date. Detail:
   `audit/BlogPosts.md`, `audit/Seo.md`.
 
-*(Empty as of 2026-07-27 — this file was just created; the entry above is the first addition.
-New entries go here going forward, newest first, each pointing at the doc that now states the
-rule, same convention as the retired chain. The full historical Resolved index — every decision
+*(Newest first: new entries go at the top of this section, each pointing at the doc that now states
+the rule, same convention as the retired chain. The full historical Resolved index — every decision
 from 2025's design sessions through 2026-07-27 — lives in `middle_plan_v2.md` §Resolved.)*

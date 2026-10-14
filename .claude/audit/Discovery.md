@@ -31,8 +31,10 @@ below). Data marts: `AlsoFavoritedScore`, `AlsoRecommendedScore`, `UserStoryTree
 lives on `StoryListing.SearchVector` (generated `tsvector` column + GIN index
 `ix_story_listing_search_vector`, both in `OnModelCreating`).
 
-**Every layer of search/discovery is built as of WU-DiscoveryOverrideUI (2026-07-31).** The
-three-axis search engine (Source × Filter × Sort, spec §5.3) is fully implemented across L1–L6 —
+**Every applicable layer of search/discovery but one is built as of WU-DiscoveryOverrideUI
+(2026-07-31).** The three-axis search engine (Source × Filter × Sort, spec §5.3) is implemented at
+every applicable layer except F33 L6, which stays Stage 2 (no index work; whether a dedicated index
+is justified awaits an R4 measurement pass — F33 headline below) —
 this headline predates that work and is corrected here; see each feature's per-layer Stage numbers
 in `status.md` and the Stage notes throughout this file for what shipped and when.
 
@@ -279,7 +281,9 @@ random batch. Each fails with its fix reverted.
   Integration `DiscoveryFilterSettingsServiceTests`, browser-driven by its browser pass the same day,
   Stage note at the end of this feature).
   **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
-  WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
+  WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below; the
+  panel's page-size echo and persisted `TotalCount` since WU-TrackerFixes, 2026-10-13, and the
+  `/api/stories/query` empty-array L5 fix at its browser pass — Stage note at this feature's top).**
   **L4 — Stage 1.**
 - **L4.5 — Stage 5 (1→5 at the WU-TrackerFixes browser pass, 2026-10-13: the sorted page size follows the reader
   setting, driven on both render phases after two fixes (the empty WASM listing, the restored page's pager) — tracker H38 closed; 5→1 at WU-TrackerFixes earlier the same day; Stage note at this feature's top, with its review fixes the same day,
@@ -426,7 +430,7 @@ random batch. Each fails with its fix reverted.
     "likely composes into ResultsFilterPanel" guess. Instant-save per toggle, `NotificationSettingsPage`
     precedent. Reuses `UserStoryInteractionFilter.LabelFor` (promoted to `internal`) so the wording
     matches the live filter panel.
-  - **`UserCustomFilter` cut entirely** — see "Note on search-result narrowing" above.
+  - **`UserCustomFilter` cut entirely** — see "Note on search-result narrowing" below.
   - **`DefaultPaginationSize`/`DefaultSearchSort` wired into `SearchPage`:** replaces the hardcoded
     `RandomBatchSize = 20` and the hardcoded `Sort = Random` initial seed for authenticated
     viewers. `DefaultSearchSort` is applied only when it equals `DatePublished` — `Relevance`
@@ -587,7 +591,7 @@ each "off".
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',
   title || short_description)` — exactly the spec pattern (§5.3.2: FTS is a *filter*). Sound.
-- **L6 — Stage 5.** GIN index `ix_story_listing_search_vector` written and correct (awaiting migration).
+- **L6 — Stage 5.** GIN index `ix_story_listing_search_vector` written and correct (in `InitialSchema`).
 - **L2 — Stage 5** (WU28). **L3/L3.5 — Stage 5** (WU28). **L4 — Stage 1.**
   **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; the filtered `POST /query` path that carries the FTS filter

@@ -54,6 +54,7 @@ $retiredTerms = [ordered]@{
     'SelectedCoverFile (the two-step cover protocol, retired by owner ruling D14, WU-BlobCleanup 2026-10-13)' = '\bSelectedCoverFile\b'
     'rateLimitedAction / ReadRetryAfterSecondsAsync (the client reads the throttled kind off the 429 body, WU-ThrottleCoverage 2026-10-13)' = '\brateLimitedAction\b|\bReadRetryAfterSecondsAsync\b'
     'NotificationEmailBuffer / Worker / Flusher (generalized to the (kind, id) OutboundEmail* pipeline in Server/Email/, owner ruling D18, WU-PrivateMessageEmail 2026-10-13)' = '\bNotificationEmail(Buffer|Worker|Flusher)\b'
+    'SiteConstants.cs (split into Core/Discovery/SiteSearchModes.cs and Server/Badges/SiteBadges.cs, WU-StatBadgeProducers 2026-07-31; registered by the WU-DocCorrections doc-audit probes 2026-10-14)' = '\bSiteConstants\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a
@@ -61,6 +62,11 @@ $retiredTerms = [ordered]@{
 # Check 1 strips the term itself from the line before testing for a marker: a term that contains a
 # marker word ("[Deleted Comment]" contains "deleted") would otherwise exempt every line naming it.
 $historicalMarker = 'retired|superseded|replaced|REMOVED|removed|deleted|dissolved|former|pre-merge|absorbed|carri|historical|archived|cancelled|\bruled\b|dropped|exorcised|no longer|\bno\b|\bnot\b|\bCUT\b|folded|renamed|merged|used to|\bmoot\b|proposed|\bwas\b|\bwere\b'
+# Check 4 (missing files) uses a narrower marker: the bare negation/past-tense words no/not/was/were
+# appear on most prose lines, so on a line-wide test they hid real dead file names (the 2026-10-14
+# doc-audit probes found `SiteConstants.cs` and `ServerSpriteReadService.cs` cited as current behind
+# an unrelated "no" or "not"). A legitimate as-of-date mention of a missing file says so explicitly.
+$fileRefMarker = 'retired|superseded|replaced|REMOVED|removed|deleted|dissolved|former|pre-merge|absorbed|carri|historical|archived|cancelled|\bruled\b|dropped|exorcised|no longer|\bCUT\b|folded|renamed|merged|used to|\bmoot\b|proposed|moved'
 
 # Live docs: loaded-as-current conventions and orientation. Everything else is a dated record.
 # Deliberate exemptions:
@@ -136,10 +142,12 @@ foreach ($doc in $check3Docs) {
 # Docs rot silently when files are renamed/deleted (2026-07-27 found five such references:
 # LookupConfigurations.cs, HomeDesktop.razor, ImportModePicker, ...). Any `Name.ext` in a live doc
 # must exist somewhere in the repo (basename match — docs cite by name, not path), unless the line
-# carries a historical marker. Wildcards/placeholders (* { } < >) are skipped.
+# carries a historical marker ($fileRefMarker, narrower than Check 1's — see its comment).
+# Wildcards/placeholders (* { } < >) are skipped.
 $fileExtPattern = '`([A-Za-z0-9_\-./\\]+\.(?:cs|razor|ps1|md|js|csproj|sln|sql|yml|json))(?::\d+)?`'
-# Pedagogical placeholders and framework-served assets that are correct despite not existing on disk.
-$fileCheckAllowlist = '^(Foo\w*\.|Component\.razor\.|dotnet\.runtime\.js$|blazor\.web\.js$)'
+# Pedagogical placeholders and framework-served assets that are correct despite not existing on disk,
+# plus files the docs name only to say the project does not use them (Tailwind v4 has no config file).
+$fileCheckAllowlist = '^(Foo\w*\.|Component\.razor\.|dotnet\.runtime\.js$|blazor\.web\.js$|tailwind\.config\.js$)'
 $repoFileIndex = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 # -Force and the either-separator exclusion keep CI (Linux) in parity with Windows: on Linux every
 # dot-prefixed directory is hidden, so without -Force the index never sees .claude/ or .github/ and
@@ -152,7 +160,7 @@ foreach ($doc in $liveDocs) {
     # like `System.Text.Json` / `Results.Json` that only match case-insensitively.
     $hits = Select-String -Path $doc.FullName -Pattern $fileExtPattern -AllMatches -CaseSensitive
     foreach ($hit in $hits) {
-        if ($hit.Line -match $historicalMarker) { continue }
+        if ($hit.Line -match $fileRefMarker) { continue }
         foreach ($m in $hit.Matches) {
             $token = $m.Groups[1].Value
             # Normalize `\` first: Linux GetFileName treats it as a filename character.

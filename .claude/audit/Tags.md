@@ -74,8 +74,8 @@ no migration needed — Npgsql maps both `byte` and `short` to `smallint`). Dead
 
 **Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
 `canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
-alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
-unchanged and remains the discardable scaffolding described below, scheduled for the WU11 rebuild.**
+alongside it was deleted in the same move. (Relocated ahead of its rebuild;
+rebuilt WU11, then on `CanalaveTypeahead` at the Global Flip — Feature 14.)
 
 **Fluent config:** `Tag.TagName` unique (**WU27.5 changes to composite `(TagName, TagTypeId)` per
 `Tag_Design_Deliberations.md` §3 — so "Paris" can be both a Character and a Setting; migration required**);
@@ -86,7 +86,8 @@ self-ref `ParentTagId` SetNull; `TagType`/`Tag` Restrict; `SavedTagSelection` ca
 no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 
 **L1 drift (flag, not fixed in WU27.5):** `Tag.SpriteIdentifier` is `[MaxLength(50)]` but spec says 100;
-`Tag.Description` is 512 vs spec 500. Address in a future L1 pass.
+`Tag.Description` is 512 vs spec 500. Address in a future L1 pass. *Fixed 2026-07-26 by WU-TagFanon
+(tracker H6): 100 and 500 — its Stage note below.*
 
 ---
 
@@ -395,9 +396,11 @@ unchanged).
   each mutation checked against psql ground truth.
 
 ## Feature 12 — Story Tagging
-- **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterPairing` (renamed from
-  `StoryCharacterRelationship` in WU37), `SettingDetail` all present with priorities and pairing-type
-  conversion. *Note:* the spec's SQL-Server-era `TR_StoryCharacters_EnforceOCLogic` trigger is
+- **L1 — Stage 5.** `StoryTag` (with the nullable `CustomName`/`Nuance` overlay, WU-TagFanon
+  2026-07-26), `StoryCharacter`, `StoryCharacterPairing` (renamed from `StoryCharacterRelationship` in
+  WU37) + `StoryCharacterPairingMember`, with priorities and pairing-type conversion; gate
+  `Tag.AllowCustomName` (the former `SettingDetail` table and both `Allow*Details` flags were retired by
+  WU-TagFanon; WU37's additions below are history). *Note:* the spec's SQL-Server-era `TR_StoryCharacters_EnforceOCLogic` trigger is
   superseded by service-layer `StoryValidationException` (WU37 settled decision — see below).
   **L1 additions in WU37:** `Tag.AllowSettingDetails`; `StoryCharacterPairing` rename + `PairingType`
   field + `CharacterPairingType` enum; new `StoryCharacterPairingMember` first-class join; `UNIQUE(StoryId,
@@ -621,11 +624,12 @@ unchanged).
   contract. WU11 added `SearchTagChipsAsync(TagTypeEnum type, string term)` — a capped (`Take(10)`),
   per-keystroke search method on `ServerTagReadService`, filtering via `EF.Functions.ILike` (Npgsql
   doesn't translate the `string.Contains(string, StringComparison)` overload — caught at build/runtime,
-  not assumed), returning `List<TagChipDto>` with sprites resolved post-materialization via
-  `ISpriteReadService.GetSpriteUrl` (see `layer2-services.md` §"Per-keystroke typeahead search…").
+  not assumed), returning `List<TagChipDto>` carrying the raw `SpriteIdentifier` (resolved at render since
+  2026-06-27; see `layer2-services.md` §"Per-keystroke typeahead search…").
   Additive — `GetTagsByTypeAsync` and friends unchanged for non-chip callers.
-- **L3-Logic / L3.5-Structure — Stage 5 (WU11, 2026-06-21/22).** Rebuilt around single-select
-  **Blazored.Typeahead** 4.7.0 (not the package's multi-select — chips sit *above* the input per
+- **L3-Logic / L3.5-Structure — Stage 5 (WU11, 2026-06-21/22).** Built WU11 on single-select
+  Blazored.Typeahead 4.7.0, since replaced by the in-house `CanalaveTypeahead` at the Global Flip
+  (2026-07-13) (not the package's multi-select — chips sit *above* the input per
   §5.30.4, the package renders them inside), sourced by `SearchTagChipsAsync`. Selected chips are
   `TagChip` leaves; dropdown rows are lightweight (color dot + sprite + name). Contract is
   `EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged` — **not** the spec's literal

@@ -6,6 +6,11 @@
 > the recent window are moved wholesale to `workplan-archive.md` and "workplan.md WU-X"
 > citations resolve there. **Sweep trigger:** when this file exceeds ~1,500 lines, archive the
 > DONE entries older than ~2 weeks (never edit them in transit).
+>
+> **Worksheet-campaign inputs live outside the repo.** The campaign's DONE entries (2026-09-30 to
+> 2026-10-14) cite `wu-specs/<WU>.md`, the campaign amendments (U/R/C ids, "the wrap-up amendment")
+> and spec item ids (X/T). These are the campaign's working files in the owner's Claude project folder
+> (`worksheet-campaign/`), not in the repo; each DONE entry restates what it consumed.
 
 Produced by Phase D (`forward_plan.md`, now retired). This is the build sequence for Phase E. Each work-unit names
 its **cell(s)** (Feature # + layer, per `status.md`), its **tool** (per CLAUDE.md Per-Stage Guidance),
@@ -29,7 +34,10 @@ references it, does not restate it.
   Filed **D22** (the outgoing lineage list) and, by its review fixes, **F29** / new decision **row 32**
   (may a credit or lineage request name an unpublished story). `dotnet test`: Unit 1,377,
   RazorComponents 929, Integration 1,687. **Pointer:** its DONE entry.
-  Before that, 2026-10-13: WU-DocCorrections — the campaign's doc backstop (service audit §4's doctrine re-synced, false comments corrected, the CORRECTION-note convention, /fanon reach fixed; D21/F28/H41/H42 filed; its fresh-eyes probe gate is still open, **H42**, and the campaign's wrap-up waits on it); see its DONE entry.
+  Since then, 2026-10-14: WU-DocCorrections' fresh-eyes doc-audit probes (tracker **H42**) ran over the
+  campaign's docs and closed; their fixes landed as one doc commit, and they filed **G4/G5/H44**. See
+  WU-DocCorrections' DONE entry.
+  Before that, 2026-10-13: WU-DocCorrections — the campaign's doc backstop (service audit §4's doctrine re-synced, false comments corrected, the CORRECTION-note convention, /fanon reach fixed; D21/F28/H41/H42 filed; its fresh-eyes probe gate, **H42**, ran and closed 2026-10-14); see its DONE entry.
   Before that, 2026-10-13: WU-TrackerFixes — the tracker sweep (B16/B17/D8/H7 closed, U11 built; row 30/F27, E12, E13, H39, H40 filed, H38 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ParityAndRemaining — service audit §2.7 and §2.12 (WASM parity, the remaining service defects; row 29/F26 filed, H37/H12 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
@@ -195,7 +203,7 @@ references it, does not restate it.
   (`PersistProperty must be associated with a component or define an explicit render mode type`)
   for every visitor, authenticated or not — the entire Identity/auth funnel was broken. Not
   diagnosed further here (real risk of a rabbit hole unrelated to accessibility) — flagged at high
-  priority as tracker **H10**, and **fixed the same day by WU-H10Fix** (see Last landed; the
+  priority as tracker **H10**, and **fixed the same day by WU-H10Fix** (see the WU-H10Fix paragraph earlier in this block; the
   guess recorded at the time — three offenders including `ReaderDisplayProvider` — was wrong on
   both counts; `audit/Identity.md`'s Stage note is the confirmed account). Full evidence table:
   `audit/Accessibility.md` Stage note Addendum.
@@ -244,16 +252,16 @@ references it, does not restate it.
   **G1**'s residual and Phase 2's last open item. Before that, 2026-07-28: WU-DiscoveryFilterRestore
   + WU-SelectionPermalink — decision row 13 resolved, closing tracker item **B11**; earlier the same
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
-- **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
+- **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 0.5 (folded into Pattern Accumulation), 1, 2, 4 and 5 are all DONE.
   **Built (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13), then WU-TrackerFixes (the tracker sweep, 2026-10-13), then WU-DocCorrections (the doc backstop, 2026-10-13), the last in its build order. The campaign's wrap-up (a final full verification and the owner summary of open decisions and tracker items) has not run yet; it waits on tracker **H42**, WU-DocCorrections' fresh-eyes doc-audit probes, which need a session with a subagent tool.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13), then WU-TrackerFixes (the tracker sweep, 2026-10-13), then WU-DocCorrections (the doc backstop, 2026-10-13), the last in its build order, then the wrap-up's fix WU, WU-D21Confidentiality (tracker D21, 2026-10-14). WU-DocCorrections' fresh-eyes doc-audit probes (tracker **H42**) ran 2026-10-14 and closed. The rest of the wrap-up has not run yet: it now waits only on the orchestrator's own final full verification and the owner summary of open decisions and tracker items — no tracker item gates it.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
-  static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
+  static half, WU-A11y (Structure), is DONE outside the sweep — see its DONE entry in `workplan-archive.md`) — nothing
   further blocks starting it. WU-SweepRiders and WU-A11y (Structure) were both pulled *ahead of*
   Phase 3 rather than riding alongside it: WU-SweepRiders because H8 was a decision the sweep's
   own scope depended on (keep vs. prune the Identity scaffold it would otherwise style); WU-A11y
@@ -262,13 +270,14 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed, and
+  exist in **every group A–H** (group G only since 2026-10-14, when the doc-audit probes filed **G4/G5**,
+  two grid calls for the owner; it had been fully closed since 2026-07-30), fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed (and
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened (B16 since closed, WU-TrackerFixes 2026-10-13) — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 was closed by
   WU-ThrottleCoverage, 2026-10-13; D6 was routed to WU-ModerationIntegrity, which left it open (a rejection files
   no `Report` row, so D8(b) does not cover it); **F10/H13** opened by WU-AccessGateSweep2,
-  2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
+  2026-09-30, which also annotated E6 without closing it (its review fixes opened **D8** and **F11**); **B23/B24/H14** opened by WU-InertFeatures,
   2026-09-30, which closed B20–B22 (its browser pass closed H14 the same day); **D9/H15** opened by the WU-StoryLifecycle browser pass,
   2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
   pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
@@ -276,10 +285,12 @@ references it, does not restate it.
   **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
   opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30 (its browser pass narrowed
   H23 to an owner check the same day and opened **D12/H24**); WU-DependencyCVEs, 2026-10-12, closed
-  **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
+  **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21 (its
+  browser pass opened **H25**: imported HTML mangled in Quill, and a draft-chapter save landing on the
+  not-found page);
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42); WU-D21Confidentiality, 2026-10-14, closed **D21** and opened **D22/H43** (its review fixes split D22's product question out as **F29**, decision row 32; its browser pass closed H43 the same day),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its review fixes opened **F20/E11**; its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42); WU-D21Confidentiality, 2026-10-14, closed **D21** and opened **D22/H43** (its review fixes split D22's product question out as **F29**, decision row 32; its browser pass closed H43 the same day); WU-DocCorrections' doc-audit probes, 2026-10-14, closed **H42** and filed **G4/G5** (two grid calls for the owner) and **H44** (H8's open residual, split out of the ticked H8),
   including two **high-priority security items:
   E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -313,8 +324,9 @@ references it, does not restate it.
   Tracker **H38**, WU-TrackerFixes' browser pass, ran 2026-10-13, returned its fifteen L4.5 cells to 5
   and closed — see WU-TrackerFixes' DONE entry. Tracker **H43**, WU-D21Confidentiality's browser pass,
   ran 2026-10-14, returned F42 L4.5 to 5 and closed — see its DONE entry.
-  Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
+  Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and an
+  axe-DevTools run on `/Account/Login` and `/Account/Register` (they returned a 500 during WU-A11y (Structure)'s
+  2026-07-31 pass; WU-H10Fix fixed them) need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; its WASM re-check waited on
   WU-ParityAndRemaining P1, which landed 2026-10-13, and passed as step 1 of tracker **H37**, whose pass
@@ -422,20 +434,25 @@ cell(s)/feature, phase, audit pointer, and deps; move it to the DONE ✓ run bel
 cells/verification) when built.
 
 - **WU-A11y-Keyboard** — **Cells:** Feature 65, L4.5 Stage 1 (L4-Style already flipped to 5 by
-  WU-A11y (Structure), 2026-07-31 — see DONE run below). **Phase:** 3, paired with the L4 freeze
+  WU-A11y (Structure), 2026-07-31 — see its DONE entry in `workplan-archive.md`). **Phase:** 3, paired with the L4 freeze
   sweep. **Scope:** focus trap/restore (`modal.js`), the `dismiss.js` modal-first Escape branch,
-  `aria-modal="true"` on `Modal`, `CanalaveTypeahead` combobox ARIA, the manual keyboard script —
-  plus the axe-DevTools browser pass WU-A11y (Structure) didn't reach (contrast is unverified, not
-  just ungated — fold it into this WU's own browser session rather than running two). **Pointer:**
-  `audit/Accessibility.md`; tracker item **F6b**. **Deps:** Phase 3's L4 freeze sweep (same pass) —
+  `aria-modal="true"` on `Modal`, `CanalaveTypeahead` combobox ARIA, the manual keyboard script,
+  tracker **H16**'s bool-bound `aria-pressed`/`aria-expanded` (the combobox ARIA needs `aria-expanded`
+  and must not repeat the defect) — plus an axe-DevTools run on `/Account/Login`/`/Account/Register`
+  (never reached: they returned a 500 on 2026-07-31) and a contrast re-check once tracker **H11**'s token
+  decision lands; fold both into this WU's own browser session rather than running two. **Pointer:**
+  `audit/Accessibility.md`; tracker items **F6b** and **H16**. **Deps:** Phase 3's L4 freeze sweep (same pass) —
   both need Brian's own browser-driven verification.
-- **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
+- **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** beta window (roadmap
+  Tier 5, tracker A1). **Scope:**
   inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
-- **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
-  mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
+- **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** the future mobile
+  phase (tracker A8, `post-mvp-mobile`). **Scope:** a compact `EditorView` toolbar on the adaptivity
+  ladder's rung-3 trigger (`layer4-style.md` §"Responsive Adaptivity Ladder"); no device fork
+  (re-scoped 2026-07-18 by WU-ResponsiveMerge; deferred at WU6). **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6.
-*(WU-NotifEmail moved to the DONE run below, 2026-07-31.)*
+*(WU-NotifEmail built 2026-07-31; its DONE entry is in `workplan-archive.md`.)*
 ---
 
 ## Post-MVP — Layers 5–8 (historical framing — every item below has since closed or been removed)
@@ -487,7 +504,7 @@ is pending except where a bullet says so.
   the same day. Beneath Stage-5 cells, no flip: F42 L2 (the enricher), F39 L2 (a comment and a guard
   test). No migration.
 - **Trigger:** tracker **D21** (decided by the settled Class-A rule; fix shape and the D8 precedent in
-  the item) via the wrap-up amendment. No spec file: self-scoped in `wu-specs/WU-D21Confidentiality.md`.
+  the item) via the wrap-up amendment. No orchestrator spec; self-scoped in `wu-specs/WU-D21Confidentiality.md`.
   Not in scope: decision row 31 / tracker **F28** (owner-open); `AddStoryAsync`'s accept/refuse is unchanged.
 - **What landed** (two commits: `1db5b5e` moment-1 docs, then code, tests and moment-3 docs):
   1. **Rule (moment 1).** `layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by
@@ -563,7 +580,7 @@ is pending except where a bullet says so.
 - **Pointers:** Stage notes in `audit/Notifications.md` F42 and `audit/Groups.md` F39; tracker D21, D22,
   F28, F29, H43; `roadmap.md` decision rows 31 and 32.
 
-## WU-DocCorrections — the campaign's doc backstop: service audit §4's stale doctrine and false comments corrected against the code, the worksheet registered, the CORRECTION-note convention stated, every pre-split `cross-cutting.md` citation re-pointed (worksheet D12's doc half verified; service audit §4 and §7; extends no cluster — docs and comments, plus two Integration tests; its review fixes added the /fanon hub's reach fix and a third) — DONE ✓ (2026-10-13; its fresh-eyes probe gate is open, H42)
+## WU-DocCorrections — the campaign's doc backstop: service audit §4's stale doctrine and false comments corrected against the code, the worksheet registered, the CORRECTION-note convention stated, every pre-split `cross-cutting.md` citation re-pointed (worksheet D12's doc half verified; service audit §4 and §7; extends no cluster — docs and comments, plus two Integration tests; its review fixes added the /fanon hub's reach fix and a third) — DONE ✓ (2026-10-13; its fresh-eyes doc-audit probes ran 2026-10-14, H42 closed)
 
 - **Cells:** none moved. Docs and comments beneath Stage-5 cells: F39 L2, F33 L2, F11/F12 L2, F15 L5,
   F10 L2, F50 L2, F24 L2, F41 L2. No migration (`has-pending-model-changes`: none). Dated 2026-10-13, the
@@ -622,15 +639,16 @@ is pending except where a bullet says so.
   `RejectLineageAsync` (a lifecycle-guard choice; the doc only describes the code); log-level drift on
   best-effort swallows (behavior); the spec file. No Identity.md note: A7's copy was rewritten by
   WU-TptHardDelete and again by WU-UserDeletion, so F52 is untouched.
-- **Doc-audit probe coverage — the gate is still open.** The amendments and service audit §7 require
-  the doc-audit skill's fresh-eyes probes as part of this WU; neither pass had a subagent tool, so they
-  are tracker **H42**, which the campaign's wrap-up waits on. Mechanical substitutes run 2026-10-13 by
+- **Doc-audit probe coverage.** The amendments and service audit §7 require
+  the doc-audit skill's fresh-eyes probes as part of this WU; neither 2026-10-13/14 pass had a subagent
+  tool, so they became tracker **H42**. Mechanical substitutes run 2026-10-13 by
   the authoring pass: every `file.md` §"Section" reference in the conventions, `CLAUDE.md`,
   `roadmap.md`, `status.md`, the tracker and `audit/*.md` resolved against its target; every feature's
   L2/L4/L4.5 audit headline matches `status.md`'s grid; line-number citations into the edited docs
   checked (one fixed, H6); `check-doc-hygiene.ps1` clean. Added 2026-10-14 by the review fixes: a scan of
   every `audit/*.md` feature section for a campaign WU's Stage note its headline does not name (it
   confirmed the reviewers' five and found `Moderation.md` F47, all fixed; H42 has the list).
+  **Probes run 2026-10-14 (H42 closed):** Probe 1 cold walk (CLAUDE.md read order + the WU-A11y-Keyboard and tracker-D22 trails), Probe 2 ×6 over `git diff 1940078..HEAD` (ledgers; conventions core; convention layer files; `audit/` A–I; `audit/` M–Z; `design/`), Probe 3 over the untouched tail (`middle-addendum.md`, `audit/Lookups.md`, `audit/Accessibility.md`, `design/access-gating-audit.md`, `debugging.md`, `modernization-audit/` README + fix-status, `audit-summary.md` banner, doc-audit SKILL.md); none died; every finding verifier-confirmed; the confirmed fixes landed in one commit (three code comments among them), G4/G5/H44 filed, Check 4 narrowed, `SiteConstants` registered; not re-done: the full grid-vs-headline sweep (mechanical, 2026-10-13/14).
 - **Review fixes (2026-10-14; three reviewers, sixteen findings, all verified against the code):**
   - *Behavior:* `ServerFanonReadService.GetEstablishedFanonTagsAsync`, the public /fanon hub's
     "N stories", counted the bare `StoryTags`/`StoryCharacters` collections (no query filter), so

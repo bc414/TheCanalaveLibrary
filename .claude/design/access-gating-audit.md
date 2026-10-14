@@ -4,6 +4,12 @@
 > challenges to this audit's framing and **reclassifies the Tier-0 list** (most L-items are
 > downgraded to non-issues under the Intentionality Doctrine; the Class-A items stand). Where
 > the two documents disagree, the first-principles document wins.
+>
+> **Consumed by WU-AccessGate (built 2026-07-23/24; Feature 66 Stage 5 across its row).** §9's
+> "Still open" list is the pre-ruling option set as of 2026-07-19. The rulings are in
+> `access-gating-first-principles.md` §14–17 and `audit/AccessGate.md` "Settled"; several went
+> against the recommendations below (e.g. D3, D5, D9). Facts and file:line citations are as of
+> 2026-07-19.
 
 **Written 2026-07-19.** Five parallel code sweeps (identity/filter infrastructure; story-family
 surfaces; interaction/library/profile surfaces; group/blog/comment/discovery surfaces; full

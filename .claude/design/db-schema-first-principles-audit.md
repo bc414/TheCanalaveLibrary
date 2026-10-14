@@ -136,6 +136,11 @@ entity change + migration.
 
 ### 2.2 TPT cascade-orphan hazard — two unguarded hard-delete paths
 
+> **Built:** WU-TptHardDelete (2026-09-30), per worksheet D10. Options 1 and 2 were taken together:
+> every content-parent delete goes through `TptDelete`, and five comment/blog/poll FKs are RESTRICT.
+> No sweep (option 3). Rule: `layer1-data-model.md` §"TPT Inheritance" → "Hard-deleting a content
+> parent" and `layer2-services.md` §"Hard deletes of content parents". The entry below is history.
+
 **The structural fact.** DB-level cascades cannot maintain TPT integrity. Every content-parent →
 comment-child FK (`chapters → chapter_comments`, `base_blog_posts → blog_post_comments`,
 `groups → group_comments`, `AspNetUsers ← user_profile_comments` via RESTRICT) deletes **child
@@ -208,6 +213,9 @@ rebuild the unique index with `NULLS NOT DISTINCT`. Also note: name uniqueness h
 case-sensitive — see §3.1.
 
 ### 2.5 `base_polls.owner_id` CASCADE contradicts the anonymization policy
+
+> **Built:** WU-TptHardDelete (2026-09-30), per worksheet D11. `base_polls.owner_id` is nullable SET
+> NULL. Rule: `cross-cutting.md` §"Delete Policy Summary". The entry below is history.
 
 The delete-policy doctrine (spec §"Delete Policy Summary", `IdentityConfigurations.cs`) is:
 *content* survives with SET NULL; *interaction data* cascades. Blog posts are content
@@ -401,6 +409,12 @@ cleanup worker) is display-only, not the record. Two consequences worth pinning:
 
 ### 3.8 User-deletion survival set — ratify what remains
 
+> **Ruled and built:** worksheet D13 (2026-08-06: the three lists ratified with one correction —
+> poll votes moved to survives-anonymized; edge (a) empty conversations are deleted at the source;
+> edge (b) a moderator assign-admin action). Built WU-UserDeletion (2026-10-13). Polls survive their
+> owner per D11 (WU-TptHardDelete). The ratified set is `cross-cutting.md` §"Account deletion"; the
+> lists below are the pre-ruling draft.
+
 `UserDeletionService` + the cascade graph produce a specific post-deletion world; it should be a
 ratified list rather than an emergent one, because it is the site's de-facto GDPR/erasure answer:
 
@@ -512,7 +526,7 @@ subjects of §2/§3 findings.
 | Spec §4 says | Shipped | Verdict |
 |---|---|---|
 | Story: `ViewCount`, `IsComplete`, `ChapterCount`, `CommentCount`, `FavoriteCount` columns | All absent — views in `daily_story_stats`, completion in status, counts computed/`user_stats` | ✅ improvement (drift-prone hot counters removed) |
-| Story: `PublishedDate` nullable | NOT NULL | ⚠ §3.4 |
+| Story: `PublishedDate` nullable | Nullable, NULL = never published (WU-StoryLifecycle; NOT NULL at the 2026-08-02 audit) | ✅ §3.4 built |
 | ChapterContent: `ContentRaw` editor source | Never built | ⚠ §3.9 |
 | Chapter: `PrimaryContentId` NOT NULL | Nullable (circular-FK break, two-step insert) | ✅ correct trade; RESTRICT preserved |
 | StoryCharacter OC trigger `TR_..._EnforceOCLogic` | No triggers anywhere; app validation + `NULLS NOT DISTINCT` unique | ✅ improvement |
@@ -523,15 +537,18 @@ subjects of §2/§3 findings.
 | UserStoryInteractionDate: filtered date indexes + sorted lists | Table written, never read, no date indexes | ⚠ §3.5 |
 | `UserCustomFilter` | Cut entirely (2026-07-31) | ✅ recorded |
 | BaseBlogPost: `long` PK | `int` PK | ✅ acceptable; record in audit file |
-| Notification: `RelatedEntityId` polymorphic | `int` column | ⚠ §2.3 (width) |
-| GroupFolder: `ParentFolderId` self-FK SET NULL | No FK at all | ⚠ §2.4 |
-| Delete policy: content SET NULL | `base_polls.owner_id` CASCADE | ⚠ §2.5 |
+| Notification: `RelatedEntityId` polymorphic | `bigint` (WU-InertFeatures; `int` at the 2026-08-02 audit) | ✅ §2.3 built |
+| GroupFolder: `ParentFolderId` self-FK SET NULL | Self-FK SET NULL (WU-SchemaHardening; no FK at the 2026-08-02 audit) | ✅ §2.4 built |
+| Delete policy: content SET NULL | `base_polls.owner_id` SET NULL (D11, WU-TptHardDelete; CASCADE at the 2026-08-02 audit) | ✅ §2.5 built |
 | Constraint naming `PK_TableName`/`FK_Source_Target` | snake_case EF conventions (+ mixed-case TPT PKs) | ✅ convention superseded spec; cosmetic note §2.7 |
 | Cache/mart tables incl. Redis Top-100 | Marts raw-SQL as spec'd; Redis layer dissolved (L7, 2026-07-06) | ✅ recorded elsewhere |
 
 ---
 
 ## 7. Recommended sequencing
+
+> Built across WU-InertFeatures (2.1, 2.3), WU-TptHardDelete (2.2, 2.5) and WU-SchemaHardening (2.4,
+> 2.6, 2.7); see each §2 banner.
 
 **One "schema hardening" WU before first human data** (all §2 items — they compose into a single
 migration + small service fixes): remove the phantom USI column (2.1), fix the two TPT hard-delete

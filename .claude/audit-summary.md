@@ -2,8 +2,9 @@
 
 > **Snapshot as of the initial Step-3 classification pass (pre-2026-06 build-out).** Superseded by
 > `.claude/status.md` for current stage numbers and by `.claude/workplan.md`/`.claude/roadmap.md` for
-> current sequencing — retained only for its historical findings (§2) and reconciliation index
-> (§3), not as a source of current percentages.
+> current sequencing — retained for its still-live §0 adjudication principle (cited by CLAUDE.md and
+> `status.md`), its historical findings (§2) and its reconciliation index (§3), not as a source of
+> current percentages.
 
 Human-facing overview of the Step 3 classification pass. Five sections per `step3_classify.md` (a
 one-time prompt file from the original bootstrapping process, never committed to this repo — see

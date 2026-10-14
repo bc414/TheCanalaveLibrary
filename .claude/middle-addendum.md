@@ -34,10 +34,11 @@ worth naming so the gaps in §3 read in proportion, not as an indictment:
 - **Content moderation** — report queue, moderator actions, account suspension/ban,
   `ActiveReportCount` auto-flagging, soft-delete default. `audit/Moderation.md`.
 - **Real transactional email** — SMTP seam, MailKit sender, confirmation/reset/change flows
-  verified end-to-end against Mailpit. `cross-cutting.md` "Identity & Auth."
+  verified end-to-end against Mailpit. `identity-and-authorization.md` §"Identity & Auth" (split out
+  of `cross-cutting.md` 2026-07-07).
 - **Layered error handling** — page/chrome/card/comment error boundaries, toast + inline alert
   channels, localStorage draft autosave, restored `#blazor-error-ui` + `ReconnectModal`.
-  `cross-cutting.md` "Error Handling Strategy."
+  `error-handling.md` §"Error Handling Strategy" (split out of `cross-cutting.md` 2026-07-07).
 - **Account deletion exists** (Feature 52) — a real mechanism, though see §3 for why "exists" and
   "satisfies GDPR erasure" are two different claims.
 
@@ -93,6 +94,8 @@ compliance theater).
    click-through, not verification). **Realistic minimum:** an explicit per-work interstitial
    disclaimer for Explicit content (matching AO3's actual practice), plus a documented decision
    (not silence) on whether Explicit-tier volume could ever cross a state's threshold.
+   **→ interstitial BUILT 2026-07-23 (WU-AccessGate, Feature 66); wording/age-assertion remains a
+   row-10 counsel item (tracker F3).** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 3. **DMCA safe harbor mechanics.** The project has a moderation queue for *user-conduct* reports,
    but DMCA §512 safe harbor is a separate, specific, and cheap thing: registering a designated
    agent with the US Copyright Office (~$6, public form), publishing that contact, and having a
@@ -111,6 +114,8 @@ compliance theater).
    nor is there a data-export/access-request feature. GDPR has no size floor; a US site with open
    signup will accumulate *some* EU visitors' data in the ordinary course. **Realistic minimum:** a
    privacy policy + confirming F52 actually purges data end-to-end, not full DSAR tooling.
+   **→ erasure scope ruled by D13, built WU-UserDeletion 2026-10-13 (`cross-cutting.md` §"Account
+   deletion"); log erasure is a Phase-7 obligation (tracker E11).** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 6. **Trademark/IP disclaimer for the site's own branding.** Distinct from user-copyright concerns:
    the site itself is named after a Pokémon location and uses official-style sprites as UI chrome.
    The Pokémon Company's media-usage guidelines permit personal non-commercial fan use but don't
@@ -120,6 +125,8 @@ compliance theater).
 7. **Cookie consent.** Not currently needed (auth-cookie-only, no analytics exist yet per the SEO
    findings below) — but nothing tracks "revisit this the moment analytics ship," so it's a
    silent trip-wire rather than a tracked decision.
+   **→ superseded: the anon `canalave.prefs` cookie shipped with WU-AccessGate; ruled no banner,
+   privacy-policy mention only (row 10).** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 
 ### Operational resilience
 
@@ -127,6 +134,7 @@ compliance theater).
    doc anywhere says what happens next (who/what to check, rollback steps, how to communicate an
    outage). Currently zero-cost to skip pre-launch; worth a short runbook before real users depend
    on uptime.
+   **→ tracked: `roadmap.md` Phase 7 "Operational resilience group" / tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 9. **Session/circuit affinity & SignalR backplane for horizontal scaling.** Every N≥2 reference in
    this project's docs (`grid_axes.md`, `layer2-services.md`, `middle_plan_v2.md`) is about the
    Valkey signal-buffer swap — **nothing addresses sticky sessions / load-balancer affinity for
@@ -134,27 +142,37 @@ compliance theater).
    viable at all (a naive round-robin LB breaks live circuits mid-session), nor a SignalR
    backplane distinct from the buffer-store concern. Not urgent at N=1, but the docs currently
    imply "N≥2 is just a Valkey config swap," which understates what scaling out actually needs.
+   **→ addressed: `canalave-conventions/horizontal-scaling.md` §1 (affinity needed) / §2 (backplane
+   not needed); open at N≥2, tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 10. **Health-check endpoint production exposure.** Confirmed in code: `MapHealthChecks` is
     wrapped in `IsDevelopment()` only. `middle_plan_v2.md` names "safely-exposed... currently
     dev-only-mapped" as an open item but never specifies what "safely exposed" means (auth token?
     IP allowlist to the external pinger? separate internal port?) — the *mechanism* is undecided,
     not just the deployment step.
+    **→ tracked: `roadmap.md` Phase 7 "Uptime & alerting" (exposure mechanism still undecided) /
+    tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 11. **Backup/DR beyond the database.** A DB backup+restore drill is planned, but nothing addresses
     recovering the Grafana LGTM dashboards/config or documents that the Data Protection keyring is
     incidentally covered by the Postgres backup (it is, since keys live in `ApplicationDbContext`
     — but no doc states this connection, so a reader would reasonably believe it's still an open
     gap). A droplet-loss scenario today has no documented path to reconstructing observability
     config from scratch.
+    **→ tracked: `roadmap.md` Phase 7 "Operational resilience group" / tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 12. **Cost/capacity monitoring.** Nothing anywhere monitors droplet CPU/RAM/disk, Postgres storage
     growth, or defines a trigger for "time to upsize." Low urgency pre-launch, real gap once real
     traffic exists.
+    **→ tracked: `roadmap.md` Phase 7 "Operational resilience group" / tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 13. **Email deliverability (SPF/DKIM/DMARC).** WU-Email built a real SMTP sender; DNS-level
     deliverability setup is unmentioned anywhere, including in the Phase 7 checklist itself. Without
     it, transactional email (confirmation, password reset) risks landing in spam for real users —
     this is not cosmetic, it directly affects whether new users can activate accounts.
+    **→ tracked: `roadmap.md` Phase 7 "Sending-domain DNS" (since 2026-07-27) + decision row 8 /
+    tracker F4.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 14. **Staging/pre-prod environment.** The path is local dev → CI (PR-gated) → straight to
     production droplet. No intermediate environment is discussed anywhere. Reasonable to accept
     for a solo small-beta launch; worth naming as a conscious trade-off rather than an unnoticed gap.
+    **→ tracked: `roadmap.md` Phase 7 "Operational resilience group" (the explicit no-staging
+    decision) / tracker F7.** *(Annotated 2026-10-14 by WU-DocCorrections' doc-audit probes.)*
 
 ### SEO, discoverability & growth
 
@@ -166,13 +184,17 @@ compliance theater).
     per page. **`<meta name="description">` half done 2026-07-11** — `.claude/audit/Seo.md`; rides
     the same `<SocialMetaTags>` component as item #17. `robots.txt`/`sitemap.xml` remain unbuilt.
     **→ formalized 2026-07-15: Feature 64 (Site SEO), WU-SeoSite, `middle_plan_v2.md` Phase 2 item 8,
-    `audit/Seo.md`.**
+    `audit/Seo.md`.** **→ BUILT 2026-07-23 by WU-AccessGate (absorbed WU-SeoSite):
+    `Server/Seo/SeoEndpoints.cs` serves `/robots.txt` + `/sitemap.xml`; `audit/Seo.md` "Feature 64
+    Stage 5".**
 16. **Canonical slug redirect — spec'd but never built.** The spec (§ on story routing) explicitly
     says "redirect to canonical if slug doesn't match," but `StoryPage.razor` states plainly that
     the slug is cosmetic and does no redirect — `/story/42/wrong-slug` and `/story/42/right-slug`
     both resolve with no 301. This is a documented-but-unbuilt gap, not a never-considered one, and
     it's exactly the duplicate-content pattern that hurts SEO. **→ formalized 2026-07-15: Feature 64
-    (Site SEO), WU-SeoSite, same pointers as #15.**
+    (Site SEO), WU-SeoSite, same pointers as #15.** **→ BUILT 2026-07-23 (WU-AccessGate): the
+    canonical-slug 301 is middleware (`Server/Seo/SeoEndpoints.cs`, wired in `Program.cs`), plus
+    `<link rel="canonical">` on `StoryPage`.**
 17. **Open Graph tags for social sharing.** Confirmed absent. Arguably the single highest-leverage
     item on this whole list for *this* audience — fandom communities live in Discord, and a shared
     story link currently unfurls as a bare gray URL with no title/image/blurb. OG tags work fine
@@ -196,8 +218,8 @@ compliance theater).
 19. **RSS/Atom feeds.** Absent. Real precedent in this exact space (AO3, FFN both offer it) but
     both implementations are widely considered mediocre, and the real retention mechanism for
     "new chapter from a followed author" is the *already-deferred* email-digest feature
-    (`EmailEnabled`), not RSS. **Low priority, safe to skip at launch.** **The email-digest half is
-    now WU-NotifEmail** (`roadmap.md` Phase 6, `audit/Notifications.md`) — RSS itself remains
+    (`EmailEnabled`), not RSS. **Low priority, safe to skip at launch.** **The email-digest half was
+    built by WU-NotifEmail** (2026-07-31; `audit/Notifications.md` §"WU-NotifEmail Stage note") — RSS itself remains
     consciously un-formalized (no WU, no grid row); revisit only if WU-NotifEmail's fan-out doesn't
     satisfy the retention need it was meant to cover.
 20. **Analytics.** No traffic-counting tool of any kind exists. Given the project already runs a
@@ -228,9 +250,10 @@ compliance theater).
     (search, story page, chapter reading, signup/login) before public launch, plus a one-line
     addition to `layer4-style.md`'s Stage-5 criteria ("keyboard-navigable, visible focus states")
     so it stops being invisible to the process entirely. **→ formalized 2026-07-15: Feature 65
-    (Accessibility), WU-A11y, `roadmap.md` Phase 3 + decision row 12 (scope/depth still
-    open), `audit/Accessibility.md`. The Stage-5-criteria addition suggested here landed the same
-    day in `layer4-style.md` "Interaction States."**
+    (Accessibility), WU-A11y, `roadmap.md` Phase 3 + decision row 12 (resolved 2026-07-31 —
+    sweep by defect class, no fourth test tier; `roadmap.md` §Resolved), `audit/Accessibility.md`. The Stage-5-criteria addition suggested here landed the same
+    day in `layer4-style.md` "Interaction States."** **→ static/naming half BUILT 2026-07-31 (WU-A11y
+    (Structure), F65 L4 = 5); keyboard half = WU-A11y-Keyboard, tracker F6b.**
 
 ### Not flagged as gaps (deliberately out of scope, reasonably so)
 

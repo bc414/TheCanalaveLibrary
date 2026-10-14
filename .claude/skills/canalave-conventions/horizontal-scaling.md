@@ -53,7 +53,7 @@ this — but nothing today calls for one.
 ## 3. The Valkey signal-buffer body-swap (moved here from layer2-services.md/SKILL.md)
 
 Unrelated to SignalR — this is about the **in-process signal buffers** (`layer2-services.md`
-§"Signal Buffering": reading-progress and view-count), which are a different N≥2 concern entirely.
+§"Signal Buffering": reading-progress, view-count and user-activity / `LastActiveUtc`), which are a different N≥2 concern entirely.
 
 **Why a shared store is needed at N≥2:** each buffer is a per-process `ConcurrentDictionary`. At
 N=1 that's strictly better than a network hop — no dependency, no latency. At N≥2, two nodes have

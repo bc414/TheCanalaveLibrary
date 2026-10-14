@@ -103,10 +103,10 @@ WU-Marts components (spans are root spans for the workers — background work, n
 | Metric | `canalave.` prefix, lowercase dotted, UCUM unit | `canalave.image.uploads` (`{upload}`), `canalave.image.upload.size` (`By`) |
 | Tag | `canalave.{noun}.{property}`, matching log property names modulo prefix/case so traces↔logs correlate; low-cardinality values only | `canalave.user.id`, `canalave.image.kind` |
 
-Live signal-buffer metric names (WU-SignalBuffering — the shape both buffers share):
+Live signal-buffer metric names (WU-SignalBuffering — the shape the three signal buffers share):
 `canalave.{signal}.buffer.depth` (observable gauge, created by the buffer's constructor),
 `canalave.{signal}.flush.batch_size` (histogram), `canalave.{signal}.flush.duration`
-(histogram, `ms`) — signals: `readingprogress`, `viewcount`. Instrument choice encodes meaning:
+(histogram, `ms`) — signals: `readingprogress`, `viewcount`, `useractivity`. Instrument choice encodes meaning:
 `Counter` = only goes up, `Histogram` = distribution, `ObservableGauge` = sampled
 point-in-time level.
 

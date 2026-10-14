@@ -130,7 +130,7 @@ the plain FK + one unique constraint.
 | `GetByGroupAsync` — filter `group_id, is_published, rating` (child `group_blog_posts`), order `date_created DESC` (base) | `group_blog_posts(group_id, is_published, rating)` | **none** — only `ix_group_blog_posts_group_id` (plain) | **MISSING** |
 | `GetByIdAsync` / `GetForEditAsync` | PK `blog_post_id` (TPT base+child both keyed on it) | PK | **PK-served** |
 | `blog_post_likes` EXISTS | `(blog_post_id, user_id)` | PK `(blog_post_id, user_id)` | **PK-served** |
-| Poll vote/option subqueries (`ServerPollReadService`, shared across site/blog polls) | `poll_options(poll_id, sort_order)`; `poll_votes(poll_option_id, user_id)` | `ix_poll_options_poll_id_sort_order` (unique); PK `poll_votes(poll_option_id, user_id)` | **HAVE / PK-served** |
+| Poll vote/option subqueries (`ServerPollReadService`, shared across site/blog polls) | `poll_options(poll_id, sort_order)`; `poll_votes(poll_option_id, user_id)` | `ix_poll_options_poll_id_sort_order` (unique); UNIQUE `ix_poll_votes_poll_option_id_user_id` (the PK became surrogate `poll_vote_id` on 2026-10-13, WU-UserDeletion, D13) | **HAVE** |
 | `GetPollsForBlogPostAsync` — filter child `blog_post_poll.blog_post_id` | FK index | **none declared** on `blog_post_polls` beyond `ix_blog_post_polls_blog_post_id` which is actually the child's own PK (poll_id), not a `blog_post_id` column index | **needs-live-check** — schema naming is ambiguous from the snapshot alone; flag for the live pass |
 
 **F35's real gap:** both paged blog-post listings (by-author, by-group) filter+sort across the

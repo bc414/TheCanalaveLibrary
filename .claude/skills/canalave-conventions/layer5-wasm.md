@@ -167,9 +167,12 @@ app.MapTagEndpoints();
   `RequireAuthorization()`. **A write whose service enforces a token bucket takes no
   `RequireRateLimiting(...)`**: the service bucket already covers both transports, and an edge
   policy would limit WASM callers twice (corrected WU-ThrottleCoverage, 2026-10-13; this line used
-  to say the opposite while every endpoint's own doc said "no edge policy"). Edge policies are only
-  for plain-HTTP surfaces: the auth window, `TagWrites`, `Unsubscribe`, and the `ImportParse` /
-  `ExportGenerate` concurrency limiters (`security.md` §"HTTP Edge Rate Limiting").
+  to say the opposite while every endpoint's own doc said "no edge policy"). Edge policies are for
+  plain-HTTP surfaces (the auth window, `Unsubscribe`, the `ImportParse` / `ExportGenerate`
+  concurrency limiters), with one standing exception: `TagWrites`, on the moderator tag API and
+  Fanon's author half. Both are also reachable over the circuit, so it binds WASM callers only
+  (`security.md` §"Unthrottled write surfaces", moderator/admin-gated row; §"HTTP Edge Rate
+  Limiting").
 - **`CancellationToken` parameters are dropped at the client boundary.** A handful of read methods
   (`IManualTreeSearchReadService`, `ITreeSearchReadService`) take a `CancellationToken ct = default`
   for internal query cancellation. Endpoints may bind ASP.NET's own request-aborted token to the
@@ -573,8 +576,9 @@ assignment gotcha: `layer3-logic.md`.)
 Rules verified against the official .NET 10 doc (learn.microsoft.com "Blazor prerendered state
 persistence", 2026-07-13 — adopted app-wide in the Global Flip work-unit):
 
-- **`public` properties only** — the framework uses reflection/source generation; a private or
-  field-backed member silently never persists. Serialization is default-settings
+- **`public` properties only** — the framework uses reflection/source generation; a private
+  property, or a field instead of a property, silently never persists. A public property with an
+  explicit backing field is fine (`layer3-logic.md` §"State Persistence", the `MessagesPage` idiom). Serialization is default-settings
   `System.Text.Json` embedded in the prerendered HTML.
 - **`ValueTuple` state does not survive** — STJ doesn't serialize tuple fields. Pages that held
   `(Items, TotalCount)` tuples in one field split them into two persisted properties (or persist a

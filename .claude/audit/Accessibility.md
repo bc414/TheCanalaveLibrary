@@ -20,13 +20,13 @@ contrast policy (Brian-ratified 2026-07-10, `layer4-style.md` "Prerequisite: Des
 missing is everything downstream of "the rule exists": no WCAG reference document, no
 keyboard-navigation or screen-reader check in any tier rule, no accessibility-specific test tier
 (no axe-core/Lighthouse-CI style check in the three-tier suite), and the L4.5-Browser verification
-band's own definition (`status.md` header) never mentions keyboard-only or screen-reader navigation
+band's own definition (`grid_axes.md` 'Layer 4.5 — Browser Verification') never mentions keyboard-only or screen-reader navigation
 as part of "behaves as intended."
 
 **A minimal Stage-5 bar was added 2026-07-15** (`layer4-style.md` "Interaction States", after the
 recipe table) so accessibility isn't entirely invisible to the L4 gate in the meantime: keyboard
 reachability/operability, the global focus-visible ring not suppressed, and label association on
-form inputs. This is explicitly **not** a WCAG AA claim — it's a floor, pending WU-A11y's real scope.
+form inputs. This is explicitly **not** a WCAG AA claim — it's a floor; WU-A11y's scope was settled by decision row 12 (2026-07-31) — see 'Settled' below.
 
 ## Feature 65 — settled vs. open (WU-A11y planning, 2026-07-15; decision row 12 resolved 2026-07-31)
 
@@ -69,7 +69,10 @@ existing structure vs. ARIA that promises an interaction model not yet built —
   gatable, ships with regression protection. **This is the WU this file's Stage note below covers.**
 - **WU-A11y-Keyboard** (tracker **F6b**, not yet started) — focus trap/restore, the `dismiss.js`
   modal-first Escape branch, `aria-modal="true"`, `CanalaveTypeahead` combobox ARIA, the manual
-  keyboard script. Pairs with the Phase-3 L4 freeze sweep, since axe-DevTools cannot test keyboard
+  keyboard script. Also take tracker **H16** (bool-bound `aria-pressed`/`aria-expanded` render absent
+  or empty; convert to "true"/"false", rewrite the `UserStoryInteractionPanelTests` assertions that
+  encode the defect, add the `check-a11y` rule) — the combobox ARIA this WU builds needs
+  `aria-expanded` and must not repeat it (routed 2026-10-14). Pairs with the Phase-3 L4 freeze sweep, since axe-DevTools cannot test keyboard
   behavior at all and Feature 65's L4.5-Browser cell needs Brian's own browser-driven verification
   before it can move off Stage 1.
 
@@ -182,7 +185,7 @@ executes in the page's main world and worked) was run against the six planned pa
 locked, gate-reviewed, live-tuned-with-Brian tokens (`layer4-style.md` "Prerequisite: Design
 Tokens") and Pokémon-canon colors (`--color-tagtype-*` "transcribed verbatim from *Visuals.cs*")
 — changing the hex values is a design decision, not a markup fix, so WU-A11y (Structure) did not
-unilaterally alter them. Logged as a new open item — see tracker.
+unilaterally alter them. Logged as a new open item — tracker **H11**.
 
 **Severe finding, out of scope for this WU — FIXED SAME DAY by WU-H10Fix; see `audit/Identity.md`
 Stage note for the confirmed root cause, which is not the hypothesis guessed at below (there were

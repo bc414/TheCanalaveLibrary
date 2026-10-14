@@ -1254,7 +1254,7 @@ Rules:
   server-only service that will not exist in a future WASM client.
 - **Security lives in the write service**, not in the `@if`. The UI affordance is visibility only;
   the service gate (identity-equality against `IActiveUserContext.UserId`) is the actual control
-  ([`ServerCommentWriteService.EditCommentAsync`](../../../../TheCanalaveLibrary.Server/Comments/ServerCommentWriteService.cs#L77)).
+  ([`ServerCommentWriteService.EditCommentAsync`](../../../TheCanalaveLibrary.Server/Comments/ServerCommentWriteService.cs)).
 - **There is no shared "edit button" or `AdminControls` component.** Spec §5.17's `<AdminControls>`
   reference is stale — that component does not exist and should not be minted. Affordances differ per
   entity (link to edit page vs in-place swap) and are one-liners.
@@ -1425,16 +1425,18 @@ removes through the write service's own calls.
 
 ## Page Route Reference
 
-See spec §5.29 for the complete page inventory. Key dispatcher pages:
+See spec §5.29 for the complete page inventory. Key pages (as of 2026-10-14; every page is one
+responsive tree — the dispatcher → Desktop/Mobile pattern this table once listed was removed
+2026-07-18, see §"Responsive Structure — One Tree, Every Viewport" above):
 
-| Page | Route | Pattern |
-|---|---|---|
-| StoryPage | `/story/{StoryId:int}/{*StorySlug}` | Dispatcher → Desktop/Mobile |
-| ChapterPage | `/story/{StoryId:int}/{ChapterNumber:int}/{VersionOrder:int?}` | Dispatcher → Desktop/Mobile |
-| SearchPage | `/discover` | Dispatcher → Desktop/Mobile |
-| TreeSearchPage | `/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}` | Dispatcher → Desktop/Mobile |
-| ProfilePage | `/user/{UserId:int}/{*Tab}` | Dispatcher → Desktop/Mobile |
-| BookshelvesPage | `/bookshelves/{Tab}` | Dispatcher → Desktop/Mobile |
-| TagDirectoryPage | `/tags` | Dispatcher → Desktop/Mobile (browse), Desktop-only (edit) |
-| MessagingPage | `/messages/{ConversationId:int?}` | Dispatcher → Desktop/Mobile |
-| Mod pages | `/mod/reports`, `/mod/submissions`, `/mod/users` | Desktop-only, no dispatcher |
+| Page | Route(s) |
+|---|---|
+| StoryPage | `/story/{StoryId:int}/{*StorySlug}` |
+| ChapterReadingPage | `/story/{StoryId:int}/{ChapterNumber:int}` and `/story/{StoryId:int}/{ChapterNumber:int}/{VersionOrder:int}` (two `@page` directives) |
+| SearchPage | `/discover`, `/discover/selection/{SelectionId:int}/{*Slug}` |
+| TreeSearchPage | `/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}` |
+| ProfilePage | `/user/{UserId:int}/{*Tab}` |
+| BookshelvesPage | `/bookshelves/{Tab?}` |
+| TagDirectoryPage | `/tags` (browse for all; moderator edit controls behind `<AuthorizeView>`) |
+| MessagesPage | `/messages/{ConversationId:int?}` |
+| Mod pages | `/mod/reports`, `/mod/submissions`, `/mod/users/{UserId:int?}`, `/mod/stats`, `/mod/spotlight` |

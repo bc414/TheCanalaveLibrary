@@ -15,7 +15,7 @@
 > 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
 > narrow rendering deliberately unpolished, no visual pass yet.
 
-**Entities (Core/Models/):** `Group` (unique `GroupName`, `AudienceRating`/`MaxContentRating`→short,
+**Entities (Core/Groups/; the TPT subtypes `GroupComment` in Core/Comments/ and `GroupBlogPost` in Core/BlogPosts/):** `Group` (unique `GroupName`, `AudienceRating`/`MaxContentRating`→short,
 `GroupAudienceType` presets derived at boundary), `GroupMember` (composite `(UserId,GroupId)`,
 `GroupRole` enum, `DateJoined`), `GroupStory` (first-class, `AddedByUserId` SetNull),
 `GroupFolder` (nesting via `ParentFolderId` — a self-FK `ON DELETE SET NULL` and `ck_group_folders_no_self`
@@ -23,7 +23,9 @@ since WU-SchemaHardening 2026-10-13, a bare integer before it; unique `(GroupId,
 **NULLS NOT DISTINCT** since the same WU, so top-level names are unique too; `MaxRating`→short),
 `group_stories` unique `(GroupId, StoryId)` (D23, same WU),
 `GroupComment` (TPT subtype of `BaseComment`, has `DatePosted` + `GroupId` — build-ready after WU31.5),
-`GroupBlogPost` (TPT subtype of `BaseBlogPost`). **No services or components built.** Composes
+`GroupBlogPost` (TPT subtype of `BaseBlogPost`). Services `ServerGroupReadService`/`ServerGroupWriteService`
+(WU32, `Server/Groups/`); pages `GroupsPage`, `GroupPage`, `GroupCreateEditPage`, `GroupFolderManagementPage`
+and `GroupBlogPostEditorPage` (`SharedUI/Groups/`). Composes
 `StoryDeck` for story listings and WU31 `BlogPost*` components/services for group blog posts.
 
 **Note on `Group.Rating → AudienceRating` rename:** The EF entity property is renamed in WU32 Phase 1
@@ -747,7 +749,7 @@ WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
   fan-out is best-effort post-commit (try/catch).
   Test tier: Integration (`GroupServiceTests`) — group comments post/read, blog-post create + read,
   notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule).
-- **L3-Logic — Stage 5 (2026-06-24, WU32; `GroupPage`'s moderator flag, leave warning and the panel's submit/refusal handling since WU-UserDeletion, 2026-10-13, the refusal handed to the page to reload the group since its review fixes the same day, RazorComponents-tested — Stage notes above).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
+- **L3-Logic — Stage 5 (2026-06-24, WU32; `GroupPage`'s moderator flag, leave warning and the panel's submit/refusal handling since WU-UserDeletion, 2026-10-13, the refusal handed to the page to reload the group since its review fixes the same day, RazorComponents-tested — Stage notes above; eight toast sites became inline `ErrorAlert`s and `IToastService` left the cluster since WU-TrackerFixes, 2026-10-13 — its Stage note above).** `GroupAudienceTypeMapper` (preset round-trip; inverse).
   `CommentSection.GroupId` param + `CommentTarget.Group` branch (exactly-one-set guard, Load/Post/Reply).
   Test tier: Unit (`GroupAudienceTypeMapperTests`) — all three presets, round-trip, unknown value throws.
   RazorComponents (`CommentSectionGroupTests`) — initial load, post dispatch, no-spoiler-toggle, guard.

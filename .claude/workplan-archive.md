@@ -7,9 +7,11 @@
 >
 > Contents: the Phase A–E build arc (WU0, Phases 1–3: atoms → integration points → consumers /
 > pages), then dated DONE entries 2026-07-06 → 2026-07-18 (first sweep, 2026-07-27), then
-> 2026-07-23 → 2026-08-01, oldest first (second sweep, 2026-09-30 — `workplan.md` had reached
-> 2,516 lines against its ~1,500 trigger; entries moved verbatim, only their order reversed to
-> keep this file chronological), then WU-QuickFixes (2026-09-20; third sweep, 2026-10-13, by the
+> 2026-07-23 → 2026-08-01 (second sweep, 2026-09-30 — `workplan.md` had reached 2,516 lines against
+> its ~1,500 trigger; entries moved verbatim). *Corrected 2026-10-14:* only part of that run was put
+> in chronological order. Its first 19 entries, WU-Home + WU-SiteNews (2026-07-28) down to
+> WU-AccessGate (2026-07-23/24), sit newest first; from WU-DiscoveryFilterRestore (2026-07-28) on,
+> the run is oldest first. Then WU-QuickFixes (2026-09-20; third sweep, 2026-10-13, by the
 > WU-NotificationCorrectness review fixes — `workplan.md` had reached 1,641 lines, and it was the
 > only DONE entry older than two weeks). Entries from 2026-09-30 onward remain in `workplan.md`
 > until a future archival sweep.

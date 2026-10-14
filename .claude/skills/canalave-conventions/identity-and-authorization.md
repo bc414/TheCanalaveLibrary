@@ -368,7 +368,7 @@ Versioning — Progressive Disclosure".
 **Pattern 2 — Lightweight embedded content (comments, recs, vouch text): in-place inline edit.**
 One page; edit mode is parent-owned (e.g. `CommentSection._editingId`). The item being edited swaps
 `EditorView` (via `CommentEditor`) in place; siblings render `RichTextView`. Both renderers co-exist
-by design. No dedicated edit route. [`CommentItem`](../../../../TheCanalaveLibrary.SharedUI/Comments/CommentItem.razor#L42-L78)
+by design. No dedicated edit route. [`CommentItem`](../../../TheCanalaveLibrary.SharedUI/Comments/CommentItem.razor)
 is the reference.
 
 ## Identity & Auth
@@ -384,7 +384,8 @@ error envelope" / `layer5-wasm.md` §"The Error-Translation Contract" (WU-ErrorH
 2026-07-30).
 `RequireConfirmedAccount = true`.
 
-Data Protection: `PersistKeysToFileSystem` (dev), `PersistKeysToDbContext` (prod).
+Data Protection: `PersistKeysToDbContext<ApplicationDbContext>()` in every environment (keys in the
+`data_protection_keys` table; `security.md` §"Data Protection Keyring").
 Email: pluggable SMTP seam (`Email:Provider` = `Smtp`/`NoOp`, mirrors `ImageStorage:Provider`) —
 `IdentityNoOpEmailSender` when unconfigured (server-only dev; its `RegisterConfirmation.razor`
 on-page link auto-hides once a real sender is registered), `SmtpEmailSender` (MailKit) against

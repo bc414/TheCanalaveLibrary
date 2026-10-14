@@ -225,8 +225,8 @@ else
 builder.Services.AddSingleton<UnsubscribeTokenService>();
 builder.Services.AddSingleton<MessagingUnsubscribeTokenService>();
 
-// HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today. The
-// policy set: the per-IP window on the /Account/* auth form posts (credential-stuffing damping),
+// HTTP edge rate limiting (WU-Security) — covers the plain-HTTP surfaces, plus "TagWrites", whose
+// services are also reachable over the circuit (so it binds WASM callers only). The policy set: the per-IP window on the /Account/* auth form posts (credential-stuffing damping),
 // "TagWrites" on /api/tags writes, "Unsubscribe" on the anonymous one-click links, and the
 // "ImportParse" / "ExportGenerate" concurrency limiters on work that never commits. User writes
 // (comments, uploads, …) are throttled at the service layer instead — they travel over the

@@ -29,7 +29,7 @@ public sealed class VouchConfiguration : IEntityTypeConfiguration<Vouch>
         // No one vouches for themselves (schema audit §2.6).
         builder.ToTable(t => t.HasCheckConstraint(
             "ck_vouches_no_self", "vouching_user_id <> vouched_user_id"));
-        // Voucher-side cascades on delete; vouched-side is RESTRICT (incoming vouches cleared in C# DeleteUserService).
+        // Voucher-side cascades on delete; vouched-side is RESTRICT (incoming vouches cleared in C# UserDeletionService).
         builder.HasOne(v => v.VouchingUser).WithMany(u => u.VouchesGiven)
             .HasForeignKey(v => v.VouchingUserId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(v => v.VouchedUser).WithMany(u => u.VouchesReceived)

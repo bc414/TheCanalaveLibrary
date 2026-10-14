@@ -2,8 +2,8 @@
 
 **Feature:** 51 (custom lists). User-created, named, shareable story collections beyond the system
 lists. Public/private per list. Distinct from `Discovery/`'s search-result narrowing — this is
-**personal organization + shareable curation**. Design settled 2026-07-13 (see below); building as
-WU-CustomLists.
+**personal organization + shareable curation**. Design settled and built as WU-CustomLists,
+2026-07-13 (see below).
 
 ## Shared Context
 
@@ -139,7 +139,7 @@ pre-existing in-flight finding):
   remain in the dev DB as ordinary fixture data.
 - **L5 — Stage 5.** `CustomListEndpoints` (`/api/custom-lists`, canonical naming; auth mirrors
   page posture — `/mine`+`/memberships` gated, detail/ids/public-by-user anonymous;
-  `EndpointHelpers.ExecuteWriteAsync` translation; `Results.Json` empty-body-null on the nullable
+  `EndpointHelpers.ExecuteAsync` translation; `Results.Json` empty-body-null on the nullable
   detail) + `ClientCustomList{Read,Write}Service` (nullable read via `GetNullableFromJsonAsync`;
   status→exception translation). **Unit**-covered (`ClientCustomListServiceTests`: URL/verb
   shapes, empty-body → null, 400/401/403/404/5xx translation) and live-proven under the real

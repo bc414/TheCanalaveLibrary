@@ -73,7 +73,10 @@ class). Then explicitly list what was verified sound — the absence report is h
 Scope: files recent work did NOT touch (they escape both the gates' registries and the
 session's attention). Probe for the known defect classes: (1) headline/summary lines
 contradicted by later dated notes in the same file, (2) claims superseded by paradigm
-shifts (check the status.md standing-constraints list for the current shift inventory),
+shifts (check the status.md standing-constraints list, plus
+`roadmap.md` §Resolved entries and the `audit-decision-worksheet.md` **Built:** lines dated since the
+last probe, for the current shift inventory — status.md alone does not list rulings that bind
+through the conventions),
 (3) references to deleted/renamed code (verify against the codebase, not other docs),
 (4) internal cross-references that don't resolve. Read small files fully; for large files
 read all headers + spot-check N claims against code. Report a coverage note (read fully
@@ -88,6 +91,8 @@ swept files.
 - `workplan*.md` dated DONE entries and `audit/*.md` dated Stage notes are as-of-date
   records — dead names inside them are legitimate history. Headline stage lines and
   section headers ARE auditable (the moment-3 rule keeps them current).
+- `design/audit-decision-worksheet.md` entries carrying a **Built:** line are history (CLAUDE.md);
+  dead names inside them are legitimate. Unticked entries (open owner decisions) remain auditable.
 - Retired/discharged docs (banner in first lines) are out of scope entirely.
 
 ## After the audit

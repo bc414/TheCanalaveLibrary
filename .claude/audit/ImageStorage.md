@@ -445,6 +445,6 @@ components belong to their owning feature (`StoryPropertiesForm` for WU24, profi
 L5 stays N/A **by design, post-flip**: `IImageStorageService` is one of the deliberate structural
 exclusions never client-implemented — upload flows (`InputFile` → `SaveAsync`) run server-side via
 the stream/multipart endpoint pattern, not a client service body-swap. See `layer5-wasm.md`
-§"Scope Inventory"/"Avoid" and the exclusion comment in `TheCanalaveLibrary.Client/Program.cs`.
+§"Avoid" and §"Streams and multipart" and the exclusion comment in `TheCanalaveLibrary.Client/Program.cs`.
 (The original WU12-era rationale — "InteractiveServer calls the service directly, endpoint not
 designed yet" — predates the Global Flip and is superseded by that recorded exclusion.)

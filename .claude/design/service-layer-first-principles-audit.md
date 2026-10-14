@@ -191,6 +191,11 @@ re-notifies unconditionally — a double-click double-increments. Reject/Delete 
 
 ### 2.2 TPT cascade orphans — the schema audit's §2.2, verified live
 
+> **Built:** WU-TptHardDelete (2026-09-30), per worksheet D10, jointly with schema §2.2's RESTRICT
+> flip. All three sites delete through `TptDelete`, and group posts have their own update/delete
+> methods. Rule: `layer2-services.md` §"Hard deletes of content parents". The findings below are
+> history.
+
 DB cascades delete TPT *child* rows only; the abstract base rows orphan and poison every
 polymorphic query. `ServerChapterWriteService.DeleteChapterAsync` (:316-319) is the one guarded
 site and is verified sound (comments EF-deleted from both tables; the set is closed under replies;
@@ -533,13 +538,15 @@ Clamp to [0,1] + reject non-finite in the service; write the invariant into the 
 > the WU37 pairing residual, the EPUB/DOCX decompressed bound, legacy encodings, the `GetForStoryAsync`
 > author probe, the fabricated messaging participant. Left: `EditCommentAsync`'s throttle (D20: edits
 > exempt) and takedown check (owner-open, `roadmap.md` row 29 / tracker F26); the site-poll
-> `RelatedEntityId = 0` (D16's re-point backlog, tracker B23, "not urgent"); the other items name their
-> own owners.
+> `RelatedEntityId = 0` (D16's re-point backlog, tracker B23, "not urgent"). Items other WUs built are
+> marked inline too; the remaining unmarked items (archived-poll votability D42, mod-queue bound D20,
+> case-insensitive checks D29, USI all-null date rows D31) wait on pending worksheet rows.
 
 Reply depth unbounded at write and invisible at read (four one-line root checks) [built WU-ParityAndRemaining 2026-10-13]; polls: archived
-site polls remain votable, single-choice vote race leaves two standing votes, site-poll edit
+site polls remain votable, single-choice vote race leaves two standing votes [built WU-PollVoteIntegrity 2026-10-13], site-poll edit
 notifications carry `RelatedEntityId = 0`; vouch 5-limit and hidden-gem/highlight limits are
-check-then-act with no backstop (ratify or advisory-lock per §3.15); `CreateGroupAsync` two
+check-then-act with no backstop (ratify or advisory-lock per §3.15) [ruled D23: stated-soft; vouch
+insert an upsert, WU-CounterSymmetry 2026-09-30]; `CreateGroupAsync` two
 commits no transaction + raw-500 on duplicate name [built WU-ParityAndRemaining 2026-10-13]; `CreateChapterAsync` two-step save unwrapped
 (permanent `PrimaryContentId=null` chapter on crash) [built WU-ParityAndRemaining 2026-10-13]; Fanon write service claims takedown
 filtering its unfiltered write context cannot provide (adoption invites fire for removed stories;
@@ -555,11 +562,11 @@ the residual doubled member is refused since WU-ParityAndRemaining 2026-10-13]; 
 avatar/cover blobs (and abandoned cover uploads orphan — ownership decision §3.16) [ruled D14; built WU-BlobCleanup 2026-10-13]; saved-selection
 and tag-name app-level case-insensitive checks sit over case-sensitive DB indexes (mixed-case race
 persists a duplicate the app can never recreate — schema §3.1's service half); N+1 in
-`GetPublicSelectionsByUserAsync`; EPUB decompressed-size unbounded; legacy-encoding imports garble
+`GetPublicSelectionsByUserAsync` [fixed WU-QuickFixes 2026-09-20, MA-408]; EPUB decompressed-size unbounded; legacy-encoding imports garble
 without a warning [both built WU-ParityAndRemaining 2026-10-13, DOCX bounded too]; `banned (int?)` scalar projection shipped verbatim in `UploadCoverArtAsync` [closed WU-BlobCleanup 2026-10-13: the method loads the story and compares `AuthorId`, so an authorless story is 403, not 404];
 ExternalVerification `SingleAsync` → 401-instead-of-404 error class (same class as nonexistent
-report id → 401 in moderation); mod-report queue unbounded; unresolvable zombie sibling reports on
-removed targets; `GetForStoryAsync` author-probe uses the filtered set (mature-off author can't see
+report id → 401 in moderation) [both 404 since WU-ModerationIntegrity 2026-09-30]; mod-report queue unbounded; unresolvable zombie sibling reports on
+removed targets [built D7, WU-ModerationIntegrity 2026-09-30]; `GetForStoryAsync` author-probe uses the filtered set (mature-off author can't see
 the NeedsRevision recs they must manage) [built WU-ParityAndRemaining 2026-10-13]; notification-cluster
 `MessagingParticipantDto` fabricates `/user/0` links [built WU-ParityAndRemaining 2026-10-13: null,
 rendered "[deleted user]"]; USI all-null date-partition rows retained on HasStarted-only rows.
@@ -574,6 +581,9 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
 1. **Is the F48 approval queue mandatory?** The code holds both positions at once (§2.1.1). Enforce
    transitions or cut the queue; the halfway state is the only wrong answer. Drives the fix shape
    for 2.1.1 and both date stamps (§2.9).
+   > **Ruled and built:** worksheet D1 (2026-08-04: mandatory, but only for authors who have never
+   > had a story approved; the first approval grants a monotonic trust waiver), built
+   > WU-StoryLifecycle (2026-09-30); rule in `layer2-services.md` §"Story Lifecycle".
 2. **Where recommendation provenance lives** (§2.3.3): decouple `user_story_recommendation_sources`
    from the USI composite FK (FK users+stories directly — survives sparse cleanup, insertable at
    any time) vs upsert-parent vs capture-at-MarkStarted. Only the first fixes both failure modes.
@@ -632,6 +642,9 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     surface once, per the audit-before-crosscutting rule; ratify the view-ping's
     anonymous-unthrottled posture explicitly if kept (views are never sort keys — bot inflation
     accepted), or add the IP-partitioned limiter now.
+    > **Throttle half ruled and built:** worksheet D20 (2026-08-07), built WU-ThrottleCoverage
+    > (2026-10-13); rule and enumeration in `security.md` §"Write Throttling". The bounds/caps half
+    > is still pending (D20 unticked; WU-BoundsAndCaps).
 14. **Counter transactionality wording**: every cluster runs counters post-commit in a second
     transaction; the doctrine (and spec §9.4) say "same transaction." Adopt "post-commit,
     recompute-corrected" as the stated contract (and note which counters *have* no recompute —
@@ -827,7 +840,11 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 | §5.24 "download their stories" | Export = what you can read | ✅ ratified |
 | §5.26 spotlight donations | Dormant seam exactly as specified | ✅ |
 | §5.26 tree-search filter composition | Post-traversal composition (WU44) | ✅ settled |
-| §9.4 counters same-transaction | Post-commit layer-wide | ⬜ §3.14 wording ruling |
+| §9.4 counters same-transaction | Post-commit layer-wide | ✅ ratified: post-commit, recompute-corrected (worksheet D22; WU-CounterSymmetry 2026-09-30) |
+
+> As of 2026-10-14 every ⚠ row above points at a finding that now carries a Built banner (the
+> Shipped cells describe the 2026-08-03 code); the ⬜ rows §3.21 and §5.12 remain pending (worksheet
+> D38, D40).
 
 ---
 
@@ -837,16 +854,24 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 
 1. **WU-StoryLifecycle** — §2.1.1 transition table + `CanSubmitForApproval` wiring + both date
    stamps (§2.9) + the §3.1 queue ruling. The single highest-stakes item.
+   > Built 2026-09-30.
 2. **WU-TptHardDelete** — §2.2's three sites + group-post lifecycle methods + false-comment fixes,
    jointly with schema §2.2's FK flip. One cross-cutting WU.
+   > Built 2026-09-30 (with schema §2.2's RESTRICT flip).
 3. **WU-ModerationIntegrity** — §2.1.2 + §2.1.3 + §2.4.4 (+ §3.9 sibling ruling, §3.8 read gates,
    the WIP client-exception finish §2.7.5, and schema §3.7's report columns per the audit-record
    gap). Moderation tooling is newly reachable; these are its sharp edges.
+   > Built 2026-09-30.
 4. **WU-InertFeatures** — §2.3's three: new-chapter fan-out, nullable notification source
    (+ §3.4 de-identification), attribution FK redesign (+ §2.4.1's gate).
+   > Built 2026-09-30.
 5. **WU-BoundsAndCaps** — §2.5 as one policy pass (+ §3.13's throttle enumeration, §2.11's clamp).
+   > Throttle half built as WU-ThrottleCoverage (2026-10-13); bounds/caps, §2.11 and the rest still
+   > pending D20.
 6. **WU-ParityAndRegistration** — §2.7: error-list extension, the seven-cluster DI sweep, resplit
    JSON fix, anon-scroll guards, sprite-seam client transport (before CDN cutover).
+   > Built as **WU-ParityAndRemaining** (2026-10-13), without the seven-cluster DI sweep, which waits
+   > on worksheet D36.
 7. **WU-AccessGateSweep2** — §2.6's asymmetries in one pass (blog detail, acknowledgments,
    lineage source, selection copy, series ruling, clears-vs-raises, AllowProfileComments), against
    `access-gating-first-principles.md`.
@@ -857,15 +882,18 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
    > the §2.1 and §2.4 banners.
    **Notification-correctness batch** — §2.8. Remaining §2.12 items ride whichever WU touches
    their cluster next.
+   > WU-FolderIntegrity's scope built as WU-SchemaHardening (2026-10-13); the notification-correctness
+   > batch built as WU-NotificationCorrectness (2026-10-12) plus WU-InertFeatures/WU-ThrottleCoverage
+   > (see the §2.8 banner).
 
 **Decision batch for the owner:** §3's twenty numbered rulings — most are one paragraph; items
 1–5 unblock fix-WUs 1, 3 and 4 and should come first.
 
 **Doc-correction pass:** §4's table + false-comment inventory, one WU, gated by the doc-audit
 skill's probes afterward. *(Corrections built WU-DocCorrections, 2026-10-13, with review fixes
-2026-10-14. **The probe gate is still open:** neither pass had a subagent tool, so both ran mechanical
-substitutes only, and the fresh-eyes probes the skill requires are tracker **H42**, which the
-campaign's wrap-up waits on.)*
+2026-10-14. Neither of those passes had a subagent tool, so the fresh-eyes probes the skill requires
+became tracker **H42**; they ran 2026-10-14 and H42 is closed — coverage line in `workplan.md`'s
+WU-DocCorrections DONE entry.)*
 
 **Explicitly not this audit's scope:** L6 index builds (the reconciliation matrix owns them —
 §3.20 flags the one story-centric USI gap it already tracks), the live `pg_indexes` sweep,

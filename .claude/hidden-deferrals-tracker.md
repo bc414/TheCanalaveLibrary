@@ -216,7 +216,7 @@ decision work that has no row at all.
   - Grid: F22 all=5; F58 (recalc worker) L2=5 — unchanged, producers filled in under already-Stage-5 cells.
   - Source: `audit/Profiles.md` Feature 22 deferred-counters note; `layer2-services.md` §"Counters deferred — producer not yet built"; `UserStatRecalculator.cs`.
   - **`AcknowledgedAsBetaReaderCount` + `AcknowledgedAsInspirationCount` — DONE.** Source ambiguity resolved: `StoryAcknowledgment` role 1 (consent-gated — self-credit rejected outright, recipient must accept) for BetaReader; the already-built, already consent-gated `StoryLineage` "Inspired By" approval for Inspiration (a producer hook, not a new feature). Both recomputed by `UserStatRecalculator` now. **Also measured, not just built** (same day, closing the follow-up this counter would otherwise have joined C4/F49/F15 as): `SeedTool` gained generators for both, and a direct `psql` cross-check of `UserStatRecalculator`'s own aggregate SQL against seeded data returned zero mismatches — see `workplan.md` WU-StatBadgeProducers' `SeedTool` follow-up note. Full narrative: `audit/Badges.md` §"WU-StatBadgeProducers"; `audit/Profiles.md` Feature 22/58; `audit/Stories.md` Feature 10.
-  - **`SpotlightCount` → re-filed under B8** (below) as its owner. Not built by WU-StatBadgeProducers — no badge consumes it, and `audit/Spotlight.md:58` already files it as riding with the donation pipeline.
+  - **`SpotlightCount` → re-filed under B8** (below) as its owner. Not built by WU-StatBadgeProducers — no badge consumes it, and `audit/Spotlight.md` §"Deferred (Phase-4 verdict rendered 2026-07-11: past beta)" (the Patron/Spotlighter badge bullet) already files it as riding with the donation pipeline.
 
 - [x] **B4 — Badge award automation: 1 of 5 (BetaReader has no producer) — DONE (WU-StatBadgeProducers, 2026-07-31)** `[inert · med · beta]`
   - Grid: F50 L1/L2/L3/L3.5/L5=5 — unchanged.
@@ -275,7 +275,7 @@ decision work that has no row at all.
     sender and `User` targets are the account itself. Populating it for `User` targets too makes the
     history one predicate (`ReportedUserId == uid`) and a strict superset of today's list.
     WU-ModerationIntegrity owns the column + migration.
-  - Next: extend `UserModerationHistoryDto.Reports` to read by the new column and **delete** (not
+  - Next (as filed; superseded by the resolution in the heading): extend `UserModerationHistoryDto.Reports` to read by the new column and **delete** (not
     narrow) `ModUsersPage`'s on-screen caveat.
 
 - [ ] **B19 — No role grant/revoke capability exists anywhere** `[off-grid · med · beta]` — *Found by WU-UserModeration, 2026-08-01.*
@@ -429,7 +429,7 @@ decision work that has no row at all.
     consumers, so fixing this means passing an `InitialPageSize` seed through its contract and
     checking every consumer, not a SearchPage-local change — a full audit of the panel's consumers
     before touching the contract, one WU, not a point fix riding this one's coattails.
-  - Next: enumerate every `ResultsFilterPanel` consumer, decide whether `PageSize` becomes a new
+  - Next (as filed; superseded by the resolution in the heading): enumerate every `ResultsFilterPanel` consumer, decide whether `PageSize` becomes a new
     `InitialPageSize` parameter (seed pattern, mirrors `InitialFilter`) or is read by each dispatcher
     from `IUserSettingsService` directly, then wire it everywhere in one pass.
 
@@ -1356,6 +1356,8 @@ unless noted. All sit under Stage-5 cells.
 
 - [ ] **E13 — A stale WASM session still takes down most listing pages through the interaction-mark read** `[latent-risk · med · beta]` — *Filed 2026-10-13 by the WU-TrackerFixes browser pass.*
   - Grid: no cell moves at filing. The surfaces sit under F5, F9, F17, F33, F40, F51, F55, F59 and F61.
+    Whether their L4.5 cells may keep reading 5 over this known runtime bug is an owner call, tracker
+    **G5** (filed 2026-10-14).
   - **What happens.** A signed-in viewer whose cookie expired after prerender still reads as signed in
     on WASM. The cards' `GetStatesByStoryIdsAsync` (and `StoryPage`'s single `GetStateAsync`) then
     answers 401, and `ClientUserStoryInteractionReadService` throws a bare `HttpRequestException` that
@@ -1399,7 +1401,7 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
 
 - [ ] **F4 — Email production path (provider + domain + deliverability DNS)** `[decision · med · launch]`
   - Source: `roadmap.md` Decision row 8 / `middle_plan_v2.md` Resolved "Email mechanism"; `middle-addendum.md` §3 #13.
-  - Context: Mechanism is resolved (config-only swap), but provider + sending domain are unchosen. **SPF/DKIM/DMARC DNS is not even in the Phase-7 checklist** — directly gates whether confirmation/reset mail reaches real users. WU-Email flipped no cells, so email's production gap is fully invisible on the grid.
+  - Context: Mechanism is resolved (config-only swap), but provider + sending domain are unchosen. SPF/DKIM/DMARC DNS is on the Phase-7 checklist (`roadmap.md` Phase 7, "Sending-domain DNS", since 2026-07-27) under decision row 8, and must verify before beta invitations go out — it directly gates whether confirmation/reset mail reaches real users. WU-Email flipped no cells, so email's production gap is fully invisible on the grid.
 
 - [ ] **F5 — Beta logistics** `[decision · med · beta]`
   - Source: `roadmap.md` Decision row 6.
@@ -1473,8 +1475,14 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
   - Context: focus trap + restore (`modal.js`, document-level `MutationObserver`, no `IJSRuntime`
     interop — InteractiveAuto prerender/circuit/WASM timing rules it out), the `dismiss.js`
     modal-first Escape branch, `aria-modal="true"` on `Modal`, `CanalaveTypeahead` combobox ARIA
-    (`role="combobox"`/`listbox`/`option`), the manual keyboard script, **and now also the
-    axe-DevTools browser pass F6 didn't reach** (six pages, contrast verification — see F6). Two
+    (`role="combobox"`/`listbox`/`option`), the manual keyboard script, and tracker **H16**'s
+    bool-bound `aria-pressed`/`aria-expanded` (convert to `"true"`/`"false"`, rewrite the
+    `UserStoryInteractionPanelTests` assertions that encode the defect, add the `check-a11y` rule; the
+    combobox ARIA needs `aria-expanded` and must not repeat it — routed here 2026-10-14 by
+    WU-DocCorrections' doc-audit probes). **Axe:** the axe-DevTools pass already ran 2026-07-31 over six
+    pages (F6's addendum; `audit/Accessibility.md` Stage-note Addendum). Only `/Account/Login` and
+    `/Account/Register` went unscanned (they returned a 500 until WU-H10Fix), so re-run axe on those
+    two, and re-check contrast once **H11**'s token decision lands. Two
     traps for whoever
     picks this up: the focusable selector inside the trap **must** include
     `[contenteditable="true"]` or `ComposeConversationModal`'s Quill body becomes
@@ -1918,6 +1926,34 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [x] **G3 — Stale "deferred workers" note** `[doc-drift · low · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene3):** the Post-MVP "Deferred workers" bullet now records both workers built 2026-07-15 (WU-NotificationCleanup / WU-UserStatRecalc, archive).
 
+- [ ] **G4 — F62 L5 and F53 L5 read N/A, but both features have an endpoint and a registered client impl** `[doc-drift · low · anytime]` — *Filed 2026-10-14 by WU-DocCorrections' doc-audit probes. A grid correction, so it waits on the owner (the F47/F48 N/A→5 precedent, WU-DocHygiene 2026-07-27, was owner-approved).*
+  - Grid: `status.md` row 62 L5 = N/A, row 53 L5 = N/A.
+  - Context: `status.md`'s "L5 column semantics" and `layer5-wasm.md` §"L5 Stage Semantics" define L5
+    Stage 5 as an endpoint class plus a client impl, built and registered. F62 has
+    `Server/Moderation/SiteDailyStatEndpoints.cs` and `ClientSiteDailyStatReadService` (registered in
+    `Client/Program.cs`), built by WU-L5Sweep; `/mod/stats` is browser-driven on both render phases
+    (`audit/Moderation.md` F62). F53 has `ClientExternalVerificationReadService` and
+    `ClientExternalVerificationWriteService`, both registered. F62's N/A came from the 2026-07-11
+    WU-SiteDailyStat note ("server-rendered only, no WASM flip"), written before the Global Flip.
+  - Next: on the owner's word, flip both cells N/A→5 in `status.md`, rewrite `audit/Moderation.md`'s F62
+    headline L5 clause and F53's headline, and mark the 2026-07-11 note's "L5=N/A" superseded.
+
+- [ ] **G5 — Grid cells read L4.5 = 5 over known, still-open runtime bugs (H25, E13)** `[doc-drift · med · beta]` — *Filed 2026-10-14 by WU-DocCorrections' doc-audit probes. An owner call: the fix is either code or a grid move.*
+  - Grid: F6 and F63 L4.5 = 5 over **H25** (a draft-chapter save lands on the not-found page; imported
+    HTML is mangled by `SetHtmlAsync`); F5, F9, F17, F33, F40, F51, F55, F59 and F61 L4.5 = 5 over
+    **E13** (a stale WASM session takes a listing page down through the interaction-mark read).
+  - Context: CLAUDE.md §"Per-Stage Process Guidance" → "Runtime bug surfaces during verification" says
+    not to leave a cell's Stage number describing code that is not sound while the fix waits. H25 (found
+    by the WU-DependencyCVEs browser pass, 2026-10-12) and E13 (the WU-TrackerFixes browser pass,
+    2026-10-13) were both filed with "no cell moves", because neither bug was in the filing WU's code.
+    The rule makes no exception for pre-existing bugs. Verified live 2026-10-14:
+    `ChapterEditorPage.razor` still navigates to the reading URL after every save, and
+    `EditorView.razor` still calls `LoadHTMLContent`.
+  - Next (owner): either fix H25 and E13 (both items carry a fix shape), or lower the affected L4.5
+    cells to 1 with audit Stage notes naming H25/E13 (the L4.5 band defines only 1, 5 and N/A), or
+    state in CLAUDE.md that a bug found outside the WU under verification does not move a cell.
+    Record the choice in the WU that takes it.
+
 ---
 
 ## H. Design/polish & test-hygiene (lower priority)
@@ -1969,7 +2005,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
     - ~~**VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit~~ — **FIXED 2026-09-20 (WU-QuickFixes)**: `FollowButton` raises `OnFollowChanged`, `ProfileBanner` mirrors it into the vouch gate; new `ProfileBannerTests` cover it. Detail: `audit/Following.md` §"WU-QuickFixes slice".
     - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md` §"Table naming — disambiguation from story↔story lineage (Feature 10)", the MA-118 scope caveat (cited by line number until WU-DocCorrections, 2026-10-13; the number had drifted).
-    - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).
+    - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md` §"The Automatic Tree Search consumer (Feature 59) — rCTE conventions", the "Accepted consequence" bullet (same "hard-mode" idea as E6).
 
 - [x] **H7 — Open test-hygiene backlog — DONE (WU-TrackerFixes, 2026-10-13)** `[test-gap · low · anytime]` The C-consolidate merges are done (24 tests folded, every assertion kept; the spec's 25th no longer existed), the last `Task.Delay` ordering hack is gone (`SiteAnnouncementServiceTests`), and `SeedUserStatAsync` is one `IntegrationTestBase` helper (nine private copies removed or wrapped). `testing.md` states both rules. Commit `c4f3ef8`.
   - Source: `test-hygiene-manifest.md` (retired 2026-07-27 — this item is now the ledger of record; the manifest's §5 table lists the individual merge targets).
@@ -1999,6 +2035,8 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     file; deleted in `e323073`), as are the device-detection files MA-608 listed. Two moves remain:
     `Server/Components/Layout/MainLayout.razor` (MA-012) and `SharedUI/Pages/{NotFound,Welcome}.razor`.
     Both still move when their cluster is next touched.
+    **Split out 2026-10-14 (WU-DocCorrections' doc-audit probes):** those two moves are open item
+    **H44**, so this ticked item records the decision only and a scan for open boxes finds the residual.
 
 - [ ] **H9 — Identity alternate-login flows never verified end-to-end** `[test-gap · low · pre-launch]`
   - Grid: F1 mostly 5 (L4=1); no cell captures this specifically.
@@ -2096,7 +2134,8 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [ ] **H16 — Bool-bound ARIA state attributes render absent or empty, never `"false"`/`"true"`** `[a11y · med · beta]` — *Observed 2026-09-30 by the WU-AccessGateSweep2 browser pass.*
   - Grid: no single cell. Every toggle and disclosure control below; the closest owner is the
-    A11y sweep (`audit/Accessibility.md`).
+    A11y sweep (`audit/Accessibility.md`). **Routed 2026-10-14** (WU-DocCorrections' doc-audit probes)
+    to WU-A11y-Keyboard, whose combobox ARIA needs `aria-expanded` (tracker F6b; `workplan.md` Planned).
   - Context: Blazor drops an attribute whose value is `false` and writes `true` as an empty value.
     So `aria-pressed="@_isFollowing"` renders with no `aria-pressed` at all when off, and as
     `aria-pressed=""` when on (observed live on `FollowButton`). The off state then reads as "not a
@@ -2275,7 +2314,8 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 - [ ] **H25 — Chapter editor: imported HTML loses its blockquotes and gains empty paragraphs, and saving a draft chapter lands on "Page not found"** `[polish · medium · beta]` — *Observed 2026-10-12 by the WU-DependencyCVEs browser pass. Neither is in that WU's code.*
   - Grid: F63 L3-Logic (`ChapterFileImport` → editor) and F6 L3-Logic (`ChapterEditorPage`) stay 5.
     Both defects are pre-existing, not regressions of the AngleSharp move: the server-side readers
-    and the bulk import store correct HTML.
+    and the bulk import store correct HTML. Whether F6/F63 L4.5 may keep reading 5 over this known
+    runtime bug is an owner call, tracker **G5** (filed 2026-10-14).
   - **Imported HTML is mangled when it reaches Quill.** `EditorView.SetHtmlAsync` calls Blazored's
     `LoadHTMLContent`, which assigns `quill.root.innerHTML` raw and bypasses Quill's clipboard
     conversion. Inter-block whitespace (every Markdown import, any pretty-printed HTML file) then
@@ -2808,12 +2848,23 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - **`IContentImportService` lifetime asymmetry** (singleton on the server). Blocked on worksheet
     **D36/D37** (pending).
 
-- [ ] **H42 — Run the doc-audit probes with fresh eyes over the worksheet campaign's docs** `[doc-drift · med · beta]` — *Filed 2026-10-13 by WU-DocCorrections. Raised by its review fixes, 2026-10-14: this is WU-DocCorrections' own unfinished gate, not optional polish.*
+- [x] **H42 — Run the doc-audit probes with fresh eyes over the worksheet campaign's docs — DONE (2026-10-14)** `[doc-drift · med · beta]` — *Filed 2026-10-13 by WU-DocCorrections. Raised by its review fixes, 2026-10-14: this is WU-DocCorrections' own unfinished gate, not optional polish.*
+  - **Closed 2026-10-14.** All three probe shapes ran as fresh subagents, and none died: Probe 1 (a
+    cold walk of CLAUDE.md's read order and two task trails), Probe 2 split six ways over
+    `git diff 1940078..HEAD` (the ledgers; the conventions core; the convention layer files; `audit/`
+    A–I; `audit/` M–Z; `design/`), and Probe 3 over the untouched tail (`middle-addendum.md`,
+    `audit/Lookups.md`, `audit/Accessibility.md`, `design/access-gating-audit.md`, the
+    `modernization-audit/` record and others). An adversarial verifier confirmed each finding against
+    the code or a third source. The confirmed fixes landed in one WU-DocCorrections doc commit; the
+    owner calls became **G4** and **G5**; H8's open residual became **H44**. The gate's Check 4 was
+    narrowed (its line-wide no/not/was/were exemption hid dead file names) and `SiteConstants` was
+    registered as retired. Coverage line: WU-DocCorrections' DONE entry. The campaign's wrap-up no
+    longer waits on this item.
   - Grid: no cell moves.
-  - **Gate.** The amendments and service audit §7 make these probes part of WU-DocCorrections, so the
+  - **Gate (as filed; met 2026-10-14).** The amendments and service audit §7 make these probes part of WU-DocCorrections, so the
     campaign's wrap-up (the final verification and the owner summary) waits on this item. It needs a
     session with a subagent tool.
-  - **Why open.** Service audit §7 gates the doc-correction pass on `doc-audit/SKILL.md`'s probes, and
+  - **Why open (as filed).** Service audit §7 gates the doc-correction pass on `doc-audit/SKILL.md`'s probes, and
     the amendments ask for Probes 2 and 3 over every doc the 17-WU campaign touched. The skill's first
     rule is that a subagent which never saw the edits runs them. WU-DocCorrections had no subagent tool,
     so it ran mechanical substitutes itself (below). That catches broken routing and grid drift, not
@@ -2868,6 +2919,15 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
        author too); so does any of the author's story notifications for that story.
   - **Dev DB:** restore every status, takedown, credit and group-story row the pass changes, through
     `psql` or `reset-dev-db.ps1`.
+
+- [ ] **H44 — Just-in-time org moves left from MA-012/MA-112: `MainLayout.razor` and `SharedUI/Pages/{NotFound,Welcome}.razor`** `[polish · low · anytime]` — *Split out of the ticked H8 on 2026-10-14 by WU-DocCorrections' doc-audit probes, so the open residual is visible to a scan for open boxes.*
+  - Grid: no cell moves.
+  - Source: H8's residual (re-verified 2026-10-13 by WU-TrackerFixes and 2026-10-14 by the probes);
+    `modernization-audit/deferred-work.md` §5.
+  - Context: two organizational moves remain from the modernization audit's just-in-time bundle:
+    `Server/Components/Layout/MainLayout.razor` (MA-012) and `SharedUI/Pages/{NotFound,Welcome}.razor`.
+    The "empty folders just-in-time" convention defers each until its cluster is next touched.
+  - Next: move each when its cluster is next touched; no standalone WU.
 
 ---
 

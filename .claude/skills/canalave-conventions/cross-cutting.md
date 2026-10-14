@@ -91,8 +91,8 @@ rung-3 trigger — not a device fork, which no longer exists as a pattern (see
 Live since 2026-07-05 (WU-Aspire). AppHost defines dev containers; it **never deploys**. The
 authoritative resource graph is `AppHost/AppHost.cs` itself (Postgres 18 on host port 5433 →
 `canalavedb`; Redis as `cache` on 6379 (unconsumed at N=1 — see `horizontal-scaling.md`); Garage
-(S3-compatible, `dxflrs/garage`) on port 3900, superseding the spec's MinIO; web = Server's `http`
-launch profile → 5028). Run/stop/wipe workflow: `run-server/SKILL.md` "Aspire path".
+(S3-compatible, `dxflrs/garage`) on port 3900, superseding the spec's MinIO; Mailpit (`axllent/mailpit`, SMTP 1025 / UI
+8025, persistent, no volume); web = Server's `http` launch profile → 5028). Run/stop/wipe workflow: `run-server/SKILL.md` "Aspire path".
 
 Standing rules, all applied in `AppHost.cs`:
 
@@ -101,10 +101,10 @@ Standing rules, all applied in `AppHost.cs`:
   every `Aspire.Hosting.*` package, and any app-side `Aspire.*` client package ride the same
   version (13.4.6). DCP + dashboard are delivered through the SDK's NuGet pin — a mismatched SDK
   runs mismatched orchestration binaries. `aspire update` bumps the whole set.
-- **Persistent-lifetime containers + named volumes + stable secrets.** All three backing services
-  use `WithLifetime(ContainerLifetime.Persistent)`, `WithContainerName("canalave-…")`, and named
-  `-data` volumes. Passwords are `AddParameter(..., secret: true)` from AppHost **user secrets**
-  (`Parameters:postgres-password`, `Parameters:minio-password`) — a stable password is mandatory
+- **Persistent-lifetime containers + named volumes + stable secrets.** The four backing containers
+  use `WithLifetime(ContainerLifetime.Persistent)` and `WithContainerName("canalave-…")`; Postgres,
+  Redis and Garage also get named `-data` volumes (Mailpit keeps none). Passwords are `AddParameter(..., secret: true)` from AppHost **user secrets**
+  (`Parameters:postgres-password`, `Parameters:garage-s3-secret`, `Parameters:garage-rpc-secret`) — a stable password is mandatory
   once a data volume exists (a regenerated one no longer matches the initialized cluster).
 - **The Server consumes plain connection strings.** `WithReference(canalaveDb)` injects
   `ConnectionStrings__canalavedb` as an env var, which overrides `appsettings.Development.json`;

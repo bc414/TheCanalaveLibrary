@@ -226,15 +226,16 @@ five (2026-10-13).
 
 ## HTTP Edge Rate Limiting
 
-`AddRateLimiter`/`UseRateLimiter` covers the surfaces that are plain HTTP today and stay
-that way. The policy set (Program.cs):
+`AddRateLimiter`/`UseRateLimiter` covers the surfaces that are plain HTTP, plus one surface that
+is also reachable over the circuit (the `TagWrites` exception below). The policy set (Program.cs):
 
 - **Auth form posts** (`POST /Account/*` — login, register, forgot/reset password, resend
   confirmation): global partitioned limiter, **per-IP fixed window 10/min**, `QueueLimit = 0`.
   Brute-force / credential-stuffing damping. Complements (does not replace) Identity
   **lockout**, which is per-*account* — the two defend different axes.
-- **Tag write API** (`POST/PUT/DELETE /api/tags*`): named policy `"TagWrites"`, 30/min
-  partitioned by authenticated user name (IP fallback).
+- **Tag write API** (`POST/PUT/DELETE /api/tags*`, and the Fanon author-half endpoints): named
+  policy `"TagWrites"`, 30/min partitioned by authenticated user name (IP fallback). The circuit path
+  to the same services is unthrottled, so this binds WASM callers only (the exception below).
 - **Unsubscribe** (`/unsubscribe/{token}` and, since WU-PrivateMessageEmail 2026-10-13,
   `/unsubscribe/messages/{token}`): named policy `"Unsubscribe"`, per-IP 20/min, one partition
   across both groups — the anonymous, antiforgery-exempt endpoints that write
@@ -244,7 +245,10 @@ that way. The policy set (Program.cs):
 
 **An edge policy never doubles a service bucket.** A write whose service calls `EnsureAllowed`
 takes **no** `RequireRateLimiting(...)`: the bucket already covers both transports, and a second
-limit at the edge would bind WASM callers only. Edge policies are for plain-HTTP surfaces.
+limit at the edge would bind WASM callers only. Edge policies are for plain-HTTP surfaces, with one
+standing exception: `TagWrites`, on the moderator tag API and Fanon's author half. Both are also
+reachable over the circuit, so it binds WASM callers only. It doubles no bucket (mod writes have
+none; the Fanon author half has none) — §"Unthrottled write surfaces", moderator/admin-gated row.
 
 **Rules:**
 - Rejections are **429 with a small plain-text body**, plus a `Retry-After` header when the
@@ -319,8 +323,9 @@ grow script directives. All non-CSP headers are enforced in every environment.
 - **Open redirects:** `IdentityRedirectManager` only redirects to relative/local URIs — any
   `ReturnUrl` flowing into a redirect goes through it (or `LocalRedirect`), never raw
   `NavigationManager.NavigateTo(userSuppliedUrl)`.
-- `RequireConfirmedAccount = true` stands; real activation email is WU-Email's deliverable
-  (`IdentityNoOpEmailSender` is the current placeholder).
+- `RequireConfirmedAccount = true` stands. Activation mail is real since WU-Email: `SmtpEmailSender`
+  when `Email:Provider=Smtp` (the Aspire path → Mailpit), and `IdentityNoOpEmailSender` as the unset
+  default (the server-only path, which shows the link on-page).
 
 ## Account-Status Enforcement (WU38a + WU-AccountEnforcement)
 

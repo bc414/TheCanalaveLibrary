@@ -223,7 +223,7 @@ For high-frequency interactions (Favorite/Follow/Ignore buttons):
 1. **Optimistic local update** on click — toggle the bool, re-render immediately.
 2. **2-second per-component debounce** (`UserStoryInteractionConstants.UserStoryInteractionDebounceMs`
    in `Core/UserStoryInteractions/`, default 2000ms — lives in **Core**, not Server's `SiteConstants`,
-   because `SharedUI` cannot reference Server; spec's literal `SiteConstants.InteractionDebounceMs`
+   because `SharedUI` cannot reference Server; the retired spec-era `SiteConstants.InteractionDebounceMs`
    wording, and the pre-WU23 `InteractionConstants` name, are historical artifacts).
 3. When the timer fires, one API call for that one story.
 4. **A refused flush rolls back and says why** (WU-AccessGateSweep2 browser pass, 2026-09-30). The

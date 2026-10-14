@@ -260,7 +260,7 @@ leaf's. The leaf (`UserCard`) just renders whatever `AvatarUrl` it's given, fall
 
 ```razor
 @* Inside UserCard — AvatarUrl is a stored path or null, never resolved here *@
-<img src="@(User.AvatarUrl ?? "/img/default-avatar.png")" alt="" class="size-10 rounded-full" loading="lazy" />
+<img src="@(User.AvatarUrl ?? "/img/default-avatar.svg")" alt="" class="size-10 rounded-full" loading="lazy" />
 ```
 
 Still governed by the "never inline SVG" rule (avatars are image assets) and the `rounded-full` radius
@@ -284,10 +284,10 @@ element means:
    root-relative under the default root. The raw comparison it replaced never matched, so a missing
    static `.png` was re-requested on every error, forever, and `unknown.png` was never reached
    (WU-ParityAndRemaining browser pass, 2026-10-13).
-2. **Hide** when adjacent text already carries the meaning — badge icons:
-   `onerror="this.style.display='none'"` (`UserCard`, `BadgeSettingsForm`).
-3. **Placeholder swap** when the slot must stay visually occupied — avatars (`onerror` → the
-   default-avatar asset), cover art (`@onerror` flips a `_coverArtFailed` flag to a styled
+2. **Hide** when adjacent text already carries the meaning — badge icons: the `data-hide-on-error`
+   marker, handled by `img-fallback.js`'s delegated listener (`UserCard`, `BadgeSettingsForm`).
+3. **Placeholder swap** when the slot must stay visually occupied — avatars (`data-fallback-src` →
+   the default-avatar asset, same listener), cover art (`@onerror` flips a `_coverArtFailed` flag to a styled
    placeholder block — `StoryPage`, which absorbed the former `StoryDesktop`/`StoryMobile` pair
    2026-07-18).
 

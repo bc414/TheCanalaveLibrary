@@ -39,8 +39,10 @@ public static class TagEndpoints
             Results.Ok(await tags.GetTagChipsByIdsAsync(ids)));
 
         // ── Writes (mod/admin — enforced by the service's RequireModerator(), translated here) ──
-        // RequireRateLimiting("TagWrites"): per-user (IP fallback) HTTP edge limit — the tag API
-        // is the one write surface that is plain HTTP today (security.md "HTTP Edge Rate Limiting").
+        // RequireRateLimiting("TagWrites"): per-user (IP fallback) HTTP edge limit. The same writes are
+        // also reachable over the circuit, where this policy never applies, so it binds WASM callers
+        // only — the one standing exception to "edge policies are for plain-HTTP surfaces" (mod writes
+        // spend no service bucket, so nothing is doubled; security.md "HTTP Edge Rate Limiting").
 
         group.MapPost("/", (ITagWriteService tags, CreateTagDto dto) =>
                 EndpointHelpers.ExecuteAsync(async () => Results.Ok(await tags.CreateTagAsync(dto))))

@@ -9,10 +9,12 @@ Code-First with Fluent API. Models are POCOs in **Core** (references only
 Configure snake_case globally — never hand-name tables or columns:
 
 ```csharp
-builder.AddNpgsqlDbContext<ApplicationDbContext>("canalavedb",
-    configureDbContextOptions: options =>
-        options.UseSnakeCaseNamingConvention());
+builder.Services.AddDbContext<ApplicationDbContext>(options => options
+    .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+    .UseSnakeCaseNamingConvention());
 ```
+
+(Never `AddNpgsqlDbContext` — `layer2-services.md` §"DbContext Registration".)
 
 `EFCore.NamingConventions` auto-converts `UserStoryInteraction` → `user_story_interactions`.
 PostgreSQL folds unquoted identifiers to lowercase. Identity tables (`AspNetUsers`, etc.) retain
@@ -26,18 +28,20 @@ PascalCase — the convention method does not override explicit `IdentityDbConte
 | `ReadOnlyApplicationDbContext` | `NoTracking` globally | Query path (reads) — search, filtering, display |
 
 ```csharp
-// ReadOnlyApplicationDbContext
-protected override void OnConfiguring(DbContextOptionsBuilder options)
-    => options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+// ReadOnlyApplicationDbContext constructor
+ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 ```
+
+The factory registration in `Program.cs` also passes `UseQueryTrackingBehavior(NoTracking)`.
 
 Both map the same schema. `ApplicationDbContext.OnModelCreating` calls `base.OnModelCreating(...)` then
 `modelBuilder.ApplyConfigurationsFromAssembly(...)`. All entity shape/index/FK configuration lives in
 `IEntityTypeConfiguration<T>` classes (location rules in §"Fluent API Organization" below).
 
 `ReadOnlyApplicationDbContext.OnModelCreating` calls `base.OnModelCreating(modelBuilder)` first, then adds
-the four named visibility/display query filters (`"ContentRating"`, `"GroupAudience"`, `"IsTakenDown"` ×4
-roots). These filters don't touch schema and live on the read context **only** — the write context sees
+the four named query filters: `"ContentRating"` and `"StoryStatus"` on `Story` (the latter is Class-A
+confidentiality with an author clause), `"GroupAudience"` on `Group`, and `"IsTakenDown"` on four roots
+(`Story`, `BaseComment`, `BaseBlogPost`, `Recommendation`). These filters don't touch schema and live on the read context **only** — the write context sees
 ground truth with no filters. See `content-safety.md` "Content Rating Filtering" for the principle.
 
 **Migrations are `ApplicationDbContext`-only.** `ReadOnlyApplicationDbContext` owns no migration history
@@ -207,7 +211,7 @@ lifecycle methods) is in `layer2-services.md` §"Hard deletes of content parents
 | **Magic enum** (no table) | Tiny, stable, app-coupled, no display name | `Rating`, `ReportedEntityType`, `CharacterPairingType`, `ProfileVisibility` |
 | **Lookup table** (no enum) | Content-only display; rename/add without deploy | `ReportReason`, `AcknowledgmentRole`, `StoryLineageType`, `Theme` |
 | **Hybrid** (table + enum with `...Enum` suffix) | Both flexible display AND rigid C# logic | `StoryStatusEnum`, `ReportStatusEnum`, `NotificationCategoryEnum`, `NotificationTypeEnum` |
-| **String key** (string PK) | Tiny table; key used directly in C# | `SearchMode.SearchModeKey`, `Badge.BadgeKey`, `UserInteractionFilter.InteractionFilterKey`, `SiteSetting.SettingKey` (mod-editable runtime knobs — value stored as string, typed in `ISiteSettingsService`; see `layer2-services.md` §"Site Settings") |
+| **String key** (string PK) | Tiny table; key used directly in C# | `SearchMode.SearchModeKey`, `Badge.BadgeKey`, `UserStoryInteractionFilterType.UserStoryInteractionFilterKey`, `SiteSetting.SettingKey` (mod-editable runtime knobs — value stored as string, typed in `ISiteSettingsReadService`'s accessors; see `layer2-services.md` §"Site Settings") |
 
 **Magic enums:** stored as `smallint` via `.HasConversion<short>()`. Underlying type `: short`, 0-indexed:
 
@@ -342,7 +346,8 @@ independently. The service layer rejects logically impossible write combinations
 
 - **`LeftJoin` / `RightJoin`** — first-class LINQ operators. Use instead of `GroupJoin`+`SelectMany`+`DefaultIfEmpty`.
 - **Named query filters** — attach multiple named filters per entity, selectively ignore specific ones.
-  Use an enum for filter names (avoid hardcoded strings).
+  Filter names are string literals (`"ContentRating"`, `"StoryStatus"`, `"GroupAudience"`,
+  `"IsTakenDown"`) shared by the registration and every `IgnoreQueryFilters([...])`; spell them exactly.
 - **`ExecuteUpdateAsync`** — accepts non-expression lambda bodies for set-based writes without entity loading.
 - **Explicit default constraint naming** — default constraints can be named explicitly for migration clarity.
 

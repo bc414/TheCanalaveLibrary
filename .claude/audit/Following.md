@@ -4,11 +4,11 @@
 interactions.
 
 ## Shared Context
-**Entity:** `FollowedUser` (Core/Models/) — composite PK `(UserId, FollowedUserId)`, `ReceiveAlerts`,
+**Entity:** `FollowedUser` (Core/Following/) — composite PK `(UserId, FollowedUserId)`, `ReceiveAlerts`,
 `DateFollowed` (DB default). Fluent config: the follower edge is Cascade, the followed edge is `Restrict`
 ("CONFLICT: resolved in C#"). Self-referential M:N through the explicit entity. Vouching does **not**
-live on this entity — see Feature 19 below; it was promoted to its own `Vouch` table during Phase A. No
-services, no components built.
+live on this entity — see Feature 19 below; it was promoted to its own `Vouch` table during Phase A.
+Services and components followed in WU21 (Feature 18 below).
 
 ## Feature 18 — User Following
 
@@ -117,17 +117,18 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
 
 ## Feature 19 — Vouches
 - **L1 — Stage 5 (reconciled Phase B, 2026-06-20; was mis-marked Stage 1).** `Vouch` is a dedicated
-  table (`Core/Models/Vouch.cs`): composite PK `(VouchingUserId, VouchedUserId)`, optional `VouchText`
+  table (`Core/Following/Vouch.cs`): composite PK `(VouchingUserId, VouchedUserId)`, optional `VouchText`
   (`[MaxLength(1000)]`), `DateVouched` (DB default). `FollowedUser.IsVouched` was dropped. FK: voucher
-  edge Cascade, vouched edge Restrict (incoming vouches cleared in C# `DeleteUserService`). Migration
-  `20260620145246_InitialSchema` ships this shape; `dotnet build` and `has-pending-model-changes` are
+  edge Cascade, vouched edge Restrict (incoming vouches cleared in C# `UserDeletionService`). Migration
+  `20260620145246_InitialSchema` shipped this shape (since 2026-07-18 the regenerated
+  `20260719023703_InitialSchema` carries it); `dotnet build` and `has-pending-model-changes` are
   clean. **Superseded-spec note:** spec §5.8 and §8 Open Question #13 still present this as an open
   bool-vs-table choice with `VouchText MaxLength(280)` — that's the historical snapshot (spec is
   read-only). The user resolved the decision Phase B session 2026-06-20: ratify the dedicated table,
   and keep `VouchText` at **1000** (not 280) — code is authoritative, spec is not edited.
 - **L1 — Stage 5 (re-verified WU21, 2026-06-22; `ck_vouches_no_self` since WU-SchemaHardening,
-  2026-10-13 — Stage note at the end of this feature).** `MakeVouchTextUnlimited` migration removes
-  `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
+  2026-10-13 — Stage note at the end of this feature).** `MakeVouchTextUnlimited` migration removed
+  (squashed into the regenerated InitialSchema, 2026-07-18) `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
   Phase B's 1000-char ruling and spec §5.8's original 280; code is authoritative. Applied via
   Testcontainers `Database.MigrateAsync` in the integration suite. `has-pending-model-changes` clean.
 - **L2 — Stage 5 (WU21, 2026-06-22; the vouch insert is an `ON CONFLICT` upsert since WU-CounterSymmetry, 2026-09-30, its notification side tested since its review fixes — see the Stage note below).** Covered by shared `IFollowingWriteService` /
@@ -169,7 +170,7 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   **Settled constraints — do not revisit:** dedicated `Vouch` table; outgoing public / incoming private
   asymmetry (§5.8); 5-per-user cap (anti-snowball scarcity lever); FK delete behavior (see Shared
   Context); `VouchText` is rich HTML sanitized-once-on-save (EditorView/RichTextView/sanitize path).
-- **L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4-Style — Stage 5 (all WU21, 2026-06-22).**
+- **L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4-Style — Stage 5 (all WU21, 2026-06-22; `VouchButton`'s inline catch since the WU-AccessGateSweep2 browser pass, `VouchButtonTests` +1 — Feature 19's Stage notes).**
   `SharedUI/Following/` cluster: `FollowButton.razor` (follow/unfollow + bell; self-contained-write
   inject `IFollowingWriteService`), `VouchButton.razor` (follow-gated; `ConfirmDialog` + `EditorView`
   for rich note; disabled+tooltip at 5-limit; `JSInterop.Loose` in tests), `VouchList.razor`

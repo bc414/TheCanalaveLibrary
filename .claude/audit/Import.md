@@ -127,7 +127,7 @@ Service audit §2.12 (two import items) and §2.7.4.
   the ZIP magic sniff on both container paths: more than `ImportLimits.MaxArchiveEntries` (10 000)
   entries, or more than `ImportLimits.MaxDecompressedBytes` (100 MB) of **real** decompressed bytes
   (stream-counted; declared sizes are never trusted), is an `ImportException`, and so is a corrupt
-  archive. `MaxEpubChapters`' doc no longer calls itself a zip-bomb guard (the Settled bullet above is
+  archive. `MaxEpubChapters`' doc no longer calls itself a zip-bomb guard (the Settled 'Security' bullet below is
   corrected too). Rule: `security.md` §"Archive imports (EPUB / DOCX)".
 - **Legacy encodings.** New `Server/Import/ImportTextDecoder`: BOM, then strict UTF-8, then Windows-1252
   with the new `ImportWarningKind.EncodingFallback` (appended last; the enum travels by number). The TXT,

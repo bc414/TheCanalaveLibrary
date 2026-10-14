@@ -106,15 +106,16 @@ Cross-cutting clusters and their scope:
   tags) + a description-cleaning helper. Consumed by every shareable content page (Stories, Chapters,
   Profiles, Series, BlogPosts, Groups); no single feature owns it. See `render-and-layout.md`
   §"Social Meta Tags (Open Graph)" and `audit/Seo.md`.
-- **`SiteSettings/`** — `ISiteSettingsService` (Core) + `ServerSiteSettingsService` (Server):
+- **`SiteSettings/`** — `ISiteSettingsReadService`/`ISiteSettingsWriteService` (Core) +
+  `ServerSiteSettingsReadService`/`ServerSiteSettingsWriteService` (Server):
   DB-backed, mod-editable runtime tuning values (`site_settings` string-key rows, seeded defaults).
   No owning feature — any feature with a "mods tune this without a deploy" knob consumes it (first:
   Spotlight). Distinct from `Profiles/` user settings and from `appsettings` deploy config. See
-  `layer2-services.md` §"Site Settings (`ISiteSettingsService`)".
+  `layer2-services.md` §"Site Settings (`ISiteSettingsReadService`/`ISiteSettingsWriteService`)".
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/ThemeEndpoints.cs`
-beside `Server/Sprites/ServerSpriteReadService.cs`), **not** flattened into one `Endpoints/` folder.
+beside `Server/Sprites/ServerThemeReadService.cs`), **not** flattened into one `Endpoints/` folder.
 This is deliberately the opposite of EF configuration's rule below: a route is normally edited in
 lockstep with the service method it calls (same edit-locality argument that places service impls in
 cluster folders), whereas EF configuration is a cross-feature delete-cascade *graph* edited as a whole
@@ -173,7 +174,9 @@ mature content off could join an M-audience group.
    pick a policy or pre-decide a pending owner row. If code and comment disagree in a way that looks like
    a bug, fix the comment to match the code and file the bug on `hidden-deferrals-tracker.md`.
 4. **Cite convention docs by their current file and section.** `cross-cutting.md` was split on
-   2026-07-07 (its header lists where each section went), so a pre-split `cross-cutting.md` citation
+   2026-07-07 (its header names the four themed files and the three layer files that took the rest;
+   there is no per-section map, so find a moved section by grepping its heading across
+   `canalave-conventions/`), so a pre-split `cross-cutting.md` citation
    usually names the wrong file. Re-point it when you touch the comment.
 
 ## Layer Files — Read Before Working

@@ -527,8 +527,9 @@ database; a worker batch-flushes on a fixed cadence. Behavior is identical to di
 within the loss window (one flush interval; hard crash loses at most that).
 
 **The four pieces per signal** (canonical pair: `ReadingProgress*` in `Server/Chapters/`,
-`ViewCount*` in `Server/Stories/`; a third, `LastActive*` in `Server/Identity/`, follows the same
-shape keyed per-user with a latest-timestamp merge — see `layer8-data-marts.md`):
+`ViewCount*` in `Server/Stories/`; a third, `UserActivity*` in `Server/Identity/`
+(`UserActivityBuffer`/`UserActivityFlusher`/`UserActivityFlushWorker`, stamping `User.LastActiveUtc`),
+follows the same shape keyed per-user with a latest-timestamp merge — see `layer8-data-marts.md`):
 
 1. **Buffer** — singleton `ConcurrentDictionary` keyed per signal identity, merged O(1) in
    `Record(...)` (max+latest for progress and last-active; sum for views). `Drain()` removes-and-returns all
@@ -1311,7 +1312,8 @@ type's `DefaultEmailEnabled` would never reach them. The mechanism, owned by one
   `DELETE … WHERE email_enabled IS NULL AND collapsed IS NULL` on the key, whose predicate makes it
   safe against a concurrent writer that has just set a column.
 - **Readers coalesce per field**, in the explicit `s != null && s.X != null ? s.X.Value : nt.DefaultX`
-  shape (three sites: the feed's `Collapsed`, `GetSettingsAsync`, the email flusher's eligibility).
+  shape (three sites: the feed's `Collapsed`, `GetSettingsAsync`, and the notification composer's
+  eligibility in `NotificationEmailComposer`).
   `NotificationSettingDto` carries `EmailIsDefault` / `CollapsedIsDefault` per field; "no row" is no
   longer a meaningful answer once a row can be half-NULL.
 - **Accepted cost (D19, not a defect):** "explicitly chose the value that is today's default" is stored
@@ -1322,7 +1324,8 @@ type's `DefaultEmailEnabled` would never reach them. The mechanism, owned by one
 settable field each, so row-level sparseness *is* per-field sparseness there (§"§8.7 Discovery
 Defaults"). That is the distinction, not a second exception.
 
-9 categories, 47 types with gap-based numbering (30 of them default `EmailEnabled = true`).
+9 categories, 48 types with gap-based numbering (31 of them default `EmailEnabled = true`, as of
+2026-10-14).
 `DefaultEmailEnabled` and `DefaultCollapsed` are required non-nullable on all types.
 
 ### Outbound email pipeline (WU-NotifEmail, 2026-07-31; titled "Email fan-out" until WU-PrivateMessageEmail shared it, 2026-10-13)
@@ -1340,7 +1343,7 @@ flusher were notification-named and lived in `Notifications/` until WU-PrivateMe
 (2026-10-13) renamed and generalized them: shared infrastructure must carry no feature's vocabulary
 (D18).
 
-Inline sending is **rejected**, not deferred: 30 of the 47 seeded types default `EmailEnabled = true`
+Inline sending is **rejected**, not deferred: most seeded types default `EmailEnabled = true`
 and several fan out to every follower of a story or author, so an inline send puts N ×
 (connect → auth → send → disconnect) inside a SignalR circuit write path.
 
@@ -1586,14 +1589,16 @@ across heterogeneous tables. Even with raw SQL, the column set differs per branc
 projections; a heterogeneous `NotificationDto[]` would force the UI into type-switches. The solution is to
 normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — one slot regardless of kind.
 
-**The pattern (applied in `GetNotificationsAsync`):**
+**The pattern (`NotificationEnricher.ResolveTargetsAsync`, `Server/Notifications/` — shared by
+`GetNotificationsAsync` and `NotificationEmailComposer`):**
 
 1. **Materialize the page** via normal LINQ with LEFT JOINs (`UserNotificationSettings` for effective
    Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`,
    and end it in a unique key (`NotificationId`): fan-out rows can share a `DateCreated`, and a
    non-unique order lets offset paging skip or repeat rows across pages.
-2. **Classify** each materialized row's `RelatedEntityId` by a private
-   `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
+2. **Classify** each materialized row's `RelatedEntityId` by `NotificationEnricher`'s private
+   `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch (one copy; never fork it into a
+   caller).
    `RelatedEntityKind` is an internal enum: `None | User | Story | OwnStory | Chapter | OwnChapter | Group | GroupStory | OwnGroupStory | BlogPost | BlogPostDirect | OwnBlogPost | Tag`
    (the `Own*` kinds are the recipient splits described under "Three blog-post kinds" and
    "Story-family kinds by recipient" below).
@@ -1793,7 +1798,7 @@ matrix). If `activeUser.UserId` is non-null, load the user's `UserStoryInteracti
 rows for the same mode and **overlay** (user value wins per key). Anonymous → system defaults only.
 Keep keys where effective `IsEnabled == true`; map filter-key string → enum via a static
 Server-side map (keys live in `Core/Discovery/SiteSearchModes.cs` — moved out of
-`SiteConstants.cs` in WU28). **`HasStarted` is not in the enum** (the catalog
+the former `SiteConstants.cs` in WU28). **`HasStarted` is not in the enum** (the catalog
 has 7 keys but `UserStoryInteractionTypeEnum` has 6 values) — drop it from the mapped output,
 documented in the service.
 
@@ -2251,7 +2256,7 @@ foreach (StoryCharacterPairingDto p in tempStory.StoryCharacterPairings)
 
 ### Validation — server re-reads gates from Tag
 
-The write service calls `ServerStoryWriteService.ValidateStructuredTagsAsync` (or extends `CanSave()`)
+The write service calls `ServerStoryWriteService.ValidateStructuredTagGatesAsync` (or extends `CanSave()`)
 after loading `Tag` rows for all referenced TagIds. **Never trust a DTO-carried gate value
 (`AllowCustomName` — the single flag that replaced `AllowOCDetails`/`AllowSettingDetails`)** —
 load fresh from the `Tag` table. Full rules table below.
@@ -3022,8 +3027,9 @@ one `ExecuteUpdateAsync` setting `ResolvedNoAction`, a NULL moderator, `DateReso
 (81, 82) would claim a moderator review that never happened. `ResolvedNoAction` with a NULL moderator is
 the honest ledger entry: `ResolvedActionTaken` would read as a prior sanction in D8's history (the ban
 signal), and the NULL moderator plus the note distinguish it from a moderator's "no".
-- **Wired at:** `UserDeletionService.DeleteUserAsync` — the comments on the deleted user's profile and
-  the `User` target itself.
+- **Wired at:** `UserDeletionService.DeleteUserAsync` — the comments on the deleted user's profile,
+  the `User` target itself, and the messages of a conversation the deletion leaves empty (D13 edge
+  (a), WU-UserDeletion 2026-10-13; `cross-cutting.md` §"Account deletion").
 - **Not wired (owner-open, tracker F13):** the author self-delete sites (comment, recommendation, blog
   post, site post, chapter, the D15 story delete) and the TPT child comments a hard delete destroys.
   Each is a one-line call once the owner rules on author-delete report status.
@@ -3178,7 +3184,7 @@ Live `SiteBadges` constants: `Patron`, `Recommender`, `BetaReader`, `Architect`,
 `RecommenderSilver` is **retired** (WU-StatBadgeProducers) — see `scripts/check-doc-hygiene.ps1`'s
 retired-name registry. Keys are `public const string` fields on the top-level `SiteBadges` static
 class, moved to `Server/Badges/SiteBadges.cs` (WU-StatBadgeProducers closed MA-108; it previously
-lived in `Server/Data/SiteConstants.cs`, not nested inside a `SiteConstants` type).
+lived in the former `Server/Data/SiteConstants.cs`, not nested inside a `SiteConstants` type).
 
 ## UserStats Updates
 
@@ -3646,7 +3652,7 @@ a partition missing after its own ensure-insert means the parent is gone too. Th
 `group_members` and `vouches` use the same `INSERT … ON CONFLICT DO NOTHING` shape, gated on
 rows-affected. They need no re-read, because nothing is computed from the winner's row.
 
-## Site Settings (`ISiteSettingsService`) — DB-Backed Mod-Editable Runtime Knobs (WU-Spotlight)
+## Site Settings (`ISiteSettingsReadService`/`ISiteSettingsWriteService`) — DB-Backed Mod-Editable Runtime Knobs (WU-Spotlight)
 
 `SiteSettings/` is a cross-cutting cluster (see `SKILL.md` "Code Organization"): **runtime tuning
 values mods change from a mod surface without a deploy.** Distinct from `appsettings` (deploy-time

@@ -342,11 +342,11 @@ auth configured for 401/403 (not redirects), `RequireConfirmedAccount = true`, r
 `PrivacySettings`, `AuthorSettings`). Everything else in the grid depends on this.
 
 **2. Lookup Tables & Seed Data** — All seeded lookup and enum-mirror tables: `StoryStatus`, `TagType`,
-`ReportReason`, `ReportStatus`, `NotificationCategory`, `NotificationType` (~35 types with gap-based
-numbering), `AcknowledgmentRole`, `RecommendationStatus`, `StoryLineageType` (renamed from
+`ReportReason`, `ReportStatus`, `NotificationCategory`, `NotificationType` (48 types as of 2026-10-14,
+gap-based numbering), `AcknowledgmentRole`, `RecommendationStatus`, `StoryLineageType` (renamed from
 `StoryRelationshipType` in WU42, 2026-07-12), `SearchMode`,
-`UserInteractionFilter`, `Theme`, `Badge`, `DefaultSearchSetting` (SearchMode × InteractionFilter
-matrix). Seeded via `HasData()` for enum-backed tables, explicit IDs for non-enum tables. Includes
+`UserStoryInteractionFilterType`, `Theme`, `Badge`, `DefaultUserStoryInteractionFilterSetting`
+(SearchMode × interaction-filter matrix). Seeded via `HasData()` for enum-backed tables, explicit IDs for non-enum tables. Includes
 string-key constants (`Server/Badges/SiteBadges.cs` — moved from the retired `SiteConstants.cs`,
 WU-StatBadgeProducers 2026-07-31).
 
@@ -356,10 +356,12 @@ SearchMode entries (revised per three-axis model §5.3): `SearchPage`, `TreeSear
 make sense), not sources or sorts. "Random Search" is Source=All + Sort=Random on the SearchPage
 surface, not a distinct search mode.
 
-**3. Sprite & Theme System** — `ISpriteReadService` with dual implementations: `ServerSpriteReadService` uses
-`IWebHostEnvironment` + `File.Exists()` with fallback to `unknown_sprite.png`; `WasmSpriteReadService`
-constructs URLs optimistically (no disk/HTTP). `Tag.SpriteIdentifier` stores a key, not a URL — the
-client builds the full path at render time from `wwwroot/images/themes/{theme}/static|animated/`.
+**3. Sprite & Theme System** — `ISpriteReadService` has one shared implementation,
+`OptimisticSpriteReadService` (Core), which builds URLs optimistically (no disk or HTTP) under the
+configured sprite base URL (`/sprites/themes` by default); a missing asset falls back on the client,
+animated webp → static png → the theme's `unknown.png` (`sprite-fallback.js`). Disk checks at
+mod-write time go through the Server's `LocalSpriteAssetProbe`. `Tag.SpriteIdentifier` stores a key,
+not a URL — the full path (`{theme}/static|animated/`) is built at render time.
 Animated WebP format, chosen via `User.PrefersAnimatedSprites`. Adding a theme = a new folder, zero
 DB changes. Theme selection UI.
 
@@ -368,8 +370,11 @@ DB changes. Theme selection UI.
 
 **4. Story Creation & Editing** — Create/edit story metadata across the three-table vertical partition:
 `Story` (hot: status, counts, dates), `StoryListing` (warm: title, short description, cover art URL),
-`StoryDetail` (cold: long description, slug, post-approval status). Story status workflow:
-Draft → PendingApproval → moderator approves to author's chosen PostApprovalStatus. In-place editing
+`StoryDetail` (cold: long description, slug, post-approval status). Story status workflow (owner
+ruling D1, `layer2-services.md` §"Story Lifecycle"): a new story is Draft; an untrusted author's
+Submit goes to PendingApproval, which a moderator approves to the author's chosen PostApprovalStatus;
+a trusted author (an approved story and an unrevoked `CanAutoApprove`) goes straight to
+PostApprovalStatus. In-place editing
 model (edit buttons on the normal story page, not a separate dashboard). `<AdminControls>` component
 for author-only UI. Cover art upload to R2/MinIO. Slug generation (server-side, never client-editable).
 `StoryPropertiesForm` shared form component for create and edit. The primary author may hard-delete their own
@@ -397,7 +402,8 @@ warning with "Skip to next chapter" button when a chapter's rating exceeds the s
 
 **8. Story Arcs** — `StoryArc` table: title, sort order, start/end chapter numbers per story.
 Validation for overlaps/gaps in C# application code. *Spec §8.2 notes the UI for managing arcs was
-never designed — likely Stage 1 for Layers 3–4.*
+never designed; it has since been built (L3/L3.5 Stage 5, L4 Stage 1 per `status.md`; see
+`audit/Stories.md` Feature 8).*
 
 **9. Series & Ordering** — `Series` / `SeriesEntries` for author-defined canonical reading order across
 multiple stories. `OrderIndex` on the junction table.
@@ -576,8 +582,8 @@ experiences. Mobile support for browse mode; edit controls desktop-only.
 **36. Blog Post Display** — View blog posts in context (profile, story, group). All blog posts
 support comments.
 
-**37. Polls** — `BasePoll` → `SitePoll` / `BlogPostPoll` (TPT). *Spec §8.6: detailed UI not
-specified — likely Stage 1 for most cells.*
+**37. Polls** — `BasePoll` → `SitePoll` / `BlogPostPoll` (TPT). *Spec §8.6 left the UI unspecified;
+designed and built by WU-Polls (2026-07-12), see `audit/BlogPosts.md` F37.*
 
 **38. Group Management** — Create/edit groups with three audience types. `GroupMember` junction with
 Role enum.
@@ -732,9 +738,9 @@ own. Today: 237 incidental `aria-`/`role=`/`<label>`/`tabindex` occurrences exis
 semantic HTML and Blazor `EditForm` scaffolding, but no deliberate program — no WCAG reference, no
 keyboard-nav/screen-reader check in `layer4-style.md`'s tier rules, no accessibility test tier, and
 the L4.5-Browser band's own definition never mentions keyboard-only or screen-reader navigation.
-Scope/depth (full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages) is
-gated on `roadmap.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
-freeze sweep. Detail: `audit/Accessibility.md`.
+(That paragraph is as of 2026-07-15.) Scope/depth was settled by decision row 12 (resolved
+2026-07-31): split into WU-A11y (Structure), the static/naming half (DONE 2026-07-31), and
+WU-A11y-Keyboard, paired with the Phase 3 L4 freeze sweep. Detail: `audit/Accessibility.md`.
 
 **66. Viewer Access Gating** — *(added 2026-07-19, minted from decision row 11's resolution; see
 `.claude/design/access-gating-first-principles.md` (authoritative model) and

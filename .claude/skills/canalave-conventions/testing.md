@@ -128,7 +128,10 @@ with "clean state per test":
   test: the mutable `FakeActiveUserContext` singleton back to `Anonymous()`, the signal buffers
   (`ViewCountBuffer` / `ReadingProgressBuffer` / `UserActivityBuffer`, each has a test-only
   `Clear()`), and `ServerTagHierarchyCache.Invalidate()` (WU-ApplyFiltersPurity — the tag-hierarchy
-  reference-data cache, `layer2-services.md` §"Reference-Data Caching"). **This is the complete set
+  reference-data cache, `layer2-services.md` §"Reference-Data Caching"), and the outbound email
+  pipeline: `OutboundEmailBuffer.Clear()` plus the test host's `RecordingMailTransport.Clear()`
+  (WU-NotifEmail; the buffer was renamed from `NotificationEmailBuffer` at WU-PrivateMessageEmail).
+  **This is the complete set
   of stateful singletons in the host** (the real write-rate limiter is swapped for a stateless
   fake; import service and sprite probe are stateless). **Rule: any new stateful singleton
   registered in `Program.cs` MUST be reset here** — otherwise it leaks across the shared host and

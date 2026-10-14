@@ -5,9 +5,9 @@
 Feature (same shape as `Images/`, `Errors/`, `Toasts/`) — consumed by every shareable content page
 (Stories Feature 4, Chapters Feature 6, Profiles Feature 20, Series, BlogPosts Feature 35, Groups
 Feature 38) but owned by none of them. The remaining site-level work below (robots/sitemap/canonical
-redirect/`noindex`) is tracked as **Feature 64 — Site SEO** (`grid_axes.md`, `status.md`,
-`folder_clusters.md`'s new `Seo/` row) and sequenced as **WU-SeoSite** (`middle_plan_v2.md` Phase 2
-item 8, `workplan.md` "Planned / not-yet-built named WUs"). Addendum-sourced:
+redirect/`noindex`) is **Feature 64 — Site SEO** (`grid_axes.md`, `status.md`,
+`folder_clusters.md`'s `Seo/` row), built by WU-AccessGate (2026-07-23; re-minted from WU-SeoSite) —
+§"Feature 64" below. Addendum-sourced:
 `.claude/middle-addendum.md` §3 items **#15** (`<meta name="description">`, description shipped;
 sitemap/robots half now Feature 64), **#16** (canonical-slug redirect, now Feature 64), **#17** (Open
 Graph, shipped), and **#18** (mature-content `noindex`, now Feature 64, gated on decision row 11).
@@ -186,7 +186,7 @@ not the production constant).
 - `IPublicUrlProvider`/`Site:PublicBaseUrl` is the existing seam for any absolute-URL need
   (sitemap `<loc>` entries) — do not mint a second base-URL resolver.
 
-**Open:** none — WU-AccessGate (`middle_plan_v2.md` Phase 2 item 8) is unblocked end-to-end.
+**Open:** none — built by WU-AccessGate (2026-07-23).
 
 ### Feature 64 Stage 5 — built + verified (2026-07-23, WU-AccessGate)
 

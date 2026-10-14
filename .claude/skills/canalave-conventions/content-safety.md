@@ -41,9 +41,9 @@ must serve all three tiers equally well:
 A design that optimizes tier-1 comfort or tier-2 access *at the other's expense* is the flattening
 this project exists to avoid. **Prefer granular, consent-based, per-work mechanisms over global
 binary switches** — e.g. a middle-tier reader must be able to view one M work without being forced
-to reclassify their whole account to tier-2. (This is the design constraint behind the still-open
-direct-link interstitial in row 11: a temporary per-work reveal must never mutate the saved
-`ShowMatureContent` setting.)
+to reclassify their whole account to tier-2. (This is the design constraint behind the direct-link
+interstitial, settled 2026-07-19 in §"The Three-Plane Access Model": a per-work reveal never mutates
+the saved `ShowMatureContent` setting.)
 
 **The middle tier's mechanism is cross-tier author discovery.** Readers are often first drawn in by
 one kind of content but retained by an author's *broader* body of work spanning rating tiers — the
@@ -440,7 +440,7 @@ decides what a moderator can do with one (`layer2-services.md` §"Account action
 for symmetry). **`PrivateMessage` has no counter** — DMs are 1:1 sensitive; no surface would display a
 per-message report count.
 
-**Uniform `AdjustActiveReportCount(type, id, delta)`** private switch in `ServerModerationWriteService`
+**Uniform `AdjustActiveReportCountAsync(type, id, delta)`** private switch in `ServerModerationWriteService`
 increments on report submit, decrements on resolve. The switch skips `Message` targets (no counter).
 
 **What the count means, and the rules that keep it true (owner rulings D7/D8, built

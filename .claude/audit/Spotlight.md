@@ -86,7 +86,7 @@ anonymous (`audit/Moderation.md` F47's browser-verification note).
 
 Built as WU-Spotlight (2026-07-12, `workplan.md`). Conventions:
 `canalave-conventions/layer2-services.md` §"Community Spotlight — Slot Allocator Seam + Block
-Booking" and §"Site Settings (`ISiteSettingsService`)".
+Booking" and §"Site Settings (`ISiteSettingsReadService`/`ISiteSettingsWriteService`)".
 
 - **L1 — Stage 5.** `WU_Spotlight_SlotsAndSiteSettings` migration: two-table split —
   `SpotlightSlot` (entitlement) + reshaped `CommunitySpotlight` (placement: unique `SlotId` FK
@@ -105,7 +105,7 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   the Unit tier (`SpotlightBlocksTests`, 12 tests: grid floor/pre-epoch/on-grid, bookable-block
   tiling/horizon bounds).
 - **L3-Logic / L3.5-Structure — Stage 5** (behavior changed beneath them 2026-09-30 by
-  WU-InertFeatures and its review fixes — Stage note at the end of this feature).
+  WU-InertFeatures and its review fixes — the WU-InertFeatures Stage notes below).
   `CommunitySpotlightDisplay` (coordination composite,
   sanctioned injection — NotificationBell precedent), `SpotlightRedemptionPage` (`/spotlight`:
   two pick paths, any-of-the-story's-recs attach with own-rec preselect, occupancy calendar),
@@ -118,8 +118,8 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
 - **L4.5-Browser — Stage 5 (flipped 5→1 by the WU-InertFeatures review fixes, 2026-09-30, and back to 5
   by the WU-InertFeatures browser pass the same day — tracker H14 closed).** The recommendation half
   gained Read It Later / Read now, and a signed-in viewer's `StoryCard` now shows their real flags. The
-  WU shipped those with no browser; its browser pass drove them on both phases (both notes at the end
-  of this feature). *History:* Verified 2026-07-12 in a real browser against the standing dev DB
+  WU shipped those with no browser; its browser pass drove them on both phases (the WU-InertFeatures
+  Stage notes below). *History:* Verified 2026-07-12 in a real browser against the standing dev DB
   (kept, not wiped): grant as AdminUser (capacity 12→11) → redeem as TestUser via the primary
   pick path into the current block → placement live on `/` (StoryCard + RecommendationCard) →
   psql ground truth: slot Redeemed, worker stamped `GoLiveNotifiedUtc` within its 1-min cadence

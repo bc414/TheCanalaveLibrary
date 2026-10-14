@@ -10,7 +10,7 @@
 > (`layer4-style.md` §"Responsive Adaptivity Ladder") — the device-specific-composition framing is
 > obsolete. See `layer3.5-structure.md` §EditorView for the updated rationale.
 
-**Entities (Core/Models/):** `Chapter` (`StoryId`, `ChapterNumber`, `Title`, `PrimaryContentId` FK to the
+**Entities (Core/Chapters/):** `Chapter` (`StoryId`, `ChapterNumber`, `Title`, `PrimaryContentId` FK to the
 active version), `ChapterContent` (versioned body — "live alternates" not revision history, `Rating`,
 `SortOrder`), `UserChapterInteraction` (`ReadProgress` 0.0–1.0, `IsRead`, PK `(UserId,ChapterId)`).
 **Fluent config:** unique `(StoryId,ChapterNumber)`, unique `(ChapterId,SortOrder)`; the two-relationship
@@ -20,9 +20,9 @@ delete the primary). Reader settings live in `User.ReaderSettings` (JSON, see Id
 **As of WU6 (2026-06-21), both universal rich-text atoms — `RichTextView` (WU5) and `EditorView`
 (WU6) — are built. Neither lives under Chapters**; both sit in the cross-cutting `SharedUI/RichText/`
 cluster (this folder doesn't own them, it's one of their consumers), alongside the server-side
-`IHtmlSanitizationService` allow-list (`Core/RichText/` + `Server/RichText/`, minted in WU6). No
-chapter write/read service exists yet — that's still unbuilt here, and is the first intended caller
-of both `EditorView`'s output and the sanitizer.
+`IHtmlSanitizationService` allow-list (`Core/RichText/` + `Server/RichText/`, minted in WU6). The
+chapter read/write services followed in WU17 — the first callers of both `EditorView`'s output and
+the sanitizer.
 
 ---
 
@@ -83,13 +83,13 @@ null rating as primary, floor rejection, primary invariant rejection on create +
 `ChapterReadServiceTests` — null-rated version reads as effective story rating). `SeedStoryAsync` in
 `IntegrationTestBase` extended with optional `rating` parameter.
 
-- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Chapter.FirstPublishedDate` added, `ChapterContent.PublishDate` nullable; see the WU-StoryLifecycle Stage note under Feature 7; `ck_chapters_first_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note at the end of this feature).** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Chapter.FirstPublishedDate` added, `ChapterContent.PublishDate` nullable; see the WU-StoryLifecycle Stage note under Feature 7; `ck_chapters_first_published_date` since WU-SchemaHardening, 2026-10-13 — Stage note near the end of this feature).** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
   `Chapter.PrimaryContentId` was changed from `long` to `long?` (nullable) during WU17 to break the
   circular FK insert dependency (`Chapter.PrimaryContentId → ChapterContent.ChapterId → Chapter`);
-  migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
+  migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied (squashed into the regenerated InitialSchema, 2026-07-18). `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; `CreateChapterAsync` one transaction since WU-ParityAndRemaining, 2026-10-13, Integration-tested, browser-driven on WASM by its browser pass the same day, which also made an emptied editor's chapter text a refusal, Unit-tested — the first Stage note below; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — second Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12, browser-driven on both render phases by its browser pass the same day — first Stage note below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; `CreateChapterAsync` one transaction since WU-ParityAndRemaining, 2026-10-13, Integration-tested, browser-driven on WASM by its browser pass the same day, which also made an emptied editor's chapter text a refusal, Unit-tested — its Stage note below; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, its Stage note below; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, its Stage notes below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — its Stage note below; the sanitizer's parser moved off AngleSharp 0.17.1 WU-DependencyCVEs, 2026-10-12, browser-driven on both render phases by its browser pass the same day — its Stage note below).**
   **WU-ParityAndRemaining Stage note (2026-10-13) — no flip.** `CreateChapterAsync`'s two saves (insert
   the chapter with its first version, then point `PrimaryContentId` at it) committed separately, so a
   failure between them left a chapter whose primary pointer stayed NULL for good (service audit §2.12).
@@ -271,7 +271,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   count, versioning, promotion, update, Story.WordCount roll-up, validation). Mutation-sanity confirmed:
   adding `"script"` to the sanitizer allow-list → `SanitizesScriptTag` fails; reverted. Server boot:
   homepage/login `200`, DI resolves both services.
-- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5; re-verified by the WU-AuthorStoryDelete review fixes, 2026-10-13 — a taken-down story's chapter editor stays not found now that the story edit read reaches its author; RazorComponents `ChapterEditorPageTakedownTests`, and browser-checked by its browser pass the same day; see the Stage note below).** `ChapterEditorPage`
+- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5; the handler's clear-then-replace error change since WU-TrackerFixes, 2026-10-13 — Stage note at this feature's top; re-verified by the WU-AuthorStoryDelete review fixes, 2026-10-13 — a taken-down story's chapter editor stays not found now that the story edit read reaches its author; RazorComponents `ChapterEditorPageTakedownTests`, and browser-checked by its browser pass the same day; see the Stage note below).** `ChapterEditorPage`
   dispatcher with progressive versioning disclosure, publish toggle, author gate, "Set as default" promote,
   "Add alternate version" action. `ChapterEditorViewModel` shields form from DTO fields. See WU26 Phase 1–3 Stage note.
 - **L3.5-Structure — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom also Stage 5).** `ChapterPropertiesForm`
@@ -350,7 +350,9 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   the same reason `HomeDesktop`/`HomeMobile` split (Quill's toolbar listeners bind once at
   construction — see above). Settled: follows the existing desktop/mobile composition pattern
   already used elsewhere, not a runtime toggle. Open: nothing design-blocking: this is
-  build-when-scheduled, same as `HomeMobile`.
+  build-when-scheduled, same as `HomeMobile`. *(Superseded 2026-07-18, WU-ResponsiveMerge: the
+  desktop/mobile composition pattern is retired; WU-EditorMobile is re-scoped to a compact toolbar
+  with no device fork — see the Shared Context banner and tracker A8.)*
 
 ### WU-SchemaHardening Stage note (2026-10-13) — Feature 6: the chapter publish-anchor CHECK
 
