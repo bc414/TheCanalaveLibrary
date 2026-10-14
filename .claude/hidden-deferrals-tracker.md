@@ -1082,8 +1082,23 @@ unless noted. All sit under Stage-5 cells.
   - Watch upstream: if a later ASP.NET Core 10 patch clears the flag after the first supply, the
     idiom stays harmless. The convention note and this item then retire together.
 
-- [ ] **D21 — Group members are told the title of a story they cannot see (a confidentiality defect)** `[latent-risk · high · beta]` — *Filed 2026-10-13 by WU-DocCorrections (found while verifying the Group Rating Waterfall doc). Split by its review fixes, 2026-10-14: the product question moved to **F28** (decision row 31); what stays here is decided, and is the next fix WU's.*
-  - Grid: no cell moves at filing (F39 L2, F41 L2 read 5).
+- [x] **D21 — Group members are told the title of a story they cannot see (a confidentiality defect) — DONE (WU-D21Confidentiality, 2026-10-14)** `[latent-risk · high · beta]` — *Filed 2026-10-13 by WU-DocCorrections (found while verifying the Group Rating Waterfall doc). Split by its review fixes, 2026-10-14: the product question moved to **F28** (decision row 31); what stays here is decided, and is the next fix WU's.*
+  - **Closed 2026-10-14 by WU-D21Confidentiality, the tracker's fix shape across every story-family
+    kind.** The enumeration found three kinds, not one: `Story` (19 types), `Chapter` (10, 24) and
+    `GroupStory` (60, 25). Each split by recipient the D8 way: an `Own*` kind for the types whose
+    recipient is always the story's author (resolved as stored, unchanged) and a filtered kind for the
+    rest (the public window, not taken down; for 10 the chapter must also be published). Two more
+    mint-time leaks of the same root turned up and are closed by the same lookup: a lineage request
+    from a draft source (50) and a credit on a draft (52). A dropped title renders as D8's did: the
+    type's title-free arm, no link; 60 keeps the group's name and link. Type 52's title-free arm said
+    "acknowledged your story" to the credited user and now says "acknowledged your help on a story".
+    Rule: `layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by recipient".
+    Tests: Integration `StoryNotificationConfidentialityTests` (17; with the fix removed, 13 fail, all
+    but the three visible-story controls and the classification check) and a `GroupServiceTests` guard
+    theory; Unit `NotificationPresenterTests`. **F28**
+    (row 31) stays open. Found while scoping: **D22** (the credit and lineage manage lists). Browser
+    pass: **H43**. Narrative: `audit/Notifications.md` F42 and `audit/Groups.md` F39 Stage notes.
+  - Grid: no cell moves at filing (F39 L2, F41 L2 read 5). At closure: F42 L4.5 5→1 until **H43**.
   - **Confirmed** by a throwaway Integration probe (not committed): the creator of a group added their
     own `Draft` story through `IGroupWriteService.AddStoryAsync`; no exception, a `GroupStory` row, and a
     second member's bell showed `NewGroupStory` (60) with the draft's title as its context title.
@@ -1111,6 +1126,28 @@ unless noted. All sit under Stage-5 cells.
     way D8 split the blog-post kinds. Integration test in the probe's shape (an author's own draft filed
     into a group; a second member's 60 has no story title), plus one for a story unpublished after the
     fan-out.
+
+- [ ] **D22 — The credit and lineage manage lists name another author's unpublished or taken-down story** `[latent-risk · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, found while enumerating D21's story-family kinds. Not a notification, so outside that WU's scope.*
+  - Grid: no cell moves (F10 L2, F50 L2 read 5).
+  - **What, by reading (not probed):** both manage reads lift `StoryStatus` and `IsTakenDown` (and
+    `ContentRating`) for every list they build, with a comment that justifies it for the caller's *own*
+    stories only.
+    - `ServerStoryAcknowledgmentReadService.GetManageDataForUserAsync`, the **incoming** list: a user
+      credited on another author's Draft (crediting a beta reader before publishing is the obvious use)
+      sees that draft's title, and keeps seeing it after a takedown.
+    - `ServerStoryLineageReadService`'s manage read, the **incoming** list: the target's author sees the
+      requester's source story, which is only ownership-gated, so it can be a draft. The **outgoing**
+      list shows the target's title to the requester after the target is unpublished or taken down
+      (the request itself required a visible target).
+  - **Why it is not simply D21's rule applied:** the notifications now drop these titles (D21), so the
+    lists are the only place they show. But a credited user or a lineage target has to decide on a
+    request, and may need to know which story it is about. Whether a credit or a lineage link may be
+    requested on an unpublished story at all, and what its counterpart sees while it is pending, is a
+    product question of the same shape as **F28**.
+  - **Fix shape, once decided:** either refuse the request while the story is unpublished (a status
+    guard at `RequestAcknowledgmentAsync`/`RequestLineageAsync`, like the target's kind (g) check), or
+    keep it and show the counterpart a title-free row until the story is public. The outgoing lineage
+    list's taken-down/unpublished target follows D21's rule either way (title-free for a non-author).
 
 ---
 
@@ -1827,12 +1864,14 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
     which exempts the story's author. So another user's Draft, PendingApproval or Rejected story is
     refused, and the author's own is accepted.
   - As built (the status quo, not a ruling): an author may file their own unpublished story. The group
-    page hides it from other members (a filtered read). The members' type-60 notification names it,
-    which is **D21**, a defect whichever way this is answered.
+    page hides it from other members (a filtered read). The members' type-60 notification named it,
+    which was **D21**, a defect whichever way this is answered; since WU-D21Confidentiality
+    (2026-10-14) it reads "A new story was added to {group}" with no story title.
   - If no: `AddStoryAsync` requires a public status for every caller (a guard without the author
     exemption), with a refusal message and an Integration test. If yes: when do members hear about it,
-    at add time (the fan-out fires there today, title-less once D21 is fixed) or at publish time (a new
-    trigger)?
+    at add time (the fan-out fires there today, title-less since D21's fix) or at publish time (a new
+    trigger)? Either way, `StoryNotificationConfidentialityTests`' probe test files an author's own
+    draft and needs its setup moved if the answer is no.
 
 ---
 
@@ -2767,6 +2806,25 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     (`git diff 1940078..HEAD -- .claude CLAUDE.md`), and Probe 3 over the audit files the campaign
     wrote Stage notes into, each as a fresh subagent. Fix what they confirm, then close this item with a
     dated note and one probe-coverage line in WU-DocCorrections' DONE entry.
+- [ ] **H43 — WU-D21Confidentiality browser pass: hidden stories' titles leave members' and followers' notifications, the author's stay** `[test-gap · med · beta]` — *Filed 2026-10-14 by WU-D21Confidentiality, which ran with no browser available.*
+  - Grid: **F42 L4.5 went 5→1** (`status.md`). Closing this returns it to 5. Every behavior below is
+    covered by the Integration tier (`StoryNotificationConfidentialityTests`) and the 52 copy by the
+    Unit tier; what is owed is the rendering in the bell and the inbox on both render phases.
+  - Steps, on the circuit and on WASM, `psql` after every write, server-only path:
+    1. **The tracker's leak path (D21).** As AuthorAlpha, create or pick a group she administers, have a
+       second user (TestUser) join it, and file one of AuthorAlpha's Draft stories into it. TestUser's
+       bell and `/notifications` show "A new story was added to {group}" with no story title; the click
+       opens the group, which does not list the draft.
+    2. **Unpublished after the fan-out.** File a published story by a third author into the group (as
+       the admin), then unpublish it as its author. TestUser's 60 loses the story title; the author's
+       "Your story {title} was added to {group}" keeps it.
+    3. **Credit on a draft (52).** AuthorAlpha credits TestUser on a draft: TestUser reads "AuthorAlpha
+       acknowledged your help on a story", no link. Publish it: the row names the story and links it.
+    4. **Follower of a story taken down (10).** Optional if a moderator takedown is easy to drive: a
+       follower's "New chapter of {story}: {chapter}" becomes "A story you follow has a new chapter",
+       with no link; the author's own "commented on {chapter}" is unchanged.
+  - **Dev DB:** restore every status, takedown, credit and group-story row the pass changes, through
+    `psql` or `reset-dev-db.ps1`.
 
 ---
 

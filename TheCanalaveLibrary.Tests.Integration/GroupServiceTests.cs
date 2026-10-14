@@ -848,6 +848,43 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
             .Should().Be(2, "with the group id as the anchor, the second story collapsed into the first while unread");
     }
 
+    [Theory]
+    [InlineData(StoryStatusEnum.Draft, false)]
+    [InlineData(StoryStatusEnum.PendingApproval, false)]
+    [InlineData(StoryStatusEnum.Rejected, false)]
+    [InlineData(StoryStatusEnum.InProgress, true)]
+    public async Task AddStory_AnotherUsersUnpublishedOrTakenDownStory_IsRefusedAsNotFound(StoryStatusEnum status, bool takenDown)
+    {
+        // The confidentiality guard (kind (g)) had no test (audit/Groups.md, WU-DocCorrections). It refuses
+        // a non-author; the author's own unpublished story is decision row 31 / tracker F28, not pinned here.
+        // Tracker D21's notification tests rely on this boundary: a non-author's 60 can only name a hidden
+        // story that was public when it was filed.
+        int memberId = await SeedUserAsync("guard-member");
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Guard Group" });
+        int storyId = await SeedStoryAsync(authorId: _otherUserId, rating: Rating.E, status: status);
+        SetActiveUser(memberId);
+        await JoinGroupAsync(groupId);
+        if (takenDown)
+        {
+            using IServiceScope seed = Factory.Services.CreateScope();
+            await seed.ServiceProvider.GetRequiredService<ApplicationDbContext>().Stories
+                .Where(s => s.StoryId == storyId)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.IsTakenDown, true));
+        }
+
+        SetActiveUser(_userId);
+        Func<Task> act = () => AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        await act.Should().ThrowAsync<KeyNotFoundException>("the same answer as a story that does not exist");
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.GroupStories.AnyAsync(gs => gs.StoryId == storyId)).Should().BeFalse();
+        (await db.Notifications.AnyAsync(n => n.NotificationTypeId == NotificationTypeEnum.NewGroupStory
+                                              || n.NotificationTypeId == NotificationTypeEnum.YourStoryAddedToGroup))
+            .Should().BeFalse();
+    }
+
     private async Task<NotificationDto[]> GetNotificationsAsync()
     {
         using IServiceScope scope = Factory.Services.CreateScope();

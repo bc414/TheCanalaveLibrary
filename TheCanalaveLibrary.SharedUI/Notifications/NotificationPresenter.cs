@@ -107,8 +107,11 @@ public static class NotificationPresenter
             NotificationTypeEnum.StoryApproved =>
                 target is not null ? $"{target} was approved for the library" : "Your story was approved for the library",
 
+            // The recipient is the credited user and {target} is the actor's story, so the title-free
+            // arm must not say "your story". It is reached when the story is a draft, unpublished or
+            // taken down (tracker D21: the enricher drops it for a non-author), or deleted.
             NotificationTypeEnum.NewStoryAcknowledgement =>
-                target is not null ? $"{actor} acknowledged {target}" : $"{actor} acknowledged your story",
+                target is not null ? $"{actor} acknowledged {target}" : $"{actor} acknowledged your help on a story",
 
             // ── YourProfile category ──────────────────────────────────────────────
             NotificationTypeEnum.NewCommentOnYourProfile =>

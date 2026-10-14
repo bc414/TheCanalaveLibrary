@@ -297,7 +297,23 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   delete moves sub-folders to the top level — and the `AddStoryAsync` race backstop, WU-SchemaHardening
   2026-10-13 — stays Stage 5, Stage note at the end of this feature; the waterfall's tier-1 doctrine
   corrected, code unchanged, WU-DocCorrections 2026-10-13 — stays Stage 5, note below; the draft-title
-  finding split into tracker D21 and decision row 31 by its review fixes, 2026-10-14).**
+  finding split into tracker D21 and decision row 31 by its review fixes, 2026-10-14; D21 fixed in the
+  notification enricher and the add guard Integration-tested, WU-D21Confidentiality 2026-10-14 — stays
+  Stage 5, note directly below).**
+  **WU-D21Confidentiality Stage note (2026-10-14; tracker D21) — no flip; no Groups behavior change.**
+  The members' `NewGroupStory` (60) no longer names a story they cannot open. The fix is in
+  `NotificationEnricher`, not here: 60 resolves through the filtered `GroupStory` kind, which keeps the
+  group's name and link and drops the story title while the story is a draft, pending, rejected or taken
+  down; the author's `YourStoryAddedToGroup` (25) resolves through `OwnGroupStory`, as stored. Detail:
+  `audit/Notifications.md` F42's Stage note. `AddStoryAsync`'s accept/refuse behavior is unchanged:
+  whether an author may file their own unpublished story is still decision row 31 (tracker F28), and
+  the method's comment now says the members' 60s no longer name such a story. The confidentiality guard
+  the WU-DocCorrections note below found untested now has a test: Integration
+  `GroupServiceTests.AddStory_AnotherUsersUnpublishedOrTakenDownStory_IsRefusedAsNotFound` (Draft,
+  PendingApproval, Rejected, taken down: `KeyNotFoundException`, no `GroupStory` row, no notification).
+  The members' notification is covered by Integration `StoryNotificationConfidentialityTests` (the
+  tracker's probe, a story unpublished or taken down after the fan-out, the 60's email). F39 L4.5 is
+  untouched: the group page did not change; the bell is F42's (L4.5 5→1, tracker H43).
   **WU-DocCorrections Stage note (2026-10-13; service audit §4 row 2) — no flip, no code change.** The
   convention text (`layer2-services.md` §"Group Rating Waterfall") and the WU32 settled note #1 above
   said tier 1 (the viewer's `ContentRating` ceiling) is enforced when a story is added, because the
@@ -312,7 +328,8 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   `AddStoryAsync` now says so. Fixing it needs a product call (may an author park a draft in a group?).
   *(Split by the WU-DocCorrections review fixes, 2026-10-14: the title reaching members breaks the
   settled Class-A rule however that call goes, so it stays on tracker D21 as a defect for the next fix
-  WU; the product call is decision row 31, tracker F28.)*
+  WU; the product call is decision row 31, tracker F28.)* *(D21 fixed and the guard tested by
+  WU-D21Confidentiality, 2026-10-14 — its note above; row 31 is still open.)*
   **WU-InertFeatures Stage note (owner ruling D16 +
   service audit §2.8 bullets 1–3):** `AddStoryAsync` now notifies only inside `if (!alreadyAdded)` —
   re-adding an existing story was a repeatable fan-out any member could trigger; the

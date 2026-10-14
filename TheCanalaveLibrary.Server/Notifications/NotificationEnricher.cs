@@ -31,12 +31,16 @@ public readonly record struct NotificationTarget(string? Title, string? Url, str
 /// <c>int</c> primary key, so each kind's id set is narrowed to <c>int</c> before its query — an id
 /// above <c>int.MaxValue</c> simply misses — and the SQL compares <c>int = int</c>.</para>
 ///
-/// <para><b>Plane note (unchanged by the extraction):</b> enrichment resolves <em>ground truth</em>
-/// and is never rating- or audience-filtered — notifications are Personal-plane, referencing things
-/// the recipient already interacted with (<c>content-safety.md</c> §"The Three-Plane Access
-/// Model"). The one exception preserved verbatim below is the <c>IsTakenDown</c> filter on blog
-/// posts, which stays active on purpose so moderated content degrades to a title-less,
-/// non-navigating notification.</para>
+/// <para><b>Plane note:</b> enrichment is never rating- or audience-filtered — notifications are
+/// Personal-plane, referencing things the recipient already interacted with
+/// (<c>content-safety.md</c> §"The Three-Plane Access Model"). Class-A confidentiality is different:
+/// it binds every recipient who is not the content's author. So the blog-post kinds (tracker D8) and
+/// the story-family kinds (tracker D21) split by recipient: an <c>Own*</c> kind's recipient is always
+/// the author and resolves the content as stored, and its sibling drops content its recipients can no
+/// longer open (an unpublished post or story, a Private author's profile post, a taken-down post or
+/// story, an unpublished chapter). A dropped target is a miss, so the notification degrades to its
+/// title-less, non-navigating copy. The split is by notification type, never by viewer, which is what
+/// keeps this class recipient-agnostic (<c>layer2-services.md</c> §"Polymorphic RelatedEntityId").</para>
 /// </summary>
 public static class NotificationEnricher
 {
@@ -52,8 +56,19 @@ public static class NotificationEnricher
     /// author, so it drops a post they can no longer open.
     /// <c>GroupStory</c> (owner ruling D16) resolves the junction row to the group (title + link) and
     /// the story (context title).
+    /// The story-family kinds split the same way (tracker D21): <c>OwnStory</c>, <c>OwnChapter</c> and
+    /// <c>OwnGroupStory</c> serve types whose recipient is always the story's author and resolve the
+    /// story as stored; <c>Story</c>, <c>Chapter</c> and <c>GroupStory</c> serve everyone else and drop
+    /// a story outside the public window or taken down (and, for <c>Chapter</c>, an unpublished
+    /// chapter). A type belongs in an <c>Own*</c> kind only when its recipient is always the author;
+    /// when in doubt, the filtered kind — a wrong <c>Own*</c> arm leaks, a wrong filtered arm only costs
+    /// an author their own title.
     /// </summary>
-    private enum RelatedEntityKind { None, User, Story, Chapter, Group, GroupStory, BlogPost, BlogPostDirect, OwnBlogPost, Tag }
+    private enum RelatedEntityKind
+    {
+        None, User, Story, OwnStory, Chapter, OwnChapter, Group, GroupStory, OwnGroupStory,
+        BlogPost, BlogPostDirect, OwnBlogPost, Tag
+    }
 
     /// <summary>
     /// Batch-resolves <c>(type, relatedEntityId)</c> pairs to their targets.
@@ -126,9 +141,11 @@ public static class NotificationEnricher
 
         // ── Implemented WU32, re-anchored WU-InertFeatures (D16): RelatedEntityId = the
         // GroupStory junction row — title = group name, link = the group (unchanged), context
-        // title = the story. A removed GroupStory row misses → title-less (accepted by D16). ──
+        // title = the story. A removed GroupStory row misses → title-less (accepted by D16).
+        // Split by recipient (tracker D21): 60 goes to members, never the story's author (they get
+        // 25), so its story title drops while the story is unpublished or taken down. ──
         NotificationTypeEnum.NewGroupStory          => RelatedEntityKind.GroupStory,
-        NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.GroupStory,
+        NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.OwnGroupStory,
         NotificationTypeEnum.NewGroupBlogPost        => RelatedEntityKind.BlogPost,
 
         // ── Implemented WU-UserDeletion (D13 edge (b)): RelatedEntityId = the group the recipient was
@@ -137,8 +154,9 @@ public static class NotificationEnricher
 
         // ── Implemented WU-Spotlight: RelatedEntityId = spotlighted story id ─────
         // (SpotlightSlotGranted carries no entity — falls to None below; the redemption
-        // page is a fixed route, not an entity link.)
-        NotificationTypeEnum.StorySpotlighted          => RelatedEntityKind.Story,
+        // page is a fixed route, not an entity link.) 91 goes to the story's author; 92 to the
+        // recommender, who is never the author (self-recommendation is refused). ──
+        NotificationTypeEnum.StorySpotlighted          => RelatedEntityKind.OwnStory,
         NotificationTypeEnum.RecommendationSpotlighted => RelatedEntityKind.Story,
 
         // ── Implemented WU-Polls: RelatedEntityId = owning blog post id for blog-post
@@ -153,8 +171,9 @@ public static class NotificationEnricher
         // blogPostId for NewCommentOnBlog + the four followed-content blog types (13–16);
         // profileOwnerId for NewCommentOnYourProfile. CommentReply stays None below: it stores the
         // context entity's id, and one cross-context type cannot map to one table (re-pointing it at
-        // the comment via the BaseComments TPT root is on D16's conformance list, tracker B23). ──
-        NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.Chapter,
+        // the comment via the BaseComments TPT root is on D16's conformance list, tracker B23).
+        // 24's recipient is always the story's author (tracker D21's split): OwnChapter. ──
+        NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.OwnChapter,
         // 33's recipient is always the post's author (tracker D8's type split): OwnBlogPost.
         NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.OwnBlogPost,
         NotificationTypeEnum.NewCommentOnYourProfile         => RelatedEntityKind.User,
@@ -164,30 +183,37 @@ public static class NotificationEnricher
         NotificationTypeEnum.NewBlogPostOnReadItLaterStory   => RelatedEntityKind.BlogPostDirect,
 
         // ── Implemented WU-InertFeatures: RelatedEntityId = the new chapter (the Chapter kind
-        // also yields the story title as context). ─────────────────────────────────────
+        // also yields the story title as context). Followers only — the author is the source and
+        // drops out — so the filtered Chapter kind (tracker D21). ─────────────────────────
         NotificationTypeEnum.NewChapterOnFollowedStory       => RelatedEntityKind.Chapter,
 
-        // ── Forward-compat stubs (no rows until triggering work-units land — tracker B24) ──
+        // ── Forward-compat stubs (no rows until triggering work-units land — tracker B24).
+        // Classified by the recipient each type names: 20/21 tell the story's author; 11/12 tell
+        // followers and 41/42 the recommender, never the author. ──
         NotificationTypeEnum.NewStoryByFollowedUser          => RelatedEntityKind.Story,
         NotificationTypeEnum.NewRecommendationByFollowedUser => RelatedEntityKind.Story,
-        NotificationTypeEnum.NewStoryFavorite                => RelatedEntityKind.Story,
-        NotificationTypeEnum.NewStoryFollower                => RelatedEntityKind.Story,
+        NotificationTypeEnum.NewStoryFavorite                => RelatedEntityKind.OwnStory,
+        NotificationTypeEnum.NewStoryFollower                => RelatedEntityKind.OwnStory,
         NotificationTypeEnum.RecommendationHighlighted       => RelatedEntityKind.Story,
         NotificationTypeEnum.SuccessfulRec                   => RelatedEntityKind.Story,
 
-        // ── Implemented WU-RecLifecycle (submit / revise / revision request / unblock) ──
-        NotificationTypeEnum.NewRecommendationOnYourStory    => RelatedEntityKind.Story,
+        // ── Implemented WU-RecLifecycle (submit / revise / revision request / unblock):
+        // 22/27 tell the story's author; 40/43 tell the recommender. ──
+        NotificationTypeEnum.NewRecommendationOnYourStory    => RelatedEntityKind.OwnStory,
         NotificationTypeEnum.RecommendationApproved          => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationRevisionRequested => RelatedEntityKind.Story,
-        NotificationTypeEnum.RecommendationRevised           => RelatedEntityKind.Story,
+        NotificationTypeEnum.RecommendationRevised           => RelatedEntityKind.OwnStory,
 
         // ── Implemented: lineage (WU42), acknowledgement (WU-StatBadgeProducers), and the
-        // submission outcomes (WU34) — RelatedEntityId = the story. ─────────────────────
+        // submission outcomes (WU34) — RelatedEntityId = the story. 50 names the requester's
+        // source story to the target's author, 51 the approver's target story to the source's
+        // author, 52 the crediting author's story to the credited user: none is the story's
+        // author, and 50/52 can be minted while that story is still a draft. 71/75 tell the author. ──
         NotificationTypeEnum.StoryLineageRequested            => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryLineageApproved             => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryAcknowledgement         => RelatedEntityKind.Story,
-        NotificationTypeEnum.StoryRejected                   => RelatedEntityKind.Story,
-        NotificationTypeEnum.StoryApproved                   => RelatedEntityKind.Story,
+        NotificationTypeEnum.StoryRejected                   => RelatedEntityKind.OwnStory,
+        NotificationTypeEnum.StoryApproved                   => RelatedEntityKind.OwnStory,
 
         // ── Implemented WU-TagFanon: RelatedEntityId = the official tag the author is invited
         // to adopt; deep-links to the per-tag adoption page. ─────────────────────────────
@@ -195,9 +221,9 @@ public static class NotificationEnricher
 
         // ── Implemented WU39 (Feature 53): RelatedEntityId = storyId for the per-link tier;
         // the account tier carries 0 (Settings is a fixed route, not an entity) — falls to
-        // None below. ─────────────────────────────────────────────────────────────────────
-        NotificationTypeEnum.ExternalLinkVerified => RelatedEntityKind.Story,
-        NotificationTypeEnum.ExternalLinkRejected => RelatedEntityKind.Story,
+        // None below. Both tell the story's author. ──────────────────────────────────────────
+        NotificationTypeEnum.ExternalLinkVerified => RelatedEntityKind.OwnStory,
+        NotificationTypeEnum.ExternalLinkRejected => RelatedEntityKind.OwnStory,
 
         // ── No navigable target: site announcements, account actions, and the report-anchored
         // types (70/80/81/82 carry the report id — D4 — which is a dedup anchor, not a link a
@@ -230,31 +256,35 @@ public static class NotificationEnricher
 
         var result = new Dictionary<RelatedEntityKind, Dictionary<int, NotificationTarget>>();
 
+        // ── Story-family kinds, split by recipient (tracker D21; layer2-services.md §"Polymorphic
+        // RelatedEntityId" → "Story-family kinds by recipient"). Each pair runs the same loader over a
+        // different story source, so the two halves cannot drift apart in shape. ──
+
         if (idsByKind.TryGetValue(RelatedEntityKind.Story, out var storyIds) && storyIds.Count > 0)
-        {
-            result[RelatedEntityKind.Story] = (await readDb.StoryListings
-                    .Where(s => storyIds.Contains(s.StoryId))
-                    .Select(s => new { s.StoryId, s.StoryTitle })
-                    .ToListAsync())
-                .ToDictionary(
-                    s => s.StoryId,
-                    s => new NotificationTarget(s.StoryTitle, $"/story/{s.StoryId}", null));
-        }
+            result[RelatedEntityKind.Story] = await LoadStoriesAsync(PublicWindowStories(readDb), storyIds);
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.OwnStory, out var ownStoryIds) && ownStoryIds.Count > 0)
+            result[RelatedEntityKind.OwnStory] = await LoadStoriesAsync(StoriesAsStored(readDb), ownStoryIds);
 
         if (idsByKind.TryGetValue(RelatedEntityKind.Chapter, out var chapterIds) && chapterIds.Count > 0)
         {
-            // The story title rides along as context (type 10: "New chapter of {story}: {chapter}").
-            result[RelatedEntityKind.Chapter] = (await (
-                    from c in readDb.Chapters
-                    where chapterIds.Contains(c.ChapterId)
-                    join s in readDb.StoryListings on c.StoryId equals s.StoryId into stories
-                    from s in stories.DefaultIfEmpty()
-                    select new { c.ChapterId, c.Title, c.StoryId, c.ChapterNumber, StoryTitle = (string?)s.StoryTitle })
-                    .ToListAsync())
-                .ToDictionary(
-                    c => c.ChapterId,
-                    c => new NotificationTarget(c.Title, $"/story/{c.StoryId}/{c.ChapterNumber}", c.StoryTitle));
+            // Followers (type 10): an unpublished chapter is its author's alone, like its story
+            // (StoryVisibilityGuard.IsChapterVisibleAsync's rule).
+            result[RelatedEntityKind.Chapter] =
+                await LoadChaptersAsync(readDb, PublicWindowStories(readDb), chapterIds, publishedChaptersOnly: true);
         }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.OwnChapter, out var ownChapterIds) && ownChapterIds.Count > 0)
+        {
+            result[RelatedEntityKind.OwnChapter] =
+                await LoadChaptersAsync(readDb, StoriesAsStored(readDb), ownChapterIds, publishedChaptersOnly: false);
+        }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.GroupStory, out var groupStoryIds) && groupStoryIds.Count > 0)
+            result[RelatedEntityKind.GroupStory] = await LoadGroupStoriesAsync(readDb, PublicWindowStories(readDb), groupStoryIds);
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.OwnGroupStory, out var ownGroupStoryIds) && ownGroupStoryIds.Count > 0)
+            result[RelatedEntityKind.OwnGroupStory] = await LoadGroupStoriesAsync(readDb, StoriesAsStored(readDb), ownGroupStoryIds);
 
         if (idsByKind.TryGetValue(RelatedEntityKind.User, out var userIds) && userIds.Count > 0)
         {
@@ -283,24 +313,6 @@ public static class NotificationEnricher
                 .ToDictionary(
                     g => g.GroupId,
                     g => new NotificationTarget(g.GroupName, $"/group/{g.GroupId}", null));
-        }
-
-        if (idsByKind.TryGetValue(RelatedEntityKind.GroupStory, out var groupStoryIds) && groupStoryIds.Count > 0)
-        {
-            // D16: one id names the pairing. Explicit joins (not navigations) so the group read can
-            // carry the same elevated GroupAudience bypass as the Group kind above — Personal plane.
-            // The link target stays the group, as it was when these types carried the group id.
-            result[RelatedEntityKind.GroupStory] = (await (
-                    from gs in readDb.GroupStories
-                    where groupStoryIds.Contains(gs.GroupStoryId)
-                    join g in readDb.Groups.IgnoreQueryFilters(["GroupAudience"]) on gs.GroupId equals g.GroupId
-                    join s in readDb.StoryListings on gs.StoryId equals s.StoryId into stories
-                    from s in stories.DefaultIfEmpty()
-                    select new { gs.GroupStoryId, g.GroupId, g.GroupName, StoryTitle = (string?)s.StoryTitle })
-                    .ToListAsync())
-                .ToDictionary(
-                    x => x.GroupStoryId,
-                    x => new NotificationTarget(x.GroupName, $"/group/{x.GroupId}", x.StoryTitle));
         }
 
         if (idsByKind.TryGetValue(RelatedEntityKind.BlogPost, out var blogPostIds) && blogPostIds.Count > 0)
@@ -371,4 +383,90 @@ public static class NotificationEnricher
 
         return result;
     }
+
+    // ── Story sources for the story-family kinds (tracker D21) ─────────────────────────────────
+
+    /// <summary>
+    /// The stories a recipient who is <b>not</b> the story's author may still see named: the public
+    /// window, not taken down. This is <c>ReadOnlyApplicationDbContext</c>'s <c>StoryStatus</c> filter
+    /// with its viewer clause removed, plus its <c>IsTakenDown</c> filter. The viewer clause has to go
+    /// because it exempts the <em>active user</em> when they authored the story: the email composer
+    /// has no active user, and the recipients of these kinds are not the author by construction, so
+    /// the answer must not depend on who is asking.
+    /// </summary>
+    private static IQueryable<Story> PublicWindowStories(ReadOnlyApplicationDbContext readDb) =>
+        readDb.Stories
+            // elevated read: rating is lifted because notifications are Personal plane (never
+            // rating-filtered); StoryStatus is lifted only to restate it below without its viewer
+            // clause. IsTakenDown stays active: a taken-down story drops out, as on BlogPostDirect.
+            .IgnoreQueryFilters(["ContentRating", "StoryStatus"])
+            .Where(s => s.StoryStatusId != StoryStatusEnum.Draft
+                        && s.StoryStatusId != StoryStatusEnum.PendingApproval
+                        && s.StoryStatusId != StoryStatusEnum.Rejected);
+
+    /// <summary>
+    /// Every story as stored, for the <c>Own*</c> kinds: their recipient is always the story's
+    /// author, who sees their own story in any status, taken down included. This is what these kinds
+    /// read before the split (the unfiltered <c>StoryListings</c> table); unlike <c>OwnBlogPost</c>,
+    /// which has always kept the removal filter, a taken-down story keeps its title for its author.
+    /// </summary>
+    private static IQueryable<Story> StoriesAsStored(ReadOnlyApplicationDbContext readDb) =>
+        readDb.Stories.IgnoreQueryFilters(); // elevated read: the recipient is the story's author
+
+    private static async Task<Dictionary<int, NotificationTarget>> LoadStoriesAsync(
+        IQueryable<Story> stories, HashSet<int> storyIds) =>
+        (await stories
+                .Where(s => storyIds.Contains(s.StoryId))
+                .Select(s => new { s.StoryId, StoryTitle = (string?)s.StoryListing.StoryTitle })
+                .ToListAsync())
+            .ToDictionary(
+                s => s.StoryId,
+                s => new NotificationTarget(s.StoryTitle, $"/story/{s.StoryId}", null));
+
+    /// <summary>
+    /// Chapter targets. The story title rides along as context (type 10: "New chapter of {story}:
+    /// {chapter}"). The inner join on <paramref name="stories"/> is the confidentiality step: a chapter
+    /// whose story is outside the source drops whole, chapter title and link included.
+    /// </summary>
+    private static async Task<Dictionary<int, NotificationTarget>> LoadChaptersAsync(
+        ReadOnlyApplicationDbContext readDb, IQueryable<Story> stories, HashSet<int> chapterIds,
+        bool publishedChaptersOnly) =>
+        (await (
+                from c in readDb.Chapters
+                where chapterIds.Contains(c.ChapterId) && (c.IsPublished || !publishedChaptersOnly)
+                join s in stories on c.StoryId equals s.StoryId
+                select new
+                {
+                    c.ChapterId, c.Title, c.StoryId, c.ChapterNumber,
+                    StoryTitle = (string?)s.StoryListing.StoryTitle
+                })
+                .ToListAsync())
+            .ToDictionary(
+                c => c.ChapterId,
+                c => new NotificationTarget(c.Title, $"/story/{c.StoryId}/{c.ChapterNumber}", c.StoryTitle));
+
+    /// <summary>
+    /// Group-story targets (owner ruling D16: one id names the pairing). Explicit joins (not
+    /// navigations) so the group read carries the same elevated <c>GroupAudience</c> bypass as the
+    /// <c>Group</c> kind — Personal plane. The title and link are the group, which every recipient can
+    /// still open, so the story joins on the left: a story outside <paramref name="stories"/> leaves
+    /// the target in place with no context title ("A new story was added to {group}").
+    /// </summary>
+    private static async Task<Dictionary<int, NotificationTarget>> LoadGroupStoriesAsync(
+        ReadOnlyApplicationDbContext readDb, IQueryable<Story> stories, HashSet<int> groupStoryIds) =>
+        (await (
+                from gs in readDb.GroupStories
+                where groupStoryIds.Contains(gs.GroupStoryId)
+                join g in readDb.Groups.IgnoreQueryFilters(["GroupAudience"]) on gs.GroupId equals g.GroupId
+                join s in stories on gs.StoryId equals s.StoryId into visible
+                from s in visible.DefaultIfEmpty()
+                select new
+                {
+                    gs.GroupStoryId, g.GroupId, g.GroupName,
+                    StoryTitle = s == null ? null : (string?)s.StoryListing.StoryTitle
+                })
+                .ToListAsync())
+            .ToDictionary(
+                x => x.GroupStoryId,
+                x => new NotificationTarget(x.GroupName, $"/group/{x.GroupId}", x.StoryTitle));
 }

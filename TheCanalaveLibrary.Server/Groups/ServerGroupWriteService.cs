@@ -233,8 +233,10 @@ public class ServerGroupWriteService(
         // into a group and its author notified via NotifyNewGroupStoryAsync.
         // Not closed for the story's own author: the guard reads the StoryStatus filter, which exempts
         // the author, so an author can still file their own unpublished story (whether they may is
-        // owner-open: roadmap decision row 31, tracker F28), and the members' 60s name it (a
-        // confidentiality defect either way: tracker D21; WU-DocCorrections found both).
+        // owner-open: roadmap decision row 31, tracker F28; WU-DocCorrections found it). The members'
+        // 60s do not name such a story: the notification enricher drops the story title for every
+        // recipient but its author while it is unpublished or taken down (tracker D21,
+        // WU-D21Confidentiality).
         await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
         {
             if (!await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, dto.StoryId))

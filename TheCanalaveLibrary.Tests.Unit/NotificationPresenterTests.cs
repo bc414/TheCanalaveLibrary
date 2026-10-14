@@ -327,6 +327,22 @@ public class NotificationPresenterTests
             NotificationCategoryEnum.YourFollows)).Text.Should().Be("A story you follow has a new chapter");
     }
 
+    [Fact]
+    public void Compose_NewStoryAcknowledgement_WithoutATitle_NeverCallsTheActorsStoryYours()
+    {
+        // Tracker D21 (WU-D21Confidentiality): the enricher drops a draft's title for the credited
+        // user, so a credit on a draft reaches this arm. The recipient is the credited user, not the
+        // author, so "acknowledged your story" was false.
+        var (bare, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.NewStoryAcknowledgement,
+            CategoryFor(NotificationTypeEnum.NewStoryAcknowledgement), sourceUserName: "AuthorAlpha"));
+        bare.Should().Be("AuthorAlpha acknowledged your help on a story");
+        bare.Should().NotContain("your story");
+
+        var (named, _, _) = NotificationPresenter.Compose(Make(NotificationTypeEnum.NewStoryAcknowledgement,
+            CategoryFor(NotificationTypeEnum.NewStoryAcknowledgement), sourceUserName: "AuthorAlpha", targetTitle: "The Dragon's Path"));
+        named.Should().Be("AuthorAlpha acknowledged The Dragon's Path");
+    }
+
     // ── Every existing type has its own arm (WU-NotificationCorrectness) ──────────
 
     [Theory]

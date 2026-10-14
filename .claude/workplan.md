@@ -17,19 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DocCorrections (2026-10-13; review fixes 2026-10-14) — the worksheet campaign's last
-  WU, its doc backstop. Service audit §4's stale doctrine in `layer2-services.md` re-synced to the code;
-  false comments corrected (two `CORRECTION` notes on the manual tree search's load-bearing status
-  window, pinned by a new Integration test, as Fanon's is by another); every pre-split `cross-cutting.md`
-  citation re-pointed; the worksheet registered in `CLAUDE.md`; the CORRECTION-note convention stated in
-  `SKILL.md`. Its review fixes limited the public /fanon hub's reach count to published, live stories (it
-  counted drafts and taken-down stories; Integration-tested, browser-verified on both render phases
-  2026-10-14, no bug found), corrected six more comment sites and six
-  headline lines, and split **D21** (members told a draft's title: a decided confidentiality defect, now
-  `high`) from its product question (**F28**, decision row 31). No cell moved. Also filed **H41**, **H42**.
-  **Its doc-audit gate is still open:** neither pass had a subagent tool, so the fresh-eyes probes are
-  **H42**, and the campaign's wrap-up waits on them. `dotnet test`: Unit 1,376, RazorComponents 929,
-  Integration 1,666. **Pointer:** its DONE entry.
+- **Last landed:** WU-D21Confidentiality (2026-10-14) — tracker **D21** closed, the campaign wrap-up's
+  fix WU. A notification never names or links a story outside the public window (Draft, PendingApproval,
+  Rejected) or taken down unless its recipient is the story's author: `NotificationEnricher`'s `Story`,
+  `Chapter` and `GroupStory` kinds each split by recipient the D8 way (31 types enumerated; the `Own*`
+  kinds resolve as stored, the rest read the public window, and a followed chapter must be published).
+  Members' 60 keeps the group and drops the story title; the lineage-request and credit-on-a-draft leaks
+  close with it; type 52's title-free copy fixed. Rule in `layer2-services.md`. Decision row 31 / **F28**
+  stays open. **F42 L4.5 5→1** (no browser; **H43**). Filed **D22** (the credit and lineage manage lists).
+  `dotnet test`: Unit 1,377, RazorComponents 929, Integration 1,687. **Pointer:** its DONE entry.
+  Before that, 2026-10-13: WU-DocCorrections — the campaign's doc backstop (service audit §4's doctrine re-synced, false comments corrected, the CORRECTION-note convention, /fanon reach fixed; D21/F28/H41/H42 filed; its fresh-eyes probe gate is still open, **H42**, and the campaign's wrap-up waits on it); see its DONE entry.
   Before that, 2026-10-13: WU-TrackerFixes — the tracker sweep (B16/B17/D8/H7 closed, U11 built; row 30/F27, E12, E13, H39, H40 filed, H38 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ParityAndRemaining — service audit §2.7 and §2.12 (WASM parity, the remaining service defects; row 29/F26 filed, H37/H12 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
@@ -279,9 +276,9 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42),
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42); WU-D21Confidentiality, 2026-10-14, closed **D21** and opened **D22/H43**,
   including two **high-priority security items:
-  E3 and E9**, and a high-priority confidentiality defect, **D21** (a draft's title reaching group members). **A7** is the
+  E3 and E9**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2's named
   follow-up (the 8 SOLO editor pages' `ErrorAlert` adoption) was built by WU-TrackerFixes, 2026-10-13. WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
@@ -309,7 +306,9 @@ references it, does not restate it.
   whether an author may file their own unpublished story into a group — added 2026-10-14 by the
   WU-DocCorrections review fixes, tracker **F28**).
   Tracker **H38**, WU-TrackerFixes' browser pass, ran 2026-10-13, returned its fifteen L4.5 cells to 5
-  and closed — see WU-TrackerFixes' DONE entry.
+  and closed — see WU-TrackerFixes' DONE entry. Tracker **H43**, WU-D21Confidentiality's browser pass
+  (F42 L4.5 is 1 until it runs: the bell and inbox for hidden stories, and type 52's copy), is open — see
+  its DONE entry.
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
   now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
   session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
@@ -477,6 +476,48 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-D21Confidentiality — a notification never names or links a story outside the public window or taken down unless its recipient is the story's author: the story-family enricher kinds split by recipient, the D8 way (tracker D21; extends `Notifications/`, with a comment and a guard test in `Groups/`) — DONE ✓ (2026-10-14)
+
+- **Cells:** **F42 L4.5 5→1** (no browser in this pass; tracker **H43**). Beneath Stage-5 cells, no flip:
+  F42 L2 (the enricher), F39 L2 (a comment and a guard test). No migration.
+- **Trigger:** tracker **D21** (decided by the settled Class-A rule; fix shape and the D8 precedent in
+  the item) via the wrap-up amendment. No spec file: self-scoped in `wu-specs/WU-D21Confidentiality.md`.
+  Not in scope: decision row 31 / tracker **F28** (owner-open); `AddStoryAsync`'s accept/refuse is unchanged.
+- **What landed** (two commits: `1db5b5e` moment-1 docs, then code, tests and moment-3 docs):
+  1. **Rule (moment 1).** `layer2-services.md` §"Polymorphic RelatedEntityId" → "Story-family kinds by
+     recipient" (the rule, the type table, the chapter clause, rendering, how to classify a new type);
+     `audit/Notifications.md` settled note beside D8's.
+  2. **Enumeration.** Three kinds read a story title unfiltered (`StoryListings`): `Story` (19 types, 4
+     B24 stubs), `Chapter` (10, 24), `GroupStory` (60, 25). Each type's recipient traced to its producer.
+  3. **`NotificationEnricher`.** `OwnStory`/`OwnChapter`/`OwnGroupStory` for the author-recipient types
+     (9 `Story` types, 24, 25), resolved as stored; `Story`/`Chapter`/`GroupStory` for the rest, over
+     `Stories` with `ContentRating` and `StoryStatus` lifted by name and the window restated without the
+     viewer clause (recipient-agnostic, so the email composer shares it), `IsTakenDown` active; `Chapter`
+     also requires a published chapter. One loader per pair over two story sources. Rendering follows D8:
+     a miss, so the title-free arm and no link; 60 keeps the group's name and link. Closes two more
+     mint-time leaks of the same root: a lineage request from a draft source (50), a credit on a draft (52).
+  4. **Copy.** Type 52's title-free arm said "acknowledged your story" to the credited user; now
+     "acknowledged your help on a story".
+  5. **Comment.** `AddStoryAsync`'s D21 sentence re-tensed (row 31 still open).
+- **Filed:** **D22** (the credit and lineage manage lists show a counterpart an unpublished story's
+  title: the same rule, plus a product question of F28's shape), **H43** (browser pass). Ticked **D21**;
+  F28 and roadmap row 31 re-tensed, still open.
+- **Left alone:** row 31 / F28, including *when* members hear of an author's own draft (the 60 still
+  fires at add time, now title-free); D22's lists; the `Own*` kinds keep a taken-down story's title for
+  its author (unlike `OwnBlogPost`, which has always kept the removal filter; the rule's "unless the
+  recipient is the author" is the authority).
+- **Verification:** build 0 errors, no new warnings in touched files; **Unit 1,377 (+1), RazorComponents
+  929, Integration 1,687 (+21)**, all green; check-doc-hygiene, check-design-tokens, check-render-modes
+  and check-a11y pass. Integration `StoryNotificationConfidentialityTests` (17) and
+  `GroupServiceTests.AddStory_AnotherUsersUnpublishedOrTakenDownStory_IsRefusedAsNotFound` (4). With the
+  enricher reverted, 13 of the 17 fail (the three visible-story controls and the classification check
+  pass); mutation-checked separately: 25 and 24 moved to their filtered kinds, 75 moved to `Story`, the
+  chapter clause removed, `IsTakenDown` lifted, an unlisted type mapped to `Story` — each fails. Unit
+  `NotificationPresenterTests` (52 with and without a title). **No browser in this pass:** the bell and
+  inbox rendering on both phases is tracker **H43** (F42 L4.5 is 1 until it runs).
+- **Pointers:** Stage notes in `audit/Notifications.md` F42 and `audit/Groups.md` F39; tracker D21, D22,
+  F28, H43; `roadmap.md` decision row 31.
 
 ## WU-DocCorrections — the campaign's doc backstop: service audit §4's stale doctrine and false comments corrected against the code, the worksheet registered, the CORRECTION-note convention stated, every pre-split `cross-cutting.md` citation re-pointed (worksheet D12's doc half verified; service audit §4 and §7; extends no cluster — docs and comments, plus two Integration tests; its review fixes added the /fanon hub's reach fix and a third) — DONE ✓ (2026-10-13; its fresh-eyes probe gate is open, H42)
 
