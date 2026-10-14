@@ -166,7 +166,9 @@ wires it. `RecommendationSection` hosts its own `ReportDialog` (the `CommentSect
 **RazorComponents** `RecommendationCardTests` +2 (raises the id; absent on own and when unwired) and
 `RecommendationSectionTests` +2 (a signed-in click opens the section's dialog and loads reasons; none
 for anonymous viewers); `StoryPageTests` and `StoryExternalLinksRowTests` register the report fake.
-**L4.5 5→1:** no browser was available; tracker **H38** step 3.
+**L4.5 5→1:** no browser was available; tracker **H38** step 3. *Review fixes (2026-10-13), no flip:*
+the `RecommendationSectionTests` case now submits the dialog and asserts a `Recommendation` report for
+the rec (it fails with the section's type changed; Moderation F46's note).
 
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
@@ -207,7 +209,8 @@ for anonymous viewers); `StoryPageTests` and `StoryExternalLinksRowTests` regist
   This is the surface WU25 embeds. Covering tier: RazorComponents.
 - **L4 — Stage 5 (WU29, visual sign-off 2026-06-23).**
 - **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the card's Report and the section's dialog,
-  undriven — tracker H38; Stage note at this feature's top).** It was 5 before.
+  undriven — tracker H38; Stage note at this feature's top, with its review fixes' test the same day, no
+  flip).** It was 5 before.
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F27's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: `RecommendationReadServiceTests`
   (Integration): `GetForStoryAsync` returns Approved-only recs with correct projection (spotlighted

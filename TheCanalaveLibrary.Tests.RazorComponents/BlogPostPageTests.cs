@@ -26,6 +26,7 @@ public class BlogPostPageTests : BunitContext
     private const int ViewerId = 7;
 
     private readonly FakeBlogPostPageService _blogService = new();
+    private readonly FakeReportSubmissionService _reports = new() { Reasons = [new ReportReasonDto(1, "Spam", null)] };
     private readonly BunitAuthorizationContext _auth;
 
     public BlogPostPageTests()
@@ -39,7 +40,7 @@ public class BlogPostPageTests : BunitContext
         Services.AddScoped<ICommentWriteService>(_ => new FakeCommentWriteService());
         // CommentSection nests ReportDialog (report submission) + toast feedback — same
         // registration set GroupPageTests uses for its comment wall.
-        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
+        Services.AddScoped<IReportSubmissionService>(_ => _reports);
         Services.AddScoped<IToastService>(_ => new FakeToastService());
         // RichTextView uses JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -321,7 +322,7 @@ public class BlogPostPageTests : BunitContext
         cut.FindAll("button").FirstOrDefault(b => b.TextContent.Trim() == "Report post");
 
     [Fact]
-    public void SignedInNonAuthor_SeesReportPost_WhichOpensTheReportDialog()
+    public async Task SignedInNonAuthor_SeesReportPost_WhichOpensTheReportDialog_AndFilesABlogPostReport()
     {
         AuthenticateAs(ViewerId);
         var cut = RenderPage(MakePost());
@@ -331,6 +332,10 @@ public class BlogPostPageTests : BunitContext
 
         cut.Find("[role='dialog'][aria-label='Report Content']").Should().NotBeNull(
             "the page hosts its own ReportDialog for the post");
+
+        await ReportDialogDriver.SubmitAsync(cut);
+        _reports.Submitted.Should().ContainSingle().Which
+            .Should().Match<SubmitReportRequest>(r => r.EntityType == ReportedEntityType.BlogPost && r.EntityId == 1);
     }
 
     [Fact]

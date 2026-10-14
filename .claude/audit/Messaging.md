@@ -133,7 +133,9 @@ F46.** `MessageItem` gains `OnReport` (beside the timestamp, only on the other p
 and opens it with `ReportedEntityType.Message`. The server now accepts a message report only from a
 participant of its conversation (F46's note). Tests: **RazorComponents** `MessageItemTests` +1,
 `MessageThreadTests` +1 (bubbles the id), `MessagesPageTests` +1 (the dialog opens with reasons);
-**Integration** in F46. **L4.5 5→1:** no browser was available; tracker **H38** step 4.
+**Integration** in F46. **L4.5 5→1:** no browser was available; tracker **H38** step 4. *Review fixes
+(2026-10-13), no flip:* the `MessagesPageTests` case now submits the dialog and asserts a `Message`
+report for message 41 (it fails with the page's type changed; F46's note).
 
 **Settled — a deleted participant (owner ruling D13 edge (a), answered 2026-08-06; settled for
 WU-UserDeletion 2026-10-13). Do not revisit:**
@@ -205,7 +207,7 @@ shared one.
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: Report on the other party's messages, undriven — tracker H38; Stage note at this feature's top). Before that, Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: Report on the other party's messages, undriven — tracker H38; Stage note at this feature's top, with its review fixes' test the same day, no flip). Before that, Stage 5 (5→1 at WU-ParityAndRemaining, 1→5 at its browser pass, both 2026-10-13):** a
   deleted participant is a null `OtherParticipant`, rendered by `ConversationListItem` and
   `MessageThread` themselves (default avatar, a muted "[deleted user]", no link), seen on both render
   phases; tracker **H37** closed (the WU-ParityAndRemaining note below). Before that:

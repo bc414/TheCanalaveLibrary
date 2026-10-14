@@ -158,4 +158,16 @@ public class BookshelvesPageTests : BunitContext
         _storyReadService.LastListingsFilter!.PageSize.Should().Be(50,
             "the viewer's DefaultPaginationSize sizes the shelf, not a constant 20");
     }
+
+    [Fact]
+    public void SignedInViewer_WhoseSettingsReadFails_StillGetsTheShelf_AtTwenty()
+    {
+        // The read is best-effort (WU-TrackerFixes review fixes): a failure keeps 20 and loads the shelf.
+        _auth.SetAuthorized("user-7").SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        _settingsService.GetMySettingsException = new SessionExpiredException();
+
+        RenderPage(BookshelfTab.Favorites);
+
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(20);
+    }
 }

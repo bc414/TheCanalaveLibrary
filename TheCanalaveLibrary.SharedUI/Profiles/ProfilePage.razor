@@ -18,6 +18,8 @@
 @inject IToastService Toasts
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
+@inject ILogger<ProfilePage> Logger
+@using Microsoft.Extensions.Logging
 
 @* Dispatcher — Feature 21 (User Profile Display), WU30.
    Route: /user/{UserId:int}/{*Tab}  (default tab = "profile").
@@ -482,8 +484,18 @@ else
 
         if (_currentUserId is int)
         {
-            int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
-            if (preferred > 0) _storyPageSize = preferred;
+            // Best-effort (layer3.5-structure.md, the page-size seed): this public page's other reads
+            // all degrade for a stale session, so a failed preference read must not take it down.
+            try
+            {
+                int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
+                if (preferred > 0) _storyPageSize = preferred;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Reader page-size read failed for viewer {UserId} — keeping {PageSize}",
+                    _currentUserId, _storyPageSize);
+            }
         }
         _storyFilter = new StoryFilterDto { PageSize = _storyPageSize };
 

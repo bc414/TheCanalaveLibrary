@@ -293,7 +293,7 @@ public class MessagesPageTests : BunitContext
     // ── Report a message (tracker B17) ────────────────────────────────────────────
 
     [Fact]
-    public void ReportOnTheOtherPartysMessage_OpensThePagesReportDialog()
+    public async Task ReportOnTheOtherPartysMessage_OpensThePagesReportDialog_AndFilesAMessageReport()
     {
         _reports.Reasons = [new ReportReasonDto(1, "Harassment", null)];
         MessageDto theirs = new(MessageId: 41, ConversationId: 1, SenderUserId: 101, SenderUsername: "Ash",
@@ -309,5 +309,10 @@ public class MessagesPageTests : BunitContext
 
         cut.Find("[role='dialog'][aria-label='Report Content']").Should().NotBeNull();
         cut.Markup.Should().Contain("Harassment", "the dialog loaded the report reasons");
+
+        await ReportDialogDriver.SubmitAsync(cut);
+        _reports.Submitted.Should().ContainSingle().Which
+            .Should().Match<SubmitReportRequest>(r => r.EntityType == ReportedEntityType.Message && r.EntityId == 41,
+                "the page files the report against the message, not its conversation");
     }
 }

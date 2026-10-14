@@ -88,11 +88,16 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
     /// never call it — the WASM client's read is auth-required).</summary>
     public int GetMySettingsCalls { get; private set; }
 
+    /// <summary>When set, <see cref="GetMySettingsAsync"/> throws it: a WASM tab whose cookie expired after
+    /// prerender (the pages' page-size read is best-effort — WU-TrackerFixes review fixes).</summary>
+    public Exception? GetMySettingsException { get; set; }
+
     public Task<UserSettingsDto> GetMySettingsAsync() => Task.FromResult(Settings());
 
     private UserSettingsDto Settings()
     {
         GetMySettingsCalls++;
+        if (GetMySettingsException is not null) throw GetMySettingsException;
         return new UserSettingsDto(
             Tagline: null,
             ProfilePictureRelativeUrl: null,

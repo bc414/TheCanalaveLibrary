@@ -629,6 +629,16 @@ unchanged).
 
 ## Feature 15 — Saved Tag Selections
 
+**WU-TrackerFixes review fixes Stage note (2026-10-13) — no flip (L4.5 already 1).** The load
+flyout's sort-preference read (`SavedTagSelectionLoadFlyoutInner.OnInitializedAsync`) caught only
+`InvalidOperationException`. On a WASM tab whose cookie expired after prerender the viewer still reads
+as signed in, the read answers 401 → `SessionExpiredException`, and that escaped to the error boundary
+of whatever page hosts `TagFilter` (`/discover`, Bookshelves, the profile story tabs). It is
+best-effort now: a failure logs at Warning and keeps the default sort (`layer3.5-structure.md`, the
+page-size seed). Tests: **RazorComponents** — the expired-session cases in `SearchPageTests`,
+`BookshelvesPageTests` and `ProfilePageTests` render the flyout, and each fails with the old catch
+restored.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
 `RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
@@ -683,7 +693,7 @@ Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
 **L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`; the
 permalink needed **no** L1 change — see WU-SelectionPermalink below).
 **L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below; shared auth guard WU-ModerationIntegrity 2026-09-30; extended by WU-SelectionPermalink,
-2026-07-28). **L4-Style / L4.5-Browser — Stage 1**
+2026-07-28; the flyout's sort read made best-effort by the WU-TrackerFixes review fixes, 2026-10-13 — Stage note at this feature's top). **L4-Style / L4.5-Browser — Stage 1**
 (pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; permalink read + its client twin added 2026-07-28)** — endpoints + client impl live (WU-L5Sweep) and the
 site now runs global InteractiveAuto; the saved-selection flyout fetch is interactive-only and was
 not browser-driven in the flip's wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`

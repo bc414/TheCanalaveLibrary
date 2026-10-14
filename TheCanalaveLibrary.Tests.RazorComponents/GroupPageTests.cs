@@ -32,6 +32,7 @@ public class GroupPageTests : BunitContext
     private readonly FakeRelatedStoriesStoryReadService _storyService = new();
     private readonly FakeModerationWriteService _moderationService = new();
     private readonly FakeBlogPostReadService _blogService = new();
+    private readonly FakeReportSubmissionService _reports = new() { Reasons = [new ReportReasonDto(1, "Spam", null)] };
 
     public GroupPageTests()
     {
@@ -49,7 +50,7 @@ public class GroupPageTests : BunitContext
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IBlogPostReadService>(_ => _blogService);
         Services.AddScoped<ICommentWriteService>(_ => new FakeCommentWriteService());
-        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
+        Services.AddScoped<IReportSubmissionService>(_ => _reports);
         Services.AddScoped<IToastService>(_ => new FakeToastService());
         // SocialMetaTags (inside the page) injects IPublicUrlProvider — pure Core class, no host dependency.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
@@ -358,15 +359,36 @@ public class GroupPageTests : BunitContext
         IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member);
 
         // BlogPostCard: root div > title row > title link, so the card is the link's grandparent.
+        IElement Card(string title) =>
+            cut.FindAll("a[href^='/blog/']").Single(a => a.TextContent.Trim() == title).ParentElement!.ParentElement!;
         string[] ReportsOnCard(string title) =>
-        [
-            .. cut.FindAll("a[href^='/blog/']").Single(a => a.TextContent.Trim() == title)
-                .ParentElement!.ParentElement!.QuerySelectorAll("button")
-                .Select(b => b.TextContent.Trim()).Where(t => t == "Report"),
-        ];
+            [.. Card(title).QuerySelectorAll("button").Select(b => b.TextContent.Trim()).Where(t => t == "Report")];
 
         ReportsOnCard("Someone else's post").Should().ContainSingle();
         ReportsOnCard("My own post").Should().BeEmpty("the listing's AuthorId marks the viewer's own post");
+
+        // The footer row exists only for a control it holds: the viewer's own card (no EditHref here,
+        // and Report hidden) has none, not an empty bordered row (WU-TrackerFixes review fixes).
+        Card("Someone else's post").QuerySelectorAll("div.border-t").Should().ContainSingle();
+        Card("My own post").QuerySelectorAll("div.border-t").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BlogPosts_Report_FilesABlogPostReport_NotAStoryReport()
+    {
+        // The page's single ReportDialog also serves the StoryDeck (ReportedEntityType.Story); the blog
+        // card's wiring must send BlogPost with the post's id.
+        _blogService.GroupResult = (
+            [new BlogPostListingDto(12, "Someone else's post", "Snippet", DateTime.UtcNow, Rating.T, false, AuthorId: 2)], 1);
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member);
+
+        cut.FindAll("a[href^='/blog/']").Single(a => a.TextContent.Trim() == "Someone else's post")
+            .ParentElement!.ParentElement!.QuerySelectorAll("button").Single(b => b.TextContent.Trim() == "Report")
+            .Click();
+        await ReportDialogDriver.SubmitAsync(cut);
+
+        _reports.Submitted.Should().ContainSingle().Which
+            .Should().Match<SubmitReportRequest>(r => r.EntityType == ReportedEntityType.BlogPost && r.EntityId == 12);
     }
 
     [Fact]
@@ -416,5 +438,32 @@ public class GroupPageTests : BunitContext
         FindButton(cut, "Remove from group").Click();
         await FindButton(cut, "Remove").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         cut.Markup.Should().NotContain("That story is no longer in this group.");
+    }
+
+    [Fact]
+    public void FileStory_Refused_ShowsTheRefusalAboveTheStories()
+    {
+        // ContentRatingExceededException (the folder's rating cap) is user-facing (WU-TrackerFixes review
+        // fixes: the file surface had no test).
+        _groupService.AssignStoryException = new ContentRatingExceededException("Story A is rated above the folder cap.");
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Admin);
+
+        cut.Find("select[aria-label='Move Story A to folder']").Change(FolderXId.ToString());
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Story A is rated above the folder cap."));
+        cut.FindAll("aside [role='alert']").Should().BeEmpty("a filing refusal shows above the stories, not in the tree");
+        SignInLinks(cut).Should().Be(0);
+    }
+
+    [Fact]
+    public void FolderTreeUnassign_Refused_ShowsTheRefusalInsideTheTree_WithSignInForAnExpiredSession()
+    {
+        _groupService.UnassignStoryException = new SessionExpiredException();
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Admin);
+
+        cut.Find("[aria-label='Remove Story B from Folder X']").Click();
+
+        cut.WaitForAssertion(() => cut.Find("aside [role='alert']").TextContent.Should().Contain("session has expired"));
+        SignInLinks(cut).Should().Be(1);
     }
 }

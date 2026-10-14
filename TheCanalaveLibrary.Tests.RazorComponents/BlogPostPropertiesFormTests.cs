@@ -106,4 +106,21 @@ public class BlogPostPropertiesFormTests : BunitContext
 
         callbackFired.Should().BeTrue();
     }
+
+    // ── ErrorAlert's Sign in (the WU-ErrorHandling2 follow-up; test added by the WU-TrackerFixes review fixes) ──
+
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public void ServerError_OffersSignIn_OnlyForAnExpiredSession(bool sessionExpired, int signInLinks)
+    {
+        BlogPostPropertiesViewModel vm = MakeValidViewModel();
+        vm.ShowServerError(sessionExpired ? new SessionExpiredException() : new UnauthorizedAccessException());
+
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(p => p
+            .Add(f => f.ViewModel, vm));
+
+        cut.FindAll("[role='alert']").Should().ContainSingle("the refusal renders through one ErrorAlert");
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(signInLinks);
+    }
 }

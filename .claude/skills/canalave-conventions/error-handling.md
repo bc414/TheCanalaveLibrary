@@ -165,7 +165,10 @@ honest:
   A handler's failure replaces the previous one's messages; it never appends to them.
 - **A refusal is never a toast.** A page's own operations (join, leave, add or remove a story)
   show their refusal in an `ErrorAlert` beside the controls that caused it, and log an unexpected
-  failure at `Error` like any other catch site (`GroupPage`).
+  failure at `Error` like any other catch site (`GroupPage`). Five older surfaces still toast a
+  refusal (`ProfilePage`'s tag-selection copy, `SelectionAdoptButton`, `SeriesCreateEditPage`'s
+  delete, `MyAcknowledgmentsPage`'s revoke, `MyStoryLineagesPage`'s remove): defects to convert,
+  tracker **E12**, not precedent.
 
 **Logging note:** `ServerFaultException` is deliberately **not** user-facing
 (`ExceptionPresenter.IsUserFacing` excludes it — it's the generic-message path) but must not be

@@ -535,7 +535,9 @@ restored page must sit under a pager of the same size). Every filter the page bu
 tab reset and both `LoadTabAsync` branches — carries it, and `ResultsFilterPanel` echoes it on Apply
 (F31's note). Tests: **RazorComponents** `BookshelvesPageTests` +1 (a 50 setting reaches the listing
 read; fails with the size dropped from the tab filter). **L4.5 5→1:** no browser was available;
-tracker **H38** step 1.
+tracker **H38** step 1. *Review fixes (2026-10-13), no flip:* the read is best-effort, as on the
+profile page (a failure logs at Warning and keeps 20); `BookshelvesPageTests` +1 (an expired-session
+read still loads the shelf at 20; fails with the catch removed).
 
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;
   derived tabs "Actively Reading" (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned"
@@ -571,7 +573,8 @@ tracker **H38** step 1.
   `@onclick:stopPropagation`, renders nothing when closed). Human visual sign-off pending (browser walk-through
   of all 11 tabs + teal Following + mobile overlay) — no automated style check; visual → Stage 6.
 - **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the shelf's page size follows the reader
-  setting, undriven — tracker H38; Stage note at this feature's top).** It was 5 before.
+  setting, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day,
+  no flip).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; the bookshelves page verified in a real WASM runtime during
   the flip's browser wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.

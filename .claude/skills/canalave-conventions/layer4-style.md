@@ -735,8 +735,12 @@ Neither clause is a full WCAG AA verification per component — that stays out o
      WU-A11y-Keyboard's scope, not decided here.
   New flyouts MUST use one of these three shapes.
 
-**Errors surface through the standing components:** transient action failures →
-`IToastService.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger)` (GroupPage's
-local fixed-position error div was converted 2026-07-10 — never hand-roll a toast); persistent
-form/summary errors → `InlineAlert`. Raw `ex.Message` in UI remains a defect per
-`error-handling.md`.
+**Errors surface through the standing components:** a refused or failed action → an inline
+`ErrorAlert` beside the controls that caused it, with `ShowSignIn` from `ex is
+SessionExpiredException` (`GroupPage`'s join/leave, story and folder-tree alerts are the model —
+error-handling.md §"The API error envelope"); form/summary validation → `InlineAlert` or
+`ErrorAlert`; a toast (`IToastService.Show`) only for a non-blocking system event with no inline
+home ("Draft restored."), never for a refusal. Never hand-roll a toast or an error div. Raw
+`ex.Message` in UI remains a defect per `error-handling.md`. *(Corrected 2026-10-13 by the
+WU-TrackerFixes review fixes: this paragraph used to route action failures to a toast, with
+GroupPage as its example, contradicting error-handling.md's channel table.)*

@@ -7,6 +7,8 @@
 @inject IRecommendationReadService RecommendationReadService
 @inject IUserSettingsService SettingsService
 @inject NavigationManager Nav
+@inject ILogger<BookshelvesPage> Logger
+@using Microsoft.Extensions.Logging
 
 @if (_isLoading)
 {
@@ -199,8 +201,17 @@ else
 
         if (_currentUserId is int)
         {
-            int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
-            if (preferred > 0) _pageSize = preferred;
+            // Best-effort (layer3.5-structure.md, the page-size seed): a failed preference read keeps 20.
+            try
+            {
+                int preferred = (await SettingsService.GetMySettingsAsync()).Reader.DefaultPaginationSize;
+                if (preferred > 0) _pageSize = preferred;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Reader page-size read failed for viewer {UserId} — keeping {PageSize}",
+                    _currentUserId, _pageSize);
+            }
         }
 
         await LoadTabAsync();

@@ -444,6 +444,9 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     /// <summary>GroupPage's inline refusals (WU-TrackerFixes): thrown by JoinAsync / RemoveStoryAsync when set.</summary>
     public Exception? JoinException { get; set; }
     public Exception? RemoveStoryException { get; set; }
+    /// <summary>GroupPage's file and folder-tree refusals (WU-TrackerFixes review fixes).</summary>
+    public Exception? AssignStoryException { get; set; }
+    public Exception? UnassignStoryException { get; set; }
 
     public Task JoinAsync(int groupId) => JoinException is null ? Task.CompletedTask : throw JoinException;
     public Task LeaveAsync(int groupId)
@@ -462,13 +465,13 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId)
     {
         AssignStoryToFolderCalls.Add((groupStoryId, groupFolderId));
-        return Task.CompletedTask;
+        return AssignStoryException is null ? Task.CompletedTask : throw AssignStoryException;
     }
 
     public Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId)
     {
         UnassignStoryFromFolderCalls.Add((groupStoryId, groupFolderId));
-        return Task.CompletedTask;
+        return UnassignStoryException is null ? Task.CompletedTask : throw UnassignStoryException;
     }
 
     // ── Folder writes (what this page actually exercises) ────────────────────────

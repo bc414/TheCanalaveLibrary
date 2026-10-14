@@ -246,7 +246,8 @@ Generation" → "Filtering semantics" and §"Email fan-out".
     granting moderator, which answered the unruled decision row 19 by itself; the review fixes below
     took the name out.
   - 91/92 name the sponsor ("Someone" once deleted).
-  - 100 is actor-free and, since the review fixes, title-free (tracker D8).
+  - 100 is actor-free and, since the review fixes, title-free (tracker D8) *(built by WU-TrackerFixes
+    2026-10-13; the title is back — F42's WU-TrackerFixes Stage note)*.
 - **Tests.**
   - **Integration** (+18): `NotificationServiceTests` +7 — per-field collapse, three unsubscribe
     shapes, two interleaved upsert races (`InterleavingCommandInterceptor`), the tied-timestamp

@@ -976,7 +976,12 @@ and `TagFilter`:
   `InitialFilter`. The dispatcher resolves it from the viewer's
   `ReaderSettingsDto.DefaultPaginationSize` (signed-in viewers only: anonymous viewers keep the DTO's
   20, and the WASM settings read requires auth) in `OnInitializedAsync`, before the first listing
-  load, on both render passes. The panel copies it in `OnParametersSet` **before** the
+  load, on both render passes. The read is best-effort, like `ReaderDisplayProvider`'s: a failure
+  (a WASM tab whose cookie expired after prerender answers 401 → `SessionExpiredException`) logs at
+  Warning and keeps 20, because a page-size preference must never take down the page around it.
+  The same holds for `SavedTagSelectionLoadFlyoutInner`'s sort read, which renders inside these
+  pages' `TagFilter` (WU-TrackerFixes review fixes, 2026-10-13).
+  The panel copies it in `OnParametersSet` **before** the
   `_userHasInteracted` early return, because no panel control edits it, and echoes it on Apply; it
   never writes a literal. A device-local restore keeps the viewer's size, since the snapshot stores ids
   only. Consumers: `SearchPage`, `BookshelvesPage`, `ProfilePage`'s story tabs. `TreeSearchPage`

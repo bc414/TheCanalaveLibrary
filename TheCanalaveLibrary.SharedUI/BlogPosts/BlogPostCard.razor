@@ -51,7 +51,9 @@
     }
 
     @* ── Footer controls — Edit (owner only) + Report (others only) ─────────── *@
-    @if ((IsOwner && EditHref is not null) || OnReport.HasDelegate)
+    @* The row's guard is exactly its children's guards: an owner with no EditHref (GroupPage) and a
+       Report delegate would otherwise get an empty bordered row (WU-TrackerFixes review fixes). *@
+    @if ((IsOwner && EditHref is not null) || (!IsOwner && OnReport.HasDelegate))
     {
         <div class="mt-1 flex gap-3 border-t border-(--color-border) pt-2">
             @if (IsOwner && EditHref is not null)

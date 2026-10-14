@@ -2,6 +2,8 @@
 @inject ISavedTagSelectionReadService ReadService
 @inject ISavedTagSelectionWriteService WriteService
 @inject IUserSettingsService SettingsService
+@inject ILogger<SavedTagSelectionLoadFlyoutInner> Logger
+@using Microsoft.Extensions.Logging
 
 @* The actual authenticated-only content for SavedTagSelectionLoadFlyout (WU43). Split out of the
    thin AuthorizeView wrapper so its @inject services are resolved ONLY when this component is
@@ -185,10 +187,13 @@
             UserSettingsDto settings = await SettingsService.GetMySettingsAsync();
             _sort = settings.Reader.SavedTagSelectionSort;
         }
-        catch (InvalidOperationException)
+        catch (Exception ex)
         {
-            // Defensive only — this component is only ever instantiated inside
-            // SavedTagSelectionLoadFlyout's <AuthorizeView><Authorized>.
+            // Best-effort, like the host pages' page-size read (layer3.5-structure.md): the sort is a
+            // preference. Authorized here still fails on a WASM tab whose cookie expired after
+            // prerender (401 → SessionExpiredException), which used to take down the page around the
+            // filter (WU-TrackerFixes review fixes). The flyout keeps its default sort.
+            Logger.LogWarning(ex, "Saved-selection sort preference read failed — keeping {Sort}", _sort);
         }
     }
 

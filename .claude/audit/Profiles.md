@@ -139,6 +139,13 @@ F66.
   none for anonymous viewers or the owner). The class now signs viewers in through
   `AddAuthorization()` (the story tabs' `TagFilter` renders an `AuthorizeView`). **L4.5 5→1:** no browser
   was available; tracker **H38** steps 1–2.
+- **Review fixes (2026-10-13), no flip.** The new settings read made this public page throw for a
+  signed-in viewer whose cookie had expired after prerender (WASM answers 401 → `SessionExpiredException`,
+  caught only by the page's error boundary); every other read here degrades. It is best-effort now: a
+  failure logs at Warning and keeps 20 (`layer3.5-structure.md`, the page-size seed). The Blog-tab Report
+  test now submits and asserts a `BlogPost` report for the post (the page's dialog also serves "Report
+  user"). Tests: **RazorComponents** `ProfilePageTests` +1 (the expired-session read still renders the
+  profile at 20; fails with the catch removed). H38 step 1 gains the expired-session check.
 
 - **L1 — Stage 5.**
 - **L2 — Stage 5** (WU30, 2026-06-24). `IUserProfileReadService` built in `Server/Profiles/`:
@@ -170,7 +177,8 @@ F66.
   stats strip with bold counter values; badge row; action buttons (follow/vouch/edit). Visual sign-off
   pending human run at `/user/{id}`. Stage-6 gate = human visual approval.
 - **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the story tabs' page size and the blog
-  tab's Report, undriven — tracker H38; Stage note at this feature's top).** It was 5 before.
+  tab's Report, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same
+  day, no flip).** It was 5 before.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; profile page verified in a real WASM runtime during the
   flip's browser wave (header, stats, vouches, tabs). Full wave narrative + the 7 bugs found/fixed:

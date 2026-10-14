@@ -42,6 +42,7 @@ public class ProfilePageTests : BunitContext
     private readonly FakeBlogPostReadService _blogService;
     private readonly FakeStoryReadService _storyReadService = new();
     private readonly FakeUserSettingsService _settingsService = new();
+    private readonly FakeReportSubmissionService _reports = new() { Reasons = [new ReportReasonDto(1, "Spam", null)] };
 
     // The viewer: anonymous unless a test calls SignInAs before rendering. AddAuthorization (not a
     // bare cascading value) because the story tabs' TagFilter renders an AuthorizeView.
@@ -94,7 +95,7 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<IToastService>(_ => new ToastService());
         // WU-UserModeration — the page's single ReportDialog moved out of the Stories tab to page
         // level (the banner's "Report user" control is on every tab), so it now renders always.
-        Services.AddScoped<IReportSubmissionService>(_ => new FakeReportSubmissionService());
+        Services.AddScoped<IReportSubmissionService>(_ => _reports);
         // WU-Seo — ProfilePage now renders <SocialMetaTags>, which needs IPublicUrlProvider.
         // PublicUrlProvider is a pure Core class (no host dependency); a fixed test base is fine.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
@@ -165,6 +166,23 @@ public class ProfilePageTests : BunitContext
     }
 
     [Fact]
+    public void SignedInViewer_WhoseSettingsReadFails_StillGetsTheProfile_AtTwenty()
+    {
+        // A WASM tab whose cookie expired after prerender: the auth state still says signed in, the
+        // settings read answers 401. Every other read on this public page degrades, so this one must
+        // too (WU-TrackerFixes review fixes) — before, the exception reached the page's error boundary.
+        SignInAs(99);
+        _settingsService.GetMySettingsException = new SessionExpiredException();
+
+        IRenderedComponent<ProfilePage> cut = Render<ProfilePage>(p => p
+            .Add(c => c.UserId, TestUserId)
+            .Add(c => c.Tab, ProfileTabSlug.For(ProfileTab.Favorites)));
+
+        cut.Markup.Should().Contain("TestUser", "the profile renders");
+        _storyReadService.LastListingsFilter!.PageSize.Should().Be(20, "a failed preference read keeps the default");
+    }
+
+    [Fact]
     public void AnonymousViewer_StoryTabs_KeepTwenty_WithoutReadingSettings()
     {
         _settingsService.DefaultPaginationSize = 50;
@@ -188,7 +206,7 @@ public class ProfilePageTests : BunitContext
     private static bool IsReportButton(AngleSharp.Dom.IElement b) => b.TextContent.Trim() == "Report";
 
     [Fact]
-    public void BlogTab_SignedInVisitor_CanReportAPost_ThroughThePagesDialog()
+    public async Task BlogTab_SignedInVisitor_CanReportAPost_ThroughThePagesDialog()
     {
         SignInAs(99);
 
@@ -200,6 +218,11 @@ public class ProfilePageTests : BunitContext
 
         cut.Find("[role='dialog']").GetAttribute("aria-label").Should().Be("Report Content",
             "the card's Report opens the page's single ReportDialog");
+
+        // The page's dialog also serves the banner's "Report user": the card must file a BlogPost report.
+        await ReportDialogDriver.SubmitAsync(cut);
+        _reports.Submitted.Should().ContainSingle().Which
+            .Should().Match<SubmitReportRequest>(r => r.EntityType == ReportedEntityType.BlogPost && r.EntityId == 1);
     }
 
     [Theory]

@@ -48,9 +48,10 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-10-13, WU-TrackerFixes — every allow-set type has a report entry point, a
-Message report needs a participant, and `ReportDialog`'s refusal renders through `ErrorAlert` (tracker
-B17), L2 changed beneath the cell, **L4.5 5→1**, Stage note below; before that the same day,
+**Stages (updated 2026-10-13, the WU-TrackerFixes review fixes — each Report host's test now asserts
+the filed type and id, no flip; earlier the same day, WU-TrackerFixes — every allow-set type has a
+report entry point, a Message report needs a participant, and `ReportDialog`'s refusal renders through
+`ErrorAlert` (tracker B17), L2 changed beneath the cell, **L4.5 5→1**, Stage note below; before that the same day,
 WU-UserDeletion — `ReportedEntityType.Group` added as a ledger-only type, the submission allow-set
 unchanged, no flip; F47's WU-UserDeletion Stage note; before that 2026-09-30, WU-ModerationIntegrity
 browser verification):** L1–L3.5 = 5, L4 = 3, L4.5 = **1** (tracker **H38**), L5 = 5, L6 = 5. L1 stays 5
@@ -77,6 +78,12 @@ undriven) and back to 5 at the browser pass the same day (tracker **H19** closed
   non-participant's is refused like a missing id, and no row is written — fails with the arm back to
   `true`). **RazorComponents** in the features named above, plus `ReportDialogTests` (2).
 - **L4.5 5→1:** no browser was available; tracker **H38** steps 2–4 and 6.
+- **Review fixes (2026-10-13), no flip.** The host tests opened the dialog but never checked what it
+  would file, so a host wired with the wrong `ReportedEntityType` (most likely on `GroupPage`, whose one
+  dialog serves `Story` and `BlogPost`) passed every tier. `FakeReportSubmissionService` now records
+  each request, and the five hosts' tests submit and assert the type and id: `MessagesPageTests`
+  (Message), `RecommendationSectionTests` (Recommendation), `ProfilePageTests`, `BlogPostPageTests` and
+  `GroupPageTests` +1 (BlogPost). Each fails with its host's type changed.
 
 **WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46 L4.5 1→5.** `ReportDialog`
 on both render phases, `psql` after every submit:
@@ -599,7 +606,9 @@ with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` 
 (`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
 bigint comment ids; Integration).
 
-**Stages (updated 2026-10-13, the WU-PrivateMessageEmail review fixes — the moderator-initiated account
+**Stages (updated 2026-10-13, WU-TrackerFixes — the queue's User-target link and View profile use the
+id route, and the removal and account-action refusals carry an honest Sign-in flag, **L4.5 5→1**
+(tracker H38), Stage note at the top of this section; earlier the same day, the WU-PrivateMessageEmail review fixes — the moderator-initiated account
 paths load their target fresh, so a circuit that tracked it no longer decides on or writes back stale
 columns, beneath L2, no flip, Integration-tested and driven on one circuit by the WU-PrivateMessageEmail browser pass the same day, Stage note at the top of this section; earlier the
 same day, WU-BlobCleanup — a hard delete erases the story's cover blob after the
@@ -877,10 +886,14 @@ author of a revoke/restore is `roadmap.md` decision row 15.
 external link) reset their `_…IsSessionExpired` flag, so an expired-session failure no longer leaves a
 Sign in link beside the validation message (the WU-ErrorHandling2 follow-up; `error-handling.md`).
 Tests: **RazorComponents** `ModSubmissionsPageStoriesTests` +1 (the story reject sequence; fails with
-the reset removed). **L4.5 5→1:** no browser was available; tracker **H38** step 7.
+the reset removed). **L4.5 5→1:** no browser was available; tracker **H38** step 7. *Review fixes
+(2026-10-13), no flip:* the account and link resets had no test; `ModSubmissionsPageImportsTests` +2 run
+the same sequence on each tier, and each fails with its reset removed.
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity — L2 changes beneath the cell, no flip; the
-WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (5→1 at
+**Stages (updated 2026-10-13, WU-TrackerFixes — the three reject reasons reset the Sign-in flag,
+**L4.5 5→1** (tracker H38), and its review fixes test the account and link tiers, no flip; Stage note at
+the top of this section; before that 2026-09-30, WU-ModerationIntegrity — L2 changes beneath the cell,
+no flip; the WU-StoryLifecycle browser pass before that):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1** (5→1 at
 WU-TrackerFixes, 2026-10-13: `/mod/submissions`' three reject reasons no longer inherit a stale Sign-in
 flag, undriven — tracker **H38** step 7; its Stage note at the top of this section. Before that 5:
 the review fixes dropped it to 1 because `/mod/submissions` and the D1 approval workflow had changed

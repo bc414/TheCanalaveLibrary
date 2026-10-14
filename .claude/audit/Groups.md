@@ -333,7 +333,8 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   Stage note and browser verification note at the end of this feature).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
   `RenderFragment` helper (read-only display, deliberate M-badge zero-trace suppression for
   non-consenting viewers — WU-AccessGate). Inline add-story form (StoryId text field) with
-  `ContentRatingExceededException` surfaced as error toast. The admin "Manage" link to
+  `ContentRatingExceededException` surfaced as error toast *(an inline `ErrorAlert` above the stories
+  since WU-TrackerFixes, 2026-10-13 — F40's Stage note)*. The admin "Manage" link to
   `/group/{GroupId}/folders` — a dangling affordance since WU32, folder management deferred
   post-MVP — now resolves: `GroupFolderManagementPage.razor` (admin-gated, mirrors
   `GroupCreateEditPage`'s pattern) owns its own interactive recursive tree (separate from
@@ -577,6 +578,11 @@ WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
 - Tests: **RazorComponents** `GroupPageTests` +4 (Report on another member's post and not the viewer's
   own; none for anonymous viewers; an inline join refusal with Sign in; an inline remove refusal that a
   fresh attempt clears). **L4.5 5→1:** no browser was available; tracker **H38** steps 2 and 6.
+- **Review fixes (2026-10-13), no flip.** The viewer's own blog card rendered an empty bordered footer
+  row (fixed in `BlogPostCard`, F36's note). Three surfaces lacked a test: `GroupPageTests` +3 — the blog
+  card files a `BlogPost` report for its post, not a `Story` one (the page's one dialog serves both);
+  a filing refusal shows above the stories; an unfile refusal shows inside the tree with Sign in. The
+  stale "inline error strip" comment above `@code` is gone. H38 step 2 gains the footer check.
 
 - **Settled — group content FKs are RESTRICT (owner ruling D10, 2026-08-06; built WU-TptHardDelete
   2026-09-30).** `group_comments.group_id` and `group_blog_posts.group_id` refuse a group delete while
@@ -696,7 +702,7 @@ WU-ErrorHandling2 follow-up); L4.5 5→1, other cells unchanged.**
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the blog section's Report and the inline refusals, undriven — tracker H38; Stage note at this feature's top. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
+- **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the blog section's Report and the inline refusals, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day, no flip. Before that Stage 5: 5→1 at WU-UserDeletion, 1→5 at its browser pass, both 2026-10-13).** The rescue
   panel, its stale-tab refusal and the sole admin's leave warning were driven on both render phases
   (browser verification Stage note above; tracker **H29** closed). It was 5 from the 2026-07-01/02 pass
   (the "L4.5-Browser verification" section below) through the later browser-verified WUs.

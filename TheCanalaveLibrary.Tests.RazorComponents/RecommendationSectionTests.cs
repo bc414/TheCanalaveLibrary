@@ -382,7 +382,7 @@ public class RecommendationSectionTests : BunitContext
     // ── Report (tracker B17) ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Report_SignedIn_OpensTheSectionsOwnDialog_OnOthersRecsOnly()
+    public async Task Report_SignedIn_OpensTheSectionsOwnDialog_OnOthersRecsOnly_AndFilesARecommendationReport()
     {
         _fakeService.SetGetForStoryResult([MakeRec(1), MakeRec(2, isOwn: true)]);
         _reports.Reasons = [new ReportReasonDto(1, "Spam", null)];
@@ -398,6 +398,10 @@ public class RecommendationSectionTests : BunitContext
 
         cut.Find("[role='dialog']").GetAttribute("aria-label").Should().Be("Report Content");
         cut.Markup.Should().Contain("Spam", "the dialog loaded the report reasons");
+
+        await ReportDialogDriver.SubmitAsync(cut);
+        _reports.Submitted.Should().ContainSingle().Which
+            .Should().Match<SubmitReportRequest>(r => r.EntityType == ReportedEntityType.Recommendation && r.EntityId == 1);
     }
 
     [Fact]

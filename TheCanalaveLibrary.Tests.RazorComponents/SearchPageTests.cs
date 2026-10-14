@@ -316,4 +316,41 @@ public class SearchPageTests : BunitContext
         await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         _storyReadService.LastListingsFilter!.PageSize.Should().Be(35);
     }
+
+    [Fact]
+    public void Authenticated_DeviceLocalRestore_KeepsTheReaderSettingsPageSize()
+    {
+        // The snapshot stores ids only, so its ToFilter carries the DTO's 20; the restore must keep the
+        // viewer's size (WU-TrackerFixes review fixes: this path had no test).
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.Random; // first load is a random batch
+        _settingsService.DefaultPaginationSize = 35;
+        _storyReadService.ListingsResult = ([MakeStory(1)], 1);
+        var saved = new DiscoveryFilterSnapshot(null, [], [], TagIncludeMode.And, [], [], [],
+            DefaultSortOrder.DatePublished); // narrows differently: a sorted page instead of random
+        JSInterop.Setup<string?>("canalaveDiscoveryFilter.load", DiscoveryFilterStore.FilterKey(7))
+            .SetResult(System.Text.Json.JsonSerializer.Serialize(saved, System.Text.Json.JsonSerializerOptions.Web));
+
+        IRenderedComponent<SearchPage> cut = RenderPage();
+
+        cut.WaitForAssertion(() =>
+        {
+            _storyReadService.LastListingsFilter.Should().NotBeNull("the restore loads a sorted page");
+            _storyReadService.LastListingsFilter!.Sort.Should().Be(DefaultSortOrder.DatePublished);
+            _storyReadService.LastListingsFilter!.PageSize.Should().Be(35);
+        }, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public void Authenticated_SettingsReadFails_KeepsTheAnonymousDefaults()
+    {
+        // Best-effort (WU-TrackerFixes review fixes): the page renders its random batch.
+        AuthenticateAs(7);
+        _settingsService.GetMySettingsException = new SessionExpiredException();
+
+        IRenderedComponent<SearchPage> cut = RenderPage();
+
+        cut.FindAll("button").Select(b => b.TextContent.Trim())
+            .Should().Contain("Give me more", "the page falls back to random mode and renders");
+    }
 }

@@ -242,7 +242,12 @@ load; its device-local restore keeps that size (the snapshot stores ids only). A
 `ResultsFilterPanelTests` +2 (the echo; the size still tracks the dispatcher after the user's first
 interaction, which fails with the copy moved below the guard) and `SearchPageTests` +1 (a 35 setting
 sizes the first sorted load and the next Apply). **L4.5 5→1:** no browser was available; tracker **H38**
-step 1.
+step 1. *Review fixes (2026-10-13), no flip:* the device-local restore's size had no test, and the
+settings read (pre-existing here since WU-DiscoveryOverrideUI, new on F17/F21) could take the page down
+for a WASM tab whose cookie expired after prerender. The read is best-effort now (Warning, anonymous
+defaults), as is the saved-selection flyout's sort read inside `TagFilter` (F15). `SearchPageTests` +2:
+a restored snapshot loads its sorted page at the viewer's 35; an expired-session read still renders the
+random batch. Each fails with its fix reverted.
 
 - **L1 — N/A** (queries Story/USI/StoryListing; the per-user override table's key change, WU-SchemaHardening
   2026-10-13, is a Shared Context entity change with no L1 cell — Stage note at the end of this feature).
@@ -256,7 +261,8 @@ step 1.
   WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
   **L4 — Stage 1.**
 - **L4.5 — Stage 1 (5→1 at WU-TrackerFixes, 2026-10-13: the sorted page size follows the reader
-  setting, undriven — tracker H38; Stage note at this feature's top).** It was 5 from the
+  setting, undriven — tracker H38; Stage note at this feature's top, with its review fixes the same day,
+  no flip).** It was 5 from the
   2026-07-02 browser pass (the L4.5-Browser verification note at the end of this file).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; search page verified in a real WASM runtime during the

@@ -10,6 +10,8 @@
 @inject ISavedTagSelectionReadService SelectionReadService
 @inject DiscoveryFilterStore FilterStore
 @inject IUserSettingsService SettingsService
+@inject ILogger<SearchPage> Logger
+@using Microsoft.Extensions.Logging
 
 @* SearchPage — /discover (WU28, spec §5.3 / §5.28; former SearchDesktop composite folded in
    2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
@@ -218,10 +220,24 @@ else if (_selectionUnavailable)
         // initializer). A later device-local restore (OnAfterRenderAsync) still wins over the sort —
         // it runs after this and only applies when it narrows differently (decision row 13) — but
         // never over the sizes: the snapshot stores ids only.
+        //
+        // Best-effort (layer3.5-structure.md, the page-size seed): a failed read keeps the anonymous
+        // defaults rather than taking down this public page.
+        ReaderSettingsDto? reader = null;
         if (_currentUserId is int)
         {
-            ReaderSettingsDto reader = (await SettingsService.GetMySettingsAsync()).Reader;
-
+            try
+            {
+                reader = (await SettingsService.GetMySettingsAsync()).Reader;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Reader settings read failed for viewer {UserId} — keeping the defaults",
+                    _currentUserId);
+            }
+        }
+        if (reader is not null)
+        {
             // The same setting sizes a sorted page (tracker B16): it rides _filter.PageSize into the
             // first sorted load and, through the panel's InitialFilter echo, every Apply after it.
             if (reader.DefaultPaginationSize > 0)

@@ -1266,6 +1266,27 @@ unless noted. All sit under Stage-5 cells.
   - Recorded: `security.md` §"Phase-7 Deferred Register"; `cross-cutting.md` §"Account deletion" rule 3;
     `logging.md` §"What NOT to log".
 
+- [ ] **E12 — Five refusals still show as toasts; each needs an inline `ErrorAlert`** `[off-grid · low · beta]` — *Filed 2026-10-13 by the WU-TrackerFixes review fixes.*
+  - Grid: no cell moves at filing. The surfaces sit under F21, F15, F9, F50 and F10.
+  - Source: `error-handling.md` §"The API error envelope" ("A refusal is never a toast", stated
+    2026-10-13 by WU-TrackerFixes, which converted `GroupPage`'s eight sites; `layer4-style.md`'s
+    contrary sentence was corrected by its review fixes). WU-TrackerFixes' scope (amendment U11) was the
+    eight SOLO surfaces, so these five were left as they were and are named here instead.
+  - **The sites**, each a `catch` that shows its refusal with `Toasts.Show(…, ToastLevel.Danger/Warning)`:
+    1. `ProfilePage.HandleCopyTagSelectionAsync` (the Tag Selections tab's "Add to my filters"). Its doc
+       comment argues the toast as "no inline home on this page"; the card it was clicked on is one.
+    2. `SelectionAdoptButton.AdoptAsync` (the permalink banner). It also shows the raw `ex.Message`,
+       which `error-handling.md` calls a defect (harmless today only because the one caught type is
+       user-facing).
+    3. `SeriesCreateEditPage.HandleDeleteConfirmAsync`.
+    4. `MyAcknowledgmentsPage.HandleRevokeAsync`.
+    5. `MyStoryLineagesPage.HandleRemoveAsync`. That page already has an `ErrorAlert` for its incoming
+       list.
+  - **Build:** a message field and its `…IsSessionExpired` flag per surface, set together; an
+    `ErrorAlert` beside the control that caused it; log a non-user-facing failure at Error (sites 3–5
+    catch `Exception` and log nothing). Then drop the "five older surfaces" sentence from
+    `error-handling.md`. A bUnit test per site, and a browser step for both render phases.
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -1817,7 +1838,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [x] **H7 — Open test-hygiene backlog — DONE (WU-TrackerFixes, 2026-10-13)** `[test-gap · low · anytime]` The C-consolidate merges are done (24 tests folded, every assertion kept; the spec's 25th no longer existed), the last `Task.Delay` ordering hack is gone (`SiteAnnouncementServiceTests`), and `SeedUserStatAsync` is one `IntegrationTestBase` helper (nine private copies removed or wrapped). `testing.md` states both rules. Commit `c4f3ef8`.
   - Source: `test-hygiene-manifest.md` (retired 2026-07-27 — this item is now the ledger of record; the manifest's §5 table lists the individual merge targets).
-  - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5). The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists, so the manifest's two mobile merge rows are void. Suite is green, so nothing signals the pending cleanup.
+  - Context, as filed (all closed 2026-10-13 — see the heading): what remained open was the 25 non-mobile **C-consolidate** merges (manifest §5). The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists, so the manifest's two mobile merge rows are void. The suite was green, so nothing signalled the pending cleanup.
   - **Corrected 2026-10-13 (WU-TrackerFixes):** the three non-bUnit phases this item listed as open were already executed by commit `3adfba0` (2026-07-18, "Test cleanup"): the `NotificationServiceTests` `Task.Delay` → `SetNotificationDateCreatedAsync` flake fix, the Integration format-dupes (`GroupServiceTests`, `ImageStorageServiceTests`, `S3ImageStorageServiceTests`, `SavedTagSelectionServiceTests`, `RecommendationWriteServiceTests`) and the Unit tautology trim (`ModerationValidationsTests`, `EmailBodiesTests`, `EmailOptionsTests`, `SocialDescriptionHelperTests`). The manifest header was written mid-commit. The `CanalaveTypeaheadTests` "known flake" note was stale too: it was root-caused and fixed 2026-07-18 (`workplan-archive.md` §"WU-IntTestPerf follow-ups"). WU-TrackerFixes takes the open remainder (the 25 merges), the last `Task.Delay` ordering hack (`SiteAnnouncementServiceTests`) and the `SeedUserStatAsync` hoist WU-CounterSymmetry pointed at.
 
 - [x] **H8 — MA-610 Identity scaffold prune-vs-keep — DECISION RECORDED: KEEP (2026-07-31, WU-SweepRiders)** `[decision · low · pre-launch]`
@@ -2556,11 +2577,14 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Steps, each on the circuit and on WASM, `psql` after every write:
     1. **Page size (B16).** Set Reader settings' default page size to 50. `/discover` with Date published
        sort, a bookshelf tab and a profile's Favorites tab each show 50 cards and a pager sized to 50;
-       Apply keeps 50. Signed out, each shows 20.
+       Apply keeps 50. Signed out, each shows 20. *(Added by the review fixes:)* on WASM, delete the auth
+       cookie without reloading, then open a member's profile from a username link, and `/discover`:
+       each renders at 20 (a logged Warning at most, in the browser console), never the page's error boundary.
     2. **Blog post Report (B17).** As a signed-in non-author: Report on a profile Blog-tab card, on a
        group page's blog card and "Report post" on `/blog/{id}`; each opens the dialog and files a row
        (`reports.reported_entity_type = 3`). None appears on your own posts, signed out, or on a site
-       announcement.
+       announcement. *(Added by the review fixes:)* your own post on a group page shows no empty
+       bordered row under it.
     3. **Recommendation Report.** On a story page, Report on another member's recommendation opens the
        section's dialog and files a row; none on your own.
     4. **Message Report.** In `/messages/{id}`, Report beside the other party's message files a row; none

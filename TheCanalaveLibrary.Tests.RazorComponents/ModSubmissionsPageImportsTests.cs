@@ -159,6 +159,41 @@ public class ModSubmissionsPageImportsTests : BunitContext
         _verification.RejectedLink.Should().Be((42, "Listed author doesn't match."));
     }
 
+    [Theory]
+    [InlineData(false)] // the account tier
+    [InlineData(true)]  // the per-link tier
+    public async Task ImportsTab_Reject_AnExpiredSession_ThenAnEmptyReason_OffersNoStaleSignIn(bool link)
+    {
+        // The flag travels with the message (the WU-ErrorHandling2 follow-up, WU-TrackerFixes; these two
+        // tiers' resets were untested until its review fixes).
+        if (link)
+            _verification.PendingLinks =
+            [
+                new PendingLinkVerificationDto(42, 5, "Placed Story", "/story/5", 1, "Archive of Our Own",
+                    "https://archiveofourown.org/works/123", 3, "gengarlover", "gengarlover",
+                    "https://archiveofourown.org/users/gengarlover", DateTime.UtcNow)
+            ];
+        else
+            _verification.PendingAccounts =
+            [
+                new PendingAccountVerificationDto(7, 3, "gengarlover", 1, "Archive of Our Own",
+                    "https://archiveofourown.org/users/gengarlover", "gengarlover", "TCL-Verify-ABC234", DateTime.UtcNow)
+            ];
+        _verification.RejectException = new SessionExpiredException();
+
+        IRenderedComponent<ModSubmissionsPage> cut = await RenderOnImportsTabAsync();
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Reject").ClickAsync(new());
+        await cut.Find("textarea").ChangeAsync(new() { Value = "Code not found." });
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Confirm reject").ClickAsync(new());
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(1);
+
+        await cut.Find("textarea").ChangeAsync(new() { Value = "" });
+        await cut.FindAll("button").First(b => b.TextContent.Trim() == "Confirm reject").ClickAsync(new());
+
+        cut.Markup.Should().Contain("A rejection reason is required.");
+        cut.FindAll("a").Count(a => a.TextContent.Trim() == "Sign in").Should().Be(0);
+    }
+
     // ── Fake ──────────────────────────────────────────────────────────────────────
 
     private sealed class FakeExternalVerificationWriteService : IExternalVerificationWriteService
@@ -170,6 +205,9 @@ public class ModSubmissionsPageImportsTests : BunitContext
         public (int Id, string Reason)? RejectedAccount { get; private set; }
         public int? ApprovedLinkId { get; private set; }
         public (int Id, string Reason)? RejectedLink { get; private set; }
+
+        /// <summary>When set, both reject calls throw it (the stale-flag sequence).</summary>
+        public Exception? RejectException { get; set; }
 
         public Task<IReadOnlyList<VerificationPlatformDto>> GetVerificationPlatformsAsync() =>
             Task.FromResult((IReadOnlyList<VerificationPlatformDto>)Array.Empty<VerificationPlatformDto>());
@@ -201,6 +239,7 @@ public class ModSubmissionsPageImportsTests : BunitContext
 
         public Task RejectAccountVerificationAsync(int userExternalIdentityId, string reason)
         {
+            if (RejectException is not null) throw RejectException;
             RejectedAccount = (userExternalIdentityId, reason);
             PendingAccounts = PendingAccounts.Where(a => a.UserExternalIdentityId != userExternalIdentityId).ToList();
             return Task.CompletedTask;
@@ -215,6 +254,7 @@ public class ModSubmissionsPageImportsTests : BunitContext
 
         public Task RejectLinkVerificationAsync(int storyExternalLinkId, string reason)
         {
+            if (RejectException is not null) throw RejectException;
             RejectedLink = (storyExternalLinkId, reason);
             PendingLinks = PendingLinks.Where(l => l.StoryExternalLinkId != storyExternalLinkId).ToList();
             return Task.CompletedTask;
