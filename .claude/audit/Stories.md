@@ -1229,6 +1229,16 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
 
 ## Feature 10 — Story Lineage (WU42, formerly "Story Relationships")
 
+**WU-DocCorrections Stage note (2026-10-13; service audit §4) — no flip, no behavior change.**
+`IStoryLineageWriteService.RejectLineageAsync`'s doc said it "rejects a Pending request". The method
+has no status precondition, unlike `ApproveLineageAsync` since WU-CounterSymmetry: the only UI entry
+(`MyStoryLineagesPage`'s incoming list) offers it on Pending rows, but a direct call on an Approved link
+is accepted and unwinds the inspiration counter by the transition-delta rule. The doc now says that.
+Whether reject should require Pending is a lifecycle-guard choice this doc WU did not make. Test tier:
+none owed (doc only); the behavior the doc now states is Integration-covered by
+`StoryLineageServiceTests.RejectLineage_PreviouslyApproved_DecrementsCounter` and
+`RejectLineage_StillPending_DoesNotDecrementCounter`.
+
 **Renamed 2026-07-12 (settled — do not revisit).** The spec/original entity name
 `StoryRelationship` was ambiguous on this site two ways over: (a) `StoryCharacterPairing` (romantic/
 platonic character pairings, itself renamed off `StoryCharacterRelationship` in WU37 specifically to

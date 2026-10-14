@@ -706,33 +706,34 @@ unless noted):
 | # | Doctrine says | Reality | Action |
 |---|---|---|---|
 | 1 | §UserStats: counters "within the same transaction as the primary write" | Post-commit second statement, universally, matching the doctrine's *own code samples* | Reword per decision §3.14 — *fixed WU-CounterSymmetry, 2026-09-30 (D22)* |
-| 2 | §Group Rating Waterfall Tier 1: write-side story load "already filtered… never bypassed" | Write context carries **no** filters post-WU38 (stated elsewhere in the same file); code correctly uses the confidentiality-only guard | Rewrite the Tier-1 row — display-side filter, not an add-time gate |
+| 2 | §Group Rating Waterfall Tier 1: write-side story load "already filtered… never bypassed" | Write context carries **no** filters post-WU38 (stated elsewhere in the same file); code correctly uses the confidentiality-only guard | Rewrite the Tier-1 row — display-side filter, not an add-time gate — *fixed WU-DocCorrections, 2026-10-13 (`layer2-services.md` + `audit/Groups.md` settled note #1)* |
 | 3 | §Notification Generation: "composes read services for recipient resolution… will inject" | Every fan-out queries `writeDb` directly (defensible, DAG-clean) | Align doc to reality; kill the stale future tense — *fixed WU-InertFeatures, 2026-09-30 (doc + the `ServerNotificationWriteService` class comment)* |
-| 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example |
+| 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example — *fixed WU-DocCorrections, 2026-10-13 (re-synced to `FollowAsync`)* |
 | 5 | WU37 validation table: pairing member-count/in-story → Reject | `StoryMappers` silently drops bad indexes and persists degenerate pairings | Enforce or amend (defect §2.12) — *resolved by enforcing, WU-ParityAndRemaining 2026-10-13: the service already rejected both; the mapper's check is defensive only, and a doubled member is now rejected too* |
 | 6 | "SpriteBaseUrl is a config seam… no code changes" | False for WASM (§2.7.3) | Amend + fix — *fixed WU-ParityAndRemaining 2026-10-13: the client takes the value from `GET /api/client-config`; both docs name the transport* |
 | 7 | §Filtering semantics: "NULL for either field means use the default" | Columns are non-nullable; sparseness is row-level | Decision §3.17, then align — *CLOSED: schema aligned to doctrine (worksheet D19), WU-NotificationCorrectness 2026-10-12* |
-| 8 | DAG rule: write→write only Notification/Badge | `ChapterReadMarkWrite → IUserStoryInteractionWriteService` (deliberate, described elsewhere in the same file) | Amend the sanctioned list |
-| 9 | "GetListingsAsync two-step" sketch | Pre-TagFanon shape (no roll-up, no StoryCharacters branch) presented as current | Mark historical like the WU37 sketch |
-| 10 | `IStoryReadService` doc comments on DTOs | Claim sprite URLs "already resolved by the read service" — resolution moved to render time | Fix stale comments |
+| 8 | DAG rule: write→write only Notification/Badge | `ChapterReadMarkWrite → IUserStoryInteractionWriteService` (deliberate, described elsewhere in the same file) | Amend the sanctioned list — *fixed WU-DocCorrections, 2026-10-13 (a closed list of three edge kinds, re-derived from the constructors)* |
+| 9 | "GetListingsAsync two-step" sketch | Pre-TagFanon shape (no roll-up, no StoryCharacters branch) presented as current | Mark historical like the WU37 sketch — *fixed WU-DocCorrections, 2026-10-13 (both WU23 sketches bannered)* |
+| 10 | `IStoryReadService` doc comments on DTOs | Claim sprite URLs "already resolved by the read service" — resolution moved to render time | Fix stale comments — *fixed WU-DocCorrections, 2026-10-13* |
 
 **Load-bearing false code comments** found (fix with their defects, same WU — this is the exact
 class the repo's CORRECTION-note convention exists for): `DeleteFolderAsync`'s phantom SET-NULL
 (fixed WU-SchemaHardening, 2026-10-13);
-blog-delete's "cascades handle it" ×2 + interface docs; lineage-reject's phantom spam guard
+blog-delete's "cascades handle it" ×2 + interface docs (*fixed WU-TptHardDelete, 2026-09-30*); lineage-reject's phantom spam guard
 (*fixed WU-ThrottleCoverage, 2026-10-13* — the `RepeatRequest` bucket is the real bound);
 Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb (*fixed WU-ParityAndRemaining,
 2026-10-13*); `RejectLineageAsync`
 (*fixed WU-ThrottleCoverage, 2026-10-13*, the interface doc's same claim);
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —
 the explicit window now suppresses the author-exception, which must be said or a future
-simplification opens an author-draft leak); the USI "reject impossible combinations" comment (R3
+simplification opens an author-draft leak — *fixed WU-DocCorrections, 2026-10-13*: CORRECTION notes at both sites, and two Integration tests now pin the window); the USI "reject impossible combinations" comment (R3
 made it fiction — *fixed WU-AccessGateSweep2, 2026-09-30*); `FindUserByUsernameAsync`'s ILike
-narration; the moderation client's "no method produces 400 today";
-`ClientSavedTagSelectionReadService`'s auth claim; stale `cross-cutting.md` citations in the USI
+narration (*fixed WU-DocCorrections*); the moderation client's "no method produces 400 today" (*fixed
+WU-ModerationIntegrity*); `ClientSavedTagSelectionReadService`'s auth claim (*fixed WU-DocCorrections*); stale `cross-cutting.md` citations in the USI
 write service (*fixed WU-AccessGateSweep2, with the comment and recommendation `ToggleLikeAsync`
-cites; the rest are WU-DocCorrections'*); `StoryFilterDto.Sort`'s wrong fallback claim
-(LastUpdated vs shipped DatePublished — the DTO is the shared contract surface; pick one).
+cites; the rest fixed by WU-DocCorrections, 2026-10-13*); `StoryFilterDto.Sort`'s wrong fallback claim
+(LastUpdated vs shipped DatePublished — the DTO is the shared contract surface; pick one — *fixed
+WU-DocCorrections: the DTO comment follows the code and the interface doc, DatePublished*).
 
 **Pattern-uniformity items:** three private `RequireAuthenticatedUser`/`RequireModerator` copies
 with two different unauthenticated behaviors (401 vs 403) — extract the shared guard; read-return
@@ -741,7 +742,9 @@ standardize reads); `ServerTagWriteService` names its context `db`; `UserDeletio
 every convention it anchors (shared `Services/` folder, no Core interface, old-style ctor —
 modernize while behavior is settled); badge curation's "My"+userId shape is a third self-referential
 variant — record it as sanctioned; `IThemeReadService` ordering doc; `IContentImportService`
-lifetime asymmetry.
+lifetime asymmetry. *(WU-DocCorrections, 2026-10-13: the badge variant is recorded in `layer2-services.md`
+§"Self-Referential Editing Exception" and the `IThemeReadService` doc fixed; WU-ModerationIntegrity had
+already extracted the guards and renamed `db`; the code residue, re-derived, is tracker **H41**.)*
 
 ---
 
@@ -859,7 +862,9 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 1–5 unblock fix-WUs 1, 3 and 4 and should come first.
 
 **Doc-correction pass:** §4's table + false-comment inventory, one WU, gated by the doc-audit
-skill's probes afterward.
+skill's probes afterward. *(Built WU-DocCorrections, 2026-10-13. Its probes were run by the authoring
+session, mechanically, because no subagent tool was available; the fresh-eyes run the skill asks for
+is tracker **H42**.)*
 
 **Explicitly not this audit's scope:** L6 index builds (the reconciliation matrix owns them —
 §3.20 flags the one story-centric USI gap it already tracks), the live `pg_indexes` sweep,

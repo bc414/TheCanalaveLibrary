@@ -231,6 +231,9 @@ public class ServerGroupWriteService(
         // not-found and lose the diagnostic). What the waterfall never asked is whether the story is
         // published at all: a Draft, PendingApproval, Rejected or taken-down story could be filed
         // into a group and its author notified via NotifyNewGroupStoryAsync.
+        // Not closed for the story's own author: the guard reads the StoryStatus filter, which exempts
+        // the author, so an author can still file their own unpublished story and the members' 60s name
+        // it (WU-DocCorrections found this; tracker D21, not decided).
         await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
         {
             if (!await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, dto.StoryId))

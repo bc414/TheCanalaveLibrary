@@ -107,6 +107,31 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
             .Should().BeEmpty("drafts never leak into public reach counts");
     }
 
+    /// <summary>
+    /// The viewer's OWN draft case, which the test above cannot see (its one remaining author sits below
+    /// the reach threshold either way). The <c>StoryStatus</c> named filter exempts a story's author, so
+    /// the explicit 2..7 window in <c>GroupQuery</c> is what keeps a viewing author's own draft out of the
+    /// public counts (WU-DocCorrections, 2026-10-13: the comment calls that window load-bearing).
+    /// </summary>
+    [Fact]
+    public async Task GetGroupsAsync_TheViewersOwnDraft_DoesNotFeedPublicReach()
+    {
+        string name = $"Own{Guid.NewGuid():N}"[..12];
+        int authorC = await SeedUserAsync("FanonAuthorC");
+        await SeedClusterStoryAsync(_authorA, name, status: StoryStatusEnum.Draft);
+        await SeedClusterStoryAsync(_authorB, name);
+        await SeedClusterStoryAsync(authorC, name);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorA, showMatureContent: false));
+        using IServiceScope scope = NewScope();
+        IFanonReadService fanon = scope.ServiceProvider.GetRequiredService<IFanonReadService>();
+
+        FanonGroupDto group = (await fanon.GetGroupsAsync(TagTypeEnum.Character, name, 1, 50))
+            .Should().ContainSingle().Subject;
+        group.AuthorCount.Should().Be(2, "the viewer's own draft is not public reach");
+        group.StoryCount.Should().Be(2);
+    }
+
     [Fact]
     public async Task GetGroupStoriesAsync_GatesListButKeepsCompleteCount()
     {

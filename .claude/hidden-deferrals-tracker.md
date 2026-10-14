@@ -1082,6 +1082,25 @@ unless noted. All sit under Stage-5 cells.
   - Watch upstream: if a later ASP.NET Core 10 patch clears the flag after the first supply, the
     idiom stays harmless. The convention note and this item then retire together.
 
+- [ ] **D21 — An author can file their own unpublished story into a group, and the group's members are told its title** `[latent-risk · med · beta]` — *Filed 2026-10-13 by WU-DocCorrections (found while verifying the Group Rating Waterfall doc).*
+  - Grid: no cell moves at filing (F39 L2, F41 L2 read 5).
+  - **Confirmed** by a throwaway Integration probe (not committed): the creator of a group added their
+    own `Draft` story through `IGroupWriteService.AddStoryAsync`; no exception, a `GroupStory` row, and a
+    second member's bell showed `NewGroupStory` (60) with the draft's title as its context title.
+  - **Why.** `AddStoryAsync`'s confidentiality guard is `StoryVisibilityGuard.IsStoryPublishedAsync`,
+    which reads the `StoryStatus` named filter, and that filter exempts the story's own author (its doc
+    says so: "or the viewer authored it"). So the guard refuses another user's Draft/PendingApproval/
+    Rejected story but passes the author's own. The fan-out then notifies every opted-in member, and the
+    enricher's `GroupStory` kind reads the title from `StoryListings`, which carries no filter. The
+    method's own comment ("a Draft … could be filed into a group and its author notified") reads as if
+    the guard closed this. The group page itself hides the story from other members (filtered read).
+  - **Same root, by reading:** a story filed while public and later unpublished or taken down keeps its
+    title in members' existing 60s for the same reason (the enricher's `StoryListings` read).
+  - **Not decided here.** Either the add path requires a public status for everyone, the author
+    included (then `AddStoryAsync` stops using the author-exempt guard), or the fan-out and the enricher
+    skip a story that is not public. Whether an author may park their own draft in a group at all is a
+    product call. A fix needs an Integration test in the probe's shape.
+
 ---
 
 ## E. Cross-cutting work with no grid cell at all
@@ -1854,7 +1873,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - ~~**Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`~~ — **FIXED 2026-10-13 (WU-ParityAndRemaining, service audit §2.12 R5)**: a chapter comment's spoiler flag is editable through `UpdateCommentDto.IsSpoiler` and the edit form's toggle. Struck by WU-TrackerFixes (2026-10-13), which found the bullet still open.
     - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
     - ~~**VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit~~ — **FIXED 2026-09-20 (WU-QuickFixes)**: `FollowButton` raises `OnFollowChanged`, `ProfileBanner` mirrors it into the vouch gate; new `ProfileBannerTests` cover it. Detail: `audit/Following.md` §"WU-QuickFixes slice".
-    - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md:1022`.
+    - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md` §"Table naming — disambiguation from story↔story lineage (Feature 10)", the MA-118 scope caveat (cited by line number until WU-DocCorrections, 2026-10-13; the number had drifted).
     - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).
 
 - [x] **H7 — Open test-hygiene backlog — DONE (WU-TrackerFixes, 2026-10-13)** `[test-gap · low · anytime]` The C-consolidate merges are done (24 tests folded, every assertion kept; the spec's 25th no longer existed), the last `Task.Delay` ordering hack is gone (`SiteAnnouncementServiceTests`), and `SeedUserStatAsync` is one `IntegrationTestBase` helper (nine private copies removed or wrapped). `testing.md` states both rules. Commit `c4f3ef8`.
@@ -2688,6 +2707,22 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     worksheet **D36**.
   - **`IContentImportService` lifetime asymmetry** (singleton on the server). Blocked on worksheet
     **D36/D37** (pending).
+
+- [ ] **H42 — Run the doc-audit probes with fresh eyes over the worksheet campaign's docs** `[doc-drift · low · anytime]` — *Filed 2026-10-13 by WU-DocCorrections.*
+  - Grid: no cell moves.
+  - **Why open.** Service audit §7 gates the doc-correction pass on `doc-audit/SKILL.md`'s probes, and
+    the amendments ask for Probes 2 and 3 over every doc the 17-WU campaign touched. The skill's first
+    rule is that a subagent which never saw the edits runs them. WU-DocCorrections had no subagent tool,
+    so it ran mechanical substitutes itself (below). That catches broken routing and grid drift, not
+    the contradiction, tense and headline-vs-note classes that need a cold reader.
+  - **Already run (2026-10-13, by the authoring session):** every `file.md` §"Section" reference in
+    the conventions, `CLAUDE.md`, `roadmap.md`, `status.md`, this tracker and `audit/*.md` resolved
+    against its target (one stale line-number citation in H6 fixed; the rest resolve or are dated
+    history); every feature's L2/L4/L4.5 headline in `audit/*.md` matches `status.md`'s grid;
+    `check-doc-hygiene.ps1` clean.
+  - **To do:** Probe 1 (cold-session walk), Probe 2 over the campaign's convention-doc edits
+    (`git diff 1940078..HEAD -- .claude/skills`), and Probe 3 over the audit files the campaign wrote
+    Stage notes into, each as a fresh subagent. Fix what they confirm.
 
 ---
 

@@ -240,7 +240,12 @@ the gate removed). Every cell stays 5.
     `CommentSection` is a standalone self-contained injectable region, so standalone-build sign-off
     is sufficient here.
 - **L2 — Stage 5 (WU19, 2026-06-23; column placement verified WU31.5; `CommentDto.DateEdited` projected
-  by all four reads since WU-ParityAndRemaining, 2026-10-13):**
+  by all four reads since WU-ParityAndRemaining, 2026-10-13; stale index comments rewritten
+  WU-DocCorrections, 2026-10-13 — no behavior change):** *(WU-DocCorrections note: `ServerCommentReadService`
+  said "post-MVP DDL adds the composite index"; `ix_chapter_comments_chapter_id_date_posted` and
+  `ix_blog_post_comments_blog_post_id_date_posted` exist since WU-L6, 2026-07-07, and the comments now
+  name them. The same WU gave F23's `DeleteComment_ReparentsReplies_ToTopLevel` (Integration) a summary
+  calling it the ratified-behavior test for owner ruling D12. No test owed: comments only.)*
   `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)` in
   `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
   `ChapterComments` DbSet (`DatePosted DESC`); (2) fetch roots-on-page + direct replies in one query,

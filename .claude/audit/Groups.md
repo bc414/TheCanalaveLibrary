@@ -295,7 +295,21 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
 - **L2 — Stage 5 (2026-06-24, WU32; story-add notifications re-anchored and de-spammed,
   WU-InertFeatures 2026-09-30 — stays Stage 5; folder integrity — name rules, same-group parents,
   delete moves sub-folders to the top level — and the `AddStoryAsync` race backstop, WU-SchemaHardening
-  2026-10-13 — stays Stage 5, Stage note at the end of this feature).** **WU-InertFeatures Stage note (owner ruling D16 +
+  2026-10-13 — stays Stage 5, Stage note at the end of this feature; the waterfall's tier-1 doctrine
+  corrected, code unchanged, WU-DocCorrections 2026-10-13 — stays Stage 5, note below).**
+  **WU-DocCorrections Stage note (2026-10-13; service audit §4 row 2) — no flip, no code change.** The
+  convention text (`layer2-services.md` §"Group Rating Waterfall") and the WU32 settled note #1 above
+  said tier 1 (the viewer's `ContentRating` ceiling) is enforced when a story is added, because the
+  write-side story load "is already filtered". False since WU38: the write context carries no filters.
+  Tier 1 is now stated as a display-side property of the read context; the add path's confidentiality
+  guard plus tiers 2/3 are recorded as the deliberate add-time checks (WU-ParentVisibility's rationale,
+  which the `AddStoryAsync` comment already gave). The WU32 text below keeps its original wording as
+  the record. Test tier: none owed (doc only); tiers 2/3 are covered by Integration `GroupServiceTests`.
+  **Found while verifying, not fixed (tracker D21):** the confidentiality guard has no test, and it
+  exempts the story's own author, so an author can file their own Draft into a group and the members'
+  `NewGroupStory` notifications name it. A throwaway Integration probe confirmed it; the comment in
+  `AddStoryAsync` now says so. Fixing it needs a product call (may an author park a draft in a group?).
+  **WU-InertFeatures Stage note (owner ruling D16 +
   service audit §2.8 bullets 1–3):** `AddStoryAsync` now notifies only inside `if (!alreadyAdded)` —
   re-adding an existing story was a repeatable fan-out any member could trigger; the
   `if (storyAuthorId.HasValue)` wrapper is gone (an authorless story silenced the member fan-out

@@ -549,7 +549,16 @@ Mailpit; F41's cells stay as they are (Stage notes above Feature 41).
   WU-AccessGateSweep2 review fixes, 2026-09-30 — see that slice below, stage unchanged; nullable
   source, de-identified moderation band, report-id anchors, `GroupStory` anchor, hidden favoriters in
   15 and the new-chapter fan-out, WU-InertFeatures 2026-09-30 — stage unchanged, Stage note at the end
-  of this feature).** Settled constraints (do not revisit):
+  of this feature; convention sample and fan-out list re-synced to the code, WU-DocCorrections
+  2026-10-13 — docs only, stage unchanged, note directly below).**
+  *WU-DocCorrections note (2026-10-13; service audit §4 rows 3/4):* `layer2-services.md`
+  §"Notification Generation"'s sample passed `NotifyNewFollowerAsync(ActorId, targetUserId)`, the
+  reverse of the real `(recipientUserId, followerUserId)`, so code copied from it would notify the
+  follower about themselves; it also injected the read context directly and logged the swallow at
+  Error. It now mirrors `ServerFollowingWriteService.FollowAsync` (factory ctor, `LogWarning`). The
+  "semantic methods land incrementally" paragraph now lists the fan-outs that exist and where each one's
+  recipients come from. Test tier: none owed (doc only); the real signature is exercised by the
+  Integration follow notification tests. Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
     services; called via a semantic per-event method after the primary `SaveChangesAsync` (best-effort
     post-commit, `try/catch`-with-log). See `layer2-services.md` "Notification Generation"

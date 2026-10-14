@@ -227,6 +227,22 @@ on a migrated scratch clone. Tests: **Integration** `SchemaConstraintTests` (the
 /api/fanon/links` with tag 1 as both base and target answers 400 "A group cannot be linked to its own
 base tag.", before the CHECK can.
 
+## WU-DocCorrections Stage note (2026-10-13) — F11/F12 L2 and F15 L5 stay Stage 5: comments corrected, the fanon status window pinned
+
+Service audit §4, comments only; no behavior change.
+- **Fanon reach (F11 dashboard, F12 adoption).** `ServerFanonReadService`'s class doc and `GroupQuery`
+  now say why the explicit 2..7 status window exists: the `StoryStatus` named filter exempts a story's
+  own author, so without the window a viewing author's own drafts would feed the public reach counts.
+  They also say that `IsTakenDown` is active through the `sc.Story`/`st.Story` navigations (EF applies a
+  named filter on navigation access). The existing `GetGroupsAsync_DraftStories_DoNotFeedPublicReach`
+  could not see the own-draft case (its one remaining author sits below the reach threshold either
+  way). Tier: **Integration** `FanonPipelineTests.GetGroupsAsync_TheViewersOwnDraft_DoesNotFeedPublicReach`,
+  which fails with the window removed (mutation-checked).
+- **F15.** `ClientSavedTagSelectionReadService` and `SavedTagSelectionEndpoints` said every read needs
+  the cookie; `/public/{userId}` and `/permalink/{id}` are anonymous and gated in the service.
+- **Sprites in tag DTOs.** `ITagReadService.GetTagDirectoryAsync`'s doc said the chips are
+  sprite-resolved; they carry the raw `SpriteIdentifier`, resolved by the component at render time.
+
 ## Feature 11 — Tag Administration
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `ServerTagWriteService` and

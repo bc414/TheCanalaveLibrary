@@ -13,7 +13,16 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
   complete (placeholder comment) but the shape is sound. Awaiting migration.
-- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note; acknowledgment requests spend a `RepeatRequest` token, WU-ThrottleCoverage, 2026-10-13 — see its Stage note).**
+- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note; acknowledgment requests spend a `RepeatRequest` token, WU-ThrottleCoverage, 2026-10-13 — see its Stage note; curation's explicit-`userId` shape recorded as a sanctioned self-referential variant, WU-DocCorrections, 2026-10-13 — note directly below).**
+  - **WU-DocCorrections Stage note (2026-10-13; service audit §4) — no flip, no code change.**
+    `GetMyBadgesForCurationAsync(int userId)` and `SetDisplayOrderAsync(int userId, …)` break the
+    self-referential rule "no `userId` parameter" on purpose: `AwardAsync` on the same service targets
+    another user server-internally. `layer2-services.md` §"Self-Referential Editing Exception" now
+    records this as the third sanctioned variant, with self-scope enforced at the HTTP edge
+    (`BadgeEndpoints`, MA-601) and by the only circuit caller (`SettingsPage`). `BadgeEndpoints` and
+    `ClientBadgeWriteService` named one `AwardAsync` caller; there are two
+    (`ServerRecommendationWriteService`, `ServerStoryAcknowledgmentWriteService`). Test tier: none owed
+    (docs and comments); the MA-601 edge derivation is covered by Integration `BadgeEndpointsTests`.
   - Created `Core/Badges/`: `EarnedBadgeDto`, `IBadgeReadService`, `IBadgeWriteService`.
   - Created `Server/Badges/`: `ServerBadgeReadService`, `ServerBadgeWriteService` (primary-ctor chaining;
     CS9107-safe). Registered in `Server/Program.cs` (write service scoped, read forwarded).

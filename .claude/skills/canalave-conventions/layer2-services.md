@@ -918,7 +918,9 @@ violation of either throws `ContentRatingExceededException`:
 That has been false since WU38 moved every named filter to `ReadOnlyApplicationDbContext`: the write
 context carries none (§"Content-Rating Filtering Lives on the Read DbContext"). `AddStoryAsync` loads
 the story from the write context and, at add time, applies only the kind-(g) **confidentiality** guard
-`StoryVisibilityGuard.IsStoryPublishedAsync` (rating axis lifted on purpose) plus tiers 2/3. That is
+`StoryVisibilityGuard.IsStoryPublishedAsync` (rating axis lifted on purpose; like the `StoryStatus`
+filter it reads, it lets a story's own author through, so an author can file their own unpublished
+story — tracker **D21**, open) plus tiers 2/3. That is
 deliberate: the rating axis at add time belongs to tier 2, which reports its own
 `ContentRatingExceededException`, and a viewer-ceiling guard would pre-empt it with a not-found (the
 rationale comment in `AddStoryAsync`; WU-ParentVisibility, `audit/Groups.md` F38–F40). Tiers 2/3 are

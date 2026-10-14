@@ -221,6 +221,29 @@ public sealed class ManualTreeSearchTests(PostgresFixture postgres) : Integratio
             .Recommendation.IsHiddenGem.Should().BeTrue();
     }
 
+    /// <summary>
+    /// The explicit 2..7 status window in <c>VisibleStories</c> is load-bearing (WU-DocCorrections,
+    /// 2026-10-13): the <c>StoryStatus</c> named filter exempts the story's own author, so without the
+    /// window an author exploring their own node would see their unpublished stories on a
+    /// published-only pane. The other sections share the same <c>visible</c> queryable.
+    /// </summary>
+    [Fact]
+    public async Task UserPivot_AuthorExploringThemselves_TheirUnpublishedStoriesStayOut()
+    {
+        int author = await SeedUserAsync("Author");
+        int published = await SeedStoryAsync(authorId: author);
+        await SeedStoryAsync(authorId: author, status: StoryStatusEnum.Draft);
+        await SeedStoryAsync(authorId: author, status: StoryStatusEnum.PendingApproval);
+        await SeedStoryAsync(authorId: author, status: StoryStatusEnum.Rejected);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(author, showMatureContent: false));
+        ManualTreeNeighborsDto dto = await UserPivotAsync(new UserNeighborsRequest { UserId = author });
+
+        dto.Authored!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([published],
+            "the StoryStatus filter lets an author see their own drafts; only the window keeps them off Explore");
+        dto.Authored.TotalCount.Should().Be(1);
+    }
+
     // ── Candidate-pane filter axes (WU-ExploreFilterAxes) ──────────────────────────────────────
     // Every story-valued section narrows through the ONE shared `visible` queryable, so these
     // assert the substitution point, not each section separately: honest counts under a filter,
