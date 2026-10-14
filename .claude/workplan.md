@@ -23,7 +23,8 @@ references it, does not restate it.
   window, pinned by a new Integration test, as Fanon's is by another); every pre-split `cross-cutting.md`
   citation re-pointed; the worksheet registered in `CLAUDE.md`; the CORRECTION-note convention stated in
   `SKILL.md`. Its review fixes limited the public /fanon hub's reach count to published, live stories (it
-  counted drafts and taken-down stories; Integration-tested), corrected six more comment sites and six
+  counted drafts and taken-down stories; Integration-tested, browser-verified on both render phases
+  2026-10-14, no bug found), corrected six more comment sites and six
   headline lines, and split **D21** (members told a draft's title: a decided confidentiality defect, now
   `high`) from its product question (**F28**, decision row 31). No cell moved. Also filed **H41**, **H42**.
   **Its doc-audit gate is still open:** neither pass had a subagent tool, so the fresh-eyes probes are
@@ -568,9 +569,19 @@ is pending except where a bullet says so.
     WU scopes, enumerating every Story-family kind first) and the probes (H42, no subagent tool).
 - **Verification:** build 0 errors, no new warnings in touched files; **Unit 1,376, RazorComponents 929,
   Integration 1,666** (+2 by the WU, +1 by its review fixes), all green; check-doc-hygiene,
-  check-design-tokens, check-render-modes and check-a11y pass. No browser was available. None was owed:
-  no markup changed, and the one behavior change is a server-computed count pinned at the Integration
-  tier.
+  check-design-tokens, check-render-modes and check-a11y pass. The build pass had no browser, and none
+  was owed: no markup changed, and the one behavior change is a server-computed count pinned at the
+  Integration tier. **Browser pass (2026-10-14, server-only path, psql ground truth; no bug found, no
+  code change):** with a `psql` fixture of two fanon tags across published (E/T/M), draft, pending,
+  rejected and taken-down stories, the /fanon hub counted only the published, live ones (2 and 3,
+  against 7 and 6 junction rows) for TestUser, AuthorAlpha (the draft's author), ReaderGamma (mature
+  off; M still counts), anonymous and AdminUser, on the circuit and on WASM (`/api/fanon/established`);
+  reinstating the taken-down story raised both by one. The two pinned windows held too: AuthorAlpha's own
+  draft stays out of the "saura" dashboard group and out of their own Explore "Authored (4)", both
+  render phases. No `fail:`/`crit:` lines, no console errors. Detail: `audit/Tags.md` and
+  `audit/Discovery.md` F33 notes. **Dev DB:** the fixture (tag-47 and OC rows, a fanon Setting tag,
+  two story status/takedown flips) was removed and restored afterwards; the dev DB is as found, apart
+  from the `tags` and `story_characters` identity sequences having advanced.
 - **Pointers:** Stage notes in `audit/Groups.md` F39, `audit/Discovery.md` F33, `audit/Tags.md`
   (F11/F12/F15), `audit/Stories.md` F10, `audit/Badges.md` F50, `audit/Comments.md` F23/F24,
   `audit/Notifications.md` F41; tracker D21, F28, H41, H42; `roadmap.md` decision row 31.

@@ -227,7 +227,7 @@ on a migrated scratch clone. Tests: **Integration** `SchemaConstraintTests` (the
 /api/fanon/links` with tag 1 as both base and target answers 400 "A group cannot be linked to its own
 base tag.", before the CHECK can.
 
-## WU-DocCorrections Stage note (2026-10-13; review fixes 2026-10-14) — F11/F12 L2 and F15 L5 stay Stage 5: comments corrected, the fanon status window pinned, the /fanon hub's reach count fixed
+## WU-DocCorrections Stage note (2026-10-13; review fixes and browser pass 2026-10-14) — F11/F12 L2 and F15 L5 stay Stage 5: comments corrected, the fanon status window pinned, the /fanon hub's reach count fixed and browser-verified
 
 Service audit §4, comments only; no behavior change, except the review fixes' hub count (last bullet).
 - **Fanon reach (F11 dashboard, F12 adoption).** `ServerFanonReadService`'s class doc and `GroupQuery`
@@ -249,8 +249,22 @@ Service audit §4, comments only; no behavior change, except the review fixes' h
   and taken-down stories all counted. It now counts through `st.Story`/`sc.Story` inside the 2..7
   window with `ContentRating` bypassed, the dashboard's rule, and the class and interface docs say so.
   Tier: **Integration** `FanonPipelineTests.GetEstablishedFanonTagsAsync_ReachCountsOnlyPublishedLiveStories_OfEveryRating`
-  (both axes; six stories each, two counted; fails on the old count). No markup changed; no browser
-  was available, and the number is server-computed and Integration-pinned, so no browser item is owed.
+  (both axes; six stories each, two counted; fails on the old count). No markup changed; the build pass
+  had no browser, and the number is server-computed and Integration-pinned, so no browser item was owed.
+- **Browser verification (2026-10-14, server-only path, psql ground truth).** Fixture through `psql`:
+  the seed's fanon character tag 47 on seven stories (two published, one of them M; AuthorAlpha's
+  draft; AuthorBeta's pending; TestUser's draft and another of its drafts set to Rejected; a Completed story taken
+  down), and a new fanon Setting tag under Sinnoh on six (three published, one M; a draft, a pending,
+  the taken-down one). psql: 7 and 6 junction rows (what the old count showed), 2 and 3 published, live.
+  The hub showed "2 stories" / "3 stories" to TestUser, AuthorAlpha (the draft's author, whose story
+  page shows the draft carrying both tags), ReaderGamma (mature off: the M stories still count),
+  anonymous and AdminUser, each on the circuit (`_blazor/negotiate`, no API call) and on WASM
+  (client-side navigation from an axis page; `GET /api/fanon/established` 200, no negotiate). Taking the
+  story back off takedown in `psql` raised both to 3 and 4 on the next WASM load, and the server log
+  shows the count joining the filtered `stories` subquery inside the 2..7 window. The dashboard's own-draft
+  case also held in the browser: AuthorAlpha's draft added to the "saura" OC cluster left it at "2
+  stories · 2 authors" on both render phases. No `fail:`/`crit:` lines, no console errors. The fixture
+  was removed afterwards; the dev DB is as found.
 
 ## Feature 11 — Tag Administration
 
@@ -265,7 +279,7 @@ unchanged).
 
 - **L1 — Stage 5 (`ck_fanon_links_no_self` since WU-SchemaHardening, 2026-10-13 — Stage note above).**
   `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
-  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30; the fanon reach comments corrected and the dashboard's status window pinned by a test, WU-DocCorrections 2026-10-13, and the /fanon hub's established-tag reach limited to published, live stories by its review fixes, 2026-10-14 — Integration-tested, stays Stage 5, the WU-DocCorrections Stage note above this feature).** **L3/L3.5 — Stage 5
+  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30; the fanon reach comments corrected and the dashboard's status window pinned by a test, WU-DocCorrections 2026-10-13, and the /fanon hub's established-tag reach limited to published, live stories by its review fixes, 2026-10-14 — Integration-tested and browser-verified on both render phases the same day, stays Stage 5, the WU-DocCorrections Stage note above this feature).** **L3/L3.5 — Stage 5
   (WU27.5, see Stage note below)** (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
   see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:
   the tag table is tiny and PK/unique-indexed; a trigram index for the leading-wildcard chip

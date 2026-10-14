@@ -613,7 +613,7 @@ each "off".
   `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12;
   candidate-pane filter axes added WU-ExploreFilterAxes, 2026-07-31 — see both Stage notes; the
   service's false visibility comments corrected and the status window pinned by a test,
-  WU-DocCorrections 2026-10-13 — stays Stage 5, note directly below).**
+  WU-DocCorrections 2026-10-13, the window browser-checked 2026-10-14 — stays Stage 5, note directly below).**
   **WU-DocCorrections Stage note (2026-10-13; service audit §4) — no flip, no behavior change.**
   `ServerManualTreeSearchReadService`'s class doc and `VisibleStories` said story status "is not
   globally filtered" and that named filters apply to "the DbSet root, NOT to navigations". Both were
@@ -625,7 +625,11 @@ each "off".
   entity, navigations included; a bare FK column is what escapes it). The window had no test. Tier:
   **Integration** `ManualTreeSearchTests.UserPivot_AuthorExploringThemselves_TheirUnpublishedStoriesStayOut`
   (an author's own Draft, PendingApproval and Rejected stories stay out of their own Authored section;
-  fails with the window removed, mutation-checked).
+  fails with the window removed, mutation-checked). Browser check (2026-10-14, server-only, the
+  WU-DocCorrections browser pass): AuthorAlpha exploring themselves on `/discover/user/4`'s Explore tab
+  sees "Authored (4)", their four published stories, with their own draft (story 10, which they can
+  open, the `StoryStatus` filter's author exemption) absent, on the circuit and on WASM
+  (`POST /api/manual-tree-search/neighbors/user` 200; the same call unfiltered also answers 4).
   **L3/L3.5 — Stage 5 (WU40; Explore filter disclosure added WU-ExploreFilterAxes, 2026-07-31;
   recommendation cards' Read It Later + interaction-state sync WU-InertFeatures and its review fixes,
   2026-09-30 — Stage note at the end of this feature)**
