@@ -296,7 +296,8 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   WU-InertFeatures 2026-09-30 — stays Stage 5; folder integrity — name rules, same-group parents,
   delete moves sub-folders to the top level — and the `AddStoryAsync` race backstop, WU-SchemaHardening
   2026-10-13 — stays Stage 5, Stage note at the end of this feature; the waterfall's tier-1 doctrine
-  corrected, code unchanged, WU-DocCorrections 2026-10-13 — stays Stage 5, note below).**
+  corrected, code unchanged, WU-DocCorrections 2026-10-13 — stays Stage 5, note below; the draft-title
+  finding split into tracker D21 and decision row 31 by its review fixes, 2026-10-14).**
   **WU-DocCorrections Stage note (2026-10-13; service audit §4 row 2) — no flip, no code change.** The
   convention text (`layer2-services.md` §"Group Rating Waterfall") and the WU32 settled note #1 above
   said tier 1 (the viewer's `ContentRating` ceiling) is enforced when a story is added, because the
@@ -309,6 +310,9 @@ this:** case-insensitive names (D29), a composite same-group FK and the join's r
   exempts the story's own author, so an author can file their own Draft into a group and the members'
   `NewGroupStory` notifications name it. A throwaway Integration probe confirmed it; the comment in
   `AddStoryAsync` now says so. Fixing it needs a product call (may an author park a draft in a group?).
+  *(Split by the WU-DocCorrections review fixes, 2026-10-14: the title reaching members breaks the
+  settled Class-A rule however that call goes, so it stays on tracker D21 as a defect for the next fix
+  WU; the product call is decision row 31, tracker F28.)*
   **WU-InertFeatures Stage note (owner ruling D16 +
   service audit §2.8 bullets 1–3):** `AddStoryAsync` now notifies only inside `if (!alreadyAdded)` —
   re-adding an existing story was a repeatable fan-out any member could trigger; the

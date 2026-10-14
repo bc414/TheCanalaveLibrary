@@ -1082,7 +1082,7 @@ unless noted. All sit under Stage-5 cells.
   - Watch upstream: if a later ASP.NET Core 10 patch clears the flag after the first supply, the
     idiom stays harmless. The convention note and this item then retire together.
 
-- [ ] **D21 — An author can file their own unpublished story into a group, and the group's members are told its title** `[latent-risk · med · beta]` — *Filed 2026-10-13 by WU-DocCorrections (found while verifying the Group Rating Waterfall doc).*
+- [ ] **D21 — Group members are told the title of a story they cannot see (a confidentiality defect)** `[latent-risk · high · beta]` — *Filed 2026-10-13 by WU-DocCorrections (found while verifying the Group Rating Waterfall doc). Split by its review fixes, 2026-10-14: the product question moved to **F28** (decision row 31); what stays here is decided, and is the next fix WU's.*
   - Grid: no cell moves at filing (F39 L2, F41 L2 read 5).
   - **Confirmed** by a throwaway Integration probe (not committed): the creator of a group added their
     own `Draft` story through `IGroupWriteService.AddStoryAsync`; no exception, a `GroupStory` row, and a
@@ -1096,10 +1096,21 @@ unless noted. All sit under Stage-5 cells.
     the guard closed this. The group page itself hides the story from other members (filtered read).
   - **Same root, by reading:** a story filed while public and later unpublished or taken down keeps its
     title in members' existing 60s for the same reason (the enricher's `StoryListings` read).
-  - **Not decided here.** Either the add path requires a public status for everyone, the author
-    included (then `AddStoryAsync` stops using the author-exempt guard), or the fan-out and the enricher
-    skip a story that is not public. Whether an author may park their own draft in a group at all is a
-    product call. A fix needs an Integration test in the probe's shape.
+  - **Same class, by reading (not probed):** the enricher's `Story` and `Chapter` kinds also read
+    titles from `StoryListings` unfiltered, so a story unpublished or taken down after its notifications
+    went out keeps its title in them. The fix WU enumerates every Story-family kind first.
+  - **Decided, not open.** The settled Class-A rule says no one but the author may see a Draft,
+    PendingApproval or Rejected story (`ReadOnlyApplicationDbContext`'s `StoryStatus` filter: "this is
+    confidentiality, not consent"; settled WU-AccessGate2, 2026-07-23), and the removal filter hides a
+    taken-down one. That holds however row 31 is answered, and refusing the add would not cover a story
+    unpublished later. Built precedent: the enricher's `BlogPostDirect` kind (tracker D8,
+    WU-TrackerFixes 2026-10-13) drops a post its non-author recipients can no longer open.
+  - **Fix shape:** the enricher drops the story title (and, for kinds that link to the story, the link)
+    when the story is outside the public window or taken down and the recipient is not its author.
+    Types 60 (members) and 25 (the story's author) share the `GroupStory` kind today, so it splits the
+    way D8 split the blog-post kinds. Integration test in the probe's shape (an author's own draft filed
+    into a group; a second member's 60 has no story title), plus one for a story unpublished after the
+    fan-out.
 
 ---
 
@@ -1808,6 +1819,20 @@ built rows at 5 and no signal these exist. One decision item lives outside this 
   - If the owner says yes: wire `NewsPage`'s cards like `BlogPostCard` elsewhere and drop the
     `BlogPostKind.Site` exclusion on `BlogPostPage`. If no: refuse a site-announcement target in
     `RequireReportableTargetAsync` too, so the API matches the UI.
+
+- [ ] **F28 — May an author file their own unpublished story into a group?** `[decision · low · beta]` — *Filed 2026-10-14 by the WU-DocCorrections review fixes, split out of **D21**. Promoted the same day to `roadmap.md` decision row 31.*
+  - Grid: no cell moves on its account (F39 L2 stays 5).
+  - Source: D21's probe (WU-DocCorrections, 2026-10-13). `IGroupWriteService.AddStoryAsync`'s
+    confidentiality guard, `StoryVisibilityGuard.IsStoryPublishedAsync`, reads the `StoryStatus` filter,
+    which exempts the story's author. So another user's Draft, PendingApproval or Rejected story is
+    refused, and the author's own is accepted.
+  - As built (the status quo, not a ruling): an author may file their own unpublished story. The group
+    page hides it from other members (a filtered read). The members' type-60 notification names it,
+    which is **D21**, a defect whichever way this is answered.
+  - If no: `AddStoryAsync` requires a public status for every caller (a guard without the author
+    exemption), with a refusal message and an Integration test. If yes: when do members hear about it,
+    at add time (the fan-out fires there today, title-less once D21 is fixed) or at publish time (a new
+    trigger)?
 
 ---
 
@@ -2693,11 +2718,16 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     (`ServerStoryAcknowledgmentReadService`, `ServerMessagingReadService`, `ServerStoryLineageReadService`);
     only their name differs. Converting all of these changes no behavior. Rule:
     `identity-and-authorization.md` §"Active-User Context" → "The two shared guards".
-  - **An anonymous caller answered 403, not 401** (`UnauthorizedAccessException`):
-    `ServerFanonReadService.GetMyAdoptionPageAsync` and `GetMyAdoptionIndexAsync` (anonymous only), and
-    three owner gates that fold "anonymous" into "not the owner": `ServerBlogPostReadService.GetForEditAsync`,
+  - **An anonymous caller answered 403, not 401** (`UnauthorizedAccessException`): three owner gates
+    that fold "anonymous" into "not the owner": `ServerBlogPostReadService.GetForEditAsync`,
     `ServerChapterReadService.GetChapterForEditAsync` and `ServerStoryWriteService`'s cover-change loader.
     Splitting them changes a status code, so each needs a test.
+  - **Blocked on worksheet D27** (pending: anonymous callers of self-scoped reads get a zero state or
+    401): `ServerFanonReadService.GetMyAdoptionPageAsync` and `GetMyAdoptionIndexAsync` answer an
+    anonymous caller 403 today (the endpoints' authorization floor answers 401 first over HTTP, so only a
+    circuit caller sees it). 403 is wrong under either answer, but which one replaces it is D27's call.
+    *(Split out by the WU-DocCorrections review fixes, 2026-10-14: H41 had listed them as 401
+    candidates, which pre-decided D27.)*
   - **Read-return collection types are mixed.** 15 `Task<List<T>>` against 47 `Task<IReadOnlyList<T>>`
     on the Core `I*ReadService` interfaces (count 2026-10-13). `layer2-services.md` §"Id-Batch Parameters
     Use `IReadOnlyList<T>`" covers parameters only; standardizing returns ripples into every client twin.
@@ -2708,8 +2738,11 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - **`IContentImportService` lifetime asymmetry** (singleton on the server). Blocked on worksheet
     **D36/D37** (pending).
 
-- [ ] **H42 — Run the doc-audit probes with fresh eyes over the worksheet campaign's docs** `[doc-drift · low · anytime]` — *Filed 2026-10-13 by WU-DocCorrections.*
+- [ ] **H42 — Run the doc-audit probes with fresh eyes over the worksheet campaign's docs** `[doc-drift · med · beta]` — *Filed 2026-10-13 by WU-DocCorrections. Raised by its review fixes, 2026-10-14: this is WU-DocCorrections' own unfinished gate, not optional polish.*
   - Grid: no cell moves.
+  - **Gate.** The amendments and service audit §7 make these probes part of WU-DocCorrections, so the
+    campaign's wrap-up (the final verification and the owner summary) waits on this item. It needs a
+    session with a subagent tool.
   - **Why open.** Service audit §7 gates the doc-correction pass on `doc-audit/SKILL.md`'s probes, and
     the amendments ask for Probes 2 and 3 over every doc the 17-WU campaign touched. The skill's first
     rule is that a subagent which never saw the edits runs them. WU-DocCorrections had no subagent tool,
@@ -2720,9 +2753,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     against its target (one stale line-number citation in H6 fixed; the rest resolve or are dated
     history); every feature's L2/L4/L4.5 headline in `audit/*.md` matches `status.md`'s grid;
     `check-doc-hygiene.ps1` clean.
-  - **To do:** Probe 1 (cold-session walk), Probe 2 over the campaign's convention-doc edits
-    (`git diff 1940078..HEAD -- .claude/skills`), and Probe 3 over the audit files the campaign wrote
-    Stage notes into, each as a fresh subagent. Fix what they confirm.
+  - **What the review found (2026-10-14), the classes the substitutes miss:** the WU's own Stage notes
+    were missing from five feature headlines (`audit/Tags.md` F11 L2, F12 L2 and F15 L5,
+    `audit/Stories.md` F10 L2, `audit/Comments.md` F23 L2); `audit/Discovery.md` F33's WU40 note kept
+    the false "filters don't apply to navigations" unmarked; the write→write re-check grep in
+    `layer2-services.md` missed its own third edge; the Position block used session-relative wording; H41
+    pre-decided worksheet D27. All fixed by the review fixes. That pass had no subagent tool either. It
+    added one mechanical check: a scan of every `audit/*.md` feature section for a Stage note by one of
+    the campaign's 18 WUs that the feature's headline does not name. Beyond the five above it found
+    `audit/Moderation.md` F47 (WU-InertFeatures, fixed) and `audit/Groups.md` F38 (WU-UserDeletion,
+    whose note says nothing in F38 changed, left alone).
+  - **To do:** Probe 1 (cold-session walk), Probe 2 over the campaign's doc edits
+    (`git diff 1940078..HEAD -- .claude CLAUDE.md`), and Probe 3 over the audit files the campaign
+    wrote Stage notes into, each as a fresh subagent. Fix what they confirm, then close this item with a
+    dated note and one probe-coverage line in WU-DocCorrections' DONE entry.
 
 ---
 

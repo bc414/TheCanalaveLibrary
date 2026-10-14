@@ -655,8 +655,10 @@ has seen, tracker H29 — Stage note at the top of this section; its review fixe
 `AssignGroupAdminAsync`, no flip; the same day, WU-SchemaHardening —
 `ck_users_suspension` beneath L1, no flip, Stage note at the top of this section; 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
 flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
-change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
-of this section):** L1–L3.5 = 5, L4 = 3,
+change beneath the cell, no flip, HTTP-driven by its browser pass the same day; WU-InertFeatures earlier
+the same day — the queue's outcome notifications null-sourced and anchored per owner rulings D3/D4/D5,
+and its review fixes skip the acting moderator, beneath L2, no flip, Integration-tested; Stage notes
+at the top of this section):** L1–L3.5 = 5, L4 = 3,
 L4.5 = **5**: the WU-TrackerFixes browser pass returned it, 2026-10-13 (tracker **H38** closed; its note at
 the top of this section), after WU-TrackerFixes lowered it the same day (the queue's User-target link and View profile
 now use the id route, and the removal and account-action refusals carry an honest Sign-in flag, all

@@ -13,9 +13,12 @@ namespace TheCanalaveLibrary.Core;
 ///
 /// Deliberately excludes per-viewer interaction state (IsFavorited, etc.) — that's cross-partition
 /// (UserStoryInteraction), resolved by a sibling merge at the listing call site (WU15/WU16), per §3.8 +
-/// §3.6 "Context-Specific Data Augmentation." The content-rating filter has already been applied by the
-/// time a Story row reaches this projection (ReadOnlyApplicationDbContext's named query filters; the
-/// write context carries none) — no rating check belongs here.
+/// §3.6 "Context-Specific Data Augmentation." No rating check belongs here: the producing query decides.
+/// Discovery-plane reads run under ReadOnlyApplicationDbContext's ContentRating filter (the write
+/// context carries none), but the Personal-plane path (GetListingsAsync with personalScope and a
+/// restrict set, hydrating through the same projection) lifts it on purpose so a viewer's own M
+/// favorites stay visible. So a StoryListingDto is not proof that its story is within the viewer's
+/// rating ceiling.
 /// </summary>
 public record StoryListingDto(
     int StoryId,

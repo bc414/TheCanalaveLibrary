@@ -920,7 +920,8 @@ context carries none (§"Content-Rating Filtering Lives on the Read DbContext").
 the story from the write context and, at add time, applies only the kind-(g) **confidentiality** guard
 `StoryVisibilityGuard.IsStoryPublishedAsync` (rating axis lifted on purpose; like the `StoryStatus`
 filter it reads, it lets a story's own author through, so an author can file their own unpublished
-story — tracker **D21**, open) plus tiers 2/3. That is
+story — whether they may is decision row 31, tracker **F28**; the members' notifications naming it are
+tracker **D21**, a defect either way) plus tiers 2/3. That is
 deliberate: the rating axis at add time belongs to tier 2, which reports its own
 `ContentRatingExceededException`, and a viewer-ceiling guard would pre-empt it with a not-found (the
 rationale comment in `AddStoryAsync`; WU-ParentVisibility, `audit/Groups.md` F38–F40). Tiers 2/3 are
@@ -1697,8 +1698,9 @@ WU-DocCorrections; service audit §4 row 8):
    auto-producer"). There is no back-edge: the interaction service injects only its contexts and
    `IActiveUserContext`.
 
-To re-check: `grep -rnE "I[A-Za-z]+WriteService [a-z_]+\s*[,)]" TheCanalaveLibrary.Server --include=*.cs`,
-ignoring the `*Endpoints.cs` files. A fourth kind is a design change: record it here first.
+To re-check: `grep -rnE "I[A-Za-z]+WriteService\s+[A-Za-z_][A-Za-z0-9_]*\s*[,)]" TheCanalaveLibrary.Server --include=*.cs`,
+ignoring the `*Endpoints.cs` files; it returns exactly the three kinds above (the parameter name may
+be camelCase, e.g. `usiWrite`). A fourth kind is a design change: record it here first.
 
 **Hot-path escape hatch:** For performance-critical queries, a single optimized JOIN that bypasses
 composition is permitted as a documented exception. Interface and DTO don't change; only the method

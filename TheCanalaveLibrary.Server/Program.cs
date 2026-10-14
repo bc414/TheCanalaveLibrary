@@ -536,9 +536,9 @@ builder.Services.AddScoped<SpotlightGoLiveSweeper>();
 // WU-AuthorStoryDelete). Not on ISpotlightWriteService, which is WASM-registered (worksheet D37 pending).
 builder.Services.AddScoped<SpotlightPlacementRelease>();
 builder.Services.AddHostedService<SpotlightGoLiveWorker>();
-// Notifications (WU22) — L2 read/write services (Features 41/42/43).
-// WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
-// Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).
+// Notifications (WU22) — L2 read/write services (Features 41/42/43). Which events notify, through
+// which semantic methods, and which write services fire them: layer2-services.md §"Notification
+// Generation".
 builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteService>();
 builder.Services.AddScoped<INotificationReadService>(sp => sp.GetRequiredService<INotificationWriteService>());
 // Notification cleanup (Feature 57) — daily prune of read notifications older than 60 days.

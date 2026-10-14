@@ -232,8 +232,9 @@ public class ServerGroupWriteService(
         // published at all: a Draft, PendingApproval, Rejected or taken-down story could be filed
         // into a group and its author notified via NotifyNewGroupStoryAsync.
         // Not closed for the story's own author: the guard reads the StoryStatus filter, which exempts
-        // the author, so an author can still file their own unpublished story and the members' 60s name
-        // it (WU-DocCorrections found this; tracker D21, not decided).
+        // the author, so an author can still file their own unpublished story (whether they may is
+        // owner-open: roadmap decision row 31, tracker F28), and the members' 60s name it (a
+        // confidentiality defect either way: tracker D21; WU-DocCorrections found both).
         await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
         {
             if (!await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, dto.StoryId))

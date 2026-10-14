@@ -726,7 +726,7 @@ Fanon's phantom takedown filter + dead `IgnoreQueryFilters` on writeDb (*fixed W
 (*fixed WU-ThrottleCoverage, 2026-10-13*, the interface doc's same claim);
 `VisibleStories`/Fanon "status not globally filtered" (stale since the StoryStatus filter landed —
 the explicit window now suppresses the author-exception, which must be said or a future
-simplification opens an author-draft leak — *fixed WU-DocCorrections, 2026-10-13*: CORRECTION notes at both sites, and two Integration tests now pin the window); the USI "reject impossible combinations" comment (R3
+simplification opens an author-draft leak — *fixed WU-DocCorrections, 2026-10-13*: `CORRECTION` notes at the two `ServerManualTreeSearchReadService` sites (the class doc and `VisibleStories`); Fanon's class doc and `GroupQuery` were rewritten plainly to say why the window is load-bearing (their text never made the "not globally filtered" claim — checked at the campaign's base, `1940078` — so there was no false text to correct); two Integration tests now pin the window. Its review fixes, 2026-10-14, found Fanon's /fanon-hub reach count outside the window and outside the takedown filter, and fixed it); the USI "reject impossible combinations" comment (R3
 made it fiction — *fixed WU-AccessGateSweep2, 2026-09-30*); `FindUserByUsernameAsync`'s ILike
 narration (*fixed WU-DocCorrections*); the moderation client's "no method produces 400 today" (*fixed
 WU-ModerationIntegrity*); `ClientSavedTagSelectionReadService`'s auth claim (*fixed WU-DocCorrections*); stale `cross-cutting.md` citations in the USI
@@ -862,9 +862,10 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
 1–5 unblock fix-WUs 1, 3 and 4 and should come first.
 
 **Doc-correction pass:** §4's table + false-comment inventory, one WU, gated by the doc-audit
-skill's probes afterward. *(Built WU-DocCorrections, 2026-10-13. Its probes were run by the authoring
-session, mechanically, because no subagent tool was available; the fresh-eyes run the skill asks for
-is tracker **H42**.)*
+skill's probes afterward. *(Corrections built WU-DocCorrections, 2026-10-13, with review fixes
+2026-10-14. **The probe gate is still open:** neither pass had a subagent tool, so both ran mechanical
+substitutes only, and the fresh-eyes probes the skill requires are tracker **H42**, which the
+campaign's wrap-up waits on.)*
 
 **Explicitly not this audit's scope:** L6 index builds (the reconciliation matrix owns them —
 §3.20 flags the one story-centric USI gap it already tracks), the live `pg_indexes` sweep,

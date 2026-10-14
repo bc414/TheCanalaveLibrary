@@ -841,7 +841,7 @@ each "off".
   `ManualTreeNodeDisplayDto(s)`, `IManualTreeSearchReadService`;
   `Server/Discovery/ServerManualTreeSearchReadService` — one call per pivot, all sections; the
   recommendation family is ONE flag-composed query (rows constrained to viewer-visible stories
-  via a captured filtered-DbSet subquery — global filters don't apply to navigations); per-section
+  via a captured filtered-DbSet subquery — global filters don't apply to navigations *(corrected by the WU-DocCorrections review fixes, 2026-10-14: filters do apply through navigations; the subquery is needed because `Recommendation.StoryId` is a bare FK column, which no filter reaches)*); per-section
   count+page in SQL; authored orders pinned-first; vouch traverses forward only; instrumented
   `Discovery.ManualTreePivot` spans. Also: `User.PinnedStoryId` (+`AuthorSettingsDto`/
   `AuthorSettingsForm` picker + write gate: own/published/visible only) and the WU44 path-hop

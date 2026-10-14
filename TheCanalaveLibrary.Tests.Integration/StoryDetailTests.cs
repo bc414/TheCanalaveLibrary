@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <summary>
 /// Integration tests for <see cref="ServerStoryReadService.GetStoryByIdAsync"/> (WU25 extension)
 /// covering the new fields added to <see cref="StoryDetailsDTO"/>: <c>AuthorId</c>,
-/// <c>CoverArtRelativeUrl</c>, <c>Rating</c>, <c>Status</c>, and sprite-resolved <c>Tags</c>.
+/// <c>CoverArtRelativeUrl</c>, <c>Rating</c>, <c>Status</c>, and <c>Tags</c> (chips carrying the raw sprite key).
 /// Also covers <see cref="IChapterReadService.GetChapterListAsync"/> (WU25) — the story-landing-page
 /// chapter list with viewer-accessible non-primary alternate versions.
 ///
@@ -110,7 +110,7 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
 
         dto.Should().NotBeNull();
         dto!.Tags.Should().ContainSingle(t => t.TagId == tag.TagId && t.TagName == tag.TagName,
-            "the seeded tag must appear in the sprite-resolved Tags collection");
+            "the seeded tag must appear in the Tags collection");
     }
 
     [Fact]

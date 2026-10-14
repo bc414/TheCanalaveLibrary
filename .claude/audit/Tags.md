@@ -227,9 +227,9 @@ on a migrated scratch clone. Tests: **Integration** `SchemaConstraintTests` (the
 /api/fanon/links` with tag 1 as both base and target answers 400 "A group cannot be linked to its own
 base tag.", before the CHECK can.
 
-## WU-DocCorrections Stage note (2026-10-13) — F11/F12 L2 and F15 L5 stay Stage 5: comments corrected, the fanon status window pinned
+## WU-DocCorrections Stage note (2026-10-13; review fixes 2026-10-14) — F11/F12 L2 and F15 L5 stay Stage 5: comments corrected, the fanon status window pinned, the /fanon hub's reach count fixed
 
-Service audit §4, comments only; no behavior change.
+Service audit §4, comments only; no behavior change, except the review fixes' hub count (last bullet).
 - **Fanon reach (F11 dashboard, F12 adoption).** `ServerFanonReadService`'s class doc and `GroupQuery`
   now say why the explicit 2..7 status window exists: the `StoryStatus` named filter exempts a story's
   own author, so without the window a viewing author's own drafts would feed the public reach counts.
@@ -242,6 +242,15 @@ Service audit §4, comments only; no behavior change.
   the cookie; `/public/{userId}` and `/permalink/{id}` are anonymous and gated in the service.
 - **Sprites in tag DTOs.** `ITagReadService.GetTagDirectoryAsync`'s doc said the chips are
   sprite-resolved; they carry the raw `SpriteIdentifier`, resolved by the component at render time.
+- **Review fixes (2026-10-14) — the /fanon hub's reach (F11 L2, a behavior fix).** The rewritten class
+  doc said every reach query keeps `IsTakenDown` active through the `Story` navigation; one did not.
+  `GetEstablishedFanonTagsAsync` (the public hub's "N stories") counted the bare `StoryTags` and
+  `StoryCharacters` collections, which carry no query filter, so drafts, pending and rejected stories
+  and taken-down stories all counted. It now counts through `st.Story`/`sc.Story` inside the 2..7
+  window with `ContentRating` bypassed, the dashboard's rule, and the class and interface docs say so.
+  Tier: **Integration** `FanonPipelineTests.GetEstablishedFanonTagsAsync_ReachCountsOnlyPublishedLiveStories_OfEveryRating`
+  (both axes; six stories each, two counted; fails on the old count). No markup changed; no browser
+  was available, and the number is server-computed and Integration-pinned, so no browser item is owed.
 
 ## Feature 11 — Tag Administration
 
@@ -256,7 +265,7 @@ unchanged).
 
 - **L1 — Stage 5 (`ck_fanon_links_no_self` since WU-SchemaHardening, 2026-10-13 — Stage note above).**
   `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
-  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30).** **L3/L3.5 — Stage 5
+  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below; shared moderator guard WU-ModerationIntegrity 2026-09-30; the fanon reach comments corrected and the dashboard's status window pinned by a test, WU-DocCorrections 2026-10-13, and the /fanon hub's established-tag reach limited to published, live stories by its review fixes, 2026-10-14 — Integration-tested, stays Stage 5, the WU-DocCorrections Stage note above this feature).** **L3/L3.5 — Stage 5
   (WU27.5, see Stage note below)** (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
   see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:
   the tag table is tiny and PK/unique-indexed; a trigram index for the leading-wildcard chip
@@ -429,7 +438,7 @@ unchanged).
 - **L2 — Stage 5 (tag existence, stored type and the doubled pairing member enforced, and fanon invites
   skip taken-down stories on both axes, WU-ParityAndRemaining 2026-10-13; the type read untracked since
   its review fixes — Integration-tested, stage unchanged; the stored-type refusal and the fresh read on
-  one circuit browser-driven by its browser pass the same day — the note above). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
+  one circuit browser-driven by its browser pass the same day — the note above; the adoption reads' access-gating comment corrected, WU-DocCorrections 2026-10-13 — comments only, stays Stage 5, its Stage note above Feature 11). L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
   sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 5 (WU-L6, 2026-07-07 — resolved
   as already-covered, no DDL: the tag-filter probes are correlated EXISTS on `(story_id, tag_id)`
   = the `story_tags` PK, and no probe reads `priority`; the proposed reverse composite
@@ -713,7 +722,7 @@ Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
 permalink needed **no** L1 change — see WU-SelectionPermalink below).
 **L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below; shared auth guard WU-ModerationIntegrity 2026-09-30; extended by WU-SelectionPermalink,
 2026-07-28; the flyout's sort read made best-effort by the WU-TrackerFixes review fixes, 2026-10-13 — Stage note at this feature's top). **L4-Style / L4.5-Browser — Stage 1**
-(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; permalink read + its client twin added 2026-07-28)** — endpoints + client impl live (WU-L5Sweep) and the
+(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; permalink read + its client twin added 2026-07-28; the client's and the endpoints' false auth comments corrected, WU-DocCorrections 2026-10-13 — comments only, its Stage note above Feature 11)** — endpoints + client impl live (WU-L5Sweep) and the
 site now runs global InteractiveAuto; the saved-selection flyout fetch is interactive-only and was
 not browser-driven in the flip's wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`
 WU-GlobalFlip. **L6 — Stage 5** (two new indexes, see `layer6-indexes.md` "Saved Tag

@@ -17,17 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DocCorrections (2026-10-13) — the worksheet campaign's last WU, its doc backstop.
-  Service audit §4's stale doctrine in `layer2-services.md` re-synced to the code (the waterfall's tier 1,
-  the notification sample, the write→write edge list, the WU23 sketches, the badge variant); its false
-  comments corrected, two with `CORRECTION` notes on a load-bearing status window that two new
-  Integration tests now pin; every pre-split `cross-cutting.md` citation re-pointed; the worksheet
-  registered in `CLAUDE.md`; the CORRECTION-note convention stated in `SKILL.md`. D12's doc half and
-  most of §4's comments had already been done by their owning WUs (verified). No cell moved. Filed
-  **D21** (an author's own draft filed into a group is named in members' notifications), **H41**
-  (pattern-uniformity residue) and **H42** (the fresh-eyes doc-audit run; this session ran mechanical
-  probes only, having no subagent tool). `dotnet test`: Unit 1,376, RazorComponents 929, Integration 1,665. **Pointer:** its
-  DONE entry.
+- **Last landed:** WU-DocCorrections (2026-10-13; review fixes 2026-10-14) — the worksheet campaign's last
+  WU, its doc backstop. Service audit §4's stale doctrine in `layer2-services.md` re-synced to the code;
+  false comments corrected (two `CORRECTION` notes on the manual tree search's load-bearing status
+  window, pinned by a new Integration test, as Fanon's is by another); every pre-split `cross-cutting.md`
+  citation re-pointed; the worksheet registered in `CLAUDE.md`; the CORRECTION-note convention stated in
+  `SKILL.md`. Its review fixes limited the public /fanon hub's reach count to published, live stories (it
+  counted drafts and taken-down stories; Integration-tested), corrected six more comment sites and six
+  headline lines, and split **D21** (members told a draft's title: a decided confidentiality defect, now
+  `high`) from its product question (**F28**, decision row 31). No cell moved. Also filed **H41**, **H42**.
+  **Its doc-audit gate is still open:** neither pass had a subagent tool, so the fresh-eyes probes are
+  **H42**, and the campaign's wrap-up waits on them. `dotnet test`: Unit 1,376, RazorComponents 929,
+  Integration 1,666. **Pointer:** its DONE entry.
   Before that, 2026-10-13: WU-TrackerFixes — the tracker sweep (B16/B17/D8/H7 closed, U11 built; row 30/F27, E12, E13, H39, H40 filed, H38 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-ParityAndRemaining — service audit §2.7 and §2.12 (WASM parity, the remaining service defects; row 29/F26 filed, H37/H12 closed by its browser pass); see its DONE entry.
   Before that, 2026-10-13: WU-PrivateMessageEmail — worksheet D18 (Messaging-owned PM email, one per unread run, its own preference and unsubscribe, a shared `(kind, id)` pipeline; row 28/F25, D20 filed, H35 closed by its browser pass); see its DONE entry.
@@ -248,7 +249,7 @@ references it, does not restate it.
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
   (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, then (on the
   2026-10-12 resume) the unplanned WU-DependencyCVEs and WU-NotificationCorrectness (D19), then
-  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13), then WU-TrackerFixes (the tracker sweep, 2026-10-13), then WU-DocCorrections (the doc backstop, 2026-10-13), the last in its build order. The campaign's wrap-up (a final full verification and the owner summary of open decisions and tracker items) has not run yet.
+  WU-SchemaHardening (2026-10-13), then WU-UserDeletion (D13, 2026-10-13), then WU-PollVoteIntegrity (D23's poll restructure, 2026-10-13), then WU-BlobCleanup (D14, 2026-10-13), then WU-ThrottleCoverage (D20's throttle half, 2026-10-13), then WU-AuthorStoryDelete (D15, 2026-10-13), then WU-PrivateMessageEmail (D18, 2026-10-13), then WU-ParityAndRemaining (service audit §2.7/§2.12, 2026-10-13), then WU-TrackerFixes (the tracker sweep, 2026-10-13), then WU-DocCorrections (the doc backstop, 2026-10-13), the last in its build order. The campaign's wrap-up (a final full verification and the owner summary of open decisions and tracker items) has not run yet; it waits on tracker **H42**, WU-DocCorrections' fresh-eyes doc-audit probes, which need a session with a subagent tool.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -277,14 +278,14 @@ references it, does not restate it.
   **E2** and opened **E9**, the ImageSharp licensing call the owner has to make, now decision row 21;
   WU-NotificationCorrectness, 2026-10-12, opened **D13/H26** and re-scoped **D8** without building it (its review fixes, 2026-10-13, routed D8 to WU-TrackerFixes; its browser pass closed H26 the same day);
   WU-SchemaHardening, 2026-10-13, opened **D14/H27/H28**, and its review fixes **D15** (its browser
-  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42**,
+  pass closed H28 the same day and opened **E10**); WU-UserDeletion, 2026-10-13, opened **F17/F18/F19/H29** and closed H6's last-admin-leave bullet (its browser pass closed H29 the same day); WU-PollVoteIntegrity, 2026-10-13, opened **F21/H30** (its browser pass closed H30 the same day and added the poll sites to **E10**); WU-BlobCleanup, 2026-10-13, opened **F22/H31** (its browser pass closed H31 and H3 the same day and opened **H32**); WU-ThrottleCoverage, 2026-10-13, opened **D16/D17/F23/H33**, closed **E7** and annotated E6 (clause 1 resolved) and D14 (now the ledger home of §2.11 too) (its browser pass closed H33 the same day and opened **D18**); WU-AuthorStoryDelete, 2026-10-13, opened **F24/H34** and annotated F13 (site 5 built, still open), F3 (the ToS line) and B25 (the story half of its copy duty paid); its review fixes opened **D19** and annotated D18; its browser pass closed H34 the same day); WU-PrivateMessageEmail, 2026-10-13, opened **F25/H35/H36** (its review fixes folded H36 into **H17**, added F25 (e), extended H35 and annotated D15; its browser pass closed H35 the same day, opened **D20** and annotated F6b); WU-ParityAndRemaining, 2026-10-13, opened **F26/H37**, folded H12's last step into H37 and annotated **D11** (its browser pass closed H37 and H12 the same day and annotated H22 and F6b); WU-TrackerFixes, 2026-10-13, closed **B16/B17/D8/H7**, opened **F27/H38**, re-verified H8's residual and annotated F6b (its review fixes opened **E12** and extended H38; its browser pass closed H38 and opened **E13/H39/H40**); WU-DocCorrections, 2026-10-13, opened **D21/H41/H42** (its review fixes, 2026-10-14, split D21's product question out as **F28**, decision row 31, and raised D21 and H42),
   including two **high-priority security items:
-  E3 and E9**. **A7** is the
+  E3 and E9**, and a high-priority confidentiality defect, **D21** (a draft's title reaching group members). **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2's named
   follow-up (the 8 SOLO editor pages' `ErrorAlert` adoption) was built by WU-TrackerFixes, 2026-10-13. WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–30** (`roadmap.md` §"Decisions
+- **Blocked on Brian:** decision rows 4, 6, 8, 10 and **14–31** (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — 19 — type 90's moderator attribution, filed by its review
@@ -303,7 +304,9 @@ references it, does not restate it.
   archive mutes, the run reading of its formula, no account-status gate) — added the same day by
   WU-PrivateMessageEmail, (e) by its review fixes; 29 — whether an author may edit content a moderator
   took down (freeze or remediate) — added the same day by WU-ParityAndRemaining, tracker **F26**; 30 —
-  whether site announcements are reportable — added the same day by WU-TrackerFixes, tracker **F27**).
+  whether site announcements are reportable — added the same day by WU-TrackerFixes, tracker **F27**; 31 —
+  whether an author may file their own unpublished story into a group — added 2026-10-14 by the
+  WU-DocCorrections review fixes, tracker **F28**).
   Tracker **H38**, WU-TrackerFixes' browser pass, ran 2026-10-13, returned its fifteen L4.5 cells to 5
   and closed — see WU-TrackerFixes' DONE entry.
   Separately, not a numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
@@ -474,7 +477,7 @@ is pending except where a bullet says so.
 
 ---
 
-## WU-DocCorrections — the campaign's doc backstop: service audit §4's stale doctrine and false comments corrected against the code, the worksheet registered, the CORRECTION-note convention stated, every pre-split `cross-cutting.md` citation re-pointed (worksheet D12's doc half verified; service audit §4 and §7; extends no cluster — docs and comments, plus two Integration tests) — DONE ✓ (2026-10-13)
+## WU-DocCorrections — the campaign's doc backstop: service audit §4's stale doctrine and false comments corrected against the code, the worksheet registered, the CORRECTION-note convention stated, every pre-split `cross-cutting.md` citation re-pointed (worksheet D12's doc half verified; service audit §4 and §7; extends no cluster — docs and comments, plus two Integration tests; its review fixes added the /fanon hub's reach fix and a third) — DONE ✓ (2026-10-13; its fresh-eyes probe gate is open, H42)
 
 - **Cells:** none moved. Docs and comments beneath Stage-5 cells: F39 L2, F33 L2, F11/F12 L2, F15 L5,
   F10 L2, F50 L2, F24 L2, F41 L2. No migration (`has-pending-model-changes`: none). Dated 2026-10-13, the
@@ -483,7 +486,8 @@ is pending except where a bullet says so.
   registration rider) and its amendment (C1/C4 may be done; re-derive E2's guard list; run the probes).
 - **Closed by earlier WUs, verified and not re-edited:** all of §A (D12's convention homes, settled note,
   `grid_axes`/`folder_clusters`/Identity notes, the hygiene registry and its Check-1 fix, the evidence
-  rows, roadmap Resolved, the code pointers, the copy) — WU-TptHardDelete; A12 holds (`ParentCommentId`
+  rows, roadmap Resolved, the code pointers, the copy) — WU-TptHardDelete, except A10's optional test
+  summary, which this WU added to `DeleteComment_ReparentsReplies_ToTopLevel`; A12 holds (`ParentCommentId`
   → `SetNull` in the snapshot); A13 — WU-ParityAndRemaining (R1); B2's code twins — WU-InertFeatures;
   C1 — WU-ThrottleCoverage; C4 — WU-AccessGateSweep2; G1 — WU-CounterSymmetry; G2/G3 and G5's Fanon
   comment — WU-ParityAndRemaining; G4 — WU-NotificationCorrectness; G5's folder comment and G6 —
@@ -504,9 +508,11 @@ is pending except where a bullet says so.
      are a closed list of three kinds with the grep that re-checks it; both WU23 sketches bannered;
      badge curation recorded as the third self-referential variant. `testing.md` and
      `identity-and-authorization.md` corrected; `Groups.md`'s WU32 settled note gets a dated correction.
-  4. **Comments (B6, C2, C3, C5–C11).** `CORRECTION` notes on the manual tree search's and Fanon's 2..7
-     status window (the `StoryStatus` filter exempts the author, so the window is load-bearing; C11's
-     "filters skip navigations" checked against the EF Core docs and corrected); the lineage reject doc,
+  4. **Comments (B6, C2, C3, C5–C11).** Two `CORRECTION` notes on the manual tree search's 2..7 status
+     window (its class doc and `VisibleStories`; the `StoryStatus` filter exempts the author, so the window
+     is load-bearing; C11's "filters skip navigations" checked against the EF Core docs and corrected);
+     Fanon's class doc and `GroupQuery` rewritten plainly to say the same (their text made no false
+     claim); the lineage reject doc,
      sprite-resolution claims, the write-context-filter claims, `StoryFilterDto`'s fallback, the username
      lookup, the saved-selection auth claims, nine stale-tense sites, theme order, the badge award callers.
   5. **Citation sweep (D).** Every `cross-cutting.md` citation in code, tests and `draft-autosave.js`
@@ -517,10 +523,11 @@ is pending except where a bullet says so.
      cannot see the viewer's own draft). Both fail with the window removed (mutation-checked).
   7. **Found while verifying, not fixed:** tracker **D21** — `AddStoryAsync`'s confidentiality guard
      exempts the story's author, so an author can file their own Draft into a group and members' type-60
-     notifications name it (confirmed by a throwaway Integration probe; fixing it needs a product call).
-     The `AddStoryAsync` comment, the waterfall section and `Groups.md` say so.
+     notifications name it (confirmed by a throwaway Integration probe). The `AddStoryAsync` comment, the
+     waterfall section and `Groups.md` say so. (Split by the review fixes: the title leak is decided by
+     the settled Class-A rule and stays on D21; the product call is **F28**, decision row 31.)
 - **Filed:** **H41** (the pattern-uniformity residue, re-derived: inline auth checks, two private guard
-  copies, five anonymous→403 gates, mixed read-return types, `UserDeletionService`'s interface (D36),
+  copies, three owner gates answering an anonymous caller 403 (two `GetMy*` reads wait on worksheet D27), mixed read-return types, `UserDeletionService`'s interface (D36),
   `IContentImportService`'s lifetime (D36/D37)); **D21**; **H42** (fresh-eyes probes). Tracker H6's
   drifted `layer2-services.md:1022` citation now names its section. Evidence annotations: service audit
   §4 rows 2/4/8/9/10, the false-comment and uniformity paragraphs, §7.
@@ -529,17 +536,44 @@ is pending except where a bullet says so.
   `RejectLineageAsync` (a lifecycle-guard choice; the doc only describes the code); log-level drift on
   best-effort swallows (behavior); the spec file. No Identity.md note: A7's copy was rewritten by
   WU-TptHardDelete and again by WU-UserDeletion, so F52 is untouched.
-- **Doc-audit probe coverage (2026-10-13, by the authoring session; no subagent tool was available, so
-  the fresh-eyes run is H42):** every `file.md` §"Section" reference in the conventions, `CLAUDE.md`,
+- **Doc-audit probe coverage — the gate is still open.** The amendments and service audit §7 require
+  the doc-audit skill's fresh-eyes probes as part of this WU; neither pass had a subagent tool, so they
+  are tracker **H42**, which the campaign's wrap-up waits on. Mechanical substitutes run 2026-10-13 by
+  the authoring pass: every `file.md` §"Section" reference in the conventions, `CLAUDE.md`,
   `roadmap.md`, `status.md`, the tracker and `audit/*.md` resolved against its target; every feature's
   L2/L4/L4.5 audit headline matches `status.md`'s grid; line-number citations into the edited docs
-  checked (one fixed, H6); `check-doc-hygiene.ps1` clean.
+  checked (one fixed, H6); `check-doc-hygiene.ps1` clean. Added 2026-10-14 by the review fixes: a scan of
+  every `audit/*.md` feature section for a campaign WU's Stage note its headline does not name (it
+  confirmed the reviewers' five and found `Moderation.md` F47, all fixed; H42 has the list).
+- **Review fixes (2026-10-14; three reviewers, sixteen findings, all verified against the code):**
+  - *Behavior:* `ServerFanonReadService.GetEstablishedFanonTagsAsync`, the public /fanon hub's
+    "N stories", counted the bare `StoryTags`/`StoryCharacters` collections (no query filter), so
+    drafts, pending, rejected and taken-down stories counted; it now uses the dashboard's rule (through
+    the `Story` navigation, 2..7 window, `ContentRating` bypassed). Integration
+    `FanonPipelineTests.GetEstablishedFanonTagsAsync_ReachCountsOnlyPublishedLiveStories_OfEveryRating`,
+    failing on the old count. The rewritten Fanon class doc had claimed this for every query.
+  - *Comments:* `StoryListingDto` (the Personal plane lifts the rating filter), `IActiveUserContext`
+    (SharedUI's two ratified injectors), `StoryCard`/`StoryPage`/`StoryDetailTests` ("sprite-resolved"),
+    `Program.cs`'s WU22 future tense, `AddStoryAsync`'s D21 pointer.
+  - *Docs:* six headline lines (`Tags.md` F11/F12/F15, `Stories.md` F10, `Comments.md` F23,
+    `Moderation.md` F47); `Discovery.md` F33's WU40 navigation claim marked corrected;
+    `layer2-services.md`'s write→write grep now finds its own third edge (`usiWrite`);
+    `identity-and-authorization.md`'s H41 and SharedUI sentences; service audit §4's Fanon wording and
+    §7's "Built" (the probe gate is open); the Position block's session-relative phrase.
+  - *Ledgers:* H41's two `GetMy*` adoption reads moved under worksheet **D27** (they had been filed as
+    401 candidates, which pre-decided it); **D21** re-filed as a decided confidentiality defect
+    (`high`; the enricher's `Story`/`Chapter` kinds share the root, by reading) and its product half
+    promoted to **F28** / decision row 31; **H42** raised to `med · beta` as this WU's open gate.
+  - *Rejected:* none. Not done here: the D21 fix itself (a cross-kind enricher change that the next fix
+    WU scopes, enumerating every Story-family kind first) and the probes (H42, no subagent tool).
 - **Verification:** build 0 errors, no new warnings in touched files; **Unit 1,376, RazorComponents 929,
-  Integration 1,665** (+2), all green; check-doc-hygiene, check-design-tokens, check-render-modes and
-  check-a11y pass. No browser was needed or available: no markup or behavior changed.
+  Integration 1,666** (+2 by the WU, +1 by its review fixes), all green; check-doc-hygiene,
+  check-design-tokens, check-render-modes and check-a11y pass. No browser was available. None was owed:
+  no markup changed, and the one behavior change is a server-computed count pinned at the Integration
+  tier.
 - **Pointers:** Stage notes in `audit/Groups.md` F39, `audit/Discovery.md` F33, `audit/Tags.md`
-  (F11/F12/F15), `audit/Stories.md` F10, `audit/Badges.md` F50, `audit/Comments.md` F24,
-  `audit/Notifications.md` F41; tracker D21, H41, H42.
+  (F11/F12/F15), `audit/Stories.md` F10, `audit/Badges.md` F50, `audit/Comments.md` F23/F24,
+  `audit/Notifications.md` F41; tracker D21, F28, H41, H42; `roadmap.md` decision row 31.
 
 ## WU-TrackerFixes — the tracker sweep: page size follows the reader setting (B16), a report entry point for every target and a participant-only message report (B17), blog-post notifications by recipient (D8), the test-hygiene backlog (H7), `ErrorAlert` on the SOLO surfaces (amendment U11), the last dead profile links (extends `Discovery/`, `Bookshelves/`, `Profiles/`, `Moderation/`, `BlogPosts/`, `Recommendations/`, `Messaging/`, `Groups/`, `Notifications/`, `Errors/`, `Stories/`, `Chapters/`, the Integration and RazorComponents suites) — DONE ✓ (2026-10-13)
 

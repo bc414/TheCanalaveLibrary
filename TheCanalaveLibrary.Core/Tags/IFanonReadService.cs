@@ -28,7 +28,8 @@ public interface IFanonReadService
     /// </summary>
     Task<FanonGroupStoriesDto> GetGroupStoriesAsync(TagTypeEnum axis, int baseTagId, string name);
 
-    /// <summary>Established fanon tags (IsFanon) with story reach, for the /fanon hub.</summary>
+    /// <summary>Established fanon tags (IsFanon) with their public story reach, for the /fanon hub:
+    /// published stories that are not taken down, every rating counted.</summary>
     Task<IReadOnlyList<FanonTagDto>> GetEstablishedFanonTagsAsync();
 
     /// <summary>

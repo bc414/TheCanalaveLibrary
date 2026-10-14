@@ -48,7 +48,9 @@ is not int id) throw new InvalidOperationException(…)`) remain in several writ
 BlogPosts, Polls, Groups, Spotlight, Stories, Fanon, UserStoryInteractions, ContentGate); they behave exactly like `RequireUserId()`. New
 code calls the extension; converting the inline sites is service audit §4's pattern-uniformity residue,
 filed by WU-DocCorrections (2026-10-13) as tracker **H41** with the full site list. H41 also lists the
-five gates that answer an anonymous caller 403 instead of 401.
+three owner gates that answer an anonymous caller 403 instead of 401. What an anonymous caller of a
+self-scoped "My" read should get (a zero state, or 401) is worksheet **D27**, still pending, so the two
+fanon adoption reads that answer 403 today wait on it.
 
 **What stays out, deliberately:** display name/avatar URL (presentation — comes via `UserCardDto` per
 view); `ReaderDisplaySettings` (already a separate cascading slim bag, a UI-layer concern — see
@@ -81,7 +83,8 @@ visitor in the process. That bug shipped until WU-ThrottleCoverage (2026-10-13; 
 Unit `AnonPrefsTests`); never reintroduce a static "empty" instance of a mutable prefs type. A list
 the cookie sets to `null` parses to an empty list (request input never throws). **WASM parity is deliberately not implemented** (refined at build time,
 2026-07-19): `WasmActiveUserContext` has no anon-cookie read because nothing consumes it there —
-SharedUI components never inject `IActiveUserContext` (the two-identity-source rule below), and
+SharedUI components do not inject `IActiveUserContext` (the two-identity-source rule below; its two
+ratified exceptions read only the signed-in viewer's id, never the anonymous prefs), and
 every data read crosses HTTP to the server, where the cookie rides the request and the server
 context enforces. If a WASM-side consumer ever appears, `PersistentComponentState` is the
 channel (the framework's auth-state serialization cannot carry anonymous data) — do not reach

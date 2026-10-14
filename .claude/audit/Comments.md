@@ -88,7 +88,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
-- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note; one-level threading service-enforced in all four contexts since WU-ParityAndRemaining, 2026-10-13, and an emptied editor refused since its browser pass the same day — see the Features 23 + 24 + 26 Stage note below Feature 26):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
+- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note; one-level threading service-enforced in all four contexts since WU-ParityAndRemaining, 2026-10-13, and an emptied editor refused since its browser pass the same day — see the Features 23 + 24 + 26 Stage note below Feature 26; `DeleteComment_ReparentsReplies_ToTopLevel` (Integration) given a summary naming it the ratified-behavior test for owner ruling D12, WU-DocCorrections, 2026-10-13 — a test comment only, no test owed):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
   in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
   `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
   verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
@@ -244,8 +244,7 @@ the gate removed). Every cell stays 5.
   WU-DocCorrections, 2026-10-13 — no behavior change):** *(WU-DocCorrections note: `ServerCommentReadService`
   said "post-MVP DDL adds the composite index"; `ix_chapter_comments_chapter_id_date_posted` and
   `ix_blog_post_comments_blog_post_id_date_posted` exist since WU-L6, 2026-07-07, and the comments now
-  name them. The same WU gave F23's `DeleteComment_ReparentsReplies_ToTopLevel` (Integration) a summary
-  calling it the ratified-behavior test for owner ruling D12. No test owed: comments only.)*
+  name them. No test owed: comments only. Its test-summary addition is F23's; see F23's L2 headline.)*
   `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)` in
   `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
   `ChapterComments` DbSet (`DatePosted DESC`); (2) fetch roots-on-page + direct replies in one query,

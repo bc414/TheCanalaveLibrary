@@ -29,7 +29,10 @@ public interface IActiveUserContext
     /// Valid for **server-side authorization** in write services (see
     /// <c>identity-and-authorization.md</c> §"Active-User Context") and for deciding when a read path calls
     /// <c>IgnoreQueryFilters</c>. UI role gating uses <c>&lt;AuthorizeView Roles="…"&gt;</c>
-    /// instead (SharedUI never injects this interface). <c>IsInRole</c> is literal — Admin does NOT
+    /// instead: SharedUI components resolve identity from the <c>AuthenticationState</c> cascade, and
+    /// only the two ratified exceptions inject this interface, for the viewer's id
+    /// (<c>UserActivityTracker</c>, <c>SettingsPage</c>; identity-and-authorization.md §"The two
+    /// identity sources — which to use where"). <c>IsInRole</c> is literal — Admin does NOT
     /// inherit Moderator; list both roles wherever either should be accepted.
     /// </summary>
     bool IsModerator { get; }

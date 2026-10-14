@@ -114,7 +114,7 @@ else
                                            OnStateSaved="HandleInteractionStateSaved" />
             }
 
-            @* Tag chips — sprite-resolved, read-only (no OnRemove); includes character chips *@
+            @* Tag chips — raw SpriteIdentifier resolved by TagChip at render time, read-only (no OnRemove); includes character chips *@
             @if (Story.Tags.Count > 0)
             {
                 <div class="flex flex-wrap gap-1.5">

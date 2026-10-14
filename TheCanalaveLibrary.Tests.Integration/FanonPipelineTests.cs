@@ -132,6 +132,65 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
         group.StoryCount.Should().Be(2);
     }
 
+    /// <summary>
+    /// The public /fanon hub's "N stories" (WU-DocCorrections review fixes, 2026-10-14). The reach read
+    /// counted the bare <c>StoryTags</c>/<c>StoryCharacters</c> collections, which carry no query filter,
+    /// so drafts, pending and rejected stories and taken-down stories all counted. Both axes, each with
+    /// a published E story, a published M story (counted: the viewer's mature-off setting does not trim
+    /// a public count), the viewer's own draft, another author's pending and rejected stories, and a
+    /// taken-down story.
+    /// </summary>
+    [Fact]
+    public async Task GetEstablishedFanonTagsAsync_ReachCountsOnlyPublishedLiveStories_OfEveryRating()
+    {
+        int flatTargetId;
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            string s = Guid.NewGuid().ToString("N")[..8];
+            Tag flatBase = new() { TagName = $"Region-{s}", TagTypeId = TagTypeEnum.Setting, AllowCustomName = true };
+            Tag flatTarget = new() { TagName = $"Orre-{s}", TagTypeId = TagTypeEnum.Setting, IsFanon = true, ParentTag = flatBase };
+            db.Tags.AddRange(flatBase, flatTarget);
+            await db.SaveChangesAsync();
+            flatTargetId = flatTarget.TagId;
+        }
+
+        List<int> storyIds =
+        [
+            await SeedStoryAsync(_authorB),
+            await SeedStoryAsync(_authorB, rating: Rating.M, status: StoryStatusEnum.Completed),
+            await SeedStoryAsync(_authorA, status: StoryStatusEnum.Draft),
+            await SeedStoryAsync(_authorB, status: StoryStatusEnum.PendingApproval),
+            await SeedStoryAsync(_authorB, status: StoryStatusEnum.Rejected),
+        ];
+        int takenDownId = await SeedStoryAsync(_authorB);
+        storyIds.Add(takenDownId);
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            foreach (int storyId in storyIds)
+            {
+                db.StoryCharacters.Add(new StoryCharacter
+                    { StoryId = storyId, CharacterTagId = _targetTagId, Priority = TagPriority.Supporting });
+                db.StoryTags.Add(new StoryTag { StoryId = storyId, TagId = flatTargetId, Priority = TagPriority.Supporting });
+            }
+            await db.SaveChangesAsync();
+            await db.Stories.Where(st => st.StoryId == takenDownId)
+                .ExecuteUpdateAsync(u => u.SetProperty(st => st.IsTakenDown, true));
+        }
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorA, showMatureContent: false));
+        using IServiceScope readScope = NewScope();
+        IFanonReadService fanon = readScope.ServiceProvider.GetRequiredService<IFanonReadService>();
+
+        IReadOnlyList<FanonTagDto> established = await fanon.GetEstablishedFanonTagsAsync();
+
+        established.Should().ContainSingle(t => t.Tag.TagId == _targetTagId)
+            .Which.StoryReach.Should().Be(2, "only the two published, live stories are public reach (character axis)");
+        established.Should().ContainSingle(t => t.Tag.TagId == flatTargetId)
+            .Which.StoryReach.Should().Be(2, "only the two published, live stories are public reach (flat axis)");
+    }
+
     [Fact]
     public async Task GetGroupStoriesAsync_GatesListButKeepsCompleteCount()
     {

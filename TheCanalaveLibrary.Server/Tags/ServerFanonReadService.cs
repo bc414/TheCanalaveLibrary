@@ -10,16 +10,18 @@ namespace TheCanalaveLibrary.Server;
 /// every other axis reads <c>StoryTags</c> of that type.
 ///
 /// <para><b>Access-gating:</b> reach counts are COMPLETE for every viewer (an OC name and a
-/// count are not mature content) — group queries bypass the ContentRating filter; the expanded
-/// story list keeps it active and pairs the visible rows with the complete count for the
-/// count-line disclosure. <c>IsTakenDown</c> stays active everywhere: these queries reach
-/// <c>Story</c> through the <c>sc.Story</c>/<c>st.Story</c> navigations, and EF applies a named
-/// filter on navigation access too. Public reach counts draw on published stories only (drafts never
-/// leak), through an explicit 2..7 status window. That window is load-bearing: the
-/// <c>StoryStatus</c> named filter already hides other users' Draft/PendingApproval/Rejected
-/// stories, but it lets an author see their own, so without the window a viewing author's own
-/// drafts would feed the public dashboard. The author-facing adoption pages include the author's
-/// own drafts on purpose (personal plane).</para>
+/// count are not mature content) — the group queries and the established-tag reach bypass the
+/// ContentRating filter; the expanded story list keeps it active and pairs the visible rows with the
+/// complete count for the count-line disclosure. <c>IsTakenDown</c> stays active everywhere: every
+/// story count or list here either reads <c>Stories</c> directly or reaches <c>Story</c> through the
+/// <c>sc.Story</c>/<c>st.Story</c> navigations, and EF applies a named filter on navigation access
+/// too. The junction rows have no filter of their own, so a count that never navigates to
+/// <c>Story</c> would escape it. Public reach counts (the dashboard groups and the /fanon hub's
+/// established tags) draw on published stories only (drafts never leak), through an explicit 2..7
+/// status window. That window is load-bearing: the <c>StoryStatus</c> named filter already hides
+/// other users' Draft/PendingApproval/Rejected stories, but it lets an author see their own, so
+/// without the window a viewing author's own drafts would feed the public counts. The author-facing
+/// adoption pages include the author's own drafts on purpose (personal plane).</para>
 /// </summary>
 public class ServerFanonReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -149,7 +151,12 @@ public class ServerFanonReadService(
     public async Task<IReadOnlyList<FanonTagDto>> GetEstablishedFanonTagsAsync()
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        // Public reach, the same rule as GroupQuery. StoryTag and StoryCharacter carry no query filter
+        // of their own, so a bare t.StoryTags.Count would count drafts and taken-down stories; the
+        // count must reach Story through st.Story/sc.Story (IsTakenDown active) and stay inside the
+        // 2..7 window (the StoryStatus filter's author exemption — see the class doc).
         var rows = await readDb.Tags
+            .IgnoreQueryFilters(["ContentRating"])
             .Where(t => t.IsFanon)
             .Select(t => new
             {
@@ -162,7 +169,10 @@ public class ServerFanonReadService(
                     ParentTagId = t.ParentTagId,
                     ParentTagName = t.ParentTag != null ? t.ParentTag.TagName : null
                 },
-                Reach = t.StoryTags.Count + t.StoryCharacters.Count
+                Reach = t.StoryTags.Count(st => st.Story.StoryStatusId >= StoryStatusEnum.InProgress
+                            && st.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)
+                        + t.StoryCharacters.Count(sc => sc.Story.StoryStatusId >= StoryStatusEnum.InProgress
+                            && sc.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)
             })
             .OrderByDescending(x => x.Reach)
             .ThenBy(x => x.Chip.TagName)
