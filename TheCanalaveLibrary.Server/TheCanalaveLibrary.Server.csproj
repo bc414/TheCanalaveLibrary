@@ -60,7 +60,7 @@
              License (free below the small-business threshold, no key). Dependabot is told to
              ignore the major bump (.github/dependabot.yml). See security.md "Upload Content
              Pipeline". -->
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="4.1.2" />
         <!-- EPUB import reader (WU38d): battle-tested against wild files (AO3/Calibre/FicHub) —
              we generate clean EPUBs ourselves (zero-dep ZipArchive in EpubWriter) but parse
              messy ones with this. Free OSS (Unlicense). -->
