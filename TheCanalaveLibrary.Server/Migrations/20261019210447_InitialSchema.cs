@@ -93,7 +93,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                     external_platform_id = table.Column<short>(type: "smallint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    domain_pattern = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true)
+                    domain_pattern = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    placement_instructions = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    supports_verification = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -175,7 +177,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     total_users = table.Column<int>(type: "integer", nullable: false),
                     total_stories = table.Column<int>(type: "integer", nullable: false),
                     total_words = table.Column<long>(type: "bigint", nullable: false),
-                    new_users = table.Column<int>(type: "integer", nullable: true),
+                    new_users = table.Column<int>(type: "integer", nullable: false),
                     new_stories = table.Column<int>(type: "integer", nullable: false),
                     new_chapters = table.Column<int>(type: "integer", nullable: false),
                     new_words = table.Column<long>(type: "bigint", nullable: false),
@@ -328,11 +330,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     tag_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     tag_type_id = table.Column<short>(type: "smallint", nullable: false),
                     is_fanon = table.Column<bool>(type: "boolean", nullable: false),
-                    description = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     parent_tag_id = table.Column<int>(type: "integer", nullable: true),
-                    sprite_identifier = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    allow_oc_details = table.Column<bool>(type: "boolean", nullable: false),
-                    allow_setting_details = table.Column<bool>(type: "boolean", nullable: false)
+                    sprite_identifier = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    allow_custom_name = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -435,13 +436,16 @@ namespace TheCanalaveLibrary.Server.Migrations
                     account_status = table.Column<short>(type: "smallint", nullable: false),
                     suspended_until_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     active_report_count = table.Column<int>(type: "integer", nullable: false),
+                    approved_story_submissions = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    can_auto_approve = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     created_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     last_active_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    prefers_data_saver_mode = table.Column<bool>(type: "boolean", nullable: false),
+                    email_on_new_message = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     prefers_animated_sprites = table.Column<bool>(type: "boolean", nullable: false),
                     allow_discovery_from_hidden_favorites = table.Column<bool>(type: "boolean", nullable: false),
                     pinned_story_id = table.Column<int>(type: "integer", nullable: true),
                     theme_id = table.Column<int>(type: "integer", nullable: false),
+                    verification_code = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
                     user_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     normalized_user_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
@@ -463,6 +467,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_asp_net_users", x => x.id);
+                    table.CheckConstraint("ck_users_suspension", "account_status = 2 OR suspended_until_utc IS NULL");
                     table.ForeignKey(
                         name: "fk_asp_net_users_themes_theme_id",
                         column: x => x.theme_id,
@@ -528,6 +533,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     comment_text = table.Column<string>(type: "text", nullable: false),
                     like_count = table.Column<int>(type: "integer", nullable: false),
                     active_report_count = table.Column<int>(type: "integer", nullable: false),
+                    date_edited = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     is_taken_down = table.Column<bool>(type: "boolean", nullable: false),
                     takedown_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     takedown_reason = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
@@ -555,7 +561,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     poll_id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    owner_id = table.Column<int>(type: "integer", nullable: false),
+                    owner_id = table.Column<int>(type: "integer", nullable: true),
                     poll_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     description = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
                     date_opened = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
@@ -569,12 +575,14 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_base_polls", x => x.poll_id);
+                    table.UniqueConstraint("ak_base_polls_poll_id_allow_multiple", x => new { x.poll_id, x.allow_multiple });
+                    table.CheckConstraint("ck_base_polls_dates", "date_closed IS NULL OR date_closed >= date_opened");
                     table.ForeignKey(
                         name: "fk_base_polls_asp_net_users_owner_id",
                         column: x => x.owner_id,
                         principalTable: "AspNetUsers",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -584,6 +592,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     conversation_id = table.Column<int>(type: "integer", nullable: false),
                     user_id = table.Column<int>(type: "integer", nullable: false),
                     last_read_timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    last_notified_timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     is_archived = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
@@ -626,6 +635,42 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "fanon_links",
+                columns: table => new
+                {
+                    fanon_link_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    normalized_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    base_tag_id = table.Column<int>(type: "integer", nullable: false),
+                    target_tag_id = table.Column<int>(type: "integer", nullable: false),
+                    linked_by_user_id = table.Column<int>(type: "integer", nullable: true),
+                    date_linked = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_fanon_links", x => x.fanon_link_id);
+                    table.CheckConstraint("ck_fanon_links_no_self", "base_tag_id <> target_tag_id");
+                    table.ForeignKey(
+                        name: "fk_fanon_links_tags_base_tag_id",
+                        column: x => x.base_tag_id,
+                        principalTable: "tags",
+                        principalColumn: "tag_id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_fanon_links_tags_target_tag_id",
+                        column: x => x.target_tag_id,
+                        principalTable: "tags",
+                        principalColumn: "tag_id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_fanon_links_users_linked_by_user_id",
+                        column: x => x.linked_by_user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "followed_users",
                 columns: table => new
                 {
@@ -637,6 +682,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_followed_users", x => new { x.user_id, x.followed_user_id });
+                    table.CheckConstraint("ck_followed_users_no_self", "user_id <> followed_user_id");
                     table.ForeignKey(
                         name: "fk_followed_users_asp_net_users_followed_user_id",
                         column: x => x.followed_user_id,
@@ -684,7 +730,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     recipient_user_id = table.Column<int>(type: "integer", nullable: false),
                     notification_type_id = table.Column<short>(type: "smallint", nullable: false),
                     source_user_id = table.Column<int>(type: "integer", nullable: true),
-                    related_entity_id = table.Column<int>(type: "integer", nullable: false),
+                    related_entity_id = table.Column<long>(type: "bigint", nullable: false),
                     is_read = table.Column<bool>(type: "boolean", nullable: false),
                     date_created = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
@@ -754,7 +800,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                     moderator_user_id = table.Column<int>(type: "integer", nullable: true),
                     action_taken = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
                     date_reported = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    date_resolved = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    date_resolved = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    reported_user_id = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -762,6 +809,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                     table.ForeignKey(
                         name: "fk_reports_asp_net_users_moderator_user_id",
                         column: x => x.moderator_user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_reports_asp_net_users_reported_user_id",
+                        column: x => x.reported_user_id,
                         principalTable: "AspNetUsers",
                         principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
@@ -840,6 +893,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     granted_by_user_id = table.Column<int>(type: "integer", nullable: true),
                     source = table.Column<short>(type: "smallint", nullable: false),
                     status = table.Column<short>(type: "smallint", nullable: false),
+                    max_story_rating = table.Column<short>(type: "smallint", nullable: false),
                     payment_id = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
                     granted_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
@@ -870,7 +924,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                     rating = table.Column<short>(type: "smallint", nullable: false),
                     story_status_id = table.Column<short>(type: "smallint", nullable: false),
                     word_count = table.Column<int>(type: "integer", nullable: false),
-                    published_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    published_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    submitted_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     last_updated_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     original_published_date = table.Column<DateOnly>(type: "date", nullable: true),
                     original_last_updated_date = table.Column<DateOnly>(type: "date", nullable: true),
@@ -882,6 +937,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_stories", x => x.story_id);
+                    table.CheckConstraint("ck_stories_published_date", "story_status_id NOT BETWEEN 2 AND 7 OR published_date IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_stories_asp_net_users_author_id",
                         column: x => x.author_id,
@@ -897,13 +953,40 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "tag_adoption_states",
+                columns: table => new
+                {
+                    user_id = table.Column<int>(type: "integer", nullable: false),
+                    target_tag_id = table.Column<int>(type: "integer", nullable: false),
+                    date_notified = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    is_dismissed = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tag_adoption_states", x => new { x.user_id, x.target_tag_id });
+                    table.ForeignKey(
+                        name: "fk_tag_adoption_states_tags_target_tag_id",
+                        column: x => x.target_tag_id,
+                        principalTable: "tags",
+                        principalColumn: "tag_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_tag_adoption_states_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "user_badges",
                 columns: table => new
                 {
                     user_id = table.Column<int>(type: "integer", nullable: false),
                     badge_key = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     date_earned = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    display_order = table.Column<int>(type: "integer", nullable: false)
+                    display_order = table.Column<int>(type: "integer", nullable: false),
+                    earned_count = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -923,32 +1006,62 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "user_custom_filters",
+                name: "user_content_reveals",
                 columns: table => new
                 {
-                    user_custom_filter_id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     user_id = table.Column<int>(type: "integer", nullable: false),
-                    search_mode_key = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    filter_entity_type = table.Column<short>(type: "smallint", nullable: false),
+                    entity_type = table.Column<short>(type: "smallint", nullable: false),
                     entity_id = table.Column<int>(type: "integer", nullable: false),
-                    include = table.Column<bool>(type: "boolean", nullable: false)
+                    date_revealed = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_user_custom_filters", x => x.user_custom_filter_id);
+                    table.PrimaryKey("pk_user_content_reveals", x => new { x.user_id, x.entity_type, x.entity_id });
                     table.ForeignKey(
-                        name: "fk_user_custom_filters_search_modes_search_mode_key",
-                        column: x => x.search_mode_key,
-                        principalTable: "search_modes",
-                        principalColumn: "search_mode_key",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_user_custom_filters_users_user_id",
+                        name: "fk_user_content_reveals_users_user_id",
                         column: x => x.user_id,
                         principalTable: "AspNetUsers",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "user_external_identities",
+                columns: table => new
+                {
+                    user_external_identity_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    user_id = table.Column<int>(type: "integer", nullable: false),
+                    external_platform_id = table.Column<short>(type: "smallint", nullable: false),
+                    profile_url = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: false),
+                    handle = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    verification_status = table.Column<short>(type: "smallint", nullable: false),
+                    date_requested = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    date_reviewed = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    reviewed_by_moderator_user_id = table.Column<int>(type: "integer", nullable: true),
+                    rejection_reason = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_user_external_identities", x => x.user_external_identity_id);
+                    table.ForeignKey(
+                        name: "fk_user_external_identities_asp_net_users_reviewed_by_moderator_",
+                        column: x => x.reviewed_by_moderator_user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_user_external_identities_asp_net_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_user_external_identities_external_platforms_external_platfo",
+                        column: x => x.external_platform_id,
+                        principalTable: "external_platforms",
+                        principalColumn: "external_platform_id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -957,8 +1070,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     user_id = table.Column<int>(type: "integer", nullable: false),
                     notification_type_id = table.Column<short>(type: "smallint", nullable: false),
-                    email_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    collapsed = table.Column<bool>(type: "boolean", nullable: false)
+                    email_enabled = table.Column<bool>(type: "boolean", nullable: true),
+                    collapsed = table.Column<bool>(type: "boolean", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1037,8 +1150,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "user_story_interaction_filter_settings",
                 columns: table => new
                 {
-                    user_story_interaction_filter_setting_id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     user_id = table.Column<int>(type: "integer", nullable: false),
                     search_mode_key = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     user_story_interaction_filter_key = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
@@ -1046,7 +1157,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_user_story_interaction_filter_settings", x => x.user_story_interaction_filter_setting_id);
+                    table.PrimaryKey("pk_user_story_interaction_filter_settings", x => new { x.user_id, x.search_mode_key, x.user_story_interaction_filter_key });
                     table.ForeignKey(
                         name: "fk_user_story_interaction_filter_settings_search_modes_search_",
                         column: x => x.search_mode_key,
@@ -1079,6 +1190,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_vouches", x => new { x.vouching_user_id, x.vouched_user_id });
+                    table.CheckConstraint("ck_vouches_no_self", "vouching_user_id <> vouched_user_id");
                     table.ForeignKey(
                         name: "fk_vouches_asp_net_users_vouched_user_id",
                         column: x => x.vouched_user_id,
@@ -1118,6 +1230,29 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "site_blog_posts",
+                columns: table => new
+                {
+                    blog_post_id = table.Column<int>(type: "integer", nullable: false),
+                    is_published = table.Column<bool>(type: "boolean", nullable: false),
+                    date_created = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    last_updated_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    rating = table.Column<short>(type: "smallint", nullable: false),
+                    notify_all_users = table.Column<bool>(type: "boolean", nullable: false),
+                    notified_at_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_site_blog_posts", x => x.blog_post_id);
+                    table.ForeignKey(
+                        name: "fk_site_blog_posts_base_blog_posts_blog_post_id",
+                        column: x => x.blog_post_id,
+                        principalTable: "base_blog_posts",
+                        principalColumn: "blog_post_id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "blog_post_comments",
                 columns: table => new
                 {
@@ -1139,7 +1274,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         column: x => x.blog_post_id,
                         principalTable: "base_blog_posts",
                         principalColumn: "blog_post_id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1206,7 +1341,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         column: x => x.blog_post_id,
                         principalTable: "base_blog_posts",
                         principalColumn: "blog_post_id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_blog_post_polls_base_polls_poll_id",
                         column: x => x.poll_id,
@@ -1228,6 +1363,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_poll_options", x => x.poll_option_id);
+                    table.UniqueConstraint("ak_poll_options_poll_id_poll_option_id", x => new { x.poll_id, x.poll_option_id });
                     table.ForeignKey(
                         name: "fk_poll_options_polls_poll_id",
                         column: x => x.poll_id,
@@ -1264,7 +1400,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     last_updated_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     rating = table.Column<short>(type: "smallint", nullable: false),
                     has_spoilers = table.Column<bool>(type: "boolean", nullable: false),
-                    story_id = table.Column<int>(type: "integer", nullable: true),
                     group_id = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
@@ -1281,7 +1416,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         column: x => x.group_id,
                         principalTable: "groups",
                         principalColumn: "group_id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1306,7 +1441,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         column: x => x.group_id,
                         principalTable: "groups",
                         principalColumn: "group_id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1324,6 +1459,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_group_folders", x => x.group_folder_id);
+                    table.CheckConstraint("ck_group_folders_no_self", "parent_folder_id IS NULL OR parent_folder_id <> group_folder_id");
+                    table.ForeignKey(
+                        name: "fk_group_folders_group_folders_parent_folder_id",
+                        column: x => x.parent_folder_id,
+                        principalTable: "group_folders",
+                        principalColumn: "group_folder_id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "fk_group_folders_groups_group_id",
                         column: x => x.group_id,
@@ -1542,7 +1684,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                     active_report_count = table.Column<int>(type: "integer", nullable: false),
                     is_taken_down = table.Column<bool>(type: "boolean", nullable: false),
                     takedown_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    takedown_reason = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
+                    takedown_reason = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    revision_request_note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1593,41 +1736,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "setting_details",
-                columns: table => new
-                {
-                    setting_detail_id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    story_id = table.Column<int>(type: "integer", nullable: false),
-                    base_tag_id = table.Column<int>(type: "integer", nullable: false),
-                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    description = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_setting_details", x => x.setting_detail_id);
-                    table.ForeignKey(
-                        name: "fk_setting_details_stories_story_id",
-                        column: x => x.story_id,
-                        principalTable: "stories",
-                        principalColumn: "story_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_setting_details_tags_base_tag_id",
-                        column: x => x.base_tag_id,
-                        principalTable: "tags",
-                        principalColumn: "tag_id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "story_acknowledgments",
                 columns: table => new
                 {
                     story_id = table.Column<int>(type: "integer", nullable: false),
                     acknowledged_user_id = table.Column<int>(type: "integer", nullable: false),
                     acknowledgment_role_id = table.Column<short>(type: "smallint", nullable: false),
-                    date_acknowledged = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                    status_id = table.Column<short>(type: "smallint", nullable: false),
+                    date_acknowledged = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    date_responded = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1666,6 +1783,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_story_arcs", x => x.story_arc_id);
+                    table.CheckConstraint("ck_story_arcs_bounds", "start_chapter_number <= end_chapter_number");
                     table.ForeignKey(
                         name: "fk_story_arcs_stories_story_id",
                         column: x => x.story_id,
@@ -1705,8 +1823,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                     character_tag_id = table.Column<int>(type: "integer", nullable: false),
                     priority = table.Column<short>(type: "smallint", nullable: false),
                     is_oc = table.Column<bool>(type: "boolean", nullable: false),
-                    oc_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    oc_bio = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true)
+                    custom_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    nuance = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1755,7 +1873,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                     external_platform_id = table.Column<short>(type: "smallint", nullable: false),
                     url = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: false),
                     verification_status = table.Column<short>(type: "smallint", nullable: false),
-                    date_added = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                    date_added = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    date_verification_requested = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    rejection_reason = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1787,6 +1907,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_story_lineages", x => new { x.source_story_id, x.target_story_id, x.relationship_type_id });
+                    table.CheckConstraint("ck_story_lineages_no_self", "source_story_id <> target_story_id");
                     table.ForeignKey(
                         name: "fk_story_lineages_stories_source_story_id",
                         column: x => x.source_story_id,
@@ -1834,7 +1955,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     story_id = table.Column<int>(type: "integer", nullable: false),
                     tag_id = table.Column<int>(type: "integer", nullable: false),
-                    priority = table.Column<short>(type: "smallint", nullable: false)
+                    priority = table.Column<short>(type: "smallint", nullable: false),
+                    custom_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    nuance = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1854,28 +1977,70 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "user_story_interactions",
+                columns: table => new
+                {
+                    user_id = table.Column<int>(type: "integer", nullable: false),
+                    story_id = table.Column<int>(type: "integer", nullable: false),
+                    has_started = table.Column<bool>(type: "boolean", nullable: false),
+                    is_completed = table.Column<bool>(type: "boolean", nullable: false),
+                    is_favorite = table.Column<bool>(type: "boolean", nullable: false),
+                    is_hidden_favorite = table.Column<bool>(type: "boolean", nullable: false),
+                    is_followed = table.Column<bool>(type: "boolean", nullable: false),
+                    is_read_it_later = table.Column<bool>(type: "boolean", nullable: false),
+                    is_ignored = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_user_story_interactions", x => new { x.user_id, x.story_id });
+                    table.ForeignKey(
+                        name: "fk_user_story_interactions_stories_story_id",
+                        column: x => x.story_id,
+                        principalTable: "stories",
+                        principalColumn: "story_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_user_story_interactions_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "poll_votes",
                 columns: table => new
                 {
+                    poll_vote_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    poll_id = table.Column<int>(type: "integer", nullable: false),
                     poll_option_id = table.Column<int>(type: "integer", nullable: false),
-                    user_id = table.Column<int>(type: "integer", nullable: false),
+                    user_id = table.Column<int>(type: "integer", nullable: true),
+                    allow_multiple = table.Column<bool>(type: "boolean", nullable: false),
+                    single_choice_poll_id = table.Column<int>(type: "integer", nullable: true, computedColumnSql: "CASE WHEN allow_multiple THEN NULL ELSE poll_id END", stored: true),
                     is_anonymous = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_poll_votes", x => new { x.poll_option_id, x.user_id });
+                    table.PrimaryKey("pk_poll_votes", x => x.poll_vote_id);
                     table.ForeignKey(
-                        name: "fk_poll_votes_poll_options_poll_option_id",
-                        column: x => x.poll_option_id,
+                        name: "fk_poll_votes_base_polls_poll_id_allow_multiple",
+                        columns: x => new { x.poll_id, x.allow_multiple },
+                        principalTable: "base_polls",
+                        principalColumns: new[] { "poll_id", "allow_multiple" },
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_poll_votes_poll_options_poll_id_poll_option_id",
+                        columns: x => new { x.poll_id, x.poll_option_id },
                         principalTable: "poll_options",
-                        principalColumn: "poll_option_id",
+                        principalColumns: new[] { "poll_id", "poll_option_id" },
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "fk_poll_votes_users_user_id",
                         column: x => x.user_id,
                         principalTable: "AspNetUsers",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -2014,43 +2179,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "user_story_interactions",
-                columns: table => new
-                {
-                    user_id = table.Column<int>(type: "integer", nullable: false),
-                    story_id = table.Column<int>(type: "integer", nullable: false),
-                    has_started = table.Column<bool>(type: "boolean", nullable: false),
-                    is_completed = table.Column<bool>(type: "boolean", nullable: false),
-                    is_favorite = table.Column<bool>(type: "boolean", nullable: false),
-                    is_hidden_favorite = table.Column<bool>(type: "boolean", nullable: false),
-                    is_followed = table.Column<bool>(type: "boolean", nullable: false),
-                    is_read_it_later = table.Column<bool>(type: "boolean", nullable: false),
-                    is_ignored = table.Column<bool>(type: "boolean", nullable: false),
-                    recommendation_id = table.Column<int>(type: "integer", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_user_story_interactions", x => new { x.user_id, x.story_id });
-                    table.ForeignKey(
-                        name: "fk_user_story_interactions_recommendations_recommendation_id",
-                        column: x => x.recommendation_id,
-                        principalTable: "recommendations",
-                        principalColumn: "recommendation_id");
-                    table.ForeignKey(
-                        name: "fk_user_story_interactions_stories_story_id",
-                        column: x => x.story_id,
-                        principalTable: "stories",
-                        principalColumn: "story_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_user_story_interactions_users_user_id",
-                        column: x => x.user_id,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "story_character_pairing_members",
                 columns: table => new
                 {
@@ -2158,7 +2286,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     word_count = table.Column<int>(type: "integer", nullable: false),
                     sort_order = table.Column<int>(type: "integer", nullable: false),
                     rating = table.Column<short>(type: "smallint", nullable: true),
-                    publish_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    publish_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     original_publish_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
@@ -2183,11 +2311,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                     title = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     primary_content_id = table.Column<long>(type: "bigint", nullable: true),
                     is_published = table.Column<bool>(type: "boolean", nullable: false),
+                    first_published_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     version_count = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_chapters", x => x.chapter_id);
+                    table.CheckConstraint("ck_chapters_first_published_date", "NOT is_published OR first_published_date IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_chapters_chapter_contents_primary_content_id",
                         column: x => x.primary_content_id,
@@ -2247,8 +2377,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     { (short)1, "Beta Reader" },
                     { (short)2, "Planner" },
                     { (short)3, "Cover Artist" },
-                    { (short)4, "Editor" },
-                    { (short)5, "Inspiration" }
+                    { (short)4, "Editor" }
                 });
 
             migrationBuilder.InsertData(
@@ -2260,22 +2389,21 @@ namespace TheCanalaveLibrary.Server.Migrations
                     { "Artist", "Created cover art for others' stories.", "Artist", "icons/badges/artist.png", 5 },
                     { "BetaReader", "Acknowledged as a beta reader on others' stories.", "Beta Reader", "icons/badges/beta.png", 1 },
                     { "Patron", "Supported the site through Community Spotlight.", "Patron", "icons/badges/patron.png", 2 },
-                    { "Recommender", "10+ readers followed your recommendation and found the story genuinely helpful.", "Recommender", "icons/badges/recommender.png", 3 },
-                    { "RecommenderSilver", "50+ readers followed your recommendation and found the story genuinely helpful.", "Recommender (Silver)", "icons/badges/recommender_silver.png", 30 }
+                    { "Recommender", "A reader followed your recommendation and found the story genuinely helpful.", "Recommender", "icons/badges/recommender.png", 3 }
                 });
 
             migrationBuilder.InsertData(
                 table: "external_platforms",
-                columns: new[] { "external_platform_id", "domain_pattern", "name" },
+                columns: new[] { "external_platform_id", "domain_pattern", "name", "placement_instructions", "supports_verification" },
                 values: new object[,]
                 {
-                    { (short)1, "archiveofourown.org", "Archive of Our Own" },
-                    { (short)2, "fanfiction.net", "FanFiction.Net" },
-                    { (short)3, "wattpad.com", "Wattpad" },
-                    { (short)4, "spacebattles.com", "SpaceBattles" },
-                    { (short)5, "sufficientvelocity.com", "Sufficient Velocity" },
-                    { (short)6, "royalroad.com", "Royal Road" },
-                    { (short)7, null, "Other" }
+                    { (short)1, "archiveofourown.org", "Archive of Our Own", "Add the code anywhere in your AO3 profile's \"About Me\" section (My Profile → Edit → About Me).", true },
+                    { (short)2, "fanfiction.net", "FanFiction.Net", "Add the code anywhere in your FFN profile bio, as plain text — FFN doesn't allow hyperlinks in profiles.", true },
+                    { (short)3, "wattpad.com", "Wattpad", "Add the code anywhere in your Wattpad profile bio.", true },
+                    { (short)4, "spacebattles.com", "SpaceBattles", "Add the code to your SpaceBattles profile's \"About\" field or forum signature.", true },
+                    { (short)5, "sufficientvelocity.com", "Sufficient Velocity", "Add the code to your Sufficient Velocity profile's \"About\" field or forum signature.", true },
+                    { (short)6, "royalroad.com", "Royal Road", "Add the code anywhere in your Royal Road profile bio.", true },
+                    { (short)7, null, "Other", null, false }
                 });
 
             migrationBuilder.InsertData(
@@ -2299,10 +2427,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                 columns: new[] { "recommendation_status_id", "description", "status_name" },
                 values: new object[,]
                 {
-                    { (short)1, "Submitted by user, awaiting author review.", "Pending Approval" },
+                    { (short)1, "The story author requested a revision; hidden until the recommender edits it.", "Needs Revision" },
                     { (short)2, "Publicly visible.", "Approved" },
-                    { (short)3, "Rejected by author, not visible.", "Rejected" },
-                    { (short)4, "An approved recommendation that was reported and is under review.", "Under Review" }
+                    { (short)3, "Removed by the story author, not visible; blocked until the author unblocks it.", "Rejected" }
                 });
 
             migrationBuilder.InsertData(
@@ -2349,6 +2476,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 columns: new[] { "setting_key", "value" },
                 values: new object[,]
                 {
+                    { "Fanon.MinAuthorReach", "2" },
                     { "Spotlight.BlockDurationDays", "7" },
                     { "Spotlight.BookingHorizonDays", "60" },
                     { "Spotlight.CooldownDays", "90" },
@@ -2445,7 +2573,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                     { (short)23, false, true, "A recommendation on your story was designated as a 'Hidden Gem'.", "Hidden Gem", (short)2, "HiddenGem" },
                     { (short)24, false, true, "You received a new comment on one of your story chapters.", "New Story Comment", (short)2, "NewStoryComment" },
                     { (short)25, false, false, "Your story was added to a group's collection.", "Story Added to Group", (short)2, "YourStoryAddedToGroup" },
-                    { (short)26, false, false, "One of your OC tags matches a new fanon tag.", "Tag Update Suggestion", (short)2, "TagUpdateSuggestion" },
+                    { (short)26, false, false, "A name you used in a story matches a new official tag.", "Tag adoption suggested", (short)2, "TagUpdateSuggestion" },
+                    { (short)27, false, true, "A recommendation you sent back for revision was edited and is live again.", "Recommendation Revised", (short)2, "RecommendationRevised" },
                     { (short)30, false, true, "A new user is following you.", "New Profile Follower", (short)3, "NewFollowerOnYou" },
                     { (short)31, false, true, "You received a new comment on your profile.", "New Profile Comment", (short)3, "NewCommentOnYourProfile" },
                     { (short)32, false, false, "A user you follow vouched for you.", "New Vouch", (short)3, "NewVouchOnYou" },
@@ -2454,17 +2583,23 @@ namespace TheCanalaveLibrary.Server.Migrations
                     { (short)40, false, true, "An author approved your recommendation.", "Recommendation Approved", (short)4, "RecommendationApproved" },
                     { (short)41, false, true, "An author highlighted your recommendation.", "Recommendation Highlighted", (short)4, "RecommendationHighlighted" },
                     { (short)42, false, true, "A user marked your recommendation as helpful.", "Successful Recommendation", (short)4, "SuccessfulRec" },
+                    { (short)43, false, true, "An author asked you to revise your recommendation.", "Revision Requested", (short)4, "RecommendationRevisionRequested" },
                     { (short)50, false, true, "An author wants to link their story to yours.", "New Story Lineage Request", (short)5, "StoryLineageRequested" },
                     { (short)51, false, true, "Your request to link to another story was approved.", "Story Lineage Approved", (short)5, "StoryLineageApproved" },
                     { (short)52, false, true, "You were acknowledged as a contributor on a new story.", "New Acknowledgment", (short)5, "NewStoryAcknowledgement" },
                     { (short)60, false, false, "A new story was added to a group you're in.", "New Group Story", (short)6, "NewGroupStory" },
                     { (short)61, false, false, "A new blog post was made in a group you're in.", "New Group Blog Post", (short)6, "NewGroupBlogPost" },
+                    { (short)62, false, true, "A site moderator made you an admin of a group that had none.", "Group Admin Assigned", (short)6, "GroupAdminAssigned" },
                     { (short)70, false, true, "Your content was removed for a ToS violation.", "Content Removed", (short)7, "ContentRemoved" },
                     { (short)71, false, true, "Your story submission was rejected.", "Story Rejected", (short)7, "StoryRejected" },
                     { (short)72, false, true, "You have received an official warning.", "Account Warning", (short)7, "AccountWarning" },
                     { (short)73, false, true, "Your account has been temporarily suspended.", "Account Suspended", (short)7, "AccountSuspended" },
                     { (short)74, false, true, "Your account has been permanently banned.", "Account Banned", (short)7, "AccountBanned" },
                     { (short)75, false, true, "Your story submission was approved.", "Story Approved", (short)2, "StoryApproved" },
+                    { (short)76, false, false, "A moderator confirmed your external platform account.", "External Account Verified", (short)3, "ExternalAccountVerified" },
+                    { (short)77, false, true, "A moderator could not confirm your external platform account.", "External Account Not Verified", (short)3, "ExternalAccountRejected" },
+                    { (short)78, false, false, "A moderator confirmed one of your \"also posted on\" links.", "External Link Verified", (short)2, "ExternalLinkVerified" },
+                    { (short)79, false, true, "A moderator could not confirm one of your \"also posted on\" links.", "External Link Not Verified", (short)2, "ExternalLinkRejected" },
                     { (short)80, false, false, "Thank you, we have received your report.", "Report Received", (short)8, "ReportReceived" },
                     { (short)81, false, false, "Your report has been resolved and action was taken.", "Report Resolved (Action Taken)", (short)8, "ReportResolved" },
                     { (short)82, false, false, "Your report was reviewed, but no action was deemed necessary.", "Report Resolved (No Action)", (short)8, "ReportResolvedNoAction" },
@@ -2515,6 +2650,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_asp_net_users_theme_id",
                 table: "AspNetUsers",
                 column: "theme_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_asp_net_users_verification_code",
+                table: "AspNetUsers",
+                column: "verification_code",
+                unique: true,
+                filter: "\"verification_code\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_users_created_utc",
@@ -2670,6 +2812,27 @@ namespace TheCanalaveLibrary.Server.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_fanon_links_base_tag_id",
+                table: "fanon_links",
+                column: "base_tag_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_fanon_links_linked_by_user_id",
+                table: "fanon_links",
+                column: "linked_by_user_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_fanon_links_normalized_name_base_tag_id",
+                table: "fanon_links",
+                columns: new[] { "normalized_name", "base_tag_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_fanon_links_target_tag_id",
+                table: "fanon_links",
+                column: "target_tag_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_followed_users_followed_user_id",
                 table: "followed_users",
                 column: "followed_user_id");
@@ -2693,7 +2856,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_group_folders_group_id_parent_folder_id_name",
                 table: "group_folders",
                 columns: new[] { "group_id", "parent_folder_id", "name" },
-                unique: true);
+                unique: true)
+                .Annotation("Npgsql:NullsDistinct", false);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_group_folders_parent_folder_id",
+                table: "group_folders",
+                column: "parent_folder_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_group_members_group_id",
@@ -2706,9 +2875,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "added_by_user_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_group_stories_group_id",
+                name: "ix_group_stories_group_id_story_id",
                 table: "group_stories",
-                column: "group_id");
+                columns: new[] { "group_id", "story_id" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_group_stories_story_id",
@@ -2768,6 +2938,28 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_poll_options_poll_id_text",
                 table: "poll_options",
                 columns: new[] { "poll_id", "text" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_poll_votes_poll_id_allow_multiple",
+                table: "poll_votes",
+                columns: new[] { "poll_id", "allow_multiple" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_poll_votes_poll_id_poll_option_id",
+                table: "poll_votes",
+                columns: new[] { "poll_id", "poll_option_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_poll_votes_poll_option_id_user_id",
+                table: "poll_votes",
+                columns: new[] { "poll_option_id", "user_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_poll_votes_single_choice_poll_id_user_id",
+                table: "poll_votes",
+                columns: new[] { "single_choice_poll_id", "user_id" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2840,6 +3032,19 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "moderator_user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_reports_open_reporter_target",
+                table: "reports",
+                columns: new[] { "reporter_user_id", "reported_entity_type", "reported_entity_id" },
+                unique: true,
+                filter: "\"report_status_id\" IN (0, 1)");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_reports_open_target",
+                table: "reports",
+                columns: new[] { "reported_entity_type", "reported_entity_id" },
+                filter: "\"report_status_id\" IN (0, 1)");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_reports_report_reason_id",
                 table: "reports",
                 column: "report_reason_id");
@@ -2853,6 +3058,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_reports_reported_entity_type_reported_entity_id",
                 table: "reports",
                 columns: new[] { "reported_entity_type", "reported_entity_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_reports_reported_user_id",
+                table: "reports",
+                column: "reported_user_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_reports_reporter_user_id",
@@ -2904,17 +3114,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "story_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_setting_details_base_tag_id",
-                table: "setting_details",
-                column: "base_tag_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_setting_details_story_id_base_tag_id",
-                table: "setting_details",
-                columns: new[] { "story_id", "base_tag_id" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "ix_spotlight_slots_granted_by_user_id",
                 table: "spotlight_slots",
                 column: "granted_by_user_id");
@@ -2945,9 +3144,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "story_status_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_story_acknowledgments_acknowledged_user_id",
+                name: "ix_story_acknowledgments_acknowledged_user_status",
                 table: "story_acknowledgments",
-                column: "acknowledged_user_id");
+                columns: new[] { "acknowledged_user_id", "status_id" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_story_acknowledgments_acknowledgment_role_id",
@@ -2982,9 +3181,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "character_tag_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_story_characters_story_id",
+                name: "ix_story_characters_story_id_character_tag_id_custom_name",
                 table: "story_characters",
-                column: "story_id");
+                columns: new[] { "story_id", "character_tag_id", "custom_name" },
+                unique: true)
+                .Annotation("Npgsql:NullsDistinct", false);
 
             migrationBuilder.CreateIndex(
                 name: "ix_story_details_slug",
@@ -3024,6 +3225,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_story_tags_tag_id",
                 table: "story_tags",
                 column: "tag_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tag_adoption_states_target_tag_id",
+                table: "tag_adoption_states",
+                column: "target_tag_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_tag_types_type_name",
@@ -3070,14 +3276,20 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "chapter_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_user_custom_filters_search_mode_key",
-                table: "user_custom_filters",
-                column: "search_mode_key");
+                name: "ix_user_external_identities_external_platform_id",
+                table: "user_external_identities",
+                column: "external_platform_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_user_custom_filters_user_id",
-                table: "user_custom_filters",
-                column: "user_id");
+                name: "ix_user_external_identities_reviewed_by_moderator_user_id",
+                table: "user_external_identities",
+                column: "reviewed_by_moderator_user_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_user_external_identities_user_id_external_platform_id",
+                table: "user_external_identities",
+                columns: new[] { "user_id", "external_platform_id" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_user_notification_settings_notification_type_id",
@@ -3093,12 +3305,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "ix_user_story_interaction_filter_settings_search_mode_key",
                 table: "user_story_interaction_filter_settings",
                 column: "search_mode_key");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_user_story_interaction_filter_settings_user_id_search_mode_",
-                table: "user_story_interaction_filter_settings",
-                columns: new[] { "user_id", "search_mode_key", "user_story_interaction_filter_key" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_user_story_interaction_filter_settings_user_story_interacti",
@@ -3161,11 +3367,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 .Annotation("Npgsql:IndexInclude", new[] { "story_id" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_user_story_interactions_recommendation_id",
-                table: "user_story_interactions",
-                column: "recommendation_id");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_user_story_interactions_story_id",
                 table: "user_story_interactions",
                 column: "story_id");
@@ -3218,7 +3419,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 column: "chapter_id",
                 principalTable: "chapters",
                 principalColumn: "chapter_id",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "fk_chapter_contents_chapters_chapter_id",
@@ -3354,6 +3555,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "default_user_story_interaction_filter_settings");
 
             migrationBuilder.DropTable(
+                name: "fanon_links");
+
+            migrationBuilder.DropTable(
                 name: "followed_users");
 
             migrationBuilder.DropTable(
@@ -3399,7 +3603,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "series_entries");
 
             migrationBuilder.DropTable(
-                name: "setting_details");
+                name: "site_blog_posts");
 
             migrationBuilder.DropTable(
                 name: "site_daily_stats");
@@ -3435,13 +3639,19 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "story_tags");
 
             migrationBuilder.DropTable(
+                name: "tag_adoption_states");
+
+            migrationBuilder.DropTable(
                 name: "user_badges");
 
             migrationBuilder.DropTable(
                 name: "user_chapter_interactions");
 
             migrationBuilder.DropTable(
-                name: "user_custom_filters");
+                name: "user_content_reveals");
+
+            migrationBuilder.DropTable(
+                name: "user_external_identities");
 
             migrationBuilder.DropTable(
                 name: "user_notification_settings");
@@ -3489,9 +3699,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "conversations");
 
             migrationBuilder.DropTable(
-                name: "base_blog_posts");
-
-            migrationBuilder.DropTable(
                 name: "report_reasons");
 
             migrationBuilder.DropTable(
@@ -3504,6 +3711,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "series");
 
             migrationBuilder.DropTable(
+                name: "base_blog_posts");
+
+            migrationBuilder.DropTable(
                 name: "acknowledgment_roles");
 
             migrationBuilder.DropTable(
@@ -3513,13 +3723,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "story_characters");
 
             migrationBuilder.DropTable(
-                name: "external_platforms");
-
-            migrationBuilder.DropTable(
                 name: "story_lineage_types");
 
             migrationBuilder.DropTable(
                 name: "badges");
+
+            migrationBuilder.DropTable(
+                name: "external_platforms");
 
             migrationBuilder.DropTable(
                 name: "notification_types");
@@ -3532,6 +3742,9 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             migrationBuilder.DropTable(
                 name: "user_story_interaction_filter_types");
+
+            migrationBuilder.DropTable(
+                name: "recommendations");
 
             migrationBuilder.DropTable(
                 name: "user_story_interactions");
@@ -3549,13 +3762,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                 name: "notification_categories");
 
             migrationBuilder.DropTable(
-                name: "recommendations");
+                name: "recommendation_statuses");
 
             migrationBuilder.DropTable(
                 name: "tag_types");
-
-            migrationBuilder.DropTable(
-                name: "recommendation_statuses");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");

@@ -343,7 +343,7 @@ already nullable in the DB. Enables D5.
 
 **Answer (2026-08-04):** **Make it nullable. `CreateCoreAsync` takes `int? sourceUserId`; null = no
 actor — system-sourced or self-caused.** No migration: `notifications.source_user_id` is already
-`integer NULL` (`20260719023703_InitialSchema.cs:686`), `Notification.SourceUserId` is already `int?`,
+`integer NULL` (`20260719023703_InitialSchema.cs:686`, a former migration, squashed 2026-10-19), `Notification.SourceUserId` is already `int?`,
 the DTO's `SourceUserId`/`SourceUserName` are already nullable, and the read path already LEFT JOINs.
 The write path was the only layer that could not express the shape the other four already assume.
 

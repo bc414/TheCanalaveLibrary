@@ -14,8 +14,8 @@ using TheCanalaveLibrary.Server;
 namespace TheCanalaveLibrary.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261013183147_WU_PrivateMessageEmail")]
-    partial class WU_PrivateMessageEmail
+    [Migration("20261019210447_InitialSchema")]
+    partial class InitialSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -451,6 +451,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("comment_text");
+
+                    b.Property<DateTime?>("DateEdited")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_edited");
 
                     b.Property<bool>("IsTakenDown")
                         .HasColumnType("boolean")
