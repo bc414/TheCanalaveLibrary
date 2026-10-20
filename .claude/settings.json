@@ -1,24 +1,36 @@
 {
-  "model": "claude-opus-5-5[1m]",
-  "enabledPlugins": {
-    "ponytail@ponytail": true
-  },
   "permissions": {
     "allow": [
-      "Read(**)", "Grep(**)",
-      "Bash(dotnet build*)", "Bash(dotnet test*)", "Bash(dotnet ef*)", "Bash(dotnet run*)",
+      "Read(**)",
+      "Grep(**)",
+      "Bash(dotnet build*)",
+      "Bash(dotnet test*)",
+      "Bash(dotnet ef*)",
+      "Bash(dotnet run*)",
       "Edit(.claude/**)",
       "Bash(git push origin claude/worksheet-decisions-build)",
       "PowerShell(git push origin claude/worksheet-decisions-build)"
     ],
     "deny": [
-      "Bash(git push*master*)", "PowerShell(git push*master*)",
-      "Bash(git push*--force*)", "PowerShell(git push*--force*)",
-      "Bash(git push* -f*)", "PowerShell(git push* -f*)",
-      "Bash(git rebase*)", "PowerShell(git rebase*)",
-      "Bash(git commit*--amend*)", "PowerShell(git commit*--amend*)",
-      "Bash(git branch -D*)", "PowerShell(git branch -D*)",
-      "Bash(gh *)", "PowerShell(gh *)"
+      "Bash(git push*master*)",
+      "PowerShell(git push*master*)",
+      "Bash(git push*--force*)",
+      "PowerShell(git push*--force*)",
+      "Bash(git push* -f*)",
+      "PowerShell(git push* -f*)",
+      "Bash(git rebase*)",
+      "PowerShell(git rebase*)",
+      "Bash(git commit*--amend*)",
+      "PowerShell(git commit*--amend*)",
+      "Bash(git branch -D*)",
+      "PowerShell(git branch -D*)",
+      "Bash(gh *)",
+      "PowerShell(gh *)"
     ]
+  },
+  "model": "claude-opus-5-5[1m]",
+  "enabledPlugins": {
+    "ponytail@ponytail": true,
+    "brians-claude-code-plugin@brians-local": true
   }
 }
