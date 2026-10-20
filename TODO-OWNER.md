@@ -1,6 +1,6 @@
 # To do, owner: what only Brian or an outside party can decide or do
 
-Brian, to do. Each entry is a decision only Brian (or an outside party he engages) can make, a
+Brian, pending. Each entry is a decision only Brian (or an outside party he engages) can make, a
 check only he can run, or a task only he can take. Claude never decides or does these; it records
 them, says what holds in the meantime, and works around them.
 

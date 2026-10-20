@@ -1,6 +1,6 @@
-# Defaults: Claude's choices in effect, waiting for Brian
+# Defaults: Claude's standing choices, waiting for Brian
 
-Claude, in effect. Each line is a default Claude reasoned out and built into the code because
+Claude, standing. Each line is a default Claude reasoned out and built into the code because
 nothing Brian had ruled covered it. It binds later work until Brian rules on it; it never binds
 Brian. He rules on these after his hands-on pass of the running site, or in the abstract, whichever
 suits the line.

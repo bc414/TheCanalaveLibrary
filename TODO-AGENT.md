@@ -1,6 +1,6 @@
 # To do, agent: what Claude builds next
 
-Claude, to do. Each entry is work Claude can do entirely on its own. Anything that needs Brian or an
+Claude, pending. Each entry is work Claude can do entirely on its own. Anything that needs Brian or an
 outside party first belongs in `TODO-OWNER.md` instead.
 
 The other three cells: Brian's rulings are in `.claude/rules/`; Claude's built defaults waiting for
